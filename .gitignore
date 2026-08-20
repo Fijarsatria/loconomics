@@ -1,19 +1,25 @@
-# Secrets — never commit
+# Rahasia — jangan pernah di-commit
 .env
 .env.local
 *.env
+!.env.example
+
+# Data MAPID / mitra — tidak boleh diredistribusi (ketentuan lomba B.7)
+pipeline/data/
 
 # Python
-backend/venv/
-backend/__pycache__/
+**/venv/
+**/.venv/
 **/__pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 
 # Node / frontend
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+**/node_modules/.vite/
 
 # OS / editor
 .DS_Store

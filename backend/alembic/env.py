@@ -21,10 +21,21 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+# PostGIS memasang tabel dan indeksnya sendiri di skema public. Tanpa saringan
+# ini, autogenerate akan mengira semuanya "objek yang harus dihapus" dan
+# menulis DROP TABLE spatial_ref_sys ke setiap migration baru.
+TABEL_SISTEM_POSTGIS = {"spatial_ref_sys", "geography_columns", "geometry_columns", "raster_columns", "raster_overviews"}
+
+
+def include_object(object, name, type_, reflected, compare_to):  # noqa: A002
+    if type_ == "table" and name in TABEL_SISTEM_POSTGIS:
+        return False
+    # GeoAlchemy2 membuat indeks GiST kolom geom secara otomatis lewat event DDL.
+    # Kalau indeks itu ikut di-autogenerate, migration gagal dengan
+    # "relation idx_..._geom already exists".
+    if type_ == "index" and name and name.startswith("idx_") and name.endswith("_geom"):
+        return False
+    return True
 
 
 def run_migrations_offline() -> None:
@@ -43,6 +54,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -67,7 +79,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
