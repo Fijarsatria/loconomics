@@ -1,6 +1,194 @@
 @import "tailwindcss";
 
-html, body, #root {
+/* ==========================================================================
+   Loconomics — sistem visual
+
+   Satu aturan menjelaskan hampir seluruh berkas ini:
+
+     WARNA JENUH HANYA BERARTI KUADRAN.
+
+   Tiga warna kategorikal (gem, pemenang, jebakan) adalah satu-satunya warna
+   jenuh di seluruh antarmuka. Sisanya netral. Akibatnya peta selalu terbaca
+   sekilas, dan setiap warna yang muncul di layar punya arti yang sama di mana
+   pun ia muncul.
+
+   Kuadran keempat, HINDARI, sengaja TIDAK punya warna. Validator palet
+   membuktikan abu-abu tidak bisa jadi warna kategorikal - chroma-nya selalu
+   jatuh di bawah lantai. Itu bukan halangan melainkan petunjuk: "hindari"
+   memang berarti tidak ada apa-apa di sini, jadi ia digambar tanpa isian.
+
+   Aturan kedua:
+
+     TEKSTUR BERARTI "KAMI BELUM TAHU".
+
+   Arsir dipakai konsisten untuk heksagon hasil imputasi, zona tanpa RDTR
+   digital, dan jam yang berasal dari proksi. Solid berarti terukur. Dashboard
+   biasanya menyembunyikan ketidakpastian; di sini ia jadi bagian dari bahasa
+   visualnya, karena aturan inti proyek memang menuntut setiap skor membawa
+   penanda keyakinannya.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@theme {
+  /* --- Netral: abu-abu dingin bersemu hijau ------------------------------
+     Bukan krem hangat, bukan abu-abu murni. Semburat hijaunya membuat teal
+     kuadran terasa satu keluarga dengan chrome-nya alih-alih ditempelkan. */
+  --color-ground: #ecefec;
+  --color-ground-2: #e3e7e4;
+  --color-surface: #ffffff;
+  --color-surface-2: #f6f8f6;
+
+  --color-ink: #16211c;
+  --color-ink-2: #4a5651;
+  --color-ink-3: #78857f;
+
+  --color-line: #d6dcd8;
+  --color-line-2: #bcc5bf;
+
+  /* --- Kuadran: satu-satunya warna jenuh ---------------------------------
+     Lolos enam pemeriksaan validator palet pada permukaan terang:
+     pita terang, lantai chroma, separasi CVD (deutan 19,0 · tritan 12,9),
+     lantai penglihatan normal 25,2, dan kontras >= 3:1. */
+  --color-gem: #109184;
+  --color-gem-soft: #d8efec;
+  --color-pemenang: #6849cc;
+  --color-pemenang-soft: #e5e0f8;
+  --color-jebakan: #c97400;
+  --color-jebakan-soft: #f6e7cf;
+
+  /* --- Status: keluarga merah, TIDAK PERNAH dipakai sebagai seri ---------
+     Terpisah dari kuadran dengan sengaja. Kalau merah bisa berarti "seri
+     keempat", ia berhenti berarti "berhenti". */
+  --color-bahaya: #b42318;
+  --color-bahaya-soft: #fbe4e2;
+
+  /* --- Data sekuensial: satu rona, dua langkah --------------------------
+     Captive dan choice rider adalah bagian dari satu besaran yang sama
+     (transaksi), jadi encoding yang benar bukan dua warna kategorikal
+     melainkan dua langkah dari satu rona. */
+  --color-jam-kuat: #34534a;
+  --color-jam-lemah: #a8bdb5;
+
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+}
+
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
+}
+
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Angka selalu tabular. Di panel yang berubah tiap kali heksagon diklik,
+   angka yang bergeser-geser lebarnya membuat mata harus mencari ulang. */
+.tabular,
+input,
+th,
+td {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Tipografi papan nama ------------------------------------------------
+   Archivo punya sumbu lebar. Lebar penuh dipakai HANYA untuk identitas dan
+   angka besar - meniru papan nama stasiun, yang memang selalu melebar supaya
+   terbaca dari jauh. Teks isi memakai lebar normal. Satu keluarga, dua peran. */
+.papan {
+  font-stretch: 125%;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+/* --- Tekstur ketidakpastian ---------------------------------------------
+   Satu definisi, dipakai di badge, chip zona, dan batang grafik. Versi peta
+   dibuat terpisah sebagai pola kanvas karena MapLibre butuh berkas gambar. */
+.arsir {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    color-mix(in srgb, currentColor 22%, transparent) 3px 4.5px
+  );
+}
+
+/* --- Fokus ---------------------------------------------------------------
+   Satu gaya untuk seluruh aplikasi. Offset supaya cincin tidak menempel pada
+   tepi tombol kecil dan tetap terlihat di atas peta. */
+:where(button, a, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* Scrollbar tipis supaya panel padat tidak kehilangan lebar isi. */
+.scroll-tipis {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-2) transparent;
+}
+.scroll-tipis::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-tipis::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* --- Gerak ---------------------------------------------------------------
+   Satu-satunya gerak yang dipakai: isi panel bergeser 6px saat heksagon
+   berganti, dan titik di Kompas Kuadran berpindah. Keduanya menjelaskan
+   sesuatu - bahwa isinya berganti, dan ke mana posisinya pindah. Tidak ada
+   animasi yang hanya menghias. */
+@keyframes masuk {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.masuk {
+  animation: masuk 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* MapLibre memaksakan font dan warna sendiri pada kontrolnya. */
+.maplibregl-ctrl-group {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 0 1px 2px rgb(22 33 28 / 0.12), 0 0 0 1px var(--color-line) !important;
+}
+.maplibregl-ctrl-attrib {
+  font-family: var(--font-sans) !important;
+  font-size: 10px !important;
 }

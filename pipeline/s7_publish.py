@@ -111,7 +111,7 @@ def muat_skor(db: Session, skor: pd.DataFrame, versi: str = "baseline") -> int:
     if skor.empty:
         return 0
 
-    db.execute(text("DELETE FROM location_scores WHERE versi = :v"), {"versi": versi})
+    db.execute(text("DELETE FROM location_scores WHERE versi = :versi"), {"versi": versi})
 
     kolom = [
         "ipt", "iae", "ikp", "ibr", "opportunity_score", "hidden_gem_score",

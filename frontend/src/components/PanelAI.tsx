@@ -5,20 +5,26 @@
  * melainkan `jalankanAksi()` di bawah: jawaban AI tidak berhenti sebagai teks,
  * ia menggerakkan peta.
  *
- * Pembagian kerja yang perlu dipahami sebelum mengubah berkas ini:
- *   cari_lokasi, bandingkan, jelaskan_skor  → dijalankan backend (menyentuh DB)
- *   flyTo, highlight, setLayer, filter      → dijalankan DI SINI
+ *   cari_lokasi, jelaskan_skor, cek_harga, pola_jam, cek_zona,
+ *   cari_hidden_gem, cek_risiko, bandingkan  → dijalankan backend
+ *   flyTo, highlight, setLayer, filter        → dijalankan DI SINI
  *
  * Kalau flyTo dieksekusi backend, tidak ada yang bergerak di layar pengguna.
+ *
+ * Satu keputusan tampilan yang layak disebut: setiap jawaban membawa jejak alat
+ * yang benar-benar dipanggil, dan jejak itu DITAMPILKAN, tidak disembunyikan di
+ * log. Asisten yang bisa ditanya "dari mana angkanya" dan menjawab dengan daftar
+ * fungsi yang ia jalankan jauh lebih layak dipercaya daripada yang hanya
+ * terdengar meyakinkan.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { api } from '../lib/api'
 import { LAYER, type NamaLayer } from '../config'
-import type { AksiPeta, JawabanAI, PesanRiwayat } from '../types'
+import { api } from '../lib/api'
+import type { AksiPeta, JawabanAI, PesanRiwayat, StatusAI } from '../types'
 import type { KendaliPeta, Kriteria } from './PetaInteraktif'
-import { Badge } from './PanelInsight'
+import { Badge } from './primitif'
 
 interface Pesan {
   peran: 'pengguna' | 'asisten'
@@ -26,24 +32,40 @@ interface Pesan {
   jawaban?: JawabanAI
 }
 
-/** Terjemahkan galat backend jadi kalimat yang bisa ditindaklanjuti pengguna. */
+/** Terjemahkan galat backend jadi kalimat yang bisa ditindaklanjuti. */
 function pesanGalat(e: unknown): string {
   const teks = e instanceof Error ? e.message : String(e)
   if (teks.includes('501'))
-    return 'AI Consultant belum aktif — LLM_API_KEY belum diisi di backend. Seluruh jalur fungsinya sudah siap (lihat /ai/status).'
-  if (teks.includes('429') && teks.includes('ANGGARAN'))
-    return 'Plafon biaya AI untuk hari ini sudah tercapai. Asisten akan aktif lagi besok.'
-  if (teks.includes('429'))
+    return 'Asisten belum aktif — LLM_API_KEY belum diisi di backend. Seluruh jalur fungsinya sudah siap.'
+  if (teks.includes('ANGGARAN_AI_HABIS'))
+    return 'Plafon biaya AI untuk hari ini sudah tercapai. Asisten aktif lagi besok.'
+  if (teks.includes('TERLALU_BANYAK'))
     return 'Terlalu banyak pertanyaan dalam waktu singkat. Tunggu sebentar lalu coba lagi.'
-  if (teks.includes('503'))
+  if (teks.includes('BASIS_DATA'))
     return 'Basis data sedang tidak bisa dihubungi. Kalau ini terjadi setelah lama menganggur, coba lagi dalam beberapa puluh detik.'
   return `Gagal menghubungi asisten: ${teks}`
 }
 
+/** Nama alat dalam bahasa manusia, untuk jejak yang ditampilkan. */
+const NAMA_ALAT: Record<string, string> = {
+  cari_lokasi: 'mencari lokasi',
+  bandingkan: 'membandingkan dua lokasi',
+  jelaskan_skor: 'membaca rincian skor',
+  cek_harga: 'membaca harga sewa',
+  pola_jam: 'membaca pola jam',
+  cek_zona: 'memeriksa izin zona',
+  cari_hidden_gem: 'mencari hidden gem',
+  cek_risiko: 'memeriksa risiko',
+  flyTo: 'menggerakkan peta',
+  highlight: 'menyorot heksagon',
+  setLayer: 'mengganti layer',
+  filter: 'menyaring peta',
+}
+
 const CONTOH = [
-  'Cari lokasi kopi di bawah 3 juta per bulan dekat Manggarai',
-  'Kenapa heksagon ini skornya tinggi?',
-  'Mana yang lebih baik, Tanah Abang atau Bekasi?',
+  'Lokasi kopi di bawah 3 juta per bulan dekat Manggarai',
+  'Kenapa skor heksagon ini segitu?',
+  'Mana yang berisiko menjebak di Dukuh Atas BNI?',
 ]
 
 export default function PanelAI({
@@ -56,50 +78,45 @@ export default function PanelAI({
   const [pesan, setPesan] = useState<Pesan[]>([])
   const [input, setInput] = useState('')
   const [memuat, setMemuat] = useState(false)
+  const [status, setStatus] = useState<StatusAI | null>(null)
   const akhir = useRef<HTMLDivElement>(null)
+
+  // Kesiapan diperiksa saat memuat, bukan saat pertanyaan pertama gagal.
+  // Memberi tahu di awal jauh lebih sopan daripada membiarkan orang mengetik
+  // pertanyaan panjang lalu menolaknya.
+  useEffect(() => {
+    api.statusAI().then(setStatus).catch(() => setStatus(null))
+  }, [])
 
   /**
    * Menerjemahkan `aksi_peta` dari LLM menjadi gerakan peta yang sebenarnya.
    *
-   * Nama fungsi divalidasi lewat `switch`, bukan dipanggil dinamis. LLM tidak
-   * pernah boleh menentukan fungsi apa yang dieksekusi — ia hanya boleh memilih
-   * dari daftar yang sudah ditulis di sini. Setiap argumen juga diperiksa
-   * tipenya: keluaran model diperlakukan sebagai data yang belum tentu benar,
-   * bukan sebagai perintah yang tinggal dijalankan.
-   *
-   * Nama argumen mengikuti FUNGSI_FRONTEND di backend/app/api/ai.py.
+   * Nama fungsi divalidasi lewat `switch`, bukan dipanggil dinamis. Setiap
+   * argumen juga diperiksa tipenya: keluaran model diperlakukan sebagai data
+   * yang belum tentu benar, bukan perintah yang tinggal dijalankan.
    */
   function jalankanAksi(aksi: AksiPeta) {
     const arg = aksi.argumen
-
     switch (aksi.fungsi) {
       case 'flyTo':
-        if (typeof arg.lat === 'number' && typeof arg.lon === 'number') {
+        if (typeof arg.lat === 'number' && typeof arg.lon === 'number')
           kendali.flyTo(arg.lat, arg.lon, typeof arg.zoom === 'number' ? arg.zoom : undefined)
-        }
         break
-
       case 'highlight':
-        if (Array.isArray(arg.hex_ids)) {
+        if (Array.isArray(arg.hex_ids))
           kendali.highlight(arg.hex_ids.filter((x): x is string => typeof x === 'string'))
-        }
         break
-
       case 'setLayer':
-        if (typeof arg.nama_layer === 'string' && arg.nama_layer in LAYER) {
+        if (typeof arg.nama_layer === 'string' && arg.nama_layer in LAYER)
           kendali.setLayer(arg.nama_layer as NamaLayer)
-        }
         break
-
       case 'filter':
         kendali.filter(
           arg.kriteria && typeof arg.kriteria === 'object' ? (arg.kriteria as Kriteria) : null,
         )
         break
-
       default:
-        // cari_lokasi / bandingkan / jelaskan_skor sudah dijalankan backend;
-        // hasilnya sudah ada di dalam `teks` dan `sumber_angka`.
+        // Alat backend sudah dijalankan di server; hasilnya ada di dalam `teks`.
         break
     }
   }
@@ -112,7 +129,7 @@ export default function PanelAI({
 
     try {
       // Riwayat dikirim ulang tiap giliran; backend tidak menyimpan sesi.
-      // Dipotong 20 pesan terakhir supaya sama dengan batas backend - kalau lebih,
+      // Dipotong 20 pesan supaya sama dengan batas backend — kalau lebih,
       // permintaannya ditolak validasi, bukan dipotong diam-diam.
       const riwayat: PesanRiwayat[] = pesan
         .slice(-20)
@@ -122,33 +139,56 @@ export default function PanelAI({
       jawaban.aksi_peta.forEach(jalankanAksi)
       setPesan((s) => [...s, { peran: 'asisten', teks: jawaban.teks, jawaban }])
     } catch (e) {
-      setPesan((s) => [
-        ...s,
-        {
-          peran: 'asisten',
-          teks: pesanGalat(e),
-        },
-      ])
+      setPesan((s) => [...s, { peran: 'asisten', teks: pesanGalat(e) }])
     } finally {
       setMemuat(false)
       requestAnimationFrame(() => akhir.current?.scrollIntoView({ behavior: 'smooth' }))
     }
   }
 
+  const mati = status !== null && !status.siap
+
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+    <div className="flex h-full flex-col bg-surface">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
+        <h2 className="eyebrow">Konsultan AI</h2>
+        <span
+          className="flex items-center gap-1.5 text-[10px] text-ink-3"
+          title={
+            status?.siap
+              ? `${status.model} · ${status.n_alat_backend} alat data, ${status.n_alat_peta} aksi peta`
+              : (status?.pesan ?? 'memeriksa kesiapan…')
+          }
+        >
+          <span
+            aria-hidden
+            className={`h-1.5 w-1.5 rounded-full ${
+              status === null ? 'bg-line-2' : status.siap ? 'bg-gem' : 'bg-line-2'
+            }`}
+          />
+          {status === null ? 'memeriksa' : status.siap ? 'siap' : 'belum aktif'}
+        </span>
+      </div>
+
+      <div className="scroll-tipis flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {pesan.length === 0 && (
-          <div className="text-sm text-slate-500">
-            <p className="mb-3">
-              Tanyakan apa saja tentang lokasi. Jawaban akan sekaligus menggerakkan peta.
+          <div>
+            <p className="mb-2.5 text-[12.5px] leading-snug text-ink-2">
+              Tanyakan apa saja tentang lokasi. Jawabannya sekaligus menggerakkan peta.
             </p>
+            {mati && (
+              <p className="mb-2.5 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[11.5px] leading-snug text-ink-2">
+                Asisten belum aktif — {status?.pesan}. Delapan alat datanya sudah
+                siap dipanggil; yang kurang hanya kuncinya.
+              </p>
+            )}
             <div className="space-y-1.5">
               {CONTOH.map((c) => (
                 <button
                   key={c}
                   onClick={() => kirim(c)}
-                  className="block w-full rounded-md border border-slate-200 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                  disabled={mati}
+                  className="block w-full cursor-pointer rounded-sm border border-line px-2.5 py-2 text-left text-[11.5px] leading-snug text-ink-2 transition-colors hover:border-line-2 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {c}
                 </button>
@@ -158,43 +198,72 @@ export default function PanelAI({
         )}
 
         {pesan.map((m, i) => (
-          <div key={i} className={m.peran === 'pengguna' ? 'text-right' : ''}>
-            <div
-              className={`inline-block max-w-[90%] rounded-lg px-3 py-2 text-sm ${
-                m.peran === 'pengguna'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 text-slate-900'
-              }`}
-            >
-              {m.teks}
-            </div>
-
-            {/* Setiap angka harus bisa ditelusuri. Kalau AI menyebut angka, di
-                bawah ini muncul variabel asalnya — bukan sekadar klaim. */}
-            {m.jawaban && m.jawaban.sumber_angka.length > 0 && (
-              <div className="mt-1.5 rounded-md bg-slate-50 px-3 py-2 text-left">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Sumber angka
+          <div key={i} className={m.peran === 'pengguna' ? 'flex justify-end' : ''}>
+            {m.peran === 'pengguna' ? (
+              <p className="max-w-[85%] rounded-md rounded-br-xs bg-ink px-2.5 py-1.5 text-[12.5px] leading-snug text-surface">
+                {m.teks}
+              </p>
+            ) : (
+              <div className="max-w-[92%]">
+                <p className="whitespace-pre-line text-[12.5px] leading-relaxed text-ink">
+                  {m.teks}
                 </p>
-                <ul className="space-y-0.5">
-                  {m.jawaban.sumber_angka.map((f) => (
-                    <li key={f.kode_variabel} className="font-mono text-[11px] text-slate-600">
-                      {f.kode_variabel} · {f.indeks} · persentil {f.persentil?.toFixed(0) ?? '—'}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
-            {m.jawaban?.keyakinan && (
-              <div className="mt-1.5 text-left">
-                <Badge badge={m.jawaban.keyakinan} />
+                {/* Jejak: alat apa yang benar-benar dipanggil. Ditampilkan,
+                    bukan disembunyikan — inilah yang membuat prosesnya bisa
+                    diperiksa alih-alih hanya terdengar meyakinkan. */}
+                {m.jawaban && m.jawaban.jejak.length > 0 && (
+                  <details className="mt-1.5">
+                    <summary className="cursor-pointer list-none text-[10.5px] text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-ink-2">
+                      {m.jawaban.jejak.length} langkah dijalankan
+                    </summary>
+                    <ol className="mt-1 space-y-0.5 border-l border-line pl-2.5">
+                      {m.jawaban.jejak.map((j, k) => (
+                        <li key={k} className="text-[10.5px] leading-snug text-ink-3">
+                          <span className="text-ink-2">{NAMA_ALAT[j.fungsi] ?? j.fungsi}</span>
+                          {' — '}
+                          {j.ringkas_hasil}
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                )}
+
+                {m.jawaban && m.jawaban.sumber_angka.length > 0 && (
+                  <div className="mt-1.5 rounded-sm bg-surface-2 px-2.5 py-1.5">
+                    <p className="eyebrow mb-1">Sumber angka</p>
+                    <ul className="space-y-0.5">
+                      {m.jawaban.sumber_angka.slice(0, 5).map((f) => (
+                        <li key={f.kode_variabel} className="text-[10.5px] text-ink-2">
+                          <span className="font-mono">{f.kode_variabel}</span>
+                          {f.persentil !== null && (
+                            <span className="text-ink-3">
+                              {' '}
+                              · persentil {f.persentil.toFixed(0)}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {m.jawaban?.keyakinan && (
+                  <div className="mt-1.5">
+                    <Badge badge={m.jawaban.keyakinan} ringkas />
+                  </div>
+                )}
               </div>
             )}
           </div>
         ))}
 
-        {memuat && <div className="text-sm text-slate-400">Menganalisis…</div>}
+        {memuat && (
+          <p className="flex items-center gap-1.5 text-[12px] text-ink-3" aria-live="polite">
+            <span className="h-1 w-1 animate-pulse rounded-full bg-ink-3" aria-hidden />
+            Menganalisis…
+          </p>
+        )}
         <div ref={akhir} />
       </div>
 
@@ -203,19 +272,26 @@ export default function PanelAI({
           e.preventDefault()
           kirim(input)
         }}
-        className="border-t border-slate-200 p-3"
+        className="shrink-0 border-t border-line p-2.5"
       >
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
+          <label className="sr-only" htmlFor="tanya-ai">
+            Pertanyaan untuk konsultan AI
+          </label>
           <input
+            id="tanya-ai"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={hexTerpilih ? 'Tanya soal heksagon terpilih…' : 'Tanya soal lokasi…'}
-            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            disabled={mati}
+            placeholder={
+              hexTerpilih ? 'Tanya soal heksagon terpilih…' : 'Tanya soal lokasi…'
+            }
+            className="min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[12.5px] outline-none transition-colors placeholder:text-ink-3 focus:border-ink-3 focus:bg-surface disabled:opacity-45"
           />
           <button
             type="submit"
-            disabled={memuat || !input.trim()}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            disabled={memuat || mati || !input.trim()}
+            className="cursor-pointer rounded-sm bg-ink px-3 py-2 text-[12px] font-semibold text-surface transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-30"
           >
             Kirim
           </button>
