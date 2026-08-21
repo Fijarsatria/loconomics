@@ -105,7 +105,8 @@ frontend. Petanya bergerak sendiri.
 | AI Consultant — 12 alat, loop agentik | Selesai. Butuh `LLM_API_KEY` untuk aktif |
 | Mesin skoring | Selesai — 11/11 uji lolos, sensitivitas ρ 0,97–0,99 |
 | Prompt AI A1–A4 | Selesai |
-| Frontend (3 bagian wajib) | Kerangka selesai; belum memakai endpoint fitur baru |
+| Frontend (3 bagian wajib) | Sistem visual + Kompas Kuadran + daftar + 3 grafik. Belum pernah dilihat render |
+| Data demo | 708 heksagon lewat pipeline sungguhan (`pipeline/demo_seed.py`) |
 | Pemanggil API vision (A1–A4) | Menunggu keputusan penyedia |
 | Data survei lapangan | Menunggu tim survei |
 

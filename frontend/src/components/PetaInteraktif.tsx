@@ -38,7 +38,7 @@ import {
   type NamaLayer,
 } from '../config'
 import { api } from '../lib/api'
-import type { PropertiHeksagon } from '../types'
+import type { PropertiHeksagon, SimpulTransit } from '../types'
 
 const SUMBER = 'heksagon'
 const L_ISI = 'hex-isi'
@@ -173,6 +173,22 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   const [siap, setSiap] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
   const [sorot, setSorot] = useState<PropertiHeksagon | null>(null)
+  const [simpul, setSimpul] = useState<SimpulTransit[]>([])
+
+  // Simpul transit dimuat terpisah dari heksagon: jumlahnya sedikit, jarang
+  // berubah, dan digambar sebagai elemen HTML di atas peta - bukan layer
+  // MapLibre. Alasannya bukan kemudahan: penanda HTML bisa difokuskan keyboard
+  // dan dibaca pembaca layar, sedangkan simbol di kanvas tidak bisa keduanya.
+  useEffect(() => {
+    let batal = false
+    api
+      .simpulTransit(kawasan)
+      .then((s) => !batal && setSimpul(s))
+      .catch(() => !batal && setSimpul([]))
+    return () => {
+      batal = true
+    }
+  }, [kawasan])
 
   // --- Inisialisasi. Sekali saja seumur komponen. ---
   useEffect(() => {
@@ -373,6 +389,13 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     <div className="relative h-full w-full">
       <div ref={wadah} className="absolute inset-0" />
 
+      {/* Simpul transit. Ini produk transit-oriented, dan peta tanpa stasiun
+          menghilangkan titik acuan yang membuat seluruh skor punya arti.
+
+          Bentuknya meminjam kosakata rambu stasiun: kotak bermoda, bukan pin
+          generik yang bisa berarti apa saja. */}
+      <PenandaSimpul peta={peta} simpul={simpul} siap={siap} />
+
       {/* Kartu sorot mengikuti kursor di sudut, bukan tooltip melayang.
           Tooltip yang menempel pada kursor menutupi heksagon di sebelahnya —
           persis yang sedang dibandingkan pengguna. */}
@@ -404,5 +427,66 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     </div>
   )
 })
+
+/**
+ * Penanda simpul yang mengikuti kamera peta.
+ *
+ * Diposisikan ulang tiap kali peta bergerak lewat project(). Marker bawaan
+ * MapLibre juga bisa, tetapi ia membungkus isinya dengan DOM sendiri yang lebih
+ * sulit diberi gaya dan tidak menerima fokus keyboard secara wajar.
+ */
+function PenandaSimpul({
+  peta,
+  simpul,
+  siap,
+}: {
+  peta: React.RefObject<MapLibreMap | null>
+  simpul: SimpulTransit[]
+  siap: boolean
+}) {
+  const [, paksaGambar] = useState(0)
+
+  useEffect(() => {
+    const m = peta.current
+    if (!m || !siap) return
+    const gambar = () => paksaGambar((n) => n + 1)
+    m.on('move', gambar)
+    gambar()
+    return () => {
+      m.off('move', gambar)
+    }
+  }, [peta, siap, simpul])
+
+  const m = peta.current
+  if (!m || !siap || simpul.length === 0) return null
+
+  return (
+    <>
+      {simpul.map((s) => {
+        const t = m.project([s.lon, s.lat])
+        return (
+          <div
+            key={s.id}
+            className="pointer-events-none absolute z-[5] -translate-x-1/2 -translate-y-1/2"
+            style={{ left: t.x, top: t.y }}
+          >
+            <div className="flex items-center gap-1.5">
+              <span
+                className="grid h-5 w-5 place-items-center rounded-[3px] bg-ink text-[9px] font-bold tracking-tight text-surface shadow-[0_0_0_2px_var(--color-surface)]"
+                aria-hidden
+              >
+                {s.moda === 'TERMINAL' ? 'T' : s.moda.slice(0, 1)}
+              </span>
+              <span className="whitespace-nowrap rounded-xs bg-surface/92 px-1.5 py-[2px] text-[10.5px] font-semibold shadow-[0_1px_3px_rgb(22_33_28/0.14)] backdrop-blur-sm">
+                {s.nama}
+                <span className="ml-1 font-normal text-ink-3">{s.moda}</span>
+              </span>
+            </div>
+          </div>
+        )
+      })}
+    </>
+  )
+}
 
 export default PetaInteraktif

@@ -28,6 +28,7 @@ import {
 } from './config'
 import { api } from './lib/api'
 import type { DiagramKuadran, Kuadran as NamaKuadran } from './types'
+import DaftarLokasi from './components/DaftarLokasi'
 import KompasKuadran from './components/KompasKuadran'
 import Legenda from './components/Legenda'
 import PanelAI from './components/PanelAI'
@@ -78,6 +79,10 @@ export default function App() {
   const [saringKuadran, setSaringKuadran] = useState<NamaKuadran | null>(null)
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
   const [kuadranPenuh, setKuadranPenuh] = useState(false)
+  // Daftar dulu, detail belakangan. Pertanyaan pertama pengguna adalah "yang mana
+  // yang harus saya lihat", bukan "bagaimana lokasi ini" - dan layar kosong yang
+  // menyuruh mengklik heksagon menjawab pertanyaan yang belum diajukan.
+  const [tab, setTab] = useState<'daftar' | 'detail'>('daftar')
   const [diagram, setDiagram] = useState<DiagramKuadran | null>(null)
   const peta = useRef<AksiPetaRef>(null)
 
@@ -95,7 +100,10 @@ export default function App() {
     [],
   )
 
-  const pilihHeksagon = useCallback((h3: string | null) => setHexTerpilih(h3), [])
+  const pilihHeksagon = useCallback((h3: string | null) => {
+    setHexTerpilih(h3)
+    if (h3) setTab('detail')
+  }, [])
   const catatMuat = useCallback((n: number) => setNHeksagon(n), [])
 
   // Titik kuadran diminta sekali per kawasan, bukan saat diagram penuh dibuka.
@@ -148,6 +156,7 @@ export default function App() {
               setKawasan(v)
               setHexTerpilih(null)
               setNHeksagon(null)
+              setTab('daftar')
               const k = KAWASAN_PILOT.find((x) => x.nama === v)
               if (k) kendali.flyTo(k.pusat[1], k.pusat[0], 14)
             }}
@@ -186,9 +195,13 @@ export default function App() {
         )}
       </div>
 
-      {/* --- Badan --------------------------------------------------------- */}
-      <main className="flex min-h-0 flex-1">
-        <section className="relative min-w-0 flex-1">
+      {/* --- Badan ---------------------------------------------------------
+          Di bawah 1024px, peta dan panel ditumpuk alih-alih berdampingan.
+          Panel selebar 25rem di layar 900px menyisakan peta yang terlalu sempit
+          untuk membandingkan heksagon - dan membandingkan heksagon adalah
+          seluruh gunanya peta ini. */}
+      <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <section className="relative min-h-[45vh] min-w-0 flex-1 lg:min-h-0">
           <PetaInteraktif
             ref={peta}
             kawasan={kawasan}
@@ -201,7 +214,7 @@ export default function App() {
           />
 
           {/* Slot legenda: isinya bertukar, tempatnya tidak. */}
-          <div className="absolute bottom-6 left-3 z-10">
+          <div className="absolute bottom-6 left-3 z-10 hidden sm:block">
             {pakaiKompas ? (
               <KompasKuadran
                 saring={saringKuadran}
@@ -216,7 +229,7 @@ export default function App() {
           {pakaiKompas && (
             <button
               onClick={() => setKuadranPenuh(true)}
-              className="absolute bottom-6 left-[15.5rem] z-10 cursor-pointer rounded-sm border border-line bg-surface/95 px-2.5 py-1.5 text-[11px] font-medium shadow-[0_2px_10px_rgb(22_33_28/0.10)] backdrop-blur-sm transition-colors hover:bg-surface-2"
+              className="absolute bottom-6 left-[15.5rem] z-10 hidden cursor-pointer sm:block rounded-sm border border-line bg-surface/95 px-2.5 py-1.5 text-[11px] font-medium shadow-[0_2px_10px_rgb(22_33_28/0.10)] backdrop-blur-sm transition-colors hover:bg-surface-2"
             >
               Buka diagram penuh
             </button>
@@ -241,11 +254,48 @@ export default function App() {
         </section>
 
         {/* --- Panel kanan ------------------------------------------------- */}
-        <aside className="flex w-[25rem] shrink-0 flex-col border-l border-line bg-surface">
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <PanelInsight h3={hexTerpilih} onBukaKuadran={() => setKuadranPenuh(true)} />
+        <aside className="flex h-[26rem] shrink-0 flex-col border-t border-line bg-surface lg:h-auto lg:w-[22rem] lg:border-l lg:border-t-0 xl:w-[25rem]">
+          <div className="flex shrink-0 border-b border-line">
+            {(
+              [
+                ['daftar', 'Daftar lokasi'],
+                ['detail', hexTerpilih ? 'Detail heksagon' : 'Detail'],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                aria-current={tab === k ? 'page' : undefined}
+                disabled={k === 'detail' && !hexTerpilih}
+                className={`flex-1 cursor-pointer border-b-2 px-3 py-2 text-[11.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  tab === k
+                    ? 'border-ink text-ink'
+                    : 'border-transparent text-ink-3 hover:text-ink-2'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="h-[19rem] shrink-0 border-t border-line">
+
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {tab === 'daftar' ? (
+              <DaftarLokasi
+                layer={layer}
+                kawasan={kawasan}
+                terpilih={hexTerpilih}
+                onPilih={(h3) => {
+                  setHexTerpilih(h3)
+                  setTab('detail')
+                  const t = diagram?.titik.find((x) => x.h3_index === h3)
+                  if (t) peta.current?.highlight([h3])
+                }}
+              />
+            ) : (
+              <PanelInsight h3={hexTerpilih} onBukaKuadran={() => setKuadranPenuh(true)} />
+            )}
+          </div>
+          <div className="h-[14rem] shrink-0 border-t border-line lg:h-[19rem]">
             <PanelAI kendali={kendali} hexTerpilih={hexTerpilih} />
           </div>
         </aside>

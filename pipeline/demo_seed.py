@@ -50,6 +50,20 @@ PUSAT = {
     "Harjamukti": (-6.3706, 106.8556),
 }
 
+# Simpul transit sungguhan: nama, moda, dan koordinatnya BUKAN karangan.
+# Isochrone-nya sengaja TIDAK dibangkitkan - poligon jangkauan jalan kaki menuntut
+# routing atas jaringan jalan, dan menggambar lingkaran lalu menyebutnya isochrone
+# akan persis melakukan kesalahan yang docs/data.md peringatkan: mengasumsikan
+# orang bisa berjalan menembus tembok, sungai, dan rel.
+SIMPUL = {
+    "Manggarai": ("Stasiun Manggarai", "KRL", 8, 130_000),
+    "Tanah Abang": ("Stasiun Tanah Abang", "KRL", 6, 95_000),
+    "Depok Baru": ("Stasiun Depok Baru", "KRL", 4, 42_000),
+    "Bekasi": ("Stasiun Bekasi", "KRL", 4, 38_000),
+    "Dukuh Atas BNI": ("MRT Dukuh Atas BNI", "MRT", 2, 31_000),
+    "Harjamukti": ("LRT Harjamukti", "LRT", 2, 9_000),
+}
+
 # Cincin ke-6 dari pusat: sekitar 127 heksagon per kawasan, radius ±2 km.
 # Cukup untuk peta yang terasa berisi, cukup kecil untuk dimuat seketika.
 CINCIN = 6
@@ -258,6 +272,19 @@ def isi(seed: int = 2026) -> dict[str, int]:
 
     Sesi = sessionmaker(bind=_mesin())
     with Sesi() as db:
+        db.execute(text("DELETE FROM transport_nodes"))
+        for kawasan, (nama, moda, jalur, ridership) in SIMPUL.items():
+            lat, lon = PUSAT[kawasan]
+            db.execute(
+                text(
+                    "INSERT INTO transport_nodes (nama, moda, kawasan, jumlah_jalur, "
+                    "ridership_harian, geom) VALUES (:nama, :moda, :kawasan, :jalur, "
+                    ":ridership, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))"
+                ),
+                {"nama": nama, "moda": moda, "kawasan": kawasan, "jalur": jalur,
+                 "ridership": ridership, "lon": lon, "lat": lat},
+            )
+
         db.execute(text("DELETE FROM hex_features"))
         sisip = text(
             "INSERT INTO hex_features (h3_index, "
@@ -278,7 +305,7 @@ def isi(seed: int = 2026) -> dict[str, int]:
         n_skor = muat_skor(db, skor, "baseline")
         db.commit()
 
-    return {"heksagon": len(muat), "profil_jam": n_profil, "skor": n_skor}
+    return {"simpul": len(SIMPUL), "heksagon": len(muat), "profil_jam": n_profil, "skor": n_skor}
 
 
 def hapus() -> int:
@@ -288,6 +315,7 @@ def hapus() -> int:
         # ON DELETE CASCADE mengurus location_scores, score_factors, dan
         # hex_hourly_profiles sekaligus.
         db.execute(text("DELETE FROM hex_features"))
+        db.execute(text("DELETE FROM transport_nodes"))
         db.commit()
     return n
 

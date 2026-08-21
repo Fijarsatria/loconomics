@@ -172,7 +172,8 @@ cd frontend && npx tsc --noEmit && npx oxlint
 | Mesin skoring | 11/11 uji lolos. Sensitivitas ρ 0,9719–0,9919 |
 | Commuter Clock & PriceLens (pipeline) | 13/13 uji lolos |
 | Prompt A1–A4 | Prompt produksi, sudah cocok dengan skema Pydantic |
-| Frontend | 3 bagian wajib tersambung ujung ke ujung; basemap MAPID tampil |
+| Frontend | 3 bagian wajib + sistem visual, Kompas Kuadran, daftar berdasar layer, 3 grafik. 13/19 endpoint terpakai |
+| Data demo | `pipeline/demo_seed.py` — 708 heksagon lewat pipeline sungguhan. Kuadran jatuh persis seperti dugaan PRD |
 | Ketahanan produksi | Amplop galat, cache TTL, pembatas laju, plafon biaya, GZip, kompresi geometri, bbox |
 | Jembatan pipeline → DB | `s7_publish.py` — muat ke basis data + ekspor GeoJSON statis untuk CDN |
 | Dokumentasi | 7 dokumen di `docs/` |
@@ -186,7 +187,9 @@ cd frontend && npx tsc --noEmit && npx oxlint
 | **`KOLOM_*_GO` masih kosong** di `pipeline/config.py` | CSV misi asli belum diunduh | **Ini yang pertama.** Cocokkan nama kolom, lalu `s1`–`s2` bisa jalan |
 | Badan `s1`, `s3`, `s5` dan sisa `s4` | Sebagian menunggu data, sebagian menunggu keputusan penyedia vision | Docstring-nya sudah memuat keputusan yang diambil — ikuti, jangan analisis ulang. `s4::profil_jam`, `belanja_per_jam`, dan `harga_sewa_per_m2` SUDAH jalan dan teruji |
 | `LLM_API_KEY` belum diisi | Kunci belum ada | Isi di `backend/.env`, lalu `GET /ai/status` menyatakan siap. Kode `/ai/tanya` sudah lengkap |
-| Frontend belum memakai endpoint baru | — | `/pricelens/*`, `/hex/{h3}/commuter-clock`, `/skor/kuadran`, `/skor/zoneguard/*` sudah siap dipakai |
+| **Frontend belum pernah dilihat render** | Tiga Chrome terhubung, tidak boleh ditebak | Buka `localhost:5173`, kirim tangkapan layar |
+| Isochrone belum tergambar di peta | `catchment_areas` kosong — butuh routing OSMnx sungguhan, dan lingkaran palsu justru kesalahan yang docs/data.md peringatkan | Isi lewat `s4_spatial.bangun_isochrone()` |
+| Mode gelap | Belum dikerjakan, sengaja | Basemap gelap sudah bisa dipilih; chrome-nya masih terang |
 | Sumber NJOP & RDTR definitif | Belum dipilih | Isi L01–L02, P01–P02 |
 | Data survei lapangan | Tim survei | Setelah masuk, **ulangi uji sensitivitas** dan laporkan apa adanya |
 | GeoJSON statis untuk Cloudflare | — | Mitigasi Render free tier, lihat `docs/arsitektur.md` |
