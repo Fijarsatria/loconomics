@@ -22,8 +22,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.api import ai
+from app.core import batas
 from app.models import HexFeature
-from app.schemas import PermintaanAI
+from app.schemas import PermintaanAI, PesanRiwayat
 
 lolos = gagal = 0
 
@@ -71,16 +72,29 @@ class KlienTiruan:
         return self.urutan.pop(0)
 
 
+class HasilTiruan:
+    def __init__(self, nilai):
+        self.nilai = nilai
+
+    def scalar_one(self):
+        return self.nilai
+
+
 class DbTiruan:
     """Cukup untuk alat yang dipakai di berkas ini. Tidak menyentuh basis data."""
 
-    def __init__(self, hex_row=None):
+    def __init__(self, hex_row=None, biaya_hari_ini=0.0):
         self.hex_row = hex_row
+        self.biaya = biaya_hari_ini
         self.ditambahkan = []
         self.commit_dipanggil = 0
 
     def get(self, model, kunci):
         return self.hex_row
+
+    def execute(self, *a, **kw):
+        # Satu-satunya query yang lewat sini adalah penjumlahan biaya harian.
+        return HasilTiruan(self.biaya)
 
     def add(self, obj):
         self.ditambahkan.append(obj)
@@ -102,7 +116,13 @@ def hex_contoh(dilarang: bool = False) -> HexFeature:
 
 
 def pasang(monkey_urutan):
-    """Ganti klien asli dengan tiruan. Dikembalikan supaya bisa diperiksa."""
+    """Ganti klien asli dengan tiruan. Dikembalikan supaya bisa diperiksa.
+
+    Pembatas laju juga dikosongkan: uji di berkas ini memanggil tanya() lebih
+    dari sepuluh kali, dan tanpa ini uji terakhir akan gagal karena terblokir
+    oleh uji sebelumnya - kegagalan yang menyesatkan.
+    """
+    batas.lupakan()
     k = KlienTiruan(monkey_urutan)
     ai.klien = lambda: k  # type: ignore[assignment]
     return k
@@ -136,7 +156,7 @@ def test_aksi_peta_tidak_dieksekusi_backend():
         Balasan([Blok("text", text="Zona di lokasi itu mengizinkan usaha.")], "end_turn"),
     ])
     db = DbTiruan(hex_contoh())
-    jawab = ai.tanya(PermintaanAI(pertanyaan="Boleh buka usaha di sana?"), db)
+    jawab = ai.tanya(PermintaanAI(pertanyaan="Boleh buka usaha di sana?"), db, None)
     pulihkan()
 
     nama_aksi = [a.fungsi for a in jawab.aksi_peta]
@@ -158,7 +178,7 @@ def test_alat_backend_hasilnya_kembali_ke_model():
         Balasan([Blok("text", text="Zona di sana melarang usaha.")], "end_turn"),
     ])
     db = DbTiruan(hex_contoh(dilarang=True))
-    jawab = ai.tanya(PermintaanAI(pertanyaan="Boleh buka usaha?"), db)
+    jawab = ai.tanya(PermintaanAI(pertanyaan="Boleh buka usaha?"), db, None)
     pulihkan()
 
     # Pesan terakhir yang dikirim ke model harus memuat hasil alat
@@ -182,7 +202,7 @@ def test_alat_gagal_tidak_mematikan_percakapan():
         Balasan([Blok("text", text="Maaf, lokasi itu tidak saya temukan.")], "end_turn"),
     ])
     db = DbTiruan(None)  # get() mengembalikan None -> ValueError di dalam alat
-    jawab = ai.tanya(PermintaanAI(pertanyaan="Harga di situ berapa?"), db)
+    jawab = ai.tanya(PermintaanAI(pertanyaan="Harga di situ berapa?"), db, None)
     pulihkan()
 
     hasil = [
@@ -197,33 +217,35 @@ def test_alat_gagal_tidak_mematikan_percakapan():
 def test_penolakan_klasifikator_ditangani():
     """stop_reason 'refusal' datang dengan HTTP 200 tapi tanpa isi yang bisa dipakai.
     Harus diperiksa SEBELUM membaca content."""
-    from fastapi import HTTPException
+    from app.core.galat import KesalahanAPI
 
     pasang([Balasan([], "refusal")])
     try:
-        ai.tanya(PermintaanAI(pertanyaan="..."), DbTiruan())
-        cek("penolakan jadi 422", False, "- tidak dilempar")
-    except HTTPException as e:
-        cek("penolakan jadi 422", e.status_code == 422, f"- dapat {e.status_code}")
+        ai.tanya(PermintaanAI(pertanyaan="..."), DbTiruan(), None)
+        cek("penolakan jadi galat beramplop", False, "- tidak dilempar")
+    except KesalahanAPI as e:
+        cek("penolakan jadi galat beramplop", e.status_code == 400, f"- dapat {e.status_code}")
+        cek("pesannya bisa ditindaklanjuti", "ubah kalimatnya" in e.pesan)
     finally:
         pulihkan()
 
 
 def test_tanpa_kunci_api_jadi_501():
     """Jujur bahwa belum siap, bukan jawaban palsu."""
-    from fastapi import HTTPException
-
+    from app.core.galat import LayananBelumSiap
     from app.core.llm import LLMBelumSiap
 
     def tolak():
         raise LLMBelumSiap("LLM_API_KEY belum diisi")
 
+    batas.lupakan()
     ai.klien = tolak  # type: ignore[assignment]
     try:
-        ai.tanya(PermintaanAI(pertanyaan="halo"), DbTiruan())
+        ai.tanya(PermintaanAI(pertanyaan="halo"), DbTiruan(), None)
         cek("tanpa kunci jadi 501", False, "- tidak dilempar")
-    except HTTPException as e:
+    except LayananBelumSiap as e:
         cek("tanpa kunci jadi 501", e.status_code == 501, f"- dapat {e.status_code}")
+        cek("pesannya menyebut apa yang kurang", "LLM_API_KEY" in e.pesan)
     finally:
         pulihkan()
 
@@ -241,7 +263,7 @@ def test_batas_putaran_dihormati():
     ]
     k = pasang(selalu_alat)
     db = DbTiruan(hex_contoh())
-    jawab = ai.tanya(PermintaanAI(pertanyaan="terus"), db)
+    jawab = ai.tanya(PermintaanAI(pertanyaan="terus"), db, None)
     pulihkan()
 
     cek("berhenti tepat di batas", k.dipanggil == MAKS_PUTARAN, f"- {k.dipanggil}")
@@ -252,7 +274,7 @@ def test_pencatatan_ai_call_log():
     """Setiap panggilan tercatat - ketentuan C.1 soal jejak audit."""
     pasang([Balasan([Blok("text", text="Halo.")], "end_turn")])
     db = DbTiruan()
-    ai.tanya(PermintaanAI(pertanyaan="halo"), db)
+    ai.tanya(PermintaanAI(pertanyaan="halo"), db, None)
     pulihkan()
 
     cek("satu baris log ditulis", len(db.ditambahkan) == 1)
@@ -270,7 +292,7 @@ def test_konteks_hex_terpilih_ikut():
     k = pasang([Balasan([Blok("text", text="Baik.")], "end_turn")])
     db = DbTiruan(hex_contoh())
     jawab = ai.tanya(
-        PermintaanAI(pertanyaan="Bagaimana menurutmu?", hex_terpilih="89aitest0001"), db
+        PermintaanAI(pertanyaan="Bagaimana menurutmu?", hex_terpilih="89aitest0001"), db, None
     )
     pulihkan()
 
@@ -280,9 +302,97 @@ def test_konteks_hex_terpilih_ikut():
     cek("badge memakai angka sebenarnya", jawab.keyakinan.n_titik_misi == 34)
 
 
+def test_pembatas_laju_menahan_banjir():
+    """Satu useEffect yang salah di frontend cukup untuk memanggil ini berkali-kali."""
+    from app.core.galat import TerlaluBanyakPermintaan
+
+    batas.lupakan()
+    urutan = [Balasan([Blok("text", text="ok")], "end_turn") for _ in range(30)]
+    k = KlienTiruan(urutan)
+    ai.klien = lambda: k  # type: ignore[assignment]
+
+    class Req:
+        headers = {"x-forwarded-for": "9.9.9.9"}
+        client = None
+
+    terpanggil = 0
+    ditolak = False
+    try:
+        for _ in range(batas.MAKS_PERMINTAAN + 3):
+            ai.tanya(PermintaanAI(pertanyaan="halo"), DbTiruan(), Req())  # type: ignore[arg-type]
+            terpanggil += 1
+    except TerlaluBanyakPermintaan:
+        ditolak = True
+    finally:
+        pulihkan()
+        batas.lupakan()
+
+    cek("banjir permintaan ditolak", ditolak)
+    cek(
+        "ditolak tepat setelah batas",
+        terpanggil == batas.MAKS_PERMINTAAN,
+        f"- lolos {terpanggil}, batas {batas.MAKS_PERMINTAAN}",
+    )
+
+
+def test_plafon_biaya_menahan():
+    """Diperiksa SEBELUM model dipanggil - memeriksa sesudah berarti plafon
+    selalu terlampaui minimal satu panggilan."""
+    from app.core.galat import AnggaranHabis
+
+    k = pasang([Balasan([Blok("text", text="ok")], "end_turn")])
+    db = DbTiruan(biaya_hari_ini=999.0)
+    try:
+        ai.tanya(PermintaanAI(pertanyaan="halo"), db, None)
+        cek("plafon habis menahan permintaan", False, "- lolos")
+    except AnggaranHabis:
+        cek("plafon habis menahan permintaan", True)
+        cek("model TIDAK ikut dipanggil", k.dipanggil == 0, f"- dipanggil {k.dipanggil}x")
+    finally:
+        pulihkan()
+
+
+def test_riwayat_diputar_ulang():
+    """Panel chat butuh banyak giliran. Riwayat dikirim frontend, bukan disimpan
+    server - backend tetap tanpa-status."""
+    k = pasang([Balasan([Blok("text", text="Baik.")], "end_turn")])
+    ai.tanya(
+        PermintaanAI(
+            pertanyaan="Kalau yang kedua?",
+            riwayat=[
+                PesanRiwayat(peran="pengguna", teks="Mana lokasi terbaik?"),
+                PesanRiwayat(peran="asisten", teks="Yang pertama 89abc."),
+            ],
+        ),
+        DbTiruan(),
+        None,
+    )
+    pulihkan()
+
+    peran = [m["role"] for m in k.pesan_terakhir]
+    cek("riwayat ikut dikirim", len(k.pesan_terakhir) == 3, f"- {len(k.pesan_terakhir)} pesan")
+    cek("urutan peran benar", peran == ["user", "assistant", "user"], f"- {peran}")
+    cek("giliran lama isinya utuh", "89abc" in k.pesan_terakhir[1]["content"])
+
+
+def test_riwayat_diawali_asisten_dibuang():
+    """Percakapan tidak boleh diawali giliran asisten - API menolaknya."""
+    k = pasang([Balasan([Blok("text", text="ok")], "end_turn")])
+    ai.tanya(
+        PermintaanAI(
+            pertanyaan="lanjut",
+            riwayat=[PesanRiwayat(peran="asisten", teks="Halo, ada yang bisa dibantu?")],
+        ),
+        DbTiruan(),
+        None,
+    )
+    pulihkan()
+    cek("giliran asisten di awal dibuang", k.pesan_terakhir[0]["role"] == "user")
+
+
 def test_semua_alat_dikirim_ke_model():
     k = pasang([Balasan([Blok("text", text="ok")], "end_turn")])
-    ai.tanya(PermintaanAI(pertanyaan="halo"), DbTiruan())
+    ai.tanya(PermintaanAI(pertanyaan="halo"), DbTiruan(), None)
     pulihkan()
     nama = {a["name"] for a in k.tools_terakhir}
     cek("12 alat dikirim", len(nama) == 12, f"- {len(nama)}")

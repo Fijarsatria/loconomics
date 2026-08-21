@@ -14,11 +14,14 @@ from sqlalchemy.orm import Session
 from app.core.aturan import (
     CHURN_PERSENTIL_BAHAYA,
     CHURN_PERSENTIL_WASPADA,
+    KAWASAN_PILOT,
     LABEL_RISIKO,
     PENJELASAN_ZONA,
     status_zona,
     tingkat_risiko_churn,
 )
+from app.core.cache import ber_cache
+from app.core.galat import KawasanTidakDikenal, TidakDitemukan
 from app.models import HexFeature, LocationScore
 from app.schemas import BadgeKeyakinan, PeringatanRisiko, SkorHeksagon, StatusZoneGuard
 
@@ -109,6 +112,7 @@ def saring_zoneguard(stmt):
 # ---------------------------------------------------------------------------
 
 
+@ber_cache("churn")
 def persentil_churn(db: Session, kawasan: str) -> tuple[float | None, float | None]:
     """Persentil 75 dan 90 indeks churn dalam satu kawasan.
 
@@ -167,3 +171,40 @@ def gabung_skor(versi: str):
         LocationScore,
         (LocationScore.h3_index == HexFeature.h3_index) & (LocationScore.versi == versi),
     )
+
+
+# ---------------------------------------------------------------------------
+# Validasi masukan
+# ---------------------------------------------------------------------------
+
+
+def periksa_kawasan(kawasan: str | None) -> str | None:
+    """Tolak nama kawasan yang tidak dikenal, jangan diam-diam mengembalikan kosong.
+
+    "Manggarai " dengan spasi di belakang, "manggarai" huruf kecil, atau
+    "Dukuh Atas" tanpa "BNI" semuanya menghasilkan nol baris. Tanpa pemeriksaan
+    ini, pemanggil membaca hasil kosong sebagai "tidak ada lokasi bagus di sana".
+    """
+    if kawasan is None:
+        return None
+    bersih = kawasan.strip()
+    if bersih in KAWASAN_PILOT:
+        return bersih
+    cocok = [k for k in KAWASAN_PILOT if k.lower() == bersih.lower()]
+    if cocok:
+        return cocok[0]
+    raise KawasanTidakDikenal(
+        f"Kawasan '{kawasan}' bukan salah satu dari enam kawasan pilot.",
+        {"kawasan_tersedia": list(KAWASAN_PILOT)},
+    )
+
+
+def ambil_hex(db: Session, h3_index: str) -> HexFeature:
+    """Ambil heksagon atau lempar 404 dengan pesan yang seragam."""
+    hx = db.get(HexFeature, h3_index)
+    if hx is None:
+        raise TidakDitemukan(
+            f"Heksagon {h3_index} tidak ditemukan.",
+            {"h3_index": h3_index},
+        )
+    return hx

@@ -285,8 +285,27 @@ class AksiPeta(BaseModel):
     argumen: dict[str, Any] = Field(default_factory=dict)
 
 
+class PesanRiwayat(BaseModel):
+    """Satu giliran percakapan sebelumnya."""
+
+    peran: Literal["pengguna", "asisten"]
+    teks: str = Field(max_length=4000)
+
+
 class PermintaanAI(BaseModel):
-    pertanyaan: str
+    pertanyaan: str = Field(min_length=1, max_length=2000)
+
+    # Riwayat dikirim ulang oleh frontend tiap giliran, bukan disimpan di server.
+    # Backend jadi tanpa-status: tidak ada sesi yang perlu dibersihkan, tidak ada
+    # kebocoran percakapan antarpengguna, dan proses Render yang tidur lalu bangun
+    # tidak kehilangan apa pun.
+    #
+    # Dibatasi 20 pesan karena seluruh riwayat ikut dikirim ke model setiap
+    # giliran - biayanya tumbuh kuadratik terhadap panjang percakapan.
+    riwayat: list[PesanRiwayat] = Field(
+        default_factory=list, max_length=20, description="Giliran sebelumnya, terlama dulu"
+    )
+
     hex_terpilih: str | None = Field(default=None, description="Konteks: heksagon yang sedang dibuka")
     layer_aktif: str | None = None
     viewport: dict[str, float] | None = None

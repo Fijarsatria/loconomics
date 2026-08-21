@@ -12,14 +12,16 @@ melihat area itu memang dikecualikan.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import Float, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.api.bersama import (
+    ambil_hex,
     badge,
     gabung_skor,
     peringatan_risiko,
+    periksa_kawasan,
     persentil_churn,
     saring_zoneguard,
     skor_heksagon,
@@ -56,11 +58,24 @@ def _baris_skor(rows) -> list[SkorHeksagon]:
 # ---------------------------------------------------------------------------
 
 
+def _total(db: Session, stmt) -> int:
+    """Jumlah baris sebelum limit/offset, untuk header X-Total-Count.
+
+    Dihitung dari statement yang sama supaya filternya tidak pernah bisa berbeda
+    dari yang dipakai mengambil data - kesalahan klasik yang menghasilkan
+    paginasi yang menunjuk halaman kosong.
+    """
+    inti = stmt.limit(None).offset(None).order_by(None).subquery()
+    return db.execute(select(func.count()).select_from(inti)).scalar_one()
+
+
 @router.get("/ranking", response_model=list[SkorHeksagon], summary="Peringkat Opportunity Score")
 def ranking(
     db: Annotated[Session, Depends(get_db)],
+    respons: Response,
     kawasan: Annotated[str | None, Query()] = None,
-    limit: Annotated[int, Query(le=200)] = 20,
+    limit: Annotated[int, Query(ge=1, le=200)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
     versi: str = "baseline",
 ) -> list[SkorHeksagon]:
     """Peringkat lokasi terbaik.
@@ -68,13 +83,130 @@ def ranking(
     ZoneGuard disaring di sini: ini endpoint rekomendasi, dan merekomendasikan
     lokasi yang zonanya melarang usaha adalah kesalahan yang jauh lebih mahal
     daripada melewatkan satu lokasi bagus.
+
+    Jumlah seluruh hasil dikirim di header `X-Total-Count`, bukan dibungkus ke
+    dalam badan respons - supaya bentuk baliknya tetap larik dan pemanggil yang
+    tidak peduli paginasi tidak perlu ikut berubah.
     """
-    stmt = saring_zoneguard(gabung_skor(versi)).order_by(
-        LocationScore.opportunity_score.desc().nullslast()
-    ).limit(limit)
+    kawasan = periksa_kawasan(kawasan)
+    dasar = saring_zoneguard(gabung_skor(versi))
     if kawasan:
-        stmt = stmt.where(HexFeature.kawasan == kawasan)
+        dasar = dasar.where(HexFeature.kawasan == kawasan)
+
+    respons.headers["X-Total-Count"] = str(_total(db, dasar))
+    stmt = (
+        dasar.order_by(LocationScore.opportunity_score.desc().nullslast())
+        .offset(offset)
+        .limit(limit)
+    )
     return _baris_skor(db.execute(stmt).all())
+
+
+# ---------------------------------------------------------------------------
+# Versi skor - sisi baca simulator what-if (fitur B3)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/versi", summary="Versi skor yang tersedia")
+def daftar_versi(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
+    """Versi skor yang sudah dihitung pipeline dan tersimpan.
+
+    Backend tidak pernah MEMBUAT versi baru - itu berarti menghitung skor, dan
+    skor hanya dihitung di pipeline/s6_score.py. Yang bisa dilakukan di sini
+    hanya menyajikan dan membandingkan versi yang sudah ada.
+    """
+    baris = db.execute(
+        select(
+            LocationScore.versi,
+            func.count().label("n"),
+            func.max(LocationScore.dihitung_pada).label("terakhir"),
+            func.avg(LocationScore.opportunity_score).label("rata_skor"),
+        )
+        .group_by(LocationScore.versi)
+        .order_by(LocationScore.versi)
+    ).all()
+    return [
+        {
+            "versi": r.versi,
+            "n_heksagon": r.n,
+            "dihitung_pada": r.terakhir,
+            "rata_opportunity_score": round(float(r.rata_skor), 2) if r.rata_skor else None,
+            "baseline": r.versi == "baseline",
+        }
+        for r in baris
+    ]
+
+
+@router.get("/banding-versi", summary="Bandingkan dua versi skor")
+def banding_versi(
+    db: Annotated[Session, Depends(get_db)],
+    a: Annotated[str, Query(description="Versi pembanding, biasanya 'baseline'")] = "baseline",
+    b: Annotated[str, Query(description="Versi yang diuji")] = "baseline",
+    kawasan: Annotated[str | None, Query()] = None,
+    limit_pindah: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> dict:
+    """Seberapa banyak peringkat berubah antara dua versi bobot.
+
+    Inilah bentuk yang bisa disajikan dari uji sensitivitas: bukan pembelaan atas
+    angka bobot, melainkan bukti bahwa hasilnya tidak sensitif terhadap angka itu.
+    Target yang dipakai proyek ini rho > 0,85 - lihat docs/skoring.md.
+
+    Korelasi dihitung SQL dengan `corr()` atas kolom `peringkat`. Karena peringkat
+    sudah berupa rank, korelasi Pearson atas keduanya SAMA DENGAN korelasi Spearman
+    atas skornya - jadi tidak perlu scipy di backend, dan tidak ada skor yang
+    dihitung ulang di sini.
+    """
+    kawasan = periksa_kawasan(kawasan)
+    A = aliased(LocationScore)
+    B = aliased(LocationScore)
+
+    gabung = (
+        select(A, B, HexFeature)
+        .select_from(A)
+        .join(B, (B.h3_index == A.h3_index) & (B.versi == b))
+        .join(HexFeature, HexFeature.h3_index == A.h3_index)
+        .where(A.versi == a, A.peringkat.is_not(None), B.peringkat.is_not(None))
+    )
+    if kawasan:
+        gabung = gabung.where(HexFeature.kawasan == kawasan)
+
+    inti = gabung.subquery()
+    ringkas = db.execute(
+        select(
+            func.count().label("n"),
+            func.corr(inti.c.peringkat, inti.c.peringkat_1).label("rho"),
+            func.avg(func.abs(inti.c.peringkat - inti.c.peringkat_1)).label("geser_rata"),
+            func.max(func.abs(inti.c.peringkat - inti.c.peringkat_1)).label("geser_maks"),
+        )
+    ).one()
+
+    pindah = db.execute(
+        gabung.order_by(func.abs(A.peringkat - B.peringkat).desc()).limit(limit_pindah)
+    ).all()
+
+    rho = float(ringkas.rho) if ringkas.rho is not None else None
+    return {
+        "versi_a": a,
+        "versi_b": b,
+        "n_dibandingkan": ringkas.n,
+        "rho_spearman": round(rho, 4) if rho is not None else None,
+        "lolos_ambang": rho is not None and rho > 0.85,
+        "ambang": 0.85,
+        "geser_peringkat_rata": round(float(ringkas.geser_rata), 1) if ringkas.geser_rata else None,
+        "geser_peringkat_maks": ringkas.geser_maks,
+        "paling_berpindah": [
+            {
+                "h3_index": hx.h3_index,
+                "kawasan": hx.kawasan,
+                "peringkat_a": sa.peringkat,
+                "peringkat_b": sb.peringkat,
+                "geser": (sa.peringkat or 0) - (sb.peringkat or 0),
+                "kuadran_a": sa.kuadran,
+                "kuadran_b": sb.kuadran,
+            }
+            for sa, sb, hx in pindah
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +354,7 @@ def _ringkasan(hx: HexFeature, sc: LocationScore, alasan: list[AlasanGem]) -> st
 @router.get("/hidden-gems", response_model=list[HiddenGem], summary="GemFinder")
 def hidden_gems(
     db: Annotated[Session, Depends(get_db)],
+    respons: Response = None,  # type: ignore[assignment]
     kawasan: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=10, le=100, description="Kriteria penerimaan: minimal 10")] = 10,
     versi: str = "baseline",
@@ -241,6 +374,7 @@ def hidden_gems(
         .order_by(LocationScore.hidden_gem_score.desc())
         .limit(limit)
     )
+    kawasan = periksa_kawasan(kawasan)
     if kawasan:
         stmt = stmt.where(HexFeature.kawasan == kawasan)
 
@@ -295,6 +429,7 @@ def risk_radar(
         .order_by(HexFeature.indeks_churn.desc().nullslast())
         .limit(limit)
     )
+    kawasan = periksa_kawasan(kawasan)
     if kawasan:
         stmt = stmt.where(HexFeature.kawasan == kawasan)
 
@@ -342,6 +477,7 @@ def diagram_kuadran(
     labelnya tidak akan bertentangan.
     """
     stmt = gabung_skor(versi).limit(limit)
+    kawasan = periksa_kawasan(kawasan)
     if kawasan:
         stmt = stmt.where(HexFeature.kawasan == kawasan)
     baris = db.execute(stmt).all()
@@ -391,9 +527,7 @@ def diagram_kuadran(
     "/risiko/{h3_index}", response_model=PeringatanRisiko, summary="Peringatan risiko satu heksagon"
 )
 def risiko_heksagon(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> PeringatanRisiko:
-    hx = db.get(HexFeature, h3_index)
-    if hx is None:
-        raise HTTPException(status_code=404, detail=f"Heksagon {h3_index} tidak ditemukan")
+    hx = ambil_hex(db, h3_index)
     p75, p90 = persentil_churn(db, hx.kawasan)
     return peringatan_risiko(hx, p75, p90)
 
@@ -440,7 +574,5 @@ def zoneguard_ringkasan(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
     "/zoneguard/{h3_index}", response_model=StatusZoneGuard, summary="Status zonasi satu heksagon"
 )
 def zoneguard_heksagon(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> StatusZoneGuard:
-    hx = db.get(HexFeature, h3_index)
-    if hx is None:
-        raise HTTPException(status_code=404, detail=f"Heksagon {h3_index} tidak ditemukan")
+    hx = ambil_hex(db, h3_index)
     return zoneguard(hx)

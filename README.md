@@ -26,9 +26,9 @@ sehingga tidak hanya merekomendasikan, tetapi juga melindungi.
 ## Struktur repositori
 
 ```
-pipeline/    Python s1→s6 — mengubah survei lapangan jadi angka di peta
+pipeline/    Python s1→s7 — dari survei lapangan sampai ke basis data
              Satu-satunya tempat skor dihitung
-backend/     FastAPI — 5 modul + tests/. Membaca basis data, tidak menghitung
+backend/     FastAPI — 6 modul + tests/. Membaca basis data, tidak menghitung
 frontend/    React + Vite + MapLibre GL — peta, insight, AI dalam satu layar
 docs/        7 dokumen. Menjelaskan kenapa, bukan bagaimana
 CLAUDE.md    Panduan untuk sesi AI berikutnya
@@ -51,7 +51,9 @@ Indeks lengkap dokumentasi: [docs/README.md](docs/README.md).
 # Uji — tidak butuh basis data maupun data lapangan
 cd pipeline && python test_s6_score.py     # mesin skoring
 cd pipeline && python test_s4_spatial.py   # Commuter Clock + PriceLens
-cd backend  && python tests/test_aturan.py tests/test_ai_loop.py
+cd pipeline && python test_s7_publish.py   # jembatan ke basis data
+cd backend  && python tests/test_aturan.py
+cd backend  && python tests/test_infra.py  # galat, cache, pembatas
 
 # Backend  → http://localhost:8000/docs
 cd backend
@@ -96,7 +98,9 @@ frontend. Petanya bergerak sendiri.
 | Bagian | Status |
 |---|---|
 | Skema basis data (43 variabel + 3 penanda + profil jam) | Selesai, migrasi diterapkan |
-| Backend — 5 modul, 23 rute | Selesai, 96 asersi lolos |
+| Backend — 6 modul, 29 rute | Selesai, 162 asersi lolos |
+| Ketahanan produksi | Amplop galat, cache, pembatas laju, plafon biaya AI, GZip |
+| Jembatan pipeline → basis data (`s7_publish`) | Selesai, termasuk ekspor GeoJSON statis |
 | PriceLens · Commuter Clock · ZoneGuard · RiskRadar · GemFinder | Selesai di backend |
 | AI Consultant — 12 alat, loop agentik | Selesai. Butuh `LLM_API_KEY` untuk aktif |
 | Mesin skoring | Selesai — 11/11 uji lolos, sensitivitas ρ 0,97–0,99 |

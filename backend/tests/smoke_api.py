@@ -18,16 +18,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import func, select
 
-from app.api import pricelens, skor
+from app.api import meta, pricelens, skor, transit
 from app.api.bersama import saring_zoneguard, zoneguard
 from app.api.hex import commuter_clock, detail_heksagon, layer_heksagon
+from app.core import cache
 from app.core.database import SessionLocal
+from app.core.galat import KawasanTidakDikenal, KesalahanAPI, TidakDitemukan
 from app.models import HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
 
-KAWASAN = "SMOKE Manggarai"
+KAWASAN = "Manggarai"  # harus kawasan pilot sungguhan - validasi menolak yang lain
 PREFIKS = "89smoke"
+VERSI_UJI = "smoke_bobot_uji"
 
 lolos = gagal = 0
+
+
+class Respons:
+    """Pengganti fastapi.Response untuk memanggil endpoint langsung.
+
+    Endpoint yang menulis header (X-Total-Count) butuh objek respons. Saat
+    dipanggil lewat HTTP, FastAPI yang menyediakannya; saat dipanggil langsung,
+    ini penggantinya.
+    """
+
+    def __init__(self):
+        self.headers: dict[str, str] = {}
 
 
 def cek(nama: str, syarat: bool, catatan: str = "") -> None:
@@ -116,6 +131,18 @@ def siapkan(db) -> None:
                 peringkat=i + 1,
             )
         )
+    # Versi kedua dengan peringkat sedikit bergeser, untuk menguji banding-versi.
+    for i in range(12):
+        db.add(
+            LocationScore(
+                h3_index=f"{PREFIKS}{i:04d}",
+                versi=VERSI_UJI,
+                opportunity_score=float(94 - i * 6),
+                peringkat=(i + 2) if i < 11 else 1,  # satu heksagon melompat jauh
+                kuadran="HIDDEN_GEM" if i < 4 else "HINDARI",
+            )
+        )
+
     db.add(
         ScoreFactor(
             h3_index=f"{PREFIKS}0000", versi="baseline", kode_variabel="D05",
@@ -158,7 +185,7 @@ def jalankan(db) -> None:
     cek("heksagon terlarang tersaring", f"{PREFIKS}0003" not in ids)
     cek("heksagon zona NULL TETAP lolos", f"{PREFIKS}0004" in ids, "- NULL bukan larangan")
 
-    peringkat = skor.ranking(db=db, kawasan=KAWASAN, limit=20)
+    peringkat = skor.ranking(db=db, respons=Respons(), kawasan=KAWASAN, limit=20)
     cek(
         "/skor/ranking tidak pernah merekomendasikan zona terlarang",
         all(r.h3_index != f"{PREFIKS}0003" for r in peringkat),
@@ -327,17 +354,132 @@ def jalankan(db) -> None:
     try:
         panggil_fungsi(db, "os.system", {"x": 1})
         cek("nama fungsi asing ditolak", False, "- tidak ditolak!")
-    except Exception:
+    except KesalahanAPI:
         cek("nama fungsi asing ditolak", True)
+
+    # ---- Validasi masukan --------------------------------------------------
+    print("\n[+] Validasi masukan")
+    try:
+        skor.ranking(db=db, respons=Respons(), kawasan="Mangarai")  # salah eja
+        cek("kawasan salah eja ditolak", False, "- diterima diam-diam")
+    except KawasanTidakDikenal as e:
+        cek("kawasan salah eja ditolak", True)
+        cek("galat menyebutkan kawasan yang sah", len(e.detail["kawasan_tersedia"]) == 6)
+
+    hasil = skor.ranking(db=db, respons=Respons(), kawasan="manggarai")
+    cek("beda huruf besar-kecil tetap diterima", len(hasil) > 0)
+
+    try:
+        detail_heksagon("tidak_ada_sama_sekali", db)
+        cek("heksagon tak dikenal jadi 404", False, "- tidak dilempar")
+    except TidakDitemukan:
+        cek("heksagon tak dikenal jadi 404", True)
+
+    # ---- Paginasi ----------------------------------------------------------
+    print("\n[+] Paginasi")
+    r1 = Respons()
+    hal1 = skor.ranking(db=db, respons=r1, kawasan=KAWASAN, limit=5, offset=0)
+    hal2 = skor.ranking(db=db, respons=Respons(), kawasan=KAWASAN, limit=5, offset=5)
+    cek("halaman 1 berisi 5", len(hal1) == 5)
+    cek("halaman 2 berisi 5 berikutnya", len(hal2) == 5)
+    cek(
+        "kedua halaman tidak tumpang tindih",
+        not ({h.h3_index for h in hal1} & {h.h3_index for h in hal2}),
+    )
+    cek(
+        "X-Total-Count menghitung seluruh hasil, bukan satu halaman",
+        r1.headers["X-Total-Count"] == "11",
+        f"- {r1.headers.get('X-Total-Count')} (12 heksagon - 1 zona dilarang)",
+    )
+
+    # ---- Versi skor (fitur B3) --------------------------------------------
+    print("\n[+] Versi skor")
+    versi = skor.daftar_versi(db=db)
+    nama_versi = {v["versi"] for v in versi}
+    cek("kedua versi terdaftar", {"baseline", VERSI_UJI} <= nama_versi, f"- {nama_versi}")
+    cek("baseline ditandai", any(v["baseline"] for v in versi))
+
+    banding = skor.banding_versi(db=db, a="baseline", b=VERSI_UJI, kawasan=KAWASAN)
+    cek("membandingkan 12 heksagon", banding["n_dibandingkan"] == 12, f"- {banding['n_dibandingkan']}")
+    cek("rho terhitung", banding["rho_spearman"] is not None)
+    cek("ambang dilaporkan", banding["ambang"] == 0.85)
+    cek("daftar paling berpindah terisi", len(banding["paling_berpindah"]) > 0)
+    cek(
+        "heksagon yang melompat ada di puncak daftar",
+        abs(banding["paling_berpindah"][0]["geser"]) == banding["geser_peringkat_maks"],
+    )
+
+    # ---- Layer: bbox dan penyederhanaan ------------------------------------
+    print("\n[+] Layer heksagon: bbox + penyederhanaan")
+    cache.bersihkan()
+    semua = layer_heksagon(db=db, kawasan=KAWASAN)
+    cache.bersihkan()
+    sebagian = layer_heksagon(db=db, kawasan=KAWASAN, bbox="106.838,-6.212,106.845,-6.205")
+    cek(
+        "bbox benar-benar menyaring",
+        0 < len(sebagian["features"]) < len(semua["features"]),
+        f"- {len(sebagian['features'])} dari {len(semua['features'])}",
+    )
+
+    cache.bersihkan()
+    kasar = layer_heksagon(db=db, kawasan=KAWASAN, sederhanakan=0.001)
+    cek("penyederhanaan tetap mengembalikan semua fitur", len(kasar["features"]) == len(semua["features"]))
+
+    try:
+        cache.bersihkan()
+        layer_heksagon(db=db, bbox="ngawur")
+        cek("bbox ngawur ditolak", False, "- diterima")
+    except KesalahanAPI:
+        cek("bbox ngawur ditolak", True)
+
+    cache.bersihkan()
+    layer_heksagon(db=db, kawasan=KAWASAN)
+    sebelum = cache.statistik()["hit"]
+    layer_heksagon(db=db, kawasan=KAWASAN)
+    cek("panggilan kedua kena cache", cache.statistik()["hit"] == sebelum + 1)
+    cache.bersihkan()
+
+    # ---- Meta --------------------------------------------------------------
+    print("\n[+] Meta: kesiapan dan cakupan")
+    siap = meta.kesiapan(db=db)
+    cek("basis data terjangkau", siap["basis_data"]["terjangkau"] is True)
+    cek("revisi migrasi terbaca", bool(siap["basis_data"]["revisi_migrasi"]))
+    cek("jumlah heksagon terbaca", siap["basis_data"]["heksagon"] >= 12)
+    cek("versi skor terdaftar", VERSI_UJI in siap["basis_data"]["versi_skor"])
+    cek("status AI ikut dilaporkan", "siap" in siap["ai"])
+    cek("plafon biaya dilaporkan", siap["ai"]["plafon_harian_usd"] > 0)
+
+    kws = meta.daftar_kawasan(db=db)
+    cek("keenam kawasan pilot selalu muncul", len(kws) == 6, f"- {len(kws)}")
+    manggarai = next(k for k in kws if k["kawasan"] == "Manggarai")
+    cek("cakupan harga terhitung", 0 < manggarai["cakupan_harga"] <= 1, f"- {manggarai}")
+    cek(
+        "kawasan tanpa data tetap muncul dengan nol",
+        any(k["heksagon"] == 0 and not k["siap_demo"] for k in kws),
+    )
+
+    # ---- Transit -----------------------------------------------------------
+    print("\n[+] Transit")
+    try:
+        transit.detail_simpul(999999, db)
+        cek("simpul tak dikenal jadi 404", False, "- tidak dilempar")
+    except TidakDitemukan:
+        cek("simpul tak dikenal jadi 404", True)
 
 
 def main() -> int:
     db = SessionLocal()
+    # Cache dikosongkan sebelum DAN sesudah: seluruh uji ini berjalan di dalam
+    # transaksi yang di-rollback, dan hasil baca yang sempat ter-cache akan
+    # bertahan setelah datanya hilang. Jebakan ini hanya muncul di uji, bukan di
+    # produksi - tetapi kalau diabaikan, ujinya jadi tidak bisa dipercaya.
+    cache.bersihkan()
     try:
         siapkan(db)
         jalankan(db)
     finally:
         db.rollback()
+        cache.bersihkan()
         sisa = db.execute(
             select(func.count()).select_from(HexFeature).where(HexFeature.kawasan == KAWASAN)
         ).scalar_one()

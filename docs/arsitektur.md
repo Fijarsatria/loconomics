@@ -69,26 +69,33 @@ optimizeDeps: { exclude: ['maplibre-gl'] }
 Setelah mengubahnya, `node_modules/.vite` harus dihapus — cache lama tetap
 dipakai kalau tidak.
 
-## Backend: modular monolith, lima modul
+## Backend: modular monolith, enam modul
 
 ```
 backend/app/
-├── main.py          rakit aplikasi + CORS
+├── main.py          rakit aplikasi: middleware, penangan galat, router
 ├── models.py        SQLAlchemy — 43 variabel + 3 penanda + profil jam
 ├── schemas.py       Pydantic — bentuk respons, tempat aturan lomba ditegakkan
 ├── core/
 │   ├── config.py    baca environment
 │   ├── database.py  sesi
 │   ├── aturan.py    aturan TAMPILAN: ambang peringatan, label, status zona
+│   ├── galat.py     amplop galat seragam + request id
+│   ├── cache.py     cache dalam proses ber-TTL
+│   ├── batas.py     pembatas laju + plafon biaya AI
 │   └── llm.py       sambungan penyedia model bahasa
 └── api/
-    ├── bersama.py   dipakai lintas modul: badge, ZoneGuard, persentil churn
+    ├── bersama.py   lintas modul: badge, ZoneGuard, persentil, validasi
+    ├── meta.py      /health · /meta/siap · /meta/kawasan · /meta/cache/bersihkan
     ├── hex.py       /hex/layer · /hex/{h3} · /hex/{h3}/commuter-clock
     ├── pricelens.py /pricelens/layer · /pricelens/ringkasan · /pricelens/{h3}
-    ├── transit.py   /transit/nodes · /transit/catchment
-    ├── skor.py      /skor/ranking · hidden-gems · risk-radar · kuadran · zoneguard
+    ├── transit.py   /transit/nodes · /transit/simpul/{id} · /transit/catchment
+    ├── skor.py      /skor/ranking · hidden-gems · risk-radar · kuadran ·
+    │                zoneguard · versi · banding-versi
     └── ai.py        /ai/fungsi · /ai/status · /ai/tanya
 ```
+
+Dua puluh sembilan rute. Daftar lengkapnya di `/docs` saat dijalankan lokal.
 
 `bersama.py` ada karena `skor.py` sempat mengimpor `badge()` dari `hex.py`. Pola
 itu berubah jadi impor melingkar begitu modul bertambah; sekarang modul API hanya
@@ -132,11 +139,42 @@ adalah objek `Query` dan fungsinya hanya bisa dipanggil lewat HTTP. Modul AI
 memanggil endpoint secara langsung sebagai alat, jadi bentuk pertama yang dipakai.
 Ini ditemukan oleh smoke test, bukan oleh code review.
 
+### Ketahanan produksi
+
+Empat hal yang tidak terlihat di daftar endpoint tetapi menentukan apakah
+backend ini selamat di free tier.
+
+**Amplop galat seragam** (`core/galat.py`). Tanpa ini, kegagalan basis data
+keluar ke pengguna sebagai traceback Python: bocor nama tabel, jalur berkas, dan
+kadang potongan connection string. Setiap galat sekarang keluar sebagai
+`{"galat": {"kode", "pesan", "request_id"}}` — `kode` untuk program, `pesan`
+untuk manusia. Pesan galat tak terduga TIDAK pernah diteruskan apa adanya;
+yang keluar hanya `request_id`, isinya lengkap ada di log server.
+
+**Cache dalam proses** (`core/cache.py`). Bukan Redis: Render free tier hanya
+memberi satu proses tanpa layanan tambahan, dan menambah Redis berarti menambah
+satu lagi hal yang bisa mati saat demo. Yang di-cache hanya bacaan mahal yang
+jarang berubah — persentil kawasan dan layer GeoJSON. Setelah pipeline memuat
+data baru, panggil `POST /meta/cache/bersihkan`.
+
+**Pembatas laju + plafon biaya** (`core/batas.py`). `/ai/tanya` satu-satunya
+endpoint yang membelanjakan uang sungguhan. Dua lapis: jendela geser 10
+permintaan per menit per alamat, dan plafon biaya harian yang dihitung dari
+`ai_call_logs`. Lapis pertama saja tidak cukup — sepuluh alamat yang
+masing-masing di bawah batas tetap bisa menguras anggaran dalam sehari. Yang
+paling mungkin memicunya bukan penyerang, melainkan satu `useEffect` tanpa
+dependensi yang benar di frontend.
+
+**Kompresi GZip.** Satu FeatureCollection berisi ribuan heksagon adalah JSON
+penuh angka berulang dan biasanya menyusut sekitar sepersepuluh. Di free tier itu
+bedanya antara peta yang muncul dan peta yang masih memuat saat juri sudah pindah.
+
 ### Uji
 
 ```bash
 cd backend
-python tests/test_aturan.py     # aturan tampilan + skema alat AI, tanpa DB
+python tests/test_aturan.py     # aturan tampilan, skema alat, konsistensi lintas berkas
+python tests/test_infra.py      # galat, cache, pembatas — tanpa DB
 python tests/test_ai_loop.py    # loop agentik dengan klien tiruan, tanpa kunci API
 python tests/smoke_api.py       # enam fitur terhadap Supabase, di dalam transaksi
 ```

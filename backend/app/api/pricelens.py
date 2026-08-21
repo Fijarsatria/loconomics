@@ -20,11 +20,11 @@ import json
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Float, func, select
 from sqlalchemy.orm import Session
 
-from app.api.bersama import badge
+from app.api.bersama import ambil_hex, badge, periksa_kawasan
 from app.core.database import get_db
 from app.models import HexFeature
 from app.schemas import PriceLensHeksagon, RentangWajar
@@ -127,6 +127,7 @@ def layer_harga(
         )
         .limit(limit)
     )
+    kawasan = periksa_kawasan(kawasan)
     if kawasan:
         stmt = stmt.where(HexFeature.kawasan == kawasan)
     if maks_sewa_per_m2 is not None:
@@ -194,7 +195,5 @@ def ringkasan_kawasan(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
     "/{h3_index}", response_model=PriceLensHeksagon, summary="Kartu harga satu heksagon"
 )
 def detail_harga(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> PriceLensHeksagon:
-    hx = db.get(HexFeature, h3_index)
-    if hx is None:
-        raise HTTPException(status_code=404, detail=f"Heksagon {h3_index} tidak ditemukan")
+    hx = ambil_hex(db, h3_index)
     return kartu_harga(db, hx)

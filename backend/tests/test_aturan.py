@@ -134,6 +134,40 @@ def test_argumen_none_dibuang():
     }
 
 
+def test_kawasan_sama_di_tiga_berkas():
+    """Backend, pipeline, dan frontend adalah tiga proses yang tidak bisa saling
+    impor, jadi daftar kawasan terpaksa ditulis tiga kali. Yang menjaganya tetap
+    sama hanya uji ini.
+
+    Kalau satu daftar berubah tanpa yang lain, gejalanya halus: peta menawarkan
+    kawasan yang backend tolak, atau pipeline memproses kawasan yang tidak pernah
+    bisa ditampilkan.
+    """
+    from app.core.aturan import KAWASAN_PILOT
+
+    akar = Path(__file__).resolve().parents[2]
+
+    pipeline_py = (akar / "pipeline" / "config.py").read_text(encoding="utf-8")
+    for k in KAWASAN_PILOT:
+        assert f'"{k}"' in pipeline_py, f"'{k}' tidak ada di pipeline/config.py"
+
+    frontend_ts = (akar / "frontend" / "src" / "config.ts").read_text(encoding="utf-8")
+    for k in KAWASAN_PILOT:
+        assert f"'{k}'" in frontend_ts, f"'{k}' tidak ada di frontend/src/config.ts"
+
+    assert len(KAWASAN_PILOT) == 6
+
+
+def test_jam_operasional_sama_dengan_pipeline():
+    """Pipeline mengisi tabel profil jam, backend menyajikannya. Kalau rentangnya
+    berbeda, sebagian jam akan hilang tanpa ada yang menyadari."""
+    from app.core.aturan import JAM_MULAI, JAM_SELESAI
+
+    akar = Path(__file__).resolve().parents[2]
+    pipeline_py = (akar / "pipeline" / "config.py").read_text(encoding="utf-8")
+    assert f"JAM_MULAI, JAM_SELESAI = {JAM_MULAI}, {JAM_SELESAI}" in pipeline_py
+
+
 def test_prompt_melarang_menghitung():
     from app.api.ai import PROMPT_SISTEM
 

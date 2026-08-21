@@ -165,6 +165,38 @@ Batas keras yang berlaku (`core/llm.py`): **8 putaran alat** dan **4096 token**
 per jawaban. Batas putaran ada supaya model yang tersesat tidak memanggil alat
 tanpa henti; batas token karena jawaban AI Consultant memang harus ringkas.
 
+### Pembatas biaya
+
+`/ai/tanya` satu-satunya endpoint di seluruh backend yang membelanjakan uang
+sungguhan, jadi ia dijaga dua lapis (`core/batas.py`), keduanya diperiksa
+**sebelum** model dipanggil:
+
+| Lapis | Batas | Mencegah |
+|---|---|---|
+| Laju per alamat | 10 permintaan / 60 detik, jendela geser | Satu sumber membanjiri |
+| Plafon biaya harian | `LLM_PLAFON_HARIAN_USD`, dari `ai_call_logs` | Banyak sumber pelan-pelan menghabiskan |
+
+Lapis pertama saja tidak cukup: sepuluh alamat yang masing-masing di bawah batas
+tetap bisa menguras anggaran dalam sehari. Yang paling mungkin memicu keduanya
+bukan penyerang, melainkan satu `useEffect` tanpa dependensi yang benar.
+
+Plafon diperiksa sebelum, bukan sesudah — memeriksa sesudah berarti plafon selalu
+terlampaui minimal satu panggilan, dan panggilan pertama setelah plafon justru
+yang paling mungkin panggilan berulang dari bug.
+
+### Percakapan banyak giliran
+
+Riwayat dikirim ulang frontend setiap giliran, **tidak disimpan di server**.
+Backend jadi tanpa-status: tidak ada sesi yang perlu dibersihkan, tidak ada
+kebocoran percakapan antarpengguna, dan proses Render yang tidur lalu bangun
+tidak kehilangan apa pun. Dibatasi 20 pesan karena seluruh riwayat ikut dikirim
+ke model setiap giliran — biayanya tumbuh kuadratik terhadap panjang percakapan.
+
+Hasil alat dari giliran lama sengaja tidak ikut diputar ulang. Yang perlu diingat
+model hanyalah apa yang sudah dikatakan, bukan seluruh payload JSON yang pernah
+dibacanya; kalau ia butuh angkanya lagi, ia memanggil alatnya lagi — dan itu
+justru benar, karena angka di basis data bisa saja sudah berubah.
+
 ### Yang keluar bersama jawaban
 
 | Field | Isi | Untuk apa |

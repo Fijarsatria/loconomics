@@ -23,7 +23,22 @@ class Settings(BaseSettings):
     llm_provider: str = "anthropic"
     llm_model: str = "claude-opus-5"
 
+    # Plafon biaya AI per hari. Bukan kehati-hatian berlebihan: satu useEffect
+    # tanpa dependensi yang benar di frontend sudah cukup untuk memanggil
+    # /ai/tanya berulang kali tanpa ada yang menyadarinya sampai tagihan datang.
+    llm_plafon_harian_usd: float = 2.0
+
+    # Diisi dari .env sebagai daftar dipisah koma saat deploy, mis.
+    # CORS_ORIGINS=https://loconomics.mapid.io,https://loconomics.pages.dev
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
+
+    # "produksi" mengetatkan beberapa hal: /docs disembunyikan dan galat tak
+    # terduga tidak pernah membawa pesan aslinya.
+    lingkungan: str = "pengembangan"
+
+    @property
+    def produksi(self) -> bool:
+        return self.lingkungan.lower().startswith("prod")
 
 
 settings = Settings()

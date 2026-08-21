@@ -34,9 +34,9 @@ dulu sebelum mengerjakannya.
 ## Struktur
 
 ```
-backend/     FastAPI — 5 modul + tests/. Membaca basis data, TIDAK menghitung skor
+backend/     FastAPI — 6 modul + tests/. Membaca basis data, TIDAK menghitung skor
 frontend/    React + Vite + MapLibre GL. 7 berkas sumber, sengaja tidak lebih
-pipeline/    Python s1→s6. Satu-satunya tempat skor dihitung
+pipeline/    Python s1→s7. Satu-satunya tempat skor dihitung
 docs/        7 dokumen. Kenapa, bukan bagaimana
 ```
 
@@ -87,6 +87,13 @@ atribusi milik MAPID atas data sumbernya — bukan tanda kita memakai tile OSM.
 Perubahannya tercatat di git, dan berkas itu sekaligus bukti untuk ketentuan
 lomba C.1.
 
+### 8. Galat tidak pernah bocor apa adanya
+
+Pesan galat tak terduga bisa memuat nama tabel, jalur berkas, bahkan potongan
+sandi. `core/galat.py` yang menanganinya: yang keluar ke pengguna hanya kode
+generik dan `request_id`; isinya lengkap ada di log server. Jangan pernah
+menambahkan penangan yang meneruskan `str(exc)` ke luar.
+
 ---
 
 ## Konvensi
@@ -117,9 +124,15 @@ lomba C.1.
 # Pipeline — tanpa DB, tanpa data lapangan
 cd pipeline && python test_s6_score.py      # skoring + sensitivitas bobot
 cd pipeline && python test_s4_spatial.py    # Commuter Clock + PriceLens
+cd pipeline && python test_s7_publish.py    # pembersihan nilai sebelum ke DB
+
+# Pipeline — terbitkan hasil ke basis data lalu ke berkas statis
+cd pipeline && python s7_publish.py --muat --ekspor
+cd pipeline && python s7_publish.py --cakupan    # kawasan mana yang siap demo
 
 # Backend
-cd backend && python tests/test_aturan.py   # aturan tampilan + skema alat AI
+cd backend && python tests/test_aturan.py   # aturan + konsistensi lintas berkas
+cd backend && python tests/test_infra.py    # galat, cache, pembatas
 cd backend && python tests/test_ai_loop.py  # loop agentik, klien tiruan
 cd backend && python tests/smoke_api.py     # 6 fitur ke Supabase, di-rollback
 cd backend && uvicorn app.main:app --reload # http://localhost:8000/docs
@@ -134,15 +147,19 @@ cd frontend && npx tsc --noEmit && npx oxlint
 
 - Menyentuh `s6_score.py` atau bobot → `test_s6_score.py` (11 uji, ρ > 0,85)
 - Menyentuh pipeline jam/harga → `test_s4_spatial.py` (13 uji)
-- Menyentuh backend → ketiga berkas di `backend/tests/` (96 asersi)
+- Menyentuh `s7_publish.py` → `test_s7_publish.py` (15 uji)
+- Menyentuh backend → keempat berkas di `backend/tests/` (162 asersi)
 - Menyentuh frontend → `npx tsc --noEmit` dan `npx oxlint`
 - Menyentuh model/skema → `alembic upgrade head` berhasil di basis data nyata
-- Menambah endpoint → periksa ulang aturan 2 di atas, dan kalau ia
-  MEREKOMENDASIKAN lokasi, wajib lewat `saring_zoneguard()`
+- Menambah endpoint → empat hal:
+  1. Aturan 2 di atas — bisakah responsnya merekonstruksi satu baris survei?
+  2. Kalau ia MEREKOMENDASIKAN lokasi, wajib lewat `saring_zoneguard()`
+  3. Parameter `kawasan` wajib lewat `periksa_kawasan()`
+  4. Ambil heksagon lewat `ambil_hex()`, jangan `db.get` + 404 sendiri
 
 ---
 
-## Status per 21 Agustus 2026
+## Status per 21 Agustus 2026 (backend lengkap)
 
 ### Sudah selesai dan terverifikasi
 
@@ -156,7 +173,11 @@ cd frontend && npx tsc --noEmit && npx oxlint
 | Commuter Clock & PriceLens (pipeline) | 13/13 uji lolos |
 | Prompt A1–A4 | Prompt produksi, sudah cocok dengan skema Pydantic |
 | Frontend | 3 bagian wajib tersambung ujung ke ujung; basemap MAPID tampil |
+| Ketahanan produksi | Amplop galat, cache TTL, pembatas laju, plafon biaya, GZip, kompresi geometri, bbox |
+| Jembatan pipeline → DB | `s7_publish.py` — muat ke basis data + ekspor GeoJSON statis untuk CDN |
 | Dokumentasi | 7 dokumen di `docs/` |
+
+**201 asersi lolos** di tujuh berkas uji.
 
 ### Belum dikerjakan — di sinilah pekerjaan berikutnya
 
@@ -187,6 +208,10 @@ jangan mengulang analisisnya.
 | Migrasi gagal: `geoalchemy2` tidak dikenal | Autogenerate tidak menulis impornya | Sudah permanen di `alembic/script.py.mako` |
 | `KeyError: 'D05'` di `_tertimbang()` | Bobot berkunci KODE, DataFrame berkunci NAMA KOLOM | `KODE_KE_KOLOM` di `config.py` |
 | `ModuleNotFoundError: No module named 'pipeline'` | Skrip pipeline dijalankan dari root | Jalankan dari dalam `pipeline/` |
+| Angka baru pipeline tidak muncul di API | Cache masih memegang nilai lama | `POST /meta/cache/bersihkan` setelah `s7_publish --muat` |
+| Cache tidak pernah kena | Objek sesi ikut jadi kunci cache | `core/cache.py::ABAIKAN` menyaringnya menurut NAMA parameter, bukan posisi — FastAPI memanggil dengan kata-kunci |
+| Heksagon hilang dari setiap filter tanpa galat | `NaN` pandas masuk ke kolom numerik dan tersimpan sebagai `'NaN'::float`, bukan `NULL` | `s7_publish._bersih()` mengubahnya jadi `None` sebelum menyentuh basis data |
+| Uji yang ber-rollback meninggalkan data di cache | Cache tidak tahu soal transaksi | `cache.bersihkan()` di awal DAN akhir uji |
 | `int() argument must be ... not 'Query'` saat memanggil endpoint dari kode | `= Query(default=...)` membuat nilai bawaannya objek, bukan nilai | Pakai `Annotated[T, Query(...)] = nilai` |
 | Rekomendasi memuat lokasi zona terlarang | Endpoint rekomendasi lupa `saring_zoneguard()` | Setiap jalur rekomendasi wajib melewatinya — diuji di `smoke_api.py` |
 

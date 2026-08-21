@@ -210,8 +210,19 @@ export interface AksiPeta {
   argumen: Record<string, unknown>
 }
 
+export interface PesanRiwayat {
+  peran: 'pengguna' | 'asisten'
+  teks: string
+}
+
 export interface PermintaanAI {
   pertanyaan: string
+  /**
+   * Giliran sebelumnya, terlama dulu. Dikirim ulang tiap giliran — backend
+   * tanpa-status, jadi tidak ada sesi yang bisa bocor antarpengguna atau hilang
+   * saat proses Render tidur. Backend membatasi 20 pesan.
+   */
+  riwayat?: PesanRiwayat[]
   hex_terpilih?: string | null
   layer_aktif?: string | null
   viewport?: Record<string, number> | null

@@ -16,7 +16,7 @@ import { useRef, useState } from 'react'
 
 import { api } from '../lib/api'
 import { LAYER, type NamaLayer } from '../config'
-import type { AksiPeta, JawabanAI } from '../types'
+import type { AksiPeta, JawabanAI, PesanRiwayat } from '../types'
 import type { KendaliPeta, Kriteria } from './PetaInteraktif'
 import { Badge } from './PanelInsight'
 
@@ -24,6 +24,20 @@ interface Pesan {
   peran: 'pengguna' | 'asisten'
   teks: string
   jawaban?: JawabanAI
+}
+
+/** Terjemahkan galat backend jadi kalimat yang bisa ditindaklanjuti pengguna. */
+function pesanGalat(e: unknown): string {
+  const teks = e instanceof Error ? e.message : String(e)
+  if (teks.includes('501'))
+    return 'AI Consultant belum aktif — LLM_API_KEY belum diisi di backend. Seluruh jalur fungsinya sudah siap (lihat /ai/status).'
+  if (teks.includes('429') && teks.includes('ANGGARAN'))
+    return 'Plafon biaya AI untuk hari ini sudah tercapai. Asisten akan aktif lagi besok.'
+  if (teks.includes('429'))
+    return 'Terlalu banyak pertanyaan dalam waktu singkat. Tunggu sebentar lalu coba lagi.'
+  if (teks.includes('503'))
+    return 'Basis data sedang tidak bisa dihubungi. Kalau ini terjadi setelah lama menganggur, coba lagi dalam beberapa puluh detik.'
+  return `Gagal menghubungi asisten: ${teks}`
 }
 
 const CONTOH = [
@@ -97,7 +111,14 @@ export default function PanelAI({
     setMemuat(true)
 
     try {
-      const jawaban = await api.tanyaAI({ pertanyaan, hex_terpilih: hexTerpilih })
+      // Riwayat dikirim ulang tiap giliran; backend tidak menyimpan sesi.
+      // Dipotong 20 pesan terakhir supaya sama dengan batas backend - kalau lebih,
+      // permintaannya ditolak validasi, bukan dipotong diam-diam.
+      const riwayat: PesanRiwayat[] = pesan
+        .slice(-20)
+        .map((m) => ({ peran: m.peran, teks: m.teks }))
+
+      const jawaban = await api.tanyaAI({ pertanyaan, riwayat, hex_terpilih: hexTerpilih })
       jawaban.aksi_peta.forEach(jalankanAksi)
       setPesan((s) => [...s, { peran: 'asisten', teks: jawaban.teks, jawaban }])
     } catch (e) {
@@ -105,10 +126,7 @@ export default function PanelAI({
         ...s,
         {
           peran: 'asisten',
-          teks:
-            e instanceof Error && e.message.includes('501')
-              ? 'AI Consultant belum aktif — penyedia LLM belum dipilih. Seluruh jalur fungsinya sudah siap di backend (lihat /ai/fungsi).'
-              : `Gagal menghubungi asisten: ${e instanceof Error ? e.message : e}`,
+          teks: pesanGalat(e),
         },
       ])
     } finally {

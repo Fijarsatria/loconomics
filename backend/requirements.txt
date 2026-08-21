@@ -8,3 +8,6 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
 anthropic==0.116.0
+
+# Dipakai fastapi.testclient di backend/tests/
+httpx==0.28.1

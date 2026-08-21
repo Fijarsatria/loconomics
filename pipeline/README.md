@@ -5,8 +5,8 @@ Jalankan **dari dalam folder ini** (`cd pipeline`), bukan dari root repo — skr
 mengimpor `config` sebagai modul lokal.
 
 ```
-s1_ingest  →  s2_clean  →  s3_extract  →  s4_spatial  →  s5_impute  →  s6_score
-   unduh       bersihkan     foto→angka     ke heksagon    isi kosong     skor
+s1_ingest → s2_clean → s3_extract → s4_spatial → s5_impute → s6_score → s7_publish
+  unduh     bersihkan   foto→angka   ke heksagon  isi kosong    skor      terbitkan
 ```
 
 ## Kenapa urutannya begitu
@@ -18,7 +18,8 @@ s1_ingest  →  s2_clean  →  s3_extract  →  s4_spatial  →  s5_impute  → 
 | **s3** `extract` | foto + `02_bersih/` | `data/cache_ai/` | Di sinilah rupiah lahir. Tanpa tahap ini proyek ini tidak punya satu pun angka harga |
 | **s4** `spatial` | `02_bersih/` + `cache_ai/` | `data/03_olahan/` | Baru setelah data bersih dan berangka, ia boleh diagregasi ke heksagon H3 res-9. Juga membangun profil per jam (Commuter Clock) |
 | **s5** `impute` | `03_olahan/` | `03_olahan/` | Imputasi butuh tetangga spasial, jadi harus setelah s4 |
-| **s6** `score` | `03_olahan/` | tabel `location_scores` | Satu-satunya tempat skor dihitung di seluruh proyek |
+| **s6** `score` | `03_olahan/` | `03_olahan/` | Satu-satunya tempat skor dihitung di seluruh proyek |
+| **s7** `publish` | `03_olahan/` | basis data + GeoJSON statis | Jembatan ke backend. Tanpa tahap ini, seluruh API menunjuk basis data yang tidak pernah bisa terisi |
 
 ## Menjalankan
 
@@ -33,6 +34,13 @@ python s3_extract.py
 python s4_spatial.py
 python s5_impute.py
 python s6_score.py
+python s7_publish.py --muat --ekspor
+```
+
+Setelah `--muat`, kosongkan cache backend supaya angka barunya langsung terlihat:
+
+```bash
+curl -X POST http://localhost:8000/meta/cache/bersihkan
 ```
 
 Uji mesin skoring — tidak butuh database, tidak butuh data lapangan:
@@ -40,7 +48,8 @@ Uji mesin skoring — tidak butuh database, tidak butuh data lapangan:
 ```bash
 python test_s6_score.py          # skoring: ringkasan + tabel sensitivitas
 python test_s4_spatial.py        # Commuter Clock + PriceLens
-python -m pytest test_s6_score.py test_s4_spatial.py -v
+python test_s7_publish.py        # pembersihan nilai sebelum masuk basis data
+python -m pytest test_s6_score.py test_s4_spatial.py test_s7_publish.py -v
 ```
 
 ## Status kesiapan
@@ -53,6 +62,7 @@ python -m pytest test_s6_score.py test_s4_spatial.py -v
 | `test_s6_score.py`, `test_s4_spatial.py` | **Siap.** |
 | `prompts/a1`–`a4` | **Siap.** Prompt produksi, sudah cocok dengan skema Pydantic di `s3_extract.py` |
 | `s2_clean.py` | Sebagian — aturan 9.1–9.6 tertulis, `bersihkan_koordinat()` sudah jalan |
+| `s7_publish.py` | **Siap & teruji.** Muat ke basis data + ekspor GeoJSON statis, 15/15 uji |
 | `s1`, `s3`, `s5`, sisa `s4` | Kerangka. Badan fungsi sengaja `NotImplementedError` dengan alasan lengkap di docstring |
 
 Kerangka itu bukan TODO kosong. Setiap docstring berisi keputusan yang sudah

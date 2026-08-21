@@ -12,6 +12,27 @@ peringkat lokasi mana pun.
 from typing import Literal
 
 # ---------------------------------------------------------------------------
+# Ruang lingkup
+# ---------------------------------------------------------------------------
+# Enam kawasan pilot. Harus sama dengan KAWASAN_PILOT di pipeline/config.py dan
+# frontend/src/config.ts. Ketiganya proses terpisah yang tidak bisa saling impor,
+# jadi kesamaannya dijaga oleh uji, bukan oleh bahasa - lihat tests/test_aturan.py.
+#
+# Dipakai untuk MEMVALIDASI parameter kawasan. Sebelum ada daftar ini, salah
+# ketik nama kawasan menghasilkan daftar kosong dengan status 200, dan pemanggil
+# menyimpulkan "tidak ada lokasi bagus di sana" padahal yang terjadi salah eja.
+
+KAWASAN_PILOT = (
+    "Manggarai",
+    "Tanah Abang",
+    "Depok Baru",
+    "Bekasi",
+    "Dukuh Atas BNI",
+    "Harjamukti",
+)
+
+
+# ---------------------------------------------------------------------------
 # RiskRadar - ambang indeks churn (P06)
 # ---------------------------------------------------------------------------
 # "Ambang batas wajar" ditetapkan relatif terhadap kawasan yang sama, bukan

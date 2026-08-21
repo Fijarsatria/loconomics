@@ -35,13 +35,16 @@ import json
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.api import pricelens, skor as modul_skor
-from app.api.bersama import zoneguard
+from app.api.bersama import ambil_hex, periksa_kawasan, zoneguard
 from app.api.hex import commuter_clock, detail_heksagon
+from app.core.batas import periksa_anggaran, periksa_laju
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.galat import KesalahanAPI, LayananBelumSiap
 from app.core.llm import (
     MAKS_PUTARAN,
     MAKS_TOKEN,
@@ -84,6 +87,7 @@ def cari_lokasi(
     from app.api.bersama import gabung_skor, saring_zoneguard, skor_heksagon
     from app.models import LocationScore
 
+    kawasan = periksa_kawasan(kawasan)
     stmt = (
         saring_zoneguard(gabung_skor(versi))
         .order_by(LocationScore.opportunity_score.desc().nullslast())
@@ -138,10 +142,7 @@ def jelaskan_skor(db: Session, hex_id: str, versi: str = "baseline") -> dict[str
 
 def cek_harga(db: Session, hex_id: str) -> dict[str, Any]:
     """PriceLens satu heksagon: sewa per m², belanja per jam, dan rentang wajarnya."""
-    hx = db.get(HexFeature, hex_id)
-    if hx is None:
-        raise ValueError(f"Heksagon {hex_id} tidak ditemukan")
-    return pricelens.kartu_harga(db, hx).model_dump()
+    return pricelens.kartu_harga(db, ambil_hex(db, hex_id)).model_dump()
 
 
 def pola_jam(db: Session, hex_id: str) -> dict[str, Any]:
@@ -171,16 +172,14 @@ def pola_jam(db: Session, hex_id: str) -> dict[str, Any]:
 
 def cek_zona(db: Session, hex_id: str) -> dict[str, Any]:
     """ZoneGuard satu heksagon. Jawaban paling penting yang bisa diberikan asisten ini."""
-    hx = db.get(HexFeature, hex_id)
-    if hx is None:
-        raise ValueError(f"Heksagon {hex_id} tidak ditemukan")
-    return zoneguard(hx).model_dump()
+    return zoneguard(ambil_hex(db, hex_id)).model_dump()
 
 
 def cari_hidden_gem(
     db: Session, kawasan: str | None = None, limit: int = 10, versi: str = "baseline"
 ) -> dict[str, Any]:
     """GemFinder beserta rangkuman alasan tiap heksagon terpilih."""
+    kawasan = periksa_kawasan(kawasan)
     gems = modul_skor.hidden_gems(db=db, kawasan=kawasan, limit=max(10, min(limit, 20)), versi=versi)
     return {
         "jumlah": len(gems),
@@ -203,6 +202,7 @@ def cek_risiko(
     db: Session, kawasan: str | None = None, limit: int = 10, versi: str = "baseline"
 ) -> dict[str, Any]:
     """RiskRadar: lokasi kuadran Jebakan Gengsi yang churn-nya melewati ambang wajar."""
+    kawasan = periksa_kawasan(kawasan)
     titik = modul_skor.risk_radar(
         db=db, kawasan=kawasan, hanya_berperingatan=True, limit=min(limit, 50), versi=versi
     )
@@ -268,7 +268,9 @@ def panggil_fungsi(db: Session, nama: str, argumen: dict[str, Any]) -> Any:
     """
     fungsi = REGISTRI.get(nama)
     if fungsi is None:
-        raise HTTPException(status_code=400, detail=f"Fungsi '{nama}' tidak tersedia")
+        raise KesalahanAPI(
+            f"Fungsi '{nama}' tidak tersedia.", {"tersedia": sorted(REGISTRI)}
+        )
     bersih = {k: v for k, v in argumen.items() if v is not None}
     return fungsi(db, **bersih)
 
@@ -521,8 +523,27 @@ def status() -> dict[str, Any]:
     }
 
 
+def _pemanggil(request: Request | None) -> str:
+    """Identitas pemanggil untuk pembatas laju.
+
+    Alamat IP, bukan sesi: tidak ada autentikasi di API ini, jadi tidak ada
+    identitas lain yang bisa dipercaya. Di belakang proksi Render, alamat aslinya
+    ada di X-Forwarded-For.
+    """
+    if request is None:
+        return "internal"
+    diteruskan = request.headers.get("x-forwarded-for")
+    if diteruskan:
+        return diteruskan.split(",")[0].strip()
+    return request.client.host if request.client else "tidak diketahui"
+
+
 @router.post("/tanya", response_model=JawabanAI, summary="Tanya AI Consultant")
-def tanya(permintaan: PermintaanAI, db: Annotated[Session, Depends(get_db)]) -> JawabanAI:
+def tanya(
+    permintaan: PermintaanAI,
+    db: Annotated[Session, Depends(get_db)],
+    request: Request = None,  # type: ignore[assignment]
+) -> JawabanAI:
     """Alur lengkap satu pertanyaan.
 
     Loop ditulis tangan, bukan memakai tool runner SDK, karena backend perlu
@@ -530,15 +551,35 @@ def tanya(permintaan: PermintaanAI, db: Annotated[Session, Depends(get_db)]) -> 
     hasilnya dikembalikan ke model, sedangkan alat peta TIDAK dijalankan di sini -
     ia dikumpulkan ke `aksi_peta` dan dieksekusi peta di layar pengguna. Tool
     runner akan mencoba menjalankan keduanya.
+
+    Dua pembatas diperiksa SEBELUM model dipanggil - ini satu-satunya endpoint di
+    seluruh backend yang membelanjakan uang sungguhan.
     """
+    periksa_laju(_pemanggil(request))
+    periksa_anggaran(db, settings.llm_plafon_harian_usd)
+
     try:
         c = klien()
     except LLMBelumSiap as e:
-        raise HTTPException(status_code=501, detail=str(e)) from e
+        raise LayananBelumSiap(str(e)) from e
+
+    # Riwayat diputar ulang sebagai giliran biasa. Hasil alat dari giliran lama
+    # sengaja TIDAK ikut: yang perlu diingat model hanyalah apa yang sudah
+    # dikatakan, bukan seluruh payload JSON yang pernah dibacanya. Kalau ia butuh
+    # angkanya lagi, ia memanggil alatnya lagi - dan itu justru yang benar, karena
+    # angka di basis data bisa saja berubah sejak giliran sebelumnya.
+    pesan: list[dict[str, Any]] = [
+        {"role": "user" if m.peran == "pengguna" else "assistant", "content": m.teks}
+        for m in permintaan.riwayat
+        if m.teks.strip()
+    ]
+    # Percakapan tidak boleh diawali giliran asisten.
+    while pesan and pesan[0]["role"] != "user":
+        pesan.pop(0)
 
     konteks = _konteks(permintaan)
     isi_awal = permintaan.pertanyaan if not konteks else f"{konteks}\n\n{permintaan.pertanyaan}"
-    pesan: list[dict[str, Any]] = [{"role": "user", "content": isi_awal}]
+    pesan.append({"role": "user", "content": isi_awal})
 
     aksi_peta: list[AksiPeta] = []
     jejak: list[JejakFungsi] = []
@@ -560,9 +601,8 @@ def tanya(permintaan: PermintaanAI, db: Annotated[Session, Depends(get_db)]) -> 
         # Klasifikator keamanan menolak permintaan: HTTP 200 tapi tanpa isi yang
         # bisa dipakai. Harus diperiksa sebelum membaca content.
         if balasan.stop_reason == "refusal":
-            raise HTTPException(
-                status_code=422,
-                detail="Pertanyaan ini ditolak oleh penyaring keamanan model. Coba ubah kalimatnya.",
+            raise KesalahanAPI(
+                "Pertanyaan ini ditolak oleh penyaring keamanan model. Coba ubah kalimatnya."
             )
 
         if balasan.stop_reason != "tool_use":
@@ -597,8 +637,8 @@ def tanya(permintaan: PermintaanAI, db: Annotated[Session, Depends(get_db)]) -> 
             # --- Alat backend: dijalankan, hasilnya kembali ke model ---
             try:
                 hasil = panggil_fungsi(db, blok.name, argumen)
-            except (HTTPException, ValueError, KeyError, TypeError) as e:
-                pesan_galat = getattr(e, "detail", None) or str(e)
+            except (KesalahanAPI, ValueError, KeyError, TypeError) as e:
+                pesan_galat = getattr(e, "pesan", None) or str(e)
                 log.warning("Alat %s gagal: %s", blok.name, pesan_galat)
                 hasil_alat.append(
                     {

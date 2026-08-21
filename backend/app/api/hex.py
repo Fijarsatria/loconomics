@@ -9,19 +9,23 @@ import json
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.bersama import (
     DIMENSI,
+    ambil_hex,
     badge,
     peringatan_risiko,
+    periksa_kawasan,
     persentil_churn,
     skor_heksagon,
     zoneguard,
 )
 from app.core.aturan import JAM_OPERASIONAL, PENJELASAN_KUADRAN
+from app.core.cache import ber_cache
+from app.core.galat import KesalahanAPI
 from app.core.database import get_db
 from app.models import HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
 from app.schemas import (
@@ -35,24 +39,70 @@ from app.schemas import (
 router = APIRouter(prefix="/hex", tags=["heksagon"])
 
 
+def _bbox_ke_envelope(bbox: str):
+    """Ubah "lon_min,lat_min,lon_max,lat_max" jadi kotak PostGIS."""
+    try:
+        angka = [float(x) for x in bbox.split(",")]
+        if len(angka) != 4:
+            raise ValueError
+    except ValueError:
+        raise KesalahanAPI(
+            "Format bbox harus 'lon_min,lat_min,lon_max,lat_max'.",
+            {"diterima": bbox},
+        ) from None
+    lon_min, lat_min, lon_max, lat_max = angka
+    if lon_min >= lon_max or lat_min >= lat_max:
+        raise KesalahanAPI("Sudut kiri-bawah bbox harus lebih kecil daripada kanan-atas.")
+    return func.ST_MakeEnvelope(lon_min, lat_min, lon_max, lat_max, 4326)
+
+
 @router.get("/layer", summary="Layer heksagon untuk peta (GeoJSON)")
+@ber_cache("hexlayer", ttl=300)
 def layer_heksagon(
     db: Annotated[Session, Depends(get_db)],
     kawasan: Annotated[str | None, Query(description="Filter salah satu dari 6 kawasan pilot")] = None,
     min_score: Annotated[float | None, Query(description="Ambang Opportunity Score")] = None,
+    bbox: Annotated[
+        str | None,
+        Query(description="Batasi ke kotak peta: lon_min,lat_min,lon_max,lat_max"),
+    ] = None,
+    sederhanakan: Annotated[
+        float | None,
+        Query(
+            ge=0,
+            le=0.01,
+            description="Toleransi penyederhanaan geometri dalam derajat. "
+            "0,0001 ≈ 11 m, cukup untuk zoom rendah",
+        ),
+    ] = None,
     versi: Annotated[str, Query()] = "baseline",
-    limit: Annotated[int, Query(le=20000)] = 5000,
+    limit: Annotated[int, Query(ge=1, le=20000)] = 5000,
 ) -> dict:
     """FeatureCollection siap render.
 
     Dalam produksi layer ini disajikan sebagai GeoJSON statis dari CDN Cloudflare
     (mitigasi free tier, lihat docs/arsitektur.md). Endpoint ini dipakai saat
-    pengembangan dan sebagai sumber untuk membangkitkan berkas statis itu.
+    pengembangan dan sebagai sumber untuk membangkitkan berkas statis itu -
+    lihat pipeline/s7_publish.py.
 
     Layer ini TIDAK menyaring ZoneGuard: peta harus tetap menggambar heksagon
     terlarang, justru supaya pengguna melihat bahwa area itu dikecualikan.
     Yang menyaringnya adalah endpoint rekomendasi - lihat skor.py.
+
+    Tiga hal yang membuat endpoint ini tetap sanggup di free tier:
+
+    `bbox`  - hanya heksagon yang benar-benar terlihat yang dikirim. Peta yang
+              di-zoom ke satu blok tidak perlu menerima seluruh kawasan.
+    `sederhanakan` - heksagon punya enam titik; pada zoom rendah, presisi tujuh
+              desimal tidak menambah apa pun selain ukuran berkas.
+    cache   - isi tabel hanya berubah saat pipeline dijalankan, jadi permintaan
+              yang sama tidak perlu memindai ulang ribuan baris.
     """
+    kawasan = periksa_kawasan(kawasan)
+    geom = HexFeature.geom
+    if sederhanakan:
+        geom = func.ST_SimplifyPreserveTopology(geom, sederhanakan)
+
     stmt = (
         select(
             HexFeature.h3_index,
@@ -71,7 +121,7 @@ def layer_heksagon(
             LocationScore.opportunity_score,
             LocationScore.hidden_gem_score,
             LocationScore.kuadran,
-            func.ST_AsGeoJSON(HexFeature.geom).label("geom"),
+            func.ST_AsGeoJSON(geom).label("geom"),
         )
         .join(
             LocationScore,
@@ -84,6 +134,8 @@ def layer_heksagon(
         stmt = stmt.where(HexFeature.kawasan == kawasan)
     if min_score is not None:
         stmt = stmt.where(LocationScore.opportunity_score >= min_score)
+    if bbox:
+        stmt = stmt.where(func.ST_Intersects(HexFeature.geom, _bbox_ke_envelope(bbox)))
 
     features = [
         {
@@ -138,9 +190,7 @@ def commuter_clock(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> Co
     didominasi choice rider punya arus yang lebih rata. Jenis usaha yang cocok di
     keduanya tidak sama.
     """
-    hx = db.get(HexFeature, h3_index)
-    if hx is None:
-        raise HTTPException(status_code=404, detail=f"Heksagon {h3_index} tidak ditemukan")
+    hx = ambil_hex(db, h3_index)
 
     baris = db.execute(
         select(HexHourlyProfile)
@@ -222,9 +272,7 @@ def detail_heksagon(
     h3_index: str, db: Annotated[Session, Depends(get_db)], versi: str = "baseline"
 ) -> DetailHeksagon:
     """Isi panel insight saat heksagon diklik. Juga sumber jawaban jelaskan_skor()."""
-    hx = db.get(HexFeature, h3_index)
-    if hx is None:
-        raise HTTPException(status_code=404, detail=f"Heksagon {h3_index} tidak ditemukan")
+    hx = ambil_hex(db, h3_index)
 
     skor = db.execute(
         select(LocationScore).where(
