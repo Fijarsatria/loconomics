@@ -5,71 +5,53 @@ properti satu per satu. Semuanya hanya keluar sebagai agregat per heksagon,
 karena ketentuan lomba melarang data misi MAPID mentah diekspos ke publik.
 """
 
+import json
+
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.bersama import (
+    DIMENSI,
+    badge,
+    peringatan_risiko,
+    persentil_churn,
+    skor_heksagon,
+    zoneguard,
+)
+from app.core.aturan import JAM_OPERASIONAL, PENJELASAN_KUADRAN
 from app.core.database import get_db
-from app.models import HexFeature, LocationScore, ScoreFactor
+from app.models import HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
 from app.schemas import (
-    BadgeKeyakinan,
+    CommuterClock,
     DetailHeksagon,
     FaktorSkor,
     IndeksKomposit,
-    SkorHeksagon,
+    TitikJam,
 )
 
 router = APIRouter(prefix="/hex", tags=["heksagon"])
 
-# 41 variabel analisis, dikelompokkan sesuai Kamus Data Final (docs/data.md).
-DIMENSI: dict[str, list[str]] = {
-    "permintaan": [
-        "pop_100m", "pop_usia_produktif", "jarak_simpul_m", "waktu_jalan_menit",
-        "skor_simpul", "ridership_proksi", "kepadatan_kos", "kepadatan_kantor",
-        "generator_keramaian", "skor_ramai_terkoreksi", "intensitas_transaksi",
-        "aktivitas_komunitas",
-    ],
-    "perilaku": [
-        "puncak_pagi", "puncak_siang", "puncak_sore", "puncak_malam",
-        "rasio_weekend", "pangsa_digital", "harga_median_porsi", "spread_harga",
-        "nominal_median_struk",
-    ],
-    "kompetisi": [
-        "n_kompetitor_langsung", "kepadatan_poi_total", "keragaman_usaha",
-        "keragaman_kuliner", "pangsa_waralaba", "rasio_kompetitor_per_kapita",
-        "rasio_keliling", "n_menetap_kuliner",
-    ],
-    "biaya": [
-        "njop_m2", "njop_persentil", "pasokan_sewa_komersial", "rasio_sewa_jual",
-        "harga_sewa_median", "indeks_churn",
-    ],
-    "risiko": ["zona_izin_komersial", "kelas_zona", "risiko_banjir"],
-    "morfologi": ["rasio_tutupan_bangunan", "luas_bangunan_median", "skor_prestise_visual"],
-}
-
-
-def badge(hex_row: HexFeature) -> BadgeKeyakinan:
-    """Satu-satunya cara membangun badge. Dipakai semua endpoint yang mengirim skor."""
-    return BadgeKeyakinan(
-        n_titik_misi=hex_row.n_titik_misi,
-        tingkat=hex_row.tingkat_keyakinan,  # type: ignore[arg-type]
-        sumber=hex_row.data_source,  # type: ignore[arg-type]
-    )
-
 
 @router.get("/layer", summary="Layer heksagon untuk peta (GeoJSON)")
 def layer_heksagon(
-    db: Session = Depends(get_db),
-    kawasan: str | None = Query(default=None, description="Filter salah satu dari 6 kawasan pilot"),
-    min_score: float | None = Query(default=None, description="Ambang Opportunity Score"),
-    versi: str = Query(default="baseline"),
-    limit: int = Query(default=5000, le=20000),
+    db: Annotated[Session, Depends(get_db)],
+    kawasan: Annotated[str | None, Query(description="Filter salah satu dari 6 kawasan pilot")] = None,
+    min_score: Annotated[float | None, Query(description="Ambang Opportunity Score")] = None,
+    versi: Annotated[str, Query()] = "baseline",
+    limit: Annotated[int, Query(le=20000)] = 5000,
 ) -> dict:
     """FeatureCollection siap render.
 
     Dalam produksi layer ini disajikan sebagai GeoJSON statis dari CDN Cloudflare
     (mitigasi free tier, lihat docs/arsitektur.md). Endpoint ini dipakai saat
     pengembangan dan sebagai sumber untuk membangkitkan berkas statis itu.
+
+    Layer ini TIDAK menyaring ZoneGuard: peta harus tetap menggambar heksagon
+    terlarang, justru supaya pengguna melihat bahwa area itu dikecualikan.
+    Yang menyaringnya adalah endpoint rekomendasi - lihat skor.py.
     """
     stmt = (
         select(
@@ -79,9 +61,12 @@ def layer_heksagon(
             HexFeature.n_titik_misi,
             HexFeature.data_source,
             HexFeature.zona_izin_komersial,
-            # Dua variabel biaya ikut di layer supaya PriceLens bisa mewarnai peta
+            HexFeature.indeks_churn,
+            # Variabel biaya ikut di layer supaya PriceLens bisa mewarnai peta
             # tanpa memanggil endpoint detail satu per satu untuk ribuan heksagon.
             HexFeature.harga_sewa_median,
+            HexFeature.harga_sewa_per_m2,
+            HexFeature.belanja_per_jam,
             HexFeature.njop_m2,
             LocationScore.opportunity_score,
             LocationScore.hidden_gem_score,
@@ -100,8 +85,6 @@ def layer_heksagon(
     if min_score is not None:
         stmt = stmt.where(LocationScore.opportunity_score >= min_score)
 
-    import json
-
     features = [
         {
             "type": "Feature",
@@ -114,7 +97,10 @@ def layer_heksagon(
                 "hidden_gem_score": r.hidden_gem_score,
                 "kuadran": r.kuadran,
                 "zona_izin_komersial": r.zona_izin_komersial,
+                "indeks_churn": r.indeks_churn,
                 "harga_sewa_median": r.harga_sewa_median,
+                "harga_sewa_per_m2": r.harga_sewa_per_m2,
+                "belanja_per_jam": r.belanja_per_jam,
                 "njop_m2": r.njop_m2,
                 # badge ikut di properti supaya peta bisa membedakan observed vs predicted
                 "tingkat_keyakinan": r.tingkat_keyakinan,
@@ -127,9 +113,113 @@ def layer_heksagon(
     return {"type": "FeatureCollection", "features": features}
 
 
+# Deklarasi rute berjalur tetap HARUS mendahului "/{h3_index}", kalau tidak
+# FastAPI akan mencocokkannya sebagai h3_index dan endpoint ini tidak pernah kena.
+@router.get(
+    "/{h3_index}/commuter-clock",
+    response_model=CommuterClock,
+    summary="Commuter Clock - pola jam 05:00-22:00",
+)
+def commuter_clock(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> CommuterClock:
+    """Kapan uang benar-benar berpindah di lokasi ini, jam demi jam.
+
+    Ini yang membedakannya dari data POI mana pun: dataset POI hanya menyimpan
+    jam buka-tutup - kapan toko buka, bukan kapan transaksi terjadi. Jam di sini
+    dibaca dari yang tercetak di struk (A2).
+
+    Pemisahan captive dan choice rider:
+      captive - tidak punya alternatif selain transit. Terikat jadwal, sehingga
+                belanjanya menumpuk di jendela berangkat dan pulang yang sempit.
+      choice  - punya kendaraan pribadi tetapi memilih transit. Waktunya lebih
+                longgar, belanjanya lebih tersebar sepanjang hari.
+
+    Bedanya penting bagi calon penyewa: lokasi yang didominasi captive rider ramai
+    dua kali sehari dalam jendela pendek dan sepi di antaranya, sedangkan yang
+    didominasi choice rider punya arus yang lebih rata. Jenis usaha yang cocok di
+    keduanya tidak sama.
+    """
+    hx = db.get(HexFeature, h3_index)
+    if hx is None:
+        raise HTTPException(status_code=404, detail=f"Heksagon {h3_index} tidak ditemukan")
+
+    baris = db.execute(
+        select(HexHourlyProfile)
+        .where(HexHourlyProfile.h3_index == h3_index)
+        .order_by(HexHourlyProfile.jam)
+    ).scalars().all()
+    per_jam = {b.jam: b for b in baris}
+
+    # Setiap jam dalam rentang selalu dikirim, walau kosong. Grafik dengan sumbu
+    # yang lengkap jauh lebih mudah dibaca daripada grafik yang jamnya meloncat,
+    # dan jam kosong itu sendiri informasi: tidak ada transaksi tercatat di sana.
+    titik = [
+        TitikJam(
+            jam=j,
+            n_transaksi=per_jam[j].n_transaksi if j in per_jam else 0,
+            nominal_total=per_jam[j].nominal_total if j in per_jam else None,
+            nominal_median=per_jam[j].nominal_median if j in per_jam else None,
+            pangsa_captive=per_jam[j].pangsa_captive if j in per_jam else None,
+            pangsa_choice=(
+                None
+                if j not in per_jam or per_jam[j].pangsa_captive is None
+                else round(1 - per_jam[j].pangsa_captive, 4)
+            ),
+            metode=per_jam[j].metode if j in per_jam else "proxy",  # type: ignore[arg-type]
+        )
+        for j in JAM_OPERASIONAL
+    ]
+
+    berisi = [t for t in titik if t.n_transaksi > 0]
+    jam_puncak = max(berisi, key=lambda t: t.n_transaksi).jam if berisi else None
+
+    # Pangsa captive harian ditimbang jumlah transaksi, bukan dirata-rata lugu:
+    # jam dengan 2 transaksi tidak boleh sama beratnya dengan jam berisi 50.
+    berbobot = [t for t in berisi if t.pangsa_captive is not None]
+    total_n = sum(t.n_transaksi for t in berbobot)
+    captive_harian = (
+        round(sum(t.pangsa_captive * t.n_transaksi for t in berbobot) / total_n, 4)  # type: ignore[operator]
+        if total_n
+        else None
+    )
+
+    dominasi = None
+    if captive_harian is not None:
+        dominasi = (
+            "captive" if captive_harian >= 0.6
+            else "choice" if captive_harian <= 0.4
+            else "seimbang"
+        )
+
+    semua_proxy = bool(baris) and all(b.metode == "proxy" for b in baris)
+    catatan = None
+    if not baris:
+        catatan = "Belum ada profil jam untuk heksagon ini - jalankan pipeline s4_spatial."
+    elif semua_proxy:
+        catatan = (
+            "Seluruh angka di sini hasil estimasi dari konteks heksagon, bukan dari jam "
+            "yang tercetak di struk. Perlakukan sebagai pola kasar, bukan pengukuran."
+        )
+
+    return CommuterClock(
+        h3_index=h3_index,
+        jam=titik,
+        ember={
+            "pagi_06_09": hx.puncak_pagi,
+            "siang_11_14": hx.puncak_siang,
+            "sore_16_20": hx.puncak_sore,
+            "malam_20_24": hx.puncak_malam,
+        },
+        jam_puncak=jam_puncak,
+        pangsa_captive_harian=captive_harian,
+        dominasi=dominasi,  # type: ignore[arg-type]
+        keyakinan=badge(hx),
+        catatan=catatan,
+    )
+
+
 @router.get("/{h3_index}", response_model=DetailHeksagon, summary="Detail satu heksagon")
 def detail_heksagon(
-    h3_index: str, db: Session = Depends(get_db), versi: str = "baseline"
+    h3_index: str, db: Annotated[Session, Depends(get_db)], versi: str = "baseline"
 ) -> DetailHeksagon:
     """Isi panel insight saat heksagon diklik. Juga sumber jawaban jelaskan_skor()."""
     hx = db.get(HexFeature, h3_index)
@@ -148,30 +238,17 @@ def detail_heksagon(
         .order_by(ScoreFactor.kontribusi.desc().nullslast())
     ).scalars().all()
 
-    variabel = {
-        nama: getattr(hx, nama)
-        for kolom in DIMENSI.values()
-        for nama in kolom
-    }
+    p75, p90 = persentil_churn(db, hx.kawasan)
 
     return DetailHeksagon(
-        skor=SkorHeksagon(
-            h3_index=hx.h3_index,
-            kawasan=hx.kawasan,
-            opportunity_score=skor.opportunity_score if skor else None,
-            hidden_gem_score=skor.hidden_gem_score if skor else None,
-            kuadran=skor.kuadran if skor else None,  # type: ignore[arg-type]
-            peringkat=skor.peringkat if skor else None,
-            zona_izin_komersial=hx.zona_izin_komersial,
-            keyakinan=badge(hx),
-        ),
+        skor=skor_heksagon(hx, skor),
         indeks=IndeksKomposit(
             ipt=skor.ipt if skor else None,
             iae=skor.iae if skor else None,
             ikp=skor.ikp if skor else None,
             ibr=skor.ibr if skor else None,
         ),
-        variabel=variabel,
+        variabel={nama: getattr(hx, nama) for kolom in DIMENSI.values() for nama in kolom},
         faktor=[
             FaktorSkor(
                 kode_variabel=f.kode_variabel,
@@ -189,4 +266,9 @@ def detail_heksagon(
             "sore_16_20": hx.puncak_sore,
             "malam_20_24": hx.puncak_malam,
         },
+        zoneguard=zoneguard(hx),
+        risiko=peringatan_risiko(hx, p75, p90),
+        kuadran_penjelasan=(
+            PENJELASAN_KUADRAN.get(skor.kuadran) if skor and skor.kuadran else None
+        ),
     )

@@ -59,20 +59,190 @@ class FaktorSkor(BaseModel):
     kontribusi: float | None = None
 
 
+# --- ZoneGuard (fitur 4) ---------------------------------------------------
+
+StatusZona = Literal["DIIZINKAN", "DILARANG", "TIDAK_DIKETAHUI"]
+
+
+class StatusZoneGuard(BaseModel):
+    """Hasil pemeriksaan zonasi. Selalu ikut di setiap respons yang membawa skor.
+
+    `filter_mutlak` adalah janji API: kalau TRUE, heksagon ini tidak pernah muncul
+    di endpoint rekomendasi mana pun dan skornya nol.
+    """
+
+    status: StatusZona
+    kelas_zona: str | None = None
+    filter_mutlak: bool = Field(description="TRUE = skor dinolkan dan tidak pernah direkomendasikan")
+    penjelasan: str
+
+
+# --- Commuter Clock (fitur 3) ----------------------------------------------
+
+
+class TitikJam(BaseModel):
+    """Satu jam dalam Commuter Clock."""
+
+    jam: int = Field(ge=0, le=23)
+    n_transaksi: int
+    nominal_total: float | None = None
+    nominal_median: float | None = None
+    pangsa_captive: float | None = Field(
+        default=None, description="0-1. Penumpang tanpa alternatif selain transit"
+    )
+    pangsa_choice: float | None = Field(
+        default=None, description="1 - pangsa_captive. Punya kendaraan pribadi tapi memilih transit"
+    )
+    metode: Literal["observed", "proxy"] = "proxy"
+
+
+class CommuterClock(BaseModel):
+    """Pola jam operasional 05:00-22:00, memisahkan captive dan choice rider.
+
+    `ember` mempertahankan B01-B04 supaya angka yang masuk perhitungan skor tetap
+    bisa dilihat berdampingan dengan pola per jam yang lebih rinci.
+    """
+
+    h3_index: str
+    jam: list[TitikJam]
+    ember: dict[str, float | None] = Field(
+        default_factory=dict, description="B01-B04, empat ember yang dipakai dalam skoring"
+    )
+    jam_puncak: int | None = Field(default=None, description="Jam dengan transaksi terbanyak")
+    pangsa_captive_harian: float | None = None
+    dominasi: Literal["captive", "choice", "seimbang"] | None = None
+    keyakinan: BadgeKeyakinan
+    catatan: str | None = Field(
+        default=None, description="Diisi kalau seluruh jam berasal dari proxy, bukan struk"
+    )
+
+
+# --- PriceLens (fitur 1) ---------------------------------------------------
+
+
+class RentangWajar(BaseModel):
+    """Rentang harga wajar dalam satu kawasan, dari persentil 25-75.
+
+    Dipakai untuk menjawab "mahal atau murah?" - pertanyaan yang tidak bisa
+    dijawab angka tunggal tanpa pembanding.
+    """
+
+    p25: float | None = None
+    p50: float | None = None
+    p75: float | None = None
+    n_sampel: int = 0
+
+
+class PriceLensHeksagon(BaseModel):
+    """Kartu harga satu heksagon.
+
+    Dua angka utamanya - harga sewa per m² dan belanja per jam - keduanya lahir
+    dari OCR: rupiah tidak ada di satu pun kolom teks dataset misi.
+    """
+
+    h3_index: str
+    kawasan: str
+    harga_sewa_per_m2: float | None = Field(default=None, description="P07, rupiah per m² per bulan")
+    harga_sewa_median: float | None = Field(default=None, description="P05, rupiah per bulan")
+    belanja_per_jam: float | None = Field(default=None, description="B10, rupiah per jam operasional")
+    harga_median_porsi: float | None = Field(default=None, description="B07")
+    njop_m2: float | None = Field(default=None, description="P01, pembanding independen dari OCR")
+
+    wajar_sewa_per_m2: RentangWajar
+    wajar_belanja_per_jam: RentangWajar
+    posisi_sewa: Literal["MURAH", "WAJAR", "MAHAL", "TIDAK_DIKETAHUI"] = "TIDAK_DIKETAHUI"
+    selisih_persen_dari_median: float | None = Field(
+        default=None, description="Positif = lebih mahal daripada median kawasan"
+    )
+
+    keyakinan: BadgeKeyakinan
+
+
+# --- RiskRadar (fitur 5) ---------------------------------------------------
+
+TingkatRisiko = Literal["AMAN", "WASPADA", "BAHAYA"]
+
+
+class PeringatanRisiko(BaseModel):
+    """Label peringatan yang muncul di peta saat churn melewati ambang wajar."""
+
+    tingkat: TingkatRisiko
+    label: str
+    indeks_churn: float | None = None
+    ambang_waspada: float | None = Field(default=None, description="Persentil 75 dalam kawasan")
+    ambang_bahaya: float | None = Field(default=None, description="Persentil 90 dalam kawasan")
+
+
+class TitikKuadran(BaseModel):
+    """Satu titik di diagram kuadran interaktif.
+
+    x = prestise visual (bagaimana lokasi terlihat), y = skor peluang (apa kata
+    datanya). Keduanya sengaja diukur dari sumber yang berbeda; kalau keduanya
+    berkorelasi kuat, diagramnya kehilangan arti.
+    """
+
+    h3_index: str
+    kawasan: str
+    x_prestise: float | None = None
+    y_peluang: float | None = None
+    kuadran: Kuadran | None = None
+    indeks_churn: float | None = None
+    risiko: TingkatRisiko = "AMAN"
+    keyakinan: BadgeKeyakinan
+
+
+class DiagramKuadran(BaseModel):
+    titik: list[TitikKuadran]
+    batas_x: float | None = Field(default=None, description="Median prestise - garis pemisah")
+    batas_y: float | None = Field(default=None, description="Median skor peluang - garis pemisah")
+    keterangan: dict[str, str] = Field(default_factory=dict)
+
+
+# --- GemFinder (fitur 6) ---------------------------------------------------
+
+
+class AlasanGem(BaseModel):
+    """Satu alasan sebuah heksagon terpilih sebagai Hidden Gem.
+
+    Dirakit dari angka yang sudah ada di basis data, bukan dikarang LLM.
+    `bukti` adalah kalimatnya; `kode_variabel` menunjuk asal angkanya.
+    """
+
+    metode: Literal["residual_biaya", "kuadran", "iptt"]
+    bukti: str
+    kode_variabel: list[str] = Field(default_factory=list)
+
+
+class HiddenGem(BaseModel):
+    """Satu baris GemFinder: skor + rangkuman alasan terpilihnya."""
+
+    skor: SkorHeksagon
+    n_metode_lolos: int = Field(description="Minimal 2 dari 3 - lihat docs/skoring.md")
+    alasan: list[AlasanGem]
+    ringkasan: str = Field(description="Satu paragraf siap tampil di kartu")
+    zoneguard: StatusZoneGuard
+
+
+# --- Detail heksagon -------------------------------------------------------
+
+
 class DetailHeksagon(BaseModel):
     """Respons lengkap saat pengguna mengklik satu heksagon.
 
-    Memuat 41 variabel dalam bentuk agregat + rincian kontribusi skor.
+    Memuat 43 variabel dalam bentuk agregat + rincian kontribusi skor.
     Tidak memuat satu pun record misi mentah.
     """
 
     skor: SkorHeksagon
     indeks: IndeksKomposit
-    variabel: dict[str, Any] = Field(description="41 variabel analisis, sudah teragregasi")
+    variabel: dict[str, Any] = Field(description="43 variabel analisis, sudah teragregasi")
     faktor: list[FaktorSkor] = Field(default_factory=list)
     commuter_clock: dict[str, float | None] = Field(
         default_factory=dict, description="B01-B04: distribusi transaksi per rentang jam"
     )
+    zoneguard: StatusZoneGuard
+    risiko: PeringatanRisiko
+    kuadran_penjelasan: str | None = None
 
 
 class SimpulTransit(BaseModel):
@@ -87,10 +257,15 @@ class SimpulTransit(BaseModel):
 # --- AI Consultant ---------------------------------------------------------
 
 NamaFungsi = Literal[
-    # dijalankan backend (menyentuh basis data)
+    # dijalankan backend (menyentuh basis data, mengembalikan angka)
     "cari_lokasi",
     "bandingkan",
     "jelaskan_skor",
+    "cek_harga",  # PriceLens
+    "pola_jam",  # Commuter Clock
+    "cek_zona",  # ZoneGuard
+    "cari_hidden_gem",  # GemFinder
+    "cek_risiko",  # RiskRadar
     # dijalankan frontend (aksi peta, tidak menyentuh basis data)
     "flyTo",
     "highlight",
@@ -117,6 +292,19 @@ class PermintaanAI(BaseModel):
     viewport: dict[str, float] | None = None
 
 
+class JejakFungsi(BaseModel):
+    """Satu langkah yang benar-benar dijalankan backend saat menjawab.
+
+    Ada untuk ketentuan C.1: proses AI harus bisa dijelaskan. Pengguna dan juri
+    bisa melihat fungsi apa yang dipanggil dan dengan argumen apa - bukan hanya
+    hasil akhirnya.
+    """
+
+    fungsi: NamaFungsi
+    argumen: dict[str, Any] = Field(default_factory=dict)
+    ringkas_hasil: str = Field(description="Ringkasan satu baris, bukan seluruh payload")
+
+
 class JawabanAI(BaseModel):
     """Jawaban asisten.
 
@@ -129,3 +317,8 @@ class JawabanAI(BaseModel):
     aksi_peta: list[AksiPeta] = Field(default_factory=list)
     sumber_angka: list[FaktorSkor] = Field(default_factory=list)
     keyakinan: BadgeKeyakinan | None = None
+    jejak: list[JejakFungsi] = Field(default_factory=list)
+    model: str | None = Field(default=None, description="Model yang menyusun narasi")
+    hex_disebut: list[str] = Field(
+        default_factory=list, description="Heksagon yang dirujuk jawaban ini"
+    )

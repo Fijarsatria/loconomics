@@ -7,6 +7,8 @@ catchment_areas. Endpoint ini hanya membacanya.
 
 import json
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -20,9 +22,9 @@ router = APIRouter(prefix="/transit", tags=["transit"])
 
 @router.get("/nodes", response_model=list[SimpulTransit], summary="Daftar simpul transportasi")
 def daftar_simpul(
-    db: Session = Depends(get_db),
-    kawasan: str | None = Query(default=None),
-    moda: str | None = Query(default=None, description="KRL | MRT | LRT | BRT | TERMINAL"),
+    db: Annotated[Session, Depends(get_db)],
+    kawasan: Annotated[str | None, Query()] = None,
+    moda: Annotated[str | None, Query(description="KRL | MRT | LRT | BRT | TERMINAL")] = None,
 ) -> list[SimpulTransit]:
     stmt = select(
         TransportNode.id,
@@ -45,9 +47,9 @@ def daftar_simpul(
 
 @router.get("/catchment", summary="Layer isochrone jalan kaki (GeoJSON)")
 def layer_catchment(
-    db: Session = Depends(get_db),
-    node_id: int | None = Query(default=None),
-    menit: int | None = Query(default=None, description="5 | 10 | 15"),
+    db: Annotated[Session, Depends(get_db)],
+    node_id: Annotated[int | None, Query()] = None,
+    menit: Annotated[int | None, Query(description="5 | 10 | 15")] = None,
 ) -> dict:
     stmt = select(
         CatchmentArea.id,

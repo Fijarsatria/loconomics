@@ -19,11 +19,11 @@ dari pusat. Pada kotak, empat tetangga berjarak *s* dan empat lagi *s√2*.
 Perbedaan itu merusak setiap perhitungan yang melibatkan tetangga — dan hampir
 semua perhitungan di sini melibatkan tetangga.
 
-## 2. Kamus Data Final — 41 variabel
+## 2. Kamus Data Final — 43 variabel
 
 Kode variabel (D01, B07, …) adalah **identitas kanonik**. Nama kolom adalah
 implementasinya di tabel `hex_features`. Jembatan keduanya: `KODE_KE_KOLOM` di
-`pipeline/config.py`, yang di-`assert` harus berisi tepat 41 entri.
+`pipeline/config.py`, yang di-`assert` harus berisi tepat 43 entri.
 
 ### Dimensi Permintaan — 12 variabel
 
@@ -42,7 +42,7 @@ implementasinya di tabel `hex_features`. Jembatan keduanya: `KODE_KE_KOLOM` di
 | D11 | `intensitas_transaksi` | Transaksi per satuan waktu | Misi Struk |
 | D12 | `aktivitas_komunitas` | Aktivitas komunitas/keagamaan | OSM + misi |
 
-### Dimensi Perilaku Konsumen — 9 variabel
+### Dimensi Perilaku Konsumen — 10 variabel
 
 | Kode | Kolom | Arti | Sumber |
 |---|---|---|---|
@@ -55,10 +55,17 @@ implementasinya di tabel `hex_features`. Jembatan keduanya: `KODE_KE_KOLOM` di
 | B07 | `harga_median_porsi` | Median harga satu porsi | **A4** |
 | B08 | `spread_harga` | Sebaran harga dalam heksagon | **A4** |
 | B09 | `nominal_median_struk` | Median nominal per struk | **A2** |
+| B10 | `belanja_per_jam` | Rupiah per jam operasional | **A2** |
 
-B01–B04 adalah **Commuter Clock**. Yang membuatnya mungkin: struk mencantumkan
-jam transaksi. Dataset POI komersial mana pun hanya menyimpan jam buka-tutup —
-kapan toko buka, bukan kapan uang berpindah.
+B01–B04 adalah empat ember yang masuk perhitungan skor. Pola **per jam** yang
+ditampilkan Commuter Clock tinggal di tabel terpisah — lihat bagian 3 di bawah.
+
+Yang membuat keduanya mungkin: struk mencantumkan jam transaksi. Dataset POI
+komersial mana pun hanya menyimpan jam buka-tutup — kapan toko buka, bukan
+kapan uang berpindah.
+
+**B10 dan P07 tidak masuk perhitungan skor.** Keduanya variabel tampilan untuk
+PriceLens. Alasannya di [skoring.md](skoring.md) bagian akhir.
 
 ### Dimensi Kompetisi — 8 variabel
 
@@ -78,7 +85,7 @@ kapan toko buka, bukan kapan uang berpindah.
 yang kebetulan jatuh ke heksagon sebelah tidak terhitung sebagai pesaing —
 padahal pembelinya sama persis.
 
-### Dimensi Biaya & Pasokan Ruang — 6 variabel
+### Dimensi Biaya & Pasokan Ruang — 7 variabel
 
 | Kode | Kolom | Arti | Sumber |
 |---|---|---|---|
@@ -88,6 +95,7 @@ padahal pembelinya sama persis.
 | P04 | `rasio_sewa_jual` | Sewa tahunan ÷ harga jual | Turunan |
 | P05 | `harga_sewa_median` | Median sewa | **A1** (foto spanduk) |
 | P06 | `indeks_churn` | Seberapa sering usaha berganti | Misi + OSM historis |
+| P07 | `harga_sewa_per_m2` | Median sewa bulanan per m² | **A1** |
 
 ### Dimensi Risiko & Legalitas — 3 variabel
 
@@ -115,7 +123,54 @@ belum digital — kesalahan yang langsung terlihat di peta.
 | M02 | `luas_bangunan_median` | Median luas bangunan | OSM footprint |
 | M03 | `skor_prestise_visual` | Kesan visual 1–5 | **A3** (foto fasad) |
 
-## 3. Tiga penanda kualitas — Q01–Q03
+## 3. Tabel profil jam — Commuter Clock
+
+`hex_hourly_profiles`, satu baris per (heksagon, jam). Delapan belas jam per
+heksagon, 05:00–22:00.
+
+| Kolom | Isi |
+|---|---|
+| `jam` | 5–22 |
+| `n_transaksi` | Jumlah struk pada jam itu |
+| `nominal_total`, `nominal_median` | Rupiah pada jam itu |
+| `pangsa_captive` | 0–1. `pangsa_choice` diturunkan sebagai `1 − pangsa_captive` |
+| `metode` | `observed` (≥ 3 struk berjam nyata) / `proxy` |
+
+**Kenapa tabel terpisah, bukan kolom di `hex_features`.** B01–B04 hanya membagi
+hari jadi empat ember; kriteria penerimaan Commuter Clock menuntut pola per jam.
+Delapan belas kolom baru akan membuat `hex_features` sulit dibaca dan tetap tidak
+bisa menyimpan pembagian captive/choice per jam.
+
+Hanya `pangsa_captive` yang disimpan. Menyimpan keduanya membuka kemungkinan
+jumlahnya tidak 1 setelah suatu pembaruan; satu angka tidak bisa salah begitu.
+
+### Captive dan choice rider
+
+| | Captive rider | Choice rider |
+|---|---|---|
+| Definisi | Tidak punya alternatif selain transit | Punya kendaraan pribadi, memilih transit |
+| Pola belanja | Menumpuk di jendela berangkat & pulang | Tersebar sepanjang hari |
+| Artinya bagi penyewa | Ramai dua kali sehari, sepi di antaranya | Arus lebih rata |
+
+Jenis usaha yang cocok di keduanya tidak sama — itu sebabnya pemisahan ini layak
+ditampilkan, bukan sekadar menarik.
+
+**Angka ini estimasi, bukan pengukuran.** Dataset misi tidak menanyakan
+kepemilikan kendaraan kepada siapa pun, dan tidak ada dataset publik yang
+menyediakannya pada resolusi heksagon. Yang dilakukan: memakai proksi yang jelas
+arahnya, dan mengatakan terus terang bahwa ini proksi.
+
+Dua sinyal digabung setengah-setengah (`pipeline/s4_spatial.py`):
+
+1. **Bentuk jam.** Pembelian pukul 06:30 di sebelah stasiun hampir pasti
+   pembelian orang yang sedang mengejar kereta; pukul 14:00 hampir pasti bukan.
+2. **Konteks heksagon.** D07 kepadatan kos ↑ → captive ↑. D08 kepadatan kantor,
+   P02 persentil NJOP, dan B06 pangsa digital ↑ → captive ↓.
+
+Hasilnya dibatasi ke rentang **0,05–0,95**. Tidak pernah menyentuh 0 atau 1:
+keduanya berarti "pasti", dan tidak ada proksi yang berhak sepasti itu.
+
+## 4. Tiga penanda kualitas — Q01–Q03
 
 **Bukan variabel model.** Tidak masuk perhitungan skor sama sekali. Tetapi
 **wajib tampil di setiap tempat skor ditampilkan.**
@@ -134,7 +189,7 @@ mengirim skor tanpa badge-nya.
 Alasannya sederhana: skor 82 dari 40 titik survei dan skor 82 dari 3 titik survei
 adalah dua pernyataan yang sangat berbeda, dan pengguna berhak tahu yang mana.
 
-## 4. Taksonomi usaha — 8 kelas induk
+## 5. Taksonomi usaha — 8 kelas induk
 
 | Kode | Kelas |
 |---|---|
@@ -154,7 +209,7 @@ Kalau ragu, pilih kelas yang paling menggambarkan sumber pendapatan utamanya.
 Kelas kuliner yang lebih rinci (9 nilai `KELAS_KULINER` di `s3_extract.py`) hanya
 dipakai untuk C04, tidak menggantikan 8 kelas induk.
 
-## 5. Sumber data
+## 6. Sumber data
 
 ### Boleh dan dipakai
 
@@ -175,7 +230,7 @@ Ditulis eksplisit supaya tidak masuk diam-diam:
 - **Scraping Rumah123 / OLX** atau situs listing mana pun
 - **GTFS TransJakarta versi komunitas** (bukan sumber resmi)
 
-## 6. Kenapa AI Lapisan 1 bukan pilihan
+## 7. Kenapa AI Lapisan 1 bukan pilihan
 
 Tiga dataset misi, dan jumlah kolom berisi angka rupiah:
 
@@ -190,7 +245,7 @@ tidak punya satu pun angka harga untuk dianalisis. Itu jawaban paling kuat untuk
 pertanyaan "kenapa pakai AI?" — bukan karena sedang tren, tetapi karena tanpa itu
 datanya tidak ada.
 
-## 7. Enam aturan pembersihan
+## 8. Enam aturan pembersihan
 
 Diterapkan di `pipeline/s2_clean.py`, ambangnya di `config.py`.
 
@@ -219,7 +274,7 @@ justru ramai. Kalau sebuah variabel harus dinetralkan untuk perhitungan, nilainy
 P05, tidak ditebak. "45jt" bisa berarti per bulan atau per tahun — selisihnya dua
 belas kali lipat, dan salah arah menggeser seluruh peta biaya satu kawasan.
 
-## 8. Yang masih menggantung
+## 9. Yang masih menggantung
 
 | Hal | Status |
 |---|---|

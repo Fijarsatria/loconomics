@@ -76,7 +76,7 @@ OCR_CONFIDENCE_MIN = 0.7  # di bawah ini -> antrean verifikasi manusia, tidak di
 
 
 # --- Kamus Data Final: kode variabel -> nama kolom -------------------------
-# 41 variabel analisis. Kode (D01, B07, ...) adalah identitas kanonik yang dipakai
+# 43 variabel analisis. Kode (D01, B07, ...) adalah identitas kanonik yang dipakai
 # di dokumen, di tabel score_factors, dan di definisi bobot. Nama kolom adalah
 # implementasinya di hex_features. Pemetaan ini yang menghubungkan keduanya -
 # jangan pernah menulis salah satunya secara hardcode di skrip lain.
@@ -95,7 +95,7 @@ KODE_KE_KOLOM = {
     "D10": "skor_ramai_terkoreksi",
     "D11": "intensitas_transaksi",
     "D12": "aktivitas_komunitas",
-    # Dimensi Perilaku Konsumen - 9
+    # Dimensi Perilaku Konsumen - 10
     "B01": "puncak_pagi",
     "B02": "puncak_siang",
     "B03": "puncak_sore",
@@ -105,6 +105,7 @@ KODE_KE_KOLOM = {
     "B07": "harga_median_porsi",
     "B08": "spread_harga",
     "B09": "nominal_median_struk",
+    "B10": "belanja_per_jam",
     # Dimensi Kompetisi - 8
     "C01": "n_kompetitor_langsung",
     "C02": "kepadatan_poi_total",
@@ -114,13 +115,14 @@ KODE_KE_KOLOM = {
     "C06": "rasio_kompetitor_per_kapita",
     "C07": "rasio_keliling",
     "C08": "n_menetap_kuliner",
-    # Dimensi Biaya & Pasokan Ruang - 6
+    # Dimensi Biaya & Pasokan Ruang - 7
     "P01": "njop_m2",
     "P02": "njop_persentil",
     "P03": "pasokan_sewa_komersial",
     "P04": "rasio_sewa_jual",
     "P05": "harga_sewa_median",
     "P06": "indeks_churn",
+    "P07": "harga_sewa_per_m2",
     # Dimensi Risiko & Legalitas - 3
     "L01": "zona_izin_komersial",
     "L02": "kelas_zona",
@@ -133,7 +135,14 @@ KODE_KE_KOLOM = {
 
 KOLOM_KE_KODE = {v: k for k, v in KODE_KE_KOLOM.items()}
 
-assert len(KODE_KE_KOLOM) == 41, f"Kamus Data harus 41 variabel, sekarang {len(KODE_KE_KOLOM)}"
+assert len(KODE_KE_KOLOM) == 43, f"Kamus Data harus 43 variabel, sekarang {len(KODE_KE_KOLOM)}"
+
+# B10 dan P07 sengaja TIDAK masuk bobot indeks mana pun. Keduanya variabel
+# tampilan untuk PriceLens. Memasukkan P07 ke IBR menggantikan P05 memang lebih
+# benar secara metodologi (sewa absolut mencampur harga dengan luas), tetapi
+# mengubah bobot tanpa data lapangan akan membatalkan angka uji sensitivitas yang
+# sudah dilaporkan. Ditinjau ulang setelah data survei masuk - lihat docs/skoring.md.
+VARIABEL_TAMPILAN = {"B10", "P07"}
 
 # Penanda kualitas - BUKAN variabel model, tidak masuk perhitungan skor
 KODE_KUALITAS = {"Q01": "n_titik_misi", "Q02": "tingkat_keyakinan", "Q03": "data_source"}
@@ -168,6 +177,24 @@ BOBOT_HIDDEN_GEM = {"residual": 0.40, "iptt": 0.30, "peluang_x_prestise": 0.30}
 
 SENSITIVITAS_GESER = 0.10
 SENSITIVITAS_RHO_MIN = 0.85
+
+
+# --- Ambang fitur produk ---------------------------------------------------
+# Ini aturan TAMPILAN, bukan bagian dari perhitungan skor. Digeser tidak akan
+# mengubah peringkat mana pun - hanya mengubah kapan peringatan muncul.
+
+# Ambang peringatan RiskRadar TIDAK ada di sini - hanya backend yang memakainya,
+# saat menyusun respons. Rumahnya backend/app/core/aturan.py.
+
+# Commuter Clock. Rentang jam yang ditampilkan sesuai kriteria penerimaan.
+JAM_MULAI, JAM_SELESAI = 5, 22
+JAM_OPERASIONAL = list(range(JAM_MULAI, JAM_SELESAI + 1))
+
+# Jam puncak komuter - dipakai untuk memisahkan captive dan choice rider.
+# Captive rider terikat jadwal: berangkat dan pulang pada jam yang sempit dan
+# hampir sama setiap hari kerja. Choice rider lebih tersebar.
+JAM_PUNCAK_BERANGKAT = (5, 8)
+JAM_PUNCAK_PULANG = (16, 19)
 
 
 # --- Lokasi berkas ---------------------------------------------------------

@@ -7,11 +7,19 @@
 
 import { API_BASE } from '../config'
 import type {
+  CommuterClock,
   DetailHeksagon,
+  DiagramKuadran,
+  HiddenGem,
   JawabanAI,
+  PeringatanRisiko,
   PermintaanAI,
+  PriceLensHeksagon,
   SimpulTransit,
   SkorHeksagon,
+  StatusAI,
+  StatusZoneGuard,
+  TitikKuadran,
 } from '../types'
 
 type GeoJSON = { type: 'FeatureCollection'; features: unknown[] }
@@ -46,6 +54,18 @@ export const api = {
   detailHeksagon: (h3: string, versi?: string) =>
     ambil<DetailHeksagon>(`/hex/${h3}${kueri({ versi })}`),
 
+  /** Commuter Clock — 18 titik jam, captive vs choice rider. */
+  commuterClock: (h3: string) => ambil<CommuterClock>(`/hex/${h3}/commuter-clock`),
+
+  // --- PriceLens ---
+  layerHarga: (p: { kawasan?: string; maks_sewa_per_m2?: number; hanya_berdata?: boolean } = {}) =>
+    ambil<GeoJSON>(`/pricelens/layer${kueri(p)}`),
+
+  kartuHarga: (h3: string) => ambil<PriceLensHeksagon>(`/pricelens/${h3}`),
+
+  /** Rentang wajar + cakupan data tiap kawasan. Cakupan rendah wajib ditampilkan. */
+  ringkasanHarga: () => ambil<Record<string, unknown>[]>('/pricelens/ringkasan'),
+
   // --- Transit ---
   simpulTransit: (kawasan?: string) =>
     ambil<SimpulTransit[]>(`/transit/nodes${kueri({ kawasan })}`),
@@ -57,16 +77,35 @@ export const api = {
   ranking: (p: { kawasan?: string; limit?: number; versi?: string } = {}) =>
     ambil<SkorHeksagon[]>(`/skor/ranking${kueri(p)}`),
 
-  /** GemFinder — lokasi yang lolos minimal dua metode deteksi hidden gem. */
+  /** GemFinder — lolos minimal dua metode, lengkap dengan rangkuman alasannya. */
   hiddenGems: (p: { kawasan?: string; limit?: number; versi?: string } = {}) =>
-    ambil<SkorHeksagon[]>(`/skor/hidden-gems${kueri(p)}`),
+    ambil<HiddenGem[]>(`/skor/hidden-gems${kueri(p)}`),
 
-  /** RiskRadar — kuadran Jebakan Gengsi: terlihat mahal, ekonominya tidak mendukung. */
-  riskRadar: (p: { kawasan?: string; limit?: number; versi?: string } = {}) =>
-    ambil<SkorHeksagon[]>(`/skor/risk-radar${kueri(p)}`),
+  /** RiskRadar — Jebakan Gengsi yang churn-nya melewati ambang wajar kawasan. */
+  riskRadar: (p: {
+    kawasan?: string
+    hanya_berperingatan?: boolean
+    limit?: number
+    versi?: string
+  } = {}) => ambil<TitikKuadran[]>(`/skor/risk-radar${kueri(p)}`),
+
+  /** Titik sebar diagram kuadran. TIDAK menyaring ZoneGuard — ini alat analisis. */
+  diagramKuadran: (p: { kawasan?: string; limit?: number; versi?: string } = {}) =>
+    ambil<DiagramKuadran>(`/skor/kuadran${kueri(p)}`),
+
+  risikoHeksagon: (h3: string) => ambil<PeringatanRisiko>(`/skor/risiko/${h3}`),
+
+  // --- ZoneGuard ---
+  statusZona: (h3: string) => ambil<StatusZoneGuard>(`/skor/zoneguard/${h3}`),
+
+  /** Cakupan RDTR per kawasan. Angka `tidak_diketahui` besar adalah kabar penting. */
+  cakupanZona: () => ambil<Record<string, unknown>[]>('/skor/zoneguard/ringkasan'),
 
   // --- AI Consultant ---
   daftarFungsi: () => ambil<Record<string, unknown>>('/ai/fungsi'),
+
+  /** Dipanggil saat memuat, supaya panel AI bisa menampilkan keadaan sebenarnya. */
+  statusAI: () => ambil<StatusAI>('/ai/status'),
 
   tanyaAI: (permintaan: PermintaanAI) =>
     ambil<JawabanAI>('/ai/tanya', { method: 'POST', body: JSON.stringify(permintaan) }),

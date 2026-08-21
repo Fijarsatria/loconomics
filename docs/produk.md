@@ -84,12 +84,12 @@ kewarasan model yang paling cepat.
 
 | Fitur | Apa yang dilakukan | Variabel utama | Kriteria diterima |
 |---|---|---|---|
-| **PriceLens** | Menunjukkan harga wajar sewa & harga jual di kawasan itu | P05, B07, B08 | Median sewa muncul untuk ≥ 80% heksagon berbadge SEDANG/TINGGI |
-| **RiskRadar** | Menandai kuadran Jebakan Gengsi | Skor Peluang × M03 | Daftar tersaji terurut, tiap baris menyebut alasannya |
-| **GemFinder** | Menandai Hidden Gem | Residual biaya, IPTT, kuadran | Hanya menampilkan lokasi yang lolos **≥ 2 dari 3** metode |
+| **PriceLens** | Harga sewa per m² dan belanja per jam, plus rentang wajar kawasan | **P07**, **B10**, P05, B07 | Sewa per m² muncul untuk ≥ 80% heksagon berbadge SEDANG/TINGGI; heksagon tanpa data tampil sebagai kosong, bukan nol |
+| **RiskRadar** | Menandai Jebakan Gengsi + diagram kuadran interaktif | Skor Peluang × M03, ambang P06 | Peringatan muncul hanya kalau churn melewati persentil 75 kawasan **dan** lantai absolut |
+| **GemFinder** | Menandai Hidden Gem + rangkuman alasannya | Residual biaya, IPTT, kuadran | Minimal 10 teratas, tiap baris menyebut metode mana yang dilewati dan buktinya |
 | **ZoneGuard** | Menolkan skor di zona yang melarang usaha | L01 (gate) | Heksagon `zona_izin_komersial = FALSE` selalu berskor 0 |
-| **Commuter Clock** | Kapan uang benar-benar berpindah di lokasi itu | B01–B04 | Empat rentang jam tergambar dari jam di struk, bukan jam buka toko |
-| **AI Consultant** | Menjawab dengan bahasa biasa **dan menggerakkan peta** | 7 fungsi | Jawaban menyertakan `sumber_angka`; minimal satu aksi peta tereksekusi |
+| **Commuter Clock** | Kapan uang berpindah, jam demi jam, memisahkan captive & choice rider | B01–B04 + `hex_hourly_profiles` | 18 titik jam 05:00–22:00 dari jam di struk, bukan jam buka toko; pangsa captive selalu ditandai sebagai estimasi |
+| **AI Consultant** | Menjawab dengan bahasa biasa **dan menggerakkan peta** | 12 alat | Jawaban menyertakan `sumber_angka` + `jejak`; minimal satu aksi peta tereksekusi |
 
 Dua fitur pendukung tanpa nama pemasaran:
 

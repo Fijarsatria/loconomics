@@ -34,7 +34,7 @@ dulu sebelum mengerjakannya.
 ## Struktur
 
 ```
-backend/     FastAPI — 4 modul. Membaca basis data, TIDAK menghitung skor
+backend/     FastAPI — 5 modul + tests/. Membaca basis data, TIDAK menghitung skor
 frontend/    React + Vite + MapLibre GL. 7 berkas sumber, sengaja tidak lebih
 pipeline/    Python s1→s6. Satu-satunya tempat skor dihitung
 docs/        7 dokumen. Kenapa, bukan bagaimana
@@ -95,7 +95,13 @@ lomba C.1.
   istilah yang sudah baku (`h3_index`, `opportunity_score`, `GeoJSON`).
 - **Kode variabel** (D01, B07, C06…) adalah identitas kanonik; nama kolom adalah
   implementasinya. Jembatannya `KODE_KE_KOLOM` di `pipeline/config.py`, yang
-  di-`assert` harus berisi tepat 41 entri.
+  di-`assert` harus berisi tepat 43 entri. `app/api/bersama.py::SEMUA_VARIABEL`
+  menegakkan angka yang sama di sisi backend.
+- **Endpoint memakai `Annotated[T, Query(...)] = nilai`**, bukan
+  `= Query(default=nilai)`. Bentuk kedua membuat fungsinya hanya bisa dipanggil
+  lewat HTTP, dan modul AI memanggilnya langsung sebagai alat.
+- **Aturan tampilan tinggal di `app/core/aturan.py`.** Kalau sebuah angka
+  mengubah peringkat, ia bukan aturan tampilan dan tempatnya bukan di sana.
 - **Sumber kebenaran tunggal**: `pipeline/config.py` untuk pipeline,
   `frontend/src/config.ts` untuk frontend. Jangan menulis ulang ambang, bobot,
   atau nama kolom langsung di berkas lain.
@@ -108,11 +114,15 @@ lomba C.1.
 ## Perintah
 
 ```bash
-# Uji mesin skoring — tanpa DB, tanpa data lapangan. Jalankan setelah menyentuh s6.
-cd pipeline && python test_s6_score.py
+# Pipeline — tanpa DB, tanpa data lapangan
+cd pipeline && python test_s6_score.py      # skoring + sensitivitas bobot
+cd pipeline && python test_s4_spatial.py    # Commuter Clock + PriceLens
 
 # Backend
-cd backend && uvicorn app.main:app --reload      # http://localhost:8000/docs
+cd backend && python tests/test_aturan.py   # aturan tampilan + skema alat AI
+cd backend && python tests/test_ai_loop.py  # loop agentik, klien tiruan
+cd backend && python tests/smoke_api.py     # 6 fitur ke Supabase, di-rollback
+cd backend && uvicorn app.main:app --reload # http://localhost:8000/docs
 cd backend && alembic upgrade head
 
 # Frontend
@@ -122,11 +132,13 @@ cd frontend && npx tsc --noEmit && npx oxlint
 
 ## Verifikasi sebelum menyatakan selesai
 
-- Menyentuh `s6_score.py` atau bobot → `python test_s6_score.py` (11 uji harus
-  lolos, ρ sensitivitas > 0,85)
+- Menyentuh `s6_score.py` atau bobot → `test_s6_score.py` (11 uji, ρ > 0,85)
+- Menyentuh pipeline jam/harga → `test_s4_spatial.py` (13 uji)
+- Menyentuh backend → ketiga berkas di `backend/tests/` (96 asersi)
 - Menyentuh frontend → `npx tsc --noEmit` dan `npx oxlint`
 - Menyentuh model/skema → `alembic upgrade head` berhasil di basis data nyata
-- Menambah endpoint → periksa ulang aturan 2 di atas
+- Menambah endpoint → periksa ulang aturan 2 di atas, dan kalau ia
+  MEREKOMENDASIKAN lokasi, wajib lewat `saring_zoneguard()`
 
 ---
 
@@ -136,9 +148,12 @@ cd frontend && npx tsc --noEmit && npx oxlint
 
 | Bagian | Bukti |
 |---|---|
-| Skema basis data | 48 kolom di `hex_features` = 41 variabel + 3 penanda kualitas + kunci/geom. Migrasi sudah diterapkan ke Supabase |
-| 4 modul API | Semua endpoint sudah dijalankan langsung; smoke test dalam transaksi yang di-rollback (0 baris tersisa) |
+| Skema basis data | 50 kolom di `hex_features` = 43 variabel + 3 penanda + kunci/geom/waktu, plus `hex_hourly_profiles`. Migrasi diterapkan ke Supabase |
+| 5 modul API, 23 rute | Smoke test 56 asersi ke Supabase dalam transaksi yang di-rollback (0 baris tersisa) |
+| Keenam fitur produk | PriceLens · AI Consultant · Commuter Clock · ZoneGuard · RiskRadar · GemFinder |
+| AI Consultant | 12 alat mode strict, loop agentik, 26 asersi dengan klien tiruan |
 | Mesin skoring | 11/11 uji lolos. Sensitivitas ρ 0,9719–0,9919 |
+| Commuter Clock & PriceLens (pipeline) | 13/13 uji lolos |
 | Prompt A1–A4 | Prompt produksi, sudah cocok dengan skema Pydantic |
 | Frontend | 3 bagian wajib tersambung ujung ke ujung; basemap MAPID tampil |
 | Dokumentasi | 7 dokumen di `docs/` |
@@ -148,8 +163,9 @@ cd frontend && npx tsc --noEmit && npx oxlint
 | Hal | Yang menghalangi | Kalau sudah ada, kerjakan |
 |---|---|---|
 | **`KOLOM_*_GO` masih kosong** di `pipeline/config.py` | CSV misi asli belum diunduh | **Ini yang pertama.** Cocokkan nama kolom, lalu `s1`–`s2` bisa jalan |
-| Badan `s1`, `s3`, `s4`, `s5` | Sebagian menunggu data, sebagian menunggu keputusan penyedia vision | Docstring-nya sudah memuat keputusan yang diambil — ikuti, jangan analisis ulang |
-| `POST /ai/tanya` mengembalikan **501** | Penyedia LLM belum dipilih | Seluruh jalur di sekitarnya siap. Yang perlu diisi satu fungsi |
+| Badan `s1`, `s3`, `s5` dan sisa `s4` | Sebagian menunggu data, sebagian menunggu keputusan penyedia vision | Docstring-nya sudah memuat keputusan yang diambil — ikuti, jangan analisis ulang. `s4::profil_jam`, `belanja_per_jam`, dan `harga_sewa_per_m2` SUDAH jalan dan teruji |
+| `LLM_API_KEY` belum diisi | Kunci belum ada | Isi di `backend/.env`, lalu `GET /ai/status` menyatakan siap. Kode `/ai/tanya` sudah lengkap |
+| Frontend belum memakai endpoint baru | — | `/pricelens/*`, `/hex/{h3}/commuter-clock`, `/skor/kuadran`, `/skor/zoneguard/*` sudah siap dipakai |
 | Sumber NJOP & RDTR definitif | Belum dipilih | Isi L01–L02, P01–P02 |
 | Data survei lapangan | Tim survei | Setelah masuk, **ulangi uji sensitivitas** dan laporkan apa adanya |
 | GeoJSON statis untuk Cloudflare | — | Mitigasi Render free tier, lihat `docs/arsitektur.md` |
@@ -171,6 +187,8 @@ jangan mengulang analisisnya.
 | Migrasi gagal: `geoalchemy2` tidak dikenal | Autogenerate tidak menulis impornya | Sudah permanen di `alembic/script.py.mako` |
 | `KeyError: 'D05'` di `_tertimbang()` | Bobot berkunci KODE, DataFrame berkunci NAMA KOLOM | `KODE_KE_KOLOM` di `config.py` |
 | `ModuleNotFoundError: No module named 'pipeline'` | Skrip pipeline dijalankan dari root | Jalankan dari dalam `pipeline/` |
+| `int() argument must be ... not 'Query'` saat memanggil endpoint dari kode | `= Query(default=...)` membuat nilai bawaannya objek, bukan nilai | Pakai `Annotated[T, Query(...)] = nilai` |
+| Rekomendasi memuat lokasi zona terlarang | Endpoint rekomendasi lupa `saring_zoneguard()` | Setiap jalur rekomendasi wajib melewatinya — diuji di `smoke_api.py` |
 
 ## Kalau harus memutuskan sesuatu sendiri
 

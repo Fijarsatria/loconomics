@@ -97,24 +97,38 @@ antarmuka WebGIS. Bentuknya bebas — **tidak harus chatbot**.
 
 ### B4 adalah pembedanya
 
-Tujuh fungsi, terbagi dua kelompok yang jalannya berbeda:
+Dua belas alat, terbagi dua kelompok yang jalannya berbeda:
 
 **Dieksekusi backend** — menyentuh basis data, mengembalikan angka:
 
-| Fungsi | Kegunaan |
-|---|---|
-| `cari_lokasi(jenis_usaha, budget_sewa_bulanan, maks_menit_jalan, kawasan)` | Cari heksagon sesuai kriteria |
-| `bandingkan(hex_a, hex_b)` | Bandingkan dua lokasi |
-| `jelaskan_skor(hex_id)` | Ambil rincian variabel pembentuk skor |
+| Alat | Kegunaan | Fitur |
+|---|---|---|
+| `cari_lokasi(jenis_usaha, budget_sewa_bulanan, maks_menit_jalan, kawasan, limit)` | Cari heksagon sesuai kriteria | — |
+| `bandingkan(hex_a, hex_b)` | Bandingkan dua lokasi | B5 |
+| `jelaskan_skor(hex_id)` | Rincian variabel pembentuk skor | B1 |
+| `cek_harga(hex_id)` | Sewa per m², belanja per jam, rentang wajar | PriceLens |
+| `pola_jam(hex_id)` | Pola per jam + captive/choice | Commuter Clock |
+| `cek_zona(hex_id)` | Status izin RDTR | ZoneGuard |
+| `cari_hidden_gem(kawasan, limit)` | Hidden gem + alasan terpilihnya | GemFinder |
+| `cek_risiko(kawasan, limit)` | Jebakan Gengsi berperingatan churn | RiskRadar |
 
 **Dieksekusi frontend** — aksi peta, tidak menyentuh basis data:
 
-| Fungsi | Kegunaan |
+| Alat | Kegunaan |
 |---|---|
 | `flyTo(lat, lon, zoom)` | Gerakkan kamera |
 | `highlight(hex_ids)` | Sorot heksagon |
 | `setLayer(nama_layer)` | Ganti layer tematik |
-| `filter(kriteria)` | Terapkan filter |
+| `filter(min_score, kuadran)` | Terapkan filter |
+
+Setiap alat memakai **mode strict**: `additionalProperties: false` dan seluruh
+properti masuk `required`, sehingga bentuk `input` yang diterima backend dijamin
+sesuai skema. Parameter opsional dinyatakan lewat tipe yang boleh `null`, bukan
+dengan mengeluarkannya dari `required`.
+
+`filter` dideklarasikan ke model sebagai dua parameter datar supaya skemanya bisa
+strict, lalu dibungkus jadi satu objek `kriteria` di backend — kontrak yang
+dipegang peta tetap satu bentuk.
 
 **Kenapa pembagian ini penting:** kalau `flyTo` dieksekusi di backend, tidak ada
 yang bergerak di layar pengguna. Ketentuan C.2 meminta keluaran AI yang
@@ -127,7 +141,8 @@ petanya bergerak sendiri. Itulah yang membuat AI terasa menyatu, bukan tempelan.
 **Di mana kodenya:**
 
 ```
-backend/app/api/ai.py                    registri fungsi + panggil_fungsi()
+backend/app/core/llm.py                  sambungan penyedia, batas putaran & token
+backend/app/api/ai.py                    definisi alat + loop agentik + panggil_fungsi()
 frontend/src/components/PanelAI.tsx      jalankanAksi() — switch, bukan dispatch dinamis
 frontend/src/components/PetaInteraktif.tsx  implementasi aksi peta
 ```
@@ -135,6 +150,36 @@ frontend/src/components/PetaInteraktif.tsx  implementasi aksi peta
 Nama fungsi divalidasi lewat `switch`/registri, **tidak pernah** dipanggil
 dinamis. LLM hanya boleh memilih dari daftar yang sudah ditulis; ia tidak pernah
 boleh menentukan fungsi apa yang dieksekusi.
+
+### Kenapa loop ditulis tangan
+
+SDK menyediakan tool runner yang menjalankan loop secara otomatis. Ia tidak
+dipakai di sini karena backend perlu memperlakukan dua kelompok alat secara
+berbeda: alat backend dijalankan dan hasilnya dikembalikan ke model, sedangkan
+alat peta **tidak dijalankan di server sama sekali** — ia dikumpulkan ke
+`aksi_peta` dan dieksekusi peta di layar pengguna. Tool runner akan mencoba
+menjalankan keduanya, dan `flyTo` yang berjalan di server tidak menggerakkan apa
+pun.
+
+Batas keras yang berlaku (`core/llm.py`): **8 putaran alat** dan **4096 token**
+per jawaban. Batas putaran ada supaya model yang tersesat tidak memanggil alat
+tanpa henti; batas token karena jawaban AI Consultant memang harus ringkas.
+
+### Yang keluar bersama jawaban
+
+| Field | Isi | Untuk apa |
+|---|---|---|
+| `teks` | Narasi bahasa Indonesia | Ditampilkan |
+| `aksi_peta` | Aksi yang dieksekusi peta | Ketentuan C.2 |
+| `sumber_angka` | Faktor skor yang dikutip | Penelusuran angka |
+| `jejak` | Setiap alat yang dipanggil + argumennya | **Ketentuan C.1** |
+| `keyakinan` | Badge heksagon terpilih | Aturan emas 2 |
+| `hex_disebut` | Heksagon yang dirujuk | Sorot otomatis |
+
+`jejak` yang membuat proses AI bisa diperiksa: pengguna dan juri melihat alat apa
+yang dipanggil dengan argumen apa, bukan hanya hasil akhirnya. Jawaban tanpa satu
+pun panggilan alat otomatis ditandai `perlu_review` di `ai_call_logs` — jawaban
+seperti itu berarti angkanya tidak bersumber.
 
 ## Lapisan C — kerja tim (C1–C3)
 
@@ -183,10 +228,16 @@ mungkin mengirim skor tanpa badge-nya. Lihat [data.md](data.md) Q01–Q03.
 | Prompt A1–A4 | **Siap**, sudah cocok dengan skema Pydantic di `s3_extract.py` |
 | Skema keluaran A1–A4 | **Siap** (`HasilSpanduk`, `HasilStruk`, `HasilPrestise`, `HasilMenu`) |
 | Pemanggil API vision | **Belum** — penyedia belum dipilih |
-| Registri fungsi B1–B5 | **Siap** — `GET /ai/fungsi` sudah menyajikannya |
-| Jalur eksekusi aksi peta | **Siap** — sudah tersambung ujung ke ujung di frontend |
-| `POST /ai/tanya` | **Mengembalikan 501** dengan pesan jujur. Penyedia LLM belum dipilih |
+| A6 GapFill | **Belum** — menunggu data survei |
+| 12 alat B1–B5 | **Siap & teruji** — `GET /ai/fungsi` menyajikan skema lengkapnya |
+| Loop agentik | **Siap & teruji** — 26 asersi dengan klien tiruan |
+| Jalur eksekusi aksi peta | **Siap** — tersambung ujung ke ujung sampai frontend |
+| `POST /ai/tanya` | **Siap.** Butuh `LLM_API_KEY` di `backend/.env` |
 
-Endpoint `/ai/tanya` sengaja mengembalikan 501, bukan jawaban palsu. Seluruh
-jalur di sekitarnya sudah siap; yang kurang hanya keputusan penyedia. Begitu
-dipilih, satu fungsi yang perlu diisi.
+Tanpa kunci API, `/ai/tanya` mengembalikan **501** dengan pesan yang menjelaskan
+apa yang kurang — bukan jawaban palsu. `GET /ai/status` menyatakan kesiapannya,
+supaya panel AI di frontend bisa menampilkan keadaan sebenarnya alih-alih
+menunggu pertanyaan pertama gagal.
+
+Model default `claude-opus-5`, bisa ditimpa lewat `LLM_MODEL` tanpa menyentuh
+kode. Perkiraan biaya tiap panggilan dicatat ke `ai_call_logs.biaya_usd`.

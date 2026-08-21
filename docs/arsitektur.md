@@ -17,7 +17,7 @@
                                        ▼
                         ┌─────────────────────────────┐
                         │  backend/  FastAPI          │
-                        │  4 modul · tidak menghitung │
+                        │  5 modul · tidak menghitung │
                         └──────────────┬──────────────┘
                                        │ JSON / GeoJSON
                                        ▼
@@ -69,24 +69,37 @@ optimizeDeps: { exclude: ['maplibre-gl'] }
 Setelah mengubahnya, `node_modules/.vite` harus dihapus — cache lama tetap
 dipakai kalau tidak.
 
-## Backend: modular monolith, empat modul
+## Backend: modular monolith, lima modul
 
 ```
 backend/app/
 ├── main.py          rakit aplikasi + CORS
-├── models.py        SQLAlchemy — 41 variabel + 3 penanda kualitas
+├── models.py        SQLAlchemy — 43 variabel + 3 penanda + profil jam
 ├── schemas.py       Pydantic — bentuk respons, tempat aturan lomba ditegakkan
 ├── core/
 │   ├── config.py    baca environment
-│   └── database.py  sesi
+│   ├── database.py  sesi
+│   ├── aturan.py    aturan TAMPILAN: ambang peringatan, label, status zona
+│   └── llm.py       sambungan penyedia model bahasa
 └── api/
-    ├── hex.py       /hex/layer · /hex/{h3}
+    ├── bersama.py   dipakai lintas modul: badge, ZoneGuard, persentil churn
+    ├── hex.py       /hex/layer · /hex/{h3} · /hex/{h3}/commuter-clock
+    ├── pricelens.py /pricelens/layer · /pricelens/ringkasan · /pricelens/{h3}
     ├── transit.py   /transit/nodes · /transit/catchment
-    ├── skor.py      /skor/ranking · /skor/hidden-gems · /skor/risk-radar
-    └── ai.py        /ai/fungsi · /ai/tanya
+    ├── skor.py      /skor/ranking · hidden-gems · risk-radar · kuadran · zoneguard
+    └── ai.py        /ai/fungsi · /ai/status · /ai/tanya
 ```
 
-### Kenapa empat modul, bukan tujuh
+`bersama.py` ada karena `skor.py` sempat mengimpor `badge()` dari `hex.py`. Pola
+itu berubah jadi impor melingkar begitu modul bertambah; sekarang modul API hanya
+mengimpor dari bawah ke atas, tidak pernah menyamping.
+
+`core/aturan.py` memuat SELURUH aturan tampilan — ambang churn, label risiko,
+status zona, penjelasan kuadran. Semuanya bisa digeser tanpa mengubah satu pun
+peringkat, dan itu pembeda yang penting: kalau sebuah angka mengubah peringkat,
+ia bukan aturan tampilan dan tempatnya bukan di sana.
+
+### Kenapa bukan tujuh modul
 
 Awalnya masuk akal membuat modul terpisah untuk "lokasi usaha", "kompetitor", dan
 "properti" — ketiganya domain yang berbeda.
@@ -96,14 +109,43 @@ punya endpoint sendiri, endpoint itu tidak punya apa-apa untuk dikirim selain
 baris survei individual — persis yang dilarang. Ketiganya sudah hadir sebagai
 variabel agregat di `/hex`.
 
-Jadi batasan lomba justru menghasilkan arsitektur yang lebih bersih. Empat modul,
-bukan tujuh.
+Jadi batasan lomba justru menghasilkan arsitektur yang lebih bersih. Modul yang
+ada dipisah menurut **pertanyaan yang dijawab pengguna**, bukan menurut tabel:
+`/pricelens` menjawab "mahal atau murah", `/skor` menjawab "layak atau tidak".
 
 ### Backend tidak menghitung
 
 Seluruh modul `skor.py` hanya membaca tabel `location_scores`. Tidak ada
 aritmetika skor di mana pun di `backend/`. Kalau muncul, itu bug — lihat
 [skoring.md](skoring.md).
+
+Satu hal yang **memang** dihitung backend: persentil kawasan (`percentile_cont`)
+untuk rentang harga wajar PriceLens dan ambang peringatan RiskRadar. Itu statistik
+deskriptif atas nilai yang sudah tersimpan, bukan bagian dari skor — menggesernya
+mengubah kapan peringatan muncul, tidak pernah mengubah peringkat.
+
+### Endpoint bisa dipanggil langsung
+
+Seluruh parameter memakai bentuk `Annotated[T, Query(...)] = nilai`, bukan
+`= Query(default=nilai)`. Bedanya bukan gaya: pada bentuk kedua, nilai bawaannya
+adalah objek `Query` dan fungsinya hanya bisa dipanggil lewat HTTP. Modul AI
+memanggil endpoint secara langsung sebagai alat, jadi bentuk pertama yang dipakai.
+Ini ditemukan oleh smoke test, bukan oleh code review.
+
+### Uji
+
+```bash
+cd backend
+python tests/test_aturan.py     # aturan tampilan + skema alat AI, tanpa DB
+python tests/test_ai_loop.py    # loop agentik dengan klien tiruan, tanpa kunci API
+python tests/smoke_api.py       # enam fitur terhadap Supabase, di dalam transaksi
+```
+
+`smoke_api.py` sengaja memakai basis data **sungguhan**. Yang paling mungkin salah
+di modul-modul ini justru SQL-nya — `percentile_cont`, filter tri-nilai boolean,
+`NULLS LAST` — dan ketiganya berperilaku berbeda di SQLite, jadi menguji di sana
+tidak membuktikan apa pun. Seluruh isian dibuat dalam satu transaksi yang selalu
+di-rollback, dan skrip memastikan nol baris tersisa sebelum selesai.
 
 ### Versi skor
 

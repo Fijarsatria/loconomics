@@ -8,7 +8,7 @@
 ## Alur
 
 ```
-41 variabel
+43 variabel
     ↓ norm()                     min-max ke [0,1]; log1p untuk variabel berekor panjang
 4 indeks komposit                IPT · IAE · IKP · IBR
     ↓ jumlah tertimbang
@@ -168,6 +168,26 @@ Dua hal jadi mungkin karenanya:
 1. **Uji sensitivitas** menyimpan variannya tanpa merusak baseline.
 2. **Simulator what-if** (fitur B3) — pengguna menggeser bobot sendiri dan
    melihat peringkat berubah, sementara baseline tetap utuh sebagai pembanding.
+
+## Dua variabel yang sengaja TIDAK masuk skor
+
+**B10 `belanja_per_jam`** dan **P07 `harga_sewa_per_m2`** ada di Kamus Data tetapi
+tidak muncul di satu pun bobot indeks. Keduanya variabel tampilan untuk PriceLens.
+
+Untuk P07 keputusan itu tidak nyaman dan layak ditulis terus terang. Secara
+metodologi P07 **lebih benar** daripada P05 sebagai ukuran biaya di IBR: sewa
+absolut mencampur harga dengan luas, sehingga Rp 8 juta untuk 20 m² dan Rp 8 juta
+untuk 80 m² terhitung sama mahal padahal berbeda empat kali lipat.
+
+Alasan tidak menggantinya sekarang: angka uji sensitivitas di atas dilaporkan
+untuk bobot yang ada. Mengubah IBR sebelum data lapangan masuk berarti mengganti
+model berdasarkan tebakan, lalu melaporkan angka sensitivitas yang tidak lagi
+menggambarkan model yang benar-benar dipakai.
+
+Rencananya: setelah data survei masuk, jalankan keduanya berdampingan
+(`versi = "baseline"` dan `versi = "ibr_p07"`), bandingkan peringkatnya, dan
+laporkan hasilnya apa adanya. Kolom `versi` di `location_scores` memang ada untuk
+ini. Ditandai di `pipeline/config.py::VARIABEL_TAMPILAN`.
 
 ## Menjalankan uji
 

@@ -28,7 +28,7 @@ sehingga tidak hanya merekomendasikan, tetapi juga melindungi.
 ```
 pipeline/    Python s1→s6 — mengubah survei lapangan jadi angka di peta
              Satu-satunya tempat skor dihitung
-backend/     FastAPI — 4 modul. Membaca basis data, tidak menghitung
+backend/     FastAPI — 5 modul + tests/. Membaca basis data, tidak menghitung
 frontend/    React + Vite + MapLibre GL — peta, insight, AI dalam satu layar
 docs/        7 dokumen. Menjelaskan kenapa, bukan bagaimana
 CLAUDE.md    Panduan untuk sesi AI berikutnya
@@ -48,8 +48,10 @@ Indeks lengkap dokumentasi: [docs/README.md](docs/README.md).
 ## Menjalankan
 
 ```bash
-# Uji mesin skoring — tidak butuh basis data maupun data lapangan
-cd pipeline && python test_s6_score.py
+# Uji — tidak butuh basis data maupun data lapangan
+cd pipeline && python test_s6_score.py     # mesin skoring
+cd pipeline && python test_s4_spatial.py   # Commuter Clock + PriceLens
+cd backend  && python tests/test_aturan.py tests/test_ai_loop.py
 
 # Backend  → http://localhost:8000/docs
 cd backend
@@ -80,6 +82,11 @@ keliling tidak pernah masuk ke peta mana pun.
 jam yang tercetak di struk. Dataset POI mana pun hanya menyimpan jam buka-tutup —
 kapan toko buka, bukan kapan transaksi terjadi.
 
+**Harga yang hanya ada di foto.** Dataset misi punya 8 kolom untuk properti dan
+8 kolom untuk struk — tidak satu pun berisi rupiah. Angkanya ada di spanduk dan di
+struk, dan PriceLens membacanya lewat OCR menjadi harga sewa per m² dan belanja
+per jam yang bisa dibandingkan antarlokasi.
+
 **AI yang menggerakkan peta.** Jawaban asisten tidak berhenti sebagai teks; ia
 memanggil `flyTo`, `highlight`, `setLayer`, dan `filter` yang dieksekusi di
 frontend. Petanya bergerak sendiri.
@@ -88,13 +95,14 @@ frontend. Petanya bergerak sendiri.
 
 | Bagian | Status |
 |---|---|
-| Skema basis data (41 variabel + 3 penanda kualitas) | Selesai, migrasi diterapkan |
-| 4 modul API | Selesai, semua endpoint sudah diuji langsung |
+| Skema basis data (43 variabel + 3 penanda + profil jam) | Selesai, migrasi diterapkan |
+| Backend — 5 modul, 23 rute | Selesai, 96 asersi lolos |
+| PriceLens · Commuter Clock · ZoneGuard · RiskRadar · GemFinder | Selesai di backend |
+| AI Consultant — 12 alat, loop agentik | Selesai. Butuh `LLM_API_KEY` untuk aktif |
 | Mesin skoring | Selesai — 11/11 uji lolos, sensitivitas ρ 0,97–0,99 |
 | Prompt AI A1–A4 | Selesai |
-| Frontend (3 bagian wajib) | Kerangka selesai, tersambung ke API |
-| Pemanggil API vision | Menunggu keputusan penyedia |
-| `POST /ai/tanya` | Mengembalikan 501 — penyedia LLM belum dipilih |
+| Frontend (3 bagian wajib) | Kerangka selesai; belum memakai endpoint fitur baru |
+| Pemanggil API vision (A1–A4) | Menunggu keputusan penyedia |
 | Data survei lapangan | Menunggu tim survei |
 
 Daftar lengkap yang belum dikerjakan beserta apa yang menghalanginya:

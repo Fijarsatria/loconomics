@@ -18,9 +18,10 @@ class Settings(BaseSettings):
     mapid_data_api_key: str = ""
 
     # Provider LLM untuk AI Consultant. MAPID tidak menyediakan token AI.
-    # WAJIB backend saja.
+    # WAJIB backend saja - jangan pernah diteruskan ke frontend dalam bentuk apa pun.
     llm_api_key: str = ""
-    llm_provider: str = ""
+    llm_provider: str = "anthropic"
+    llm_model: str = "claude-opus-5"
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
 

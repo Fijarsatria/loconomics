@@ -1,13 +1,14 @@
 """Tabel database Loconomics.
 
-Struktur mengikuti Kamus Data Final (docs/data.md): 41 variabel analisis
+Struktur mengikuti Kamus Data Final (docs/data.md): 43 variabel analisis
 + 3 penanda kualitas, seluruhnya melekat pada satu heksagon H3 resolusi 9.
 
 Tiga kelompok tabel:
   1. Referensi spasial  - transport_nodes, catchment_areas
   2. Observasi mentah   - business_pois, *_observations
                           TIDAK PERNAH diekspos lewat API publik (aturan panitia)
-  3. Hasil analisis     - hex_features (input), location_scores + score_factors (output)
+  3. Hasil analisis     - hex_features (input), hex_hourly_profiles (Commuter Clock),
+                          location_scores + score_factors (output)
 """
 
 from datetime import datetime
@@ -146,7 +147,7 @@ class PropertyObservation(Base):
 class HexFeature(Base):
     """Tabel pusat. Satu baris = satu heksagon H3 res-9 (±0,10 km², lebar ±350 m).
 
-    41 variabel analisis + 3 penanda kualitas. Kode variabel (D01, B07, ...)
+    43 variabel analisis + 3 penanda kualitas. Kode variabel (D01, B07, ...)
     dipertahankan di nama kolom lewat komentar supaya bisa ditelusuri balik ke
     Kamus Data Final di docs/data.md.
     """
@@ -171,7 +172,7 @@ class HexFeature(Base):
     intensitas_transaksi: Mapped[float | None] = mapped_column(Float)  # D11 Struk Go -> IAE
     aktivitas_komunitas: Mapped[float | None] = mapped_column(Float)  # D12 Community Maps
 
-    # --- Dimensi Perilaku Konsumen (B01-B09) - 9 variabel -----------------
+    # --- Dimensi Perilaku Konsumen (B01-B10) - 10 variabel ----------------
     puncak_pagi: Mapped[float | None] = mapped_column(Float)  # B01 06-09  -> Commuter Clock
     puncak_siang: Mapped[float | None] = mapped_column(Float)  # B02 11-14
     puncak_sore: Mapped[float | None] = mapped_column(Float)  # B03 16-20
@@ -181,6 +182,7 @@ class HexFeature(Base):
     harga_median_porsi: Mapped[float | None] = mapped_column(Float)  # B07 Menu Go  -> IAE
     spread_harga: Mapped[float | None] = mapped_column(Float)  # B08 Menu Go
     nominal_median_struk: Mapped[float | None] = mapped_column(Float)  # B09 A2 (OCR) -> IAE
+    belanja_per_jam: Mapped[float | None] = mapped_column(Float)  # B10 A2 (OCR) -> PriceLens
 
     # --- Dimensi Kompetisi (C01-C08) - 8 variabel -------------------------
     n_kompetitor_langsung: Mapped[float | None] = mapped_column(Float)  # C01 kelas induk sama + k-ring 1
@@ -192,13 +194,14 @@ class HexFeature(Base):
     rasio_keliling: Mapped[float | None] = mapped_column(Float)  # C07 Menu Go -> IPTT
     n_menetap_kuliner: Mapped[float | None] = mapped_column(Float)  # C08 -> IPTT
 
-    # --- Dimensi Biaya & Pasokan Ruang (P01-P06) - 6 variabel -------------
+    # --- Dimensi Biaya & Pasokan Ruang (P01-P07) - 7 variabel -------------
     njop_m2: Mapped[float | None] = mapped_column(Float)  # P01 Jakarta Satu -> IBR
     njop_persentil: Mapped[float | None] = mapped_column(Float)  # P02 -> prestise
     pasokan_sewa_komersial: Mapped[float | None] = mapped_column(Float)  # P03 Properti Go
     rasio_sewa_jual: Mapped[float | None] = mapped_column(Float)  # P04 Properti Go
     harga_sewa_median: Mapped[float | None] = mapped_column(Float)  # P05 A1 (OCR) -> IBR
     indeks_churn: Mapped[float | None] = mapped_column(Float)  # P06 -> IBR, RiskRadar
+    harga_sewa_per_m2: Mapped[float | None] = mapped_column(Float)  # P07 A1 (OCR) -> PriceLens
 
     # --- Dimensi Risiko & Legalitas (L01-L03) - 3 variabel -----------------
     zona_izin_komersial: Mapped[bool | None] = mapped_column(Boolean)  # L01 GATE: FALSE -> skor 0
@@ -222,6 +225,45 @@ class HexFeature(Base):
     diperbarui_pada: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     __table_args__ = (Index("ix_hex_keyakinan", "tingkat_keyakinan"),)
+
+
+class HexHourlyProfile(Base):
+    """Commuter Clock - satu baris per (heksagon, jam). 18 baris per heksagon, 05:00-22:00.
+
+    Kenapa tabel terpisah dan bukan kolom di hex_features: B01-B04 hanya membagi
+    hari jadi empat ember, sedangkan kriteria penerimaan fitur ini menuntut pola
+    per jam. Delapan belas kolom baru di hex_features akan membuat tabel itu sulit
+    dibaca dan tetap tidak bisa menyimpan pembagian captive/choice per jam.
+
+    `pangsa_captive` disimpan; `pangsa_choice` diturunkan sebagai 1 - pangsa_captive.
+    Menyimpan keduanya membuka kemungkinan jumlahnya tidak 1 setelah suatu
+    pembaruan - satu angka tidak bisa salah begitu.
+
+    Definisi yang dipakai (docs/produk.md bagian Commuter Clock):
+      captive rider  - tidak punya alternatif, bergantung penuh pada transit
+      choice rider   - punya kendaraan pribadi tetapi memilih transit
+
+    Kolom `metode` jujur menyatakan asal angkanya: `observed` kalau berasal dari
+    jam yang benar-benar tercetak di struk, `proxy` kalau diestimasi dari konteks
+    heksagon. Antarmuka wajib membedakan keduanya.
+    """
+
+    __tablename__ = "hex_hourly_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    h3_index: Mapped[str] = mapped_column(
+        ForeignKey("hex_features.h3_index", ondelete="CASCADE"), index=True
+    )
+    jam: Mapped[int] = mapped_column(Integer, nullable=False)  # 5..22
+
+    n_transaksi: Mapped[int] = mapped_column(Integer, default=0)
+    nominal_total: Mapped[float | None] = mapped_column(Float)
+    nominal_median: Mapped[float | None] = mapped_column(Float)
+
+    pangsa_captive: Mapped[float | None] = mapped_column(Float)  # 0..1
+    metode: Mapped[str] = mapped_column(String(10), default="proxy", nullable=False)
+
+    __table_args__ = (UniqueConstraint("h3_index", "jam", name="uq_profil_hex_jam"),)
 
 
 class LocationScore(Base):
@@ -250,6 +292,17 @@ class LocationScore(Base):
     residual_biaya: Mapped[float | None] = mapped_column(Float)  # metode 1 hidden gem
     iptt: Mapped[float | None] = mapped_column(Float)  # metode 3 hidden gem
     kuadran: Mapped[str | None] = mapped_column(String(20))  # metode 2: HIDDEN_GEM|JEBAKAN_GENGSI|...
+
+    # Sumbu X diagram kuadran RiskRadar. Disimpan, bukan dihitung ulang saat
+    # request: nilainya rata-rata lima komponen yang normalisasinya bergantung
+    # pada seluruh kawasan, jadi tidak bisa direproduksi dari satu baris saja.
+    prestise_visual: Mapped[float | None] = mapped_column(Float)
+
+    # Berapa dari tiga metode hidden gem yang menandai heksagon ini. Sebuah
+    # lokasi baru disebut Hidden Gem kalau >= 2 - lihat docs/skoring.md.
+    # Disimpan supaya GemFinder bisa menjelaskan ALASAN terpilihnya, bukan
+    # sekadar menampilkan skor.
+    n_metode_lolos: Mapped[int | None] = mapped_column(Integer)
 
     peringkat: Mapped[int | None] = mapped_column(Integer)
     dihitung_pada: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -1,14 +1,24 @@
 """Loconomics API.
 
-Modular monolith. Empat modul, bukan tujuh: domain "lokasi usaha", "kompetitor",
-dan "properti" tidak punya endpoint sendiri karena data misi MAPID mentah tidak
-boleh diekspos - ketiganya hanya muncul sebagai variabel agregat di /hex.
+Modular monolith. Lima modul.
+
+Yang TIDAK ada di sini sama pentingnya dengan yang ada: domain "lokasi usaha",
+"kompetitor", dan "properti" tidak punya endpoint sendiri. Kalau punya, endpoint
+itu tidak akan punya apa-apa untuk dikirim selain baris survei individual -
+persis yang dilarang ketentuan B.7. Ketiganya hanya muncul sebagai variabel
+agregat di /hex.
+
+  /hex        heksagon, detail 43 variabel, Commuter Clock
+  /pricelens  peta harga - fitur prioritas tertinggi
+  /transit    simpul dan isochrone
+  /skor       peringkat, GemFinder, RiskRadar, ZoneGuard
+  /ai         AI Consultant
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ai, hex, skor, transit
+from app.api import ai, hex, pricelens, skor, transit
 from app.core.config import settings
 
 app = FastAPI(
@@ -25,6 +35,7 @@ app.add_middleware(
 )
 
 app.include_router(hex.router)
+app.include_router(pricelens.router)
 app.include_router(transit.router)
 app.include_router(skor.router)
 app.include_router(ai.router)
