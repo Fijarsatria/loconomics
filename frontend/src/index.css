@@ -1,3 +1,8 @@
+/* Font WAJIB diimpor sebelum apa pun. Dalam CSS, setiap @import harus
+   mendahului seluruh aturan lain - dan `@import "tailwindcss"` mengembang
+   jadi ratusan aturan. Menaruh baris ini sesudahnya membuat peramban
+   membuangnya diam-diam: tidak ada galat, font sekadar tidak pernah muncul. */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 /* ==========================================================================
@@ -28,7 +33,6 @@
    penanda keyakinannya.
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @theme {
   /* --- Netral: abu-abu dingin bersemu hijau ------------------------------
@@ -128,7 +132,7 @@ td {
   background-image: repeating-linear-gradient(
     45deg,
     transparent 0 3px,
-    color-mix(in srgb, currentColor 22%, transparent) 3px 4.5px
+    color-mix(in srgb, currentColor 34%, transparent) 3px 4.5px
   );
 }
 

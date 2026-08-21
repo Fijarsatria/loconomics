@@ -187,7 +187,7 @@ cd frontend && npx tsc --noEmit && npx oxlint
 | **`KOLOM_*_GO` masih kosong** di `pipeline/config.py` | CSV misi asli belum diunduh | **Ini yang pertama.** Cocokkan nama kolom, lalu `s1`–`s2` bisa jalan |
 | Badan `s1`, `s3`, `s5` dan sisa `s4` | Sebagian menunggu data, sebagian menunggu keputusan penyedia vision | Docstring-nya sudah memuat keputusan yang diambil — ikuti, jangan analisis ulang. `s4::profil_jam`, `belanja_per_jam`, dan `harga_sewa_per_m2` SUDAH jalan dan teruji |
 | `LLM_API_KEY` belum diisi | Kunci belum ada | Isi di `backend/.env`, lalu `GET /ai/status` menyatakan siap. Kode `/ai/tanya` sudah lengkap |
-| **Frontend belum pernah dilihat render** | Tiga Chrome terhubung, tidak boleh ditebak | Buka `localhost:5173`, kirim tangkapan layar |
+
 | Isochrone belum tergambar di peta | `catchment_areas` kosong — butuh routing OSMnx sungguhan, dan lingkaran palsu justru kesalahan yang docs/data.md peringatkan | Isi lewat `s4_spatial.bangun_isochrone()` |
 | Mode gelap | Belum dikerjakan, sengaja | Basemap gelap sudah bisa dipilih; chrome-nya masih terang |
 | Sumber NJOP & RDTR definitif | Belum dipilih | Isi L01–L02, P01–P02 |
@@ -211,6 +211,9 @@ jangan mengulang analisisnya.
 | Migrasi gagal: `geoalchemy2` tidak dikenal | Autogenerate tidak menulis impornya | Sudah permanen di `alembic/script.py.mako` |
 | `KeyError: 'D05'` di `_tertimbang()` | Bobot berkunci KODE, DataFrame berkunci NAMA KOLOM | `KODE_KE_KOLOM` di `config.py` |
 | `ModuleNotFoundError: No module named 'pipeline'` | Skrip pipeline dijalankan dari root | Jalankan dari dalam `pipeline/` |
+| Peta kosong, kontrol muncul, tanpa galat | `maplibre-gl.css` mendeklarasikan `.maplibregl-map{position:relative}` dengan spesifisitas sama dengan `.absolute` Tailwind dan dimuat belakangan, jadi `inset-0` berhenti memberi tinggi | Beri tinggi lewat `h-full`, jangan `absolute inset-0` |
+| Heksagon tersapu jalan & bangunan basemap | Disisipkan sebelum layer symbol PERTAMA — di gaya MAPID itu `water_name` pada indeks 8 dari 54 | Sisipkan setelah layer bukan-symbol TERAKHIR (`idLabelPertama()`) |
+| Font kustom tidak pernah muncul, tanpa galat | `@import` Google Fonts ditaruh SESUDAH `@import "tailwindcss"` yang mengembang jadi ratusan aturan; CSS membuang `@import` yang tidak mendahului semua aturan | Taruh @import font di baris paling atas |
 | Angka baru pipeline tidak muncul di API | Cache masih memegang nilai lama | `POST /meta/cache/bersihkan` setelah `s7_publish --muat` |
 | Cache tidak pernah kena | Objek sesi ikut jadi kunci cache | `core/cache.py::ABAIKAN` menyaringnya menurut NAMA parameter, bukan posisi — FastAPI memanggil dengan kata-kunci |
 | Heksagon hilang dari setiap filter tanpa galat | `NaN` pandas masuk ke kolom numerik dan tersimpan sebagai `'NaN'::float`, bukan `NULL` | `s7_publish._bersih()` mengubahnya jadi `None` sebelum menyentuh basis data |

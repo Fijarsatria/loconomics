@@ -66,7 +66,7 @@ export default function Legenda({ layer }: { layer: NamaLayer }) {
   return (
     <Bingkai judul="ZoneGuard — status izin">
       <ul className="space-y-1.5">
-        <Kunci warna="#c9dbd4" label="Zona mengizinkan usaha" />
+        <Kunci warna="#8fbfb2" label="Zona mengizinkan usaha" />
         <Kunci warna="#b42318" label="Zona melarang usaha" catatan="skor dinolkan, tidak pernah direkomendasikan" />
         <Kunci warna={ABU_HINDARI} label="Belum ada RDTR digital" catatan="belum bisa dipastikan, bukan larangan" />
         <Kunci arsir label="Nilai hasil imputasi model" />

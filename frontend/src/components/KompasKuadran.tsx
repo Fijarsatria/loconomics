@@ -34,6 +34,9 @@ interface Props {
   batas?: { x: number | null; y: number | null }
   onPilih?: (h3: string) => void
   besar?: boolean
+  /** Tombol pembuka diagram penuh, ditaruh DI DALAM kartu. Sebagai elemen
+      melayang terpisah ia menabrak kartunya sendiri di layar sempit. */
+  onBukaPenuh?: () => void
 }
 
 const SEL: Record<string, { kolom: 0 | 1; baris: 0 | 1 }> = Object.fromEntries(
@@ -48,8 +51,9 @@ export default function KompasKuadran({
   batas,
   onPilih,
   besar,
+  onBukaPenuh,
 }: Props) {
-  const sisi = besar ? 340 : 132
+  const sisi = besar ? 400 : 168
 
   return (
     <div
@@ -71,17 +75,16 @@ export default function KompasKuadran({
         )}
       </div>
 
-      <div className="flex gap-2.5">
-        {/* Sumbu tegak */}
-        <div className="flex flex-col items-center justify-between py-1">
-          <span className="eyebrow [writing-mode:vertical-rl] rotate-180 tracking-[0.12em]">
-            Skor peluang
-          </span>
-        </div>
+      <div className="flex items-stretch gap-1.5">
+        {/* Sumbu tegak. Ditulis vertikal karena mendampingi sumbu yang vertikal —
+            bukan demi gaya. */}
+        <span className="eyebrow shrink-0 self-center [writing-mode:vertical-rl] rotate-180 tracking-[0.14em]">
+          Skor peluang
+        </span>
 
-        <div>
+        <div className="min-w-0 shrink-0" style={{ width: sisi }}>
           <div
-            className="relative grid grid-cols-2 grid-rows-2 overflow-hidden rounded-sm border border-line-2"
+            className="relative grid w-full grid-cols-2 grid-rows-2 overflow-hidden rounded-sm border border-line-2"
             style={{ width: sisi, height: sisi }}
           >
             {URUTAN_KUADRAN.map((kunci) => {
@@ -114,18 +117,16 @@ export default function KompasKuadran({
                     }`}
                   />
                   <span
-                    className={`relative flex flex-col gap-1 ${besar ? 'p-3' : 'p-1.5'}`}
+                    className={`relative flex h-full flex-col ${besar ? 'gap-1 p-3' : 'gap-0.5 p-2'}`}
                   >
-                    <Glif kuadran={kunci} ukuran={besar ? 16 : 11} />
+                    <Glif kuadran={kunci} ukuran={besar ? 16 : 12} />
                     <span
-                      className={`font-semibold leading-tight ${besar ? 'text-[12px]' : 'text-[9.5px]'}`}
+                      className={`font-semibold leading-[1.15] ${besar ? 'text-[11px]' : 'text-[10px]'}`}
                       style={{ color: q.warna ?? 'var(--color-ink-3)' }}
                     >
                       {q.nama}
                     </span>
-                    {besar && (
-                      <span className="text-[11px] leading-snug text-ink-3">{q.arti}</span>
-                    )}
+
                   </span>
                 </button>
               )
@@ -141,8 +142,11 @@ export default function KompasKuadran({
                     title={`${t.h3_index} · peluang ${t.y_peluang?.toFixed(1)} · risiko ${t.risiko}`}
                     className="absolute -translate-x-1/2 translate-y-1/2 cursor-pointer rounded-full transition-transform hover:scale-150"
                     style={{
-                      left: `${t.x_prestise * 100}%`,
-                      bottom: `${t.y_peluang}%`,
+                      // Dijepit 3-97%: titik berskor 0 atau 100 tepat di tepi
+                      // akan tergunting separuh oleh overflow-hidden, dan justru
+                      // titik-titik ekstrem itu yang paling ingin dilihat.
+                      left: `${3 + t.x_prestise * 94}%`,
+                      bottom: `${3 + (t.y_peluang / 100) * 94}%`,
                       width: 7,
                       height: 7,
                       // Cincin permukaan 2px supaya titik yang bertumpuk tetap
@@ -160,8 +164,8 @@ export default function KompasKuadran({
             {/* Garis pemisah — median kedua sumbu, sama seperti yang dipakai pipeline */}
             {besar && batas?.x != null && (
               <span
-                className="pointer-events-none absolute inset-y-0 w-px bg-ink-3/30"
-                style={{ left: `${batas.x * 100}%` }}
+                className="pointer-events-none absolute inset-y-0 w-px bg-ink-3/25"
+                style={{ left: `${3 + batas.x * 94}%` }}
               />
             )}
 
@@ -170,8 +174,8 @@ export default function KompasKuadran({
               <span
                 className="pointer-events-none absolute z-10 -translate-x-1/2 translate-y-1/2 rounded-full transition-[left,bottom] duration-300 ease-out"
                 style={{
-                  left: `${posisi.x * 100}%`,
-                  bottom: `${posisi.y}%`,
+                  left: `${3 + posisi.x * 94}%`,
+                  bottom: `${3 + (posisi.y / 100) * 94}%`,
                   width: 9,
                   height: 9,
                   background: posisi.kuadran
@@ -185,19 +189,54 @@ export default function KompasKuadran({
           </div>
 
           {/* Sumbu datar */}
-          <div className="mt-1 flex items-center justify-between">
-            <span className="text-[9px] text-ink-3">biasa saja</span>
+          <div className="mt-1 flex items-baseline justify-between gap-2">
+            <span className="text-[9px] text-ink-3">biasa</span>
             <span className="eyebrow tracking-[0.12em]">Prestise visual</span>
             <span className="text-[9px] text-ink-3">mahal</span>
           </div>
         </div>
       </div>
 
-      {!besar && posisi?.x == null && (
-        <p className="mt-2 max-w-[15rem] border-t border-line pt-2 text-[10.5px] leading-snug text-ink-3">
-          Klik satu kuadran untuk menyaring peta, atau klik heksagon untuk melihat
-          posisinya di sini.
-        </p>
+      {besar && (
+        <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-3">
+          {URUTAN_KUADRAN.map((kunci) => {
+            const q = KUADRAN[kunci]
+            return (
+              <li key={kunci} className="flex gap-2">
+                <span className="mt-[3px] shrink-0">
+                  <Glif kuadran={kunci} ukuran={11} />
+                </span>
+                <span className="text-[10.5px] leading-snug">
+                  <span
+                    className="font-semibold"
+                    style={{ color: q.warna ?? 'var(--color-ink-2)' }}
+                  >
+                    {q.nama}
+                  </span>
+                  <span className="block text-ink-3">{q.arti}</span>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {!besar && (
+        <div className="mt-2 border-t border-line pt-2">
+          {posisi?.x == null && (
+            <p className="mb-1.5 text-[10px] leading-snug text-ink-3">
+              Klik satu kuadran untuk menyaring peta.
+            </p>
+          )}
+          {onBukaPenuh && (
+            <button
+              onClick={onBukaPenuh}
+              className="cursor-pointer text-[10.5px] font-semibold text-ink-2 underline decoration-line-2 underline-offset-2 transition-colors hover:text-ink"
+            >
+              Buka diagram penuh
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

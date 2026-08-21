@@ -71,9 +71,13 @@ const CONTOH = [
 export default function PanelAI({
   kendali,
   hexTerpilih,
+  terbuka,
+  onLipat,
 }: {
   kendali: KendaliPeta
   hexTerpilih: string | null
+  terbuka: boolean
+  onLipat: () => void
 }) {
   const [pesan, setPesan] = useState<Pesan[]>([])
   const [input, setInput] = useState('')
@@ -150,8 +154,26 @@ export default function PanelAI({
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
-        <h2 className="eyebrow">Konsultan AI</h2>
+      {/* Bilah judul merangkap tombol lipat. Panel ini bagian wajib dan tidak
+          pernah hilang dari layar, tetapi tidak selalu perlu menghabiskan 19rem -
+          kartu detail heksagon punya tujuh bagian dan butuh ruangnya. */}
+      <button
+        onClick={onLipat}
+        aria-expanded={terbuka}
+        className="flex w-full shrink-0 cursor-pointer items-center justify-between gap-2 border-b border-line px-4 py-2 text-left transition-colors hover:bg-surface-2"
+      >
+        <span className="flex items-center gap-1.5">
+          <svg
+            width="9"
+            height="9"
+            viewBox="0 0 10 10"
+            aria-hidden
+            className={`text-ink-3 transition-transform ${terbuka ? '' : 'rotate-180'}`}
+          >
+            <path d="M1 6.5 5 2.5 9 6.5" stroke="currentColor" strokeWidth="1.6" fill="none" />
+          </svg>
+          <span className="eyebrow">Konsultan AI</span>
+        </span>
         <span
           className="flex items-center gap-1.5 text-[10px] text-ink-3"
           title={
@@ -168,8 +190,11 @@ export default function PanelAI({
           />
           {status === null ? 'memeriksa' : status.siap ? 'siap' : 'belum aktif'}
         </span>
-      </div>
+      </button>
 
+      {!terbuka && null}
+
+      {terbuka && (
       <div className="scroll-tipis flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {pesan.length === 0 && (
           <div>
@@ -266,7 +291,9 @@ export default function PanelAI({
         )}
         <div ref={akhir} />
       </div>
+      )}
 
+      {terbuka && (
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -297,6 +324,7 @@ export default function PanelAI({
           </button>
         </div>
       </form>
+      )}
     </div>
   )
 }

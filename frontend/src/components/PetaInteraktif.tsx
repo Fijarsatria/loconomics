@@ -46,6 +46,7 @@ const L_ARSIR = 'hex-arsir'
 const L_GARIS = 'hex-garis'
 const L_SOROT = 'hex-sorot'
 const L_PILIH = 'hex-pilih'
+const L_SELUBUNG = 'selubung-basemap'
 const POLA = 'arsir-ketidakpastian'
 
 const q = (k: string) => KUADRAN[k].warna ?? ABU_HINDARI
@@ -116,7 +117,7 @@ const WARNA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
   // Tiga status, tiga perlakuan. NULL TIDAK disamakan dengan FALSE.
   zoneguard: [
     'case',
-    ['==', ['get', 'zona_izin_komersial'], true], '#c9dbd4',
+    ['==', ['get', 'zona_izin_komersial'], true], '#8fbfb2',
     ['==', ['get', 'zona_izin_komersial'], false], '#b42318',
     ABU_HINDARI,
   ],
@@ -131,11 +132,58 @@ const WARNA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
  * peringatan yang paling penting di layar hanya karena skor ekonominya rendah.
  */
 const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification> = {
-  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.16, 0.62],
-  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.14, 0.68],
-  risk_radar: ['case', ['==', ['get', 'kuadran'], 'JEBAKAN_GENGSI'], 0.68, 0.12],
-  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.14, 0.7],
-  zoneguard: 0.6,
+  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.14, 0.56],
+  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.1, 0.62],
+  risk_radar: ['case', ['==', ['get', 'kuadran'], 'JEBAKAN_GENGSI'], 0.62, 0.09],
+  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.1, 0.62],
+  zoneguard: 0.5,
+}
+
+/**
+ * Cari layer tempat heksagon harus disisipkan: tepat setelah isian dan garis
+ * basemap terakhir, sebelum labelnya.
+ */
+function idLabelPertama(m: MapLibreMap): string | undefined {
+  const layers = m.getStyle().layers ?? []
+  let terakhirBukanSymbol = -1
+  layers.forEach((l, i) => {
+    if (l.type !== 'symbol' && l.type !== 'background') terakhirBukanSymbol = i
+  })
+  return layers[terakhirBukanSymbol + 1]?.id
+}
+
+/**
+ * Tenangkan basemap sebelum data digambar di atasnya.
+ *
+ * Gaya MAPID menggambar setiap footprint bangunan dan setiap ikon POI - halte,
+ * klinik, posyandu. Untuk peta navigasi itu benar; untuk peta analitik ia
+ * berebut perhatian dengan hal yang justru ingin dibaca. Dua tindakan, keduanya
+ * bisa dibalik dengan mengganti gaya:
+ *
+ *   1. Selubung putih tipis di atas isian basemap, di bawah heksagon. Jalan dan
+ *      bangunan tetap ada sebagai konteks, tetapi berhenti bersaing.
+ *   2. Ikon POI disembunyikan. Nama jalan dan nama tempat DIPERTAHANKAN - itu
+ *      yang dipakai orang mengenali lokasi; ikon klinik tidak.
+ */
+function siapkanBasemap(m: MapLibreMap) {
+  const layers = m.getStyle().layers ?? []
+
+  for (const l of layers) {
+    if (/^poi/.test(l.id) && l.type === 'symbol') {
+      m.setLayoutProperty(l.id, 'visibility', 'none')
+    }
+  }
+
+  if (!m.getLayer(L_SELUBUNG)) {
+    m.addLayer(
+      {
+        id: L_SELUBUNG,
+        type: 'background',
+        paint: { 'background-color': '#ffffff', 'background-opacity': 0.58 },
+      },
+      idLabelPertama(m),
+    )
+  }
 }
 
 export interface Kriteria {
@@ -247,33 +295,60 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         }
         m.addSource(SUMBER, { type: 'geojson', data: data as never })
 
-        m.addLayer({
-          id: L_ISI,
-          type: 'fill',
-          source: SUMBER,
-          paint: {
-            'fill-color': WARNA_LAYER[layer],
-            'fill-opacity': OPASITAS_LAYER[layer],
+        siapkanBasemap(m)
+
+        // Heksagon disisipkan DI ATAS seluruh isian dan garis basemap, tetapi
+        // DI BAWAH labelnya. Kalau heksagon menutupi nama jalan dan stasiun,
+        // pengguna kehilangan satu-satunya cara mengenali tempat yang sedang
+        // dilihatnya, dan peta berubah jadi hamparan warna yang tidak menunjuk
+        // apa pun.
+        //
+        // Percobaan pertama menyisipkannya sebelum layer symbol PERTAMA, dan itu
+        // salah: symbol pertama di gaya MAPID adalah `water_name` pada indeks 8
+        // dari 54, jadi seluruh jalan dan bangunan justru tergambar DI ATAS
+        // heksagon dan menyapunya habis. Yang benar: setelah layer bukan-symbol
+        // TERAKHIR.
+        const labelPertama = idLabelPertama(m)
+
+        m.addLayer(
+          {
+            id: L_ISI,
+            type: 'fill',
+            source: SUMBER,
+            paint: {
+              'fill-color': WARNA_LAYER[layer],
+              'fill-opacity': OPASITAS_LAYER[layer],
+            },
           },
-        })
+          labelPertama,
+        )
 
         // Arsir ketidakpastian: satu layer di atas isian, berlaku untuk kelima
         // layer tematik. Warnanya tidak perlu ikut berubah - yang disampaikannya
         // bukan nilai, melainkan bahwa nilainya belum terukur.
-        m.addLayer({
-          id: L_ARSIR,
-          type: 'fill',
-          source: SUMBER,
-          filter: ['==', ['get', 'data_source'], 'predicted'],
-          paint: { 'fill-pattern': POLA, 'fill-opacity': 0.55 },
-        })
+        m.addLayer(
+          {
+            id: L_ARSIR,
+            type: 'fill',
+            source: SUMBER,
+            filter: ['==', ['get', 'data_source'], 'predicted'],
+            paint: { 'fill-pattern': POLA, 'fill-opacity': 0.5 },
+          },
+          labelPertama,
+        )
 
-        m.addLayer({
-          id: L_GARIS,
-          type: 'line',
-          source: SUMBER,
-          paint: { 'line-color': '#ffffff', 'line-width': 0.6, 'line-opacity': 0.5 },
-        })
+        // Garis batas cukup gelap untuk memisahkan heksagon sewarna. Garis putih
+        // tipis hilang begitu dua heksagon bersebelahan berwarna sama, dan
+        // keduanya melebur jadi satu gumpalan yang tidak bisa diklik dengan yakin.
+        m.addLayer(
+          {
+            id: L_GARIS,
+            type: 'line',
+            source: SUMBER,
+            paint: { 'line-color': '#16211c', 'line-width': 0.8, 'line-opacity': 0.38 },
+          },
+          labelPertama,
+        )
 
         m.addLayer({
           id: L_SOROT,
@@ -387,7 +462,14 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 
   return (
     <div className="relative h-full w-full">
-      <div ref={wadah} className="absolute inset-0" />
+      {/* Tinggi diberi lewat h-full, BUKAN lewat absolute+inset-0.
+          Alasannya konkret: maplibre-gl.css mendeklarasikan
+          `.maplibregl-map { position: relative }` dengan spesifisitas yang sama
+          dengan `.absolute` milik Tailwind, dan ia dimuat belakangan - jadi ia
+          menang, `inset-0` berhenti memberi tinggi, dan wadahnya jadi nol tanpa
+          satu pun galat di konsol. Peta ter-inisialisasi, kontrol muncul, tetapi
+          tidak ada yang terlihat. */}
+      <div ref={wadah} className="h-full w-full" />
 
       {/* Simpul transit. Ini produk transit-oriented, dan peta tanpa stasiun
           menghilangkan titik acuan yang membuat seluruh skor punya arti.

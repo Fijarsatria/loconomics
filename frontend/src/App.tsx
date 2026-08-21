@@ -83,6 +83,7 @@ export default function App() {
   // yang harus saya lihat", bukan "bagaimana lokasi ini" - dan layar kosong yang
   // menyuruh mengklik heksagon menjawab pertanyaan yang belum diajukan.
   const [tab, setTab] = useState<'daftar' | 'detail'>('daftar')
+  const [aiTerbuka, setAiTerbuka] = useState(true)
   const [diagram, setDiagram] = useState<DiagramKuadran | null>(null)
   const peta = useRef<AksiPetaRef>(null)
 
@@ -220,20 +221,13 @@ export default function App() {
                 saring={saringKuadran}
                 onSaring={setSaringKuadran}
                 posisi={posisi}
+                onBukaPenuh={() => setKuadranPenuh(true)}
               />
             ) : (
               <Legenda layer={layer} />
             )}
           </div>
 
-          {pakaiKompas && (
-            <button
-              onClick={() => setKuadranPenuh(true)}
-              className="absolute bottom-6 left-[15.5rem] z-10 hidden cursor-pointer sm:block rounded-sm border border-line bg-surface/95 px-2.5 py-1.5 text-[11px] font-medium shadow-[0_2px_10px_rgb(22_33_28/0.10)] backdrop-blur-sm transition-colors hover:bg-surface-2"
-            >
-              Buka diagram penuh
-            </button>
-          )}
 
           {nHeksagon === 0 && (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
@@ -295,8 +289,17 @@ export default function App() {
               <PanelInsight h3={hexTerpilih} onBukaKuadran={() => setKuadranPenuh(true)} />
             )}
           </div>
-          <div className="h-[14rem] shrink-0 border-t border-line lg:h-[19rem]">
-            <PanelAI kendali={kendali} hexTerpilih={hexTerpilih} />
+          <div
+            className={`shrink-0 border-t border-line ${
+              aiTerbuka ? 'h-[13rem] lg:h-[17rem]' : 'h-auto'
+            }`}
+          >
+            <PanelAI
+              kendali={kendali}
+              hexTerpilih={hexTerpilih}
+              terbuka={aiTerbuka}
+              onLipat={() => setAiTerbuka((v) => !v)}
+            />
           </div>
         </aside>
       </main>
@@ -311,7 +314,7 @@ export default function App() {
           aria-label="Diagram kuadran"
         >
           <div
-            className="masuk max-h-full overflow-auto rounded-md bg-surface shadow-[0_8px_40px_rgb(22_33_28/0.25)]"
+            className="masuk max-h-full w-[34rem] max-w-full overflow-auto rounded-md bg-surface shadow-[0_8px_40px_rgb(22_33_28/0.25)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-baseline justify-between gap-6 border-b border-line px-4 py-3">
