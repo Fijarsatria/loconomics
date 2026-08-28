@@ -53,20 +53,38 @@ memanggil dan meneruskan hasilnya.
 >
 > Jadi API-nya benar-benar mengotentikasi, dan satu kunci membuka dua pintu.
 >
-> **Keadaan sekarang: kunci itu ada di `frontend/.env` sebagai
-> `VITE_MAPID_MAPS_API_KEY` dan ikut ter-bundel ke `dist/assets/*.js`.** Siapa
-> pun yang membuka JS aplikasi bisa menyalinnya dan menarik seluruh 691 titik
-> survei mentah — melanggar aturan keras #1 sekaligus #2 di berkas ini.
+> **SUDAH DIPERBAIKI, 29 Agustus 2026.** Kunci dicabut total dari frontend.
 >
-> Yang membuatnya tidak sepele: basemap MENUNTUT kunci hadir di peramban untuk
-> mengambil tile. Memindahkannya ke backend saja akan mematikan petanya.
+> Asumsi yang selama ini menghalangi perbaikannya ternyata salah: dikira basemap
+> MENUNTUT kunci hadir di peramban, sehingga memindahkannya ke backend akan
+> mematikan peta. Diukur satu per satu, dan hanya SATU dari empat yang menuntut:
 >
-> **Belum diperbaiki.** Tiga jalan, dan yang pertama harus dicoba lebih dulu:
-> 1. Tanyakan ke MAPID lewat Koordinator Tim apakah ada kunci khusus basemap,
->    atau pembatasan HTTP referrer. Ini mungkin kekeliruan cakupan di sisi mereka
-> 2. Dua kunci terpisah — supaya yang terekspos bisa dicabut tanpa mematikan backend
-> 3. Proksikan tile lewat backend — kunci hilang dari peramban, tetapi setiap
->    tile lewat server sendiri
+> | Sumber daya | Tanpa kunci | Volume |
+> |---|---|---|
+> | `styles/{gaya}/style.json` | **401** | 4 berkas |
+> | `data/mapidtiles.json` | 200 | 2,7 MB |
+> | `data/mapidtiles/{z}/{x}/{y}.pbf` | 200 | ~397 KB/ubin, byte identik |
+> | `fonts/{fontstack}/{range}.pbf` | 200 | ~75 KB |
+>
+> Jadi yang perlu melewati sisi server cuma satu berkas JSON per gaya, dan ubin
+> — yang menyusun 99% lalu lintas peta — tetap diambil peramban LANGSUNG dari
+> MAPID. Pemakaian tetap tercatat di sisi mereka, dan A.3 tidak tersentuh.
+>
+> Alurnya:
+> 1. `GET /meta/basemap/{gaya}/style.json` di backend mengambil gaya dari MAPID
+>    dengan kunci, membuang kuncinya dari badan respons, lalu MENYISIPKAN
+>    TileJSON-nya (2,7 MB → 25 KB yang benar-benar dipakai perender)
+> 2. `frontend/scripts/gaya-basemap.mjs` menyimpan keempatnya sebagai berkas
+>    statis di `frontend/public/basemap/` (224 KB, di-commit)
+> 3. Frontend memuatnya satu-asal. Tidak ada `VITE_` berisi kunci apa pun lagi
+>
+> Statis, bukan proksi langsung, karena Render free tier tidur: kalau peramban
+> meminta gayanya ke backend saat peta dibuka, basemap ikut mati selama puluhan
+> detik pertama — persis saat juri membuka tautan.
+>
+> Dijaga empat asersi di `backend/tests/test_infra.py` dan satu di
+> `frontend/scripts/audit-prd.mjs` ("nol URL membawa key/access_token"). Build
+> produksi diperiksa: **nol berkas di `dist/` memuat kunci**.
 >
 > **Kunci profil akun BUKAN jalan keluarnya — sudah diuji 27 Agu 2026.**
 > Kunci tingkat-profil dari dasbor GEO MAPID (`c2c66e…`, berbeda dari kunci
@@ -119,7 +137,23 @@ Tidak boleh ada sumber tile lain. Bukan OSM, bukan Mapbox, bukan Google.
 MAPID sendiri** atas data sumbernya, bukan tanda kita memakai tile OSM. Tetap
 patuh.
 
-Kelima gaya yang tersedia terdaftar di `frontend/src/config.ts`.
+**EMPAT gaya**, bukan lima. `satellite` dicabut 29 Agustus 2026 — ia memang
+gaya terbitan MAPID, tetapi ubinnya datang dari `api.mapbox.com` dan
+`api.maptiler.com`, dan berkas gayanya membawa `access_token` Mapbox sepanjang
+93 karakter **milik akun pihak ketiga**. Menyajikannya berarti melanggar A.3
+sekaligus ikut menerbitkan kredensial orang lain — dan kredensial itu bisa
+dicabut kapan saja, termasuk saat penjurian.
+
+Keempat yang tersisa (Terang, Dasar, Jalan, Gelap) seluruhnya melayani ubin dari
+`basemap.mapid.io`, terdaftar di `frontend/src/config.ts` dan di daftar putih
+`backend/app/api/meta.py::GAYA_BASEMAP`. Audit peramban menegakkannya: asersi
+"nol ubin dari penyedia lain".
+
+**Catatan operasional:** `basemap.mapid.io` membatasi laju per-IP. Permintaan
+ubin yang beruntun dijawab `401 Authorization Required` untuk SELURUH ubin
+selama beberapa menit — dengan kunci maupun tanpa. Ia pulih sendiri, dan
+`style.json` tetap 200 pada saat yang sama, jadi 401 pada ubin bukan tanda
+kuncinya bermasalah.
 
 ### Tiga bagian wajib di antarmuka
 

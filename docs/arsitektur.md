@@ -265,23 +265,65 @@ itu ditegakkan `test_s6_score.py::test_faktor_menjumlah_jadi_indeksnya`.
 
 ## Deployment
 
-| Bagian | Layanan | Catatan |
-|---|---|---|
-| Frontend | Cloudflare Pages | Statis, gratis |
-| Backend | Render | Free tier **tidur setelah tidak aktif** |
-| Basis data | Supabase | Free tier dijeda kalau lama menganggur |
-| Subdomain | Disediakan panitia MAPID | Alurnya di berkas briefing Technical Meeting |
+Berkas konfigurasinya sudah ada di repo, jadi ini bukan lagi rencana:
 
-### Mitigasi free tier — wajib dikerjakan sebelum demo
+| Bagian | Layanan | Berkas | Catatan |
+|---|---|---|---|
+| Frontend | Cloudflare Pages | `frontend/public/_headers`, `_redirects` | Build `npm run build`, keluaran `dist/` |
+| Backend | Render | `render.yaml` | Free tier **tidur setelah 15 menit** |
+| Basis data | Supabase | — | Connection string mode *Transaction pooler* |
+| Subdomain | Disediakan panitia MAPID | — | Alurnya di berkas briefing Technical Meeting |
+
+`render.yaml` adalah Blueprint: Render Dashboard → New → Blueprint → pilih repo.
+Seluruh rahasia ditandai `sync: false`, artinya Render menanyakannya di dashboard
+dan tidak satu pun nilainya ada di repo.
+
+**Yang wajib disetel ulang begitu subdomain MAPID keluar:** `CORS_ORIGINS` di
+dashboard Render. CORS yang salah membuat SELURUH panggilan data gagal dari
+peramban sementara `curl` tetap berhasil — jenis kegagalan yang paling lama
+dikejar karena gejalanya menunjuk ke tempat yang salah.
+
+### Mitigasi free tier
 
 Backend Render tidur dan butuh puluhan detik untuk bangun. Kalau juri membuka
-tautan lebih dulu, halaman terlihat rusak.
+tautan lebih dulu, halaman bisa terlihat rusak. Tiga sudah terpasang, satu masih
+manual:
 
-1. **Layer heksagon disajikan sebagai GeoJSON statis dari Cloudflare**, bukan
-   dari `/hex/layer` langsung. Endpoint itu tetap dipakai saat pengembangan dan
-   sebagai sumber untuk membangkitkan berkas statisnya.
-2. **Panggil backend beberapa menit sebelum demo** supaya sudah bangun.
-3. **Cache AI tidak dikosongkan** — lihat `pipeline/README.md`.
+1. **Gaya basemap disajikan statis dari Cloudflare** — `frontend/public/basemap/`,
+   empat berkas, 224 KB. Peta tergambar lengkap dengan jalan dan nama tempat
+   walaupun backend masih bangun. Dibangkitkan `scripts/gaya-basemap.mjs`.
+2. **Heksagon tidak menunggu ubin basemap.** Penanda siap peta dipicu
+   `styledata`, bukan hanya `load`. Terukur: dengan basemap diblokir penuh
+   (MAPID sedang membatasi laju), 28 dari 29 asersi audit tetap lolos.
+3. **`/health` tidak menyentuh basis data.** Render memanggilnya tiap beberapa
+   detik; kalau ia membuka koneksi, Supabase free tier habis sendiri.
+4. **Layer heksagon sebagai GeoJSON statis — BELUM.** `s7_publish.py --ekspor`
+   sudah membangkitkan berkasnya; menyajikannya dari Cloudflare belum dikerjakan.
+
+Sisanya manual: **panggil backend beberapa menit sebelum demo** supaya sudah
+bangun, dan **jangan kosongkan cache AI** — lihat `pipeline/README.md`.
+
+### Proksi gaya basemap
+
+`GET /meta/basemap/{gaya}/style.json` mengambil gaya dari MAPID dengan kunci,
+membuang kuncinya dari badan respons, lalu menyisipkan TileJSON-nya. Ia ada
+karena kunci Map Services ternyata membuka data misi juga — rinciannya di
+`docs/aturan-lomba.md` bagian 2.
+
+Endpoint ini TIDAK dipanggil peramban saat aplikasi berjalan; ia dipanggil
+`scripts/gaya-basemap.mjs` saat build. Yang dilayani ke pengguna berkas statis.
+
+### Audit sebelum menyerahkan
+
+```bash
+cd backend  && uvicorn app.main:app --port 8000
+cd frontend && npm run dev
+cd frontend && SANDI=... node scripts/audit-prd.mjs
+```
+
+29 asersi di Chromium sungguhan: keenam acceptance criteria PRD, dua lintasan
+(tamu dan pelanggan premium), plus pemeriksaan bahwa nol URL yang diminta
+peramban membawa `key=` atau `access_token=`.
 
 ## Rahasia dan kunci
 
