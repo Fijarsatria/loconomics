@@ -19,6 +19,24 @@ Skor Peluang 0–100
 Hidden Gem Score + Kuadran
 ```
 
+Berjalan berdampingan dengan itu, dari normalisasi yang sama:
+
+```
+14 variabel berbobot
+    ↓ rincian_faktor()   bobot × nilai ternormalisasi, per (heksagon, variabel)
+score_factors           9.912 baris untuk 708 heksagon
+```
+
+Isinya bukan angka baru: jumlah kontribusi satu indeks selalu sama persis dengan
+nilai indeks itu, dan `test_faktor_menjumlah_jadi_indeksnya` yang menjaganya.
+Tabel ini ada supaya penjelasan tidak perlu menghitung apa pun saat request —
+backend membacanya untuk panel "Kenapa skornya segitu", dan LLM merangkainya
+jadi kalimat tanpa pernah menyentuh aritmetika.
+
+Empat belas, bukan 43: hanya variabel yang benar-benar punya bobot yang muncul.
+B10 dan P07 tidak ikut karena keduanya variabel tampilan PriceLens dan tidak
+membentuk satu pun indeks.
+
 ## Normalisasi
 
 Min-max ke [0,1] per kawasan. Empat belas variabel berekor panjang (populasi,
@@ -197,7 +215,7 @@ python test_s6_score.py            # ringkasan + tabel sensitivitas
 python -m pytest test_s6_score.py -v
 ```
 
-Sebelas uji, tidak butuh database maupun data lapangan. Yang dijaga: rentang
+Empat belas uji, tidak butuh database maupun data lapangan. Yang dijaga: rentang
 normalisasi, NaN tidak berubah jadi nol, ZoneGuard menolkan, zona `NULL` **tidak**
 ternol, arah IPTT, kelengkapan kuadran, aturan minimal 2 metode, dan ambang
 sensitivitas.

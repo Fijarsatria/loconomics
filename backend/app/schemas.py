@@ -9,9 +9,10 @@ Dua aturan yang ditegakkan di lapisan ini:
    sedemikian rupa sehingga tidak mungkin mengirim skor tanpa badge-nya.
 """
 
+from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 TingkatKeyakinan = Literal["TINGGI", "SEDANG", "RENDAH"]
 SumberData = Literal["observed", "predicted"]
@@ -160,7 +161,7 @@ class PriceLensHeksagon(BaseModel):
 
 # --- RiskRadar (fitur 5) ---------------------------------------------------
 
-TingkatRisiko = Literal["AMAN", "WASPADA", "BAHAYA"]
+TingkatRisiko = Literal["AMAN", "WASPADA", "BAHAYA", "TIDAK_DIKETAHUI"]
 
 
 class PeringatanRisiko(BaseModel):
@@ -223,6 +224,149 @@ class HiddenGem(BaseModel):
     zoneguard: StatusZoneGuard
 
 
+# --- Simulasi kelayakan usaha ---------------------------------------------
+
+
+class MasukanSimulasi(BaseModel):
+    """Apa yang dipilih pengguna. Dikirim balik utuh supaya hasilnya bisa dibaca
+    ulang tanpa perlu mengingat apa yang tadi diisi."""
+
+    jenis_usaha: str
+    label_usaha: str
+    jam_buka: int
+    luas_m2: int
+    pangsa_persen: float
+    margin_persen: float
+    hari_per_bulan: int
+    # Dua isian yang penggunanya tahu lebih baik daripada basis data: sewa yang
+    # ditawarkan padanya, dan harga jual rencananya sendiri. Keduanya opsional -
+    # kalau kosong, simulasi jatuh ke angka heksagon seperti sebelumnya.
+    sewa_bulanan_diminta: float | None = None
+    harga_rata_rata: float | None = None
+
+
+class SumberSimulasi(BaseModel):
+    """Asal tiap angka yang bisa datang dari dua arah: `pengguna` atau `data`.
+
+    Ada supaya antarmuka bisa menuliskannya di sebelah angkanya. Tanpa ini,
+    angka yang diketik orang dan angka yang diukur pipeline terlihat sama persis
+    di layar - dan itu kekaburan yang persis dilarang docstring `core/simulasi.py`.
+    `None` berarti belum ada dari mana pun.
+    """
+
+    sewa: Literal["pengguna", "data"] | None = None
+    harga_rata_rata: Literal["pengguna", "data"] | None = None
+
+
+class TerukurSimulasi(BaseModel):
+    """Angka dari basis data. Pengguna TIDAK bisa mengubah satu pun di sini."""
+
+    belanja_per_jam: float | None = None
+    nominal_median_struk: float | None = None
+    harga_median_porsi: float | None = None
+    harga_sewa_per_m2: float | None = None
+    indeks_kompetisi: float | None = None
+    indeks_churn: float | None = None
+
+
+class HasilSimulasi(BaseModel):
+    """Turunan. Seluruhnya boleh None - kosong tetap kosong, tidak pernah nol."""
+
+    omzet_harian: float | None = None
+    omzet_bulanan: float | None = None
+    sewa_bulanan: float | None = None
+    laba_kotor_bulanan: float | None = None
+    rasio_sewa_terhadap_omzet: float | None = None
+    pembeli_impas_per_hari: float | None = None
+    # Pangsa yang membuat laba tepat nol. Angka paling berguna di seluruh
+    # simulasi: alih-alih menebak pangsa lalu membaca hasilnya, orang bisa
+    # membandingkan "butuh berapa" dengan perasaannya soal "dapat berapa".
+    pangsa_impas_persen: float | None = None
+    # Kebiasaan pasar ruko: sewa dibayar di muka setahun. Bukan aturan - cuma
+    # aritmetika sewa x 12 yang menyelamatkan orang dari kaget di notaris.
+    sewa_tahun_pertama: float | None = None
+    # Hanya terisi kalau sewanya diisi sendiri. Gunanya menyandingkan penawaran
+    # yang diterima orang dengan sewa terukur di heksagon itu - satu-satunya
+    # cara tahu penawarannya wajar atau tidak.
+    sewa_per_m2_tersirat: float | None = None
+
+
+class TitikSensitivitas(BaseModel):
+    """Satu baris tabel kepekaan: kalau pangsa X, labanya Y."""
+
+    pangsa_persen: float
+    laba_kotor_bulanan: float | None = None
+
+
+class LingkunganSimulasi(BaseModel):
+    """Keadaan sekitar heksagon, dalam satuan yang bisa dibaca orang awam.
+
+    Seluruhnya TERUKUR - tidak satu pun boleh ditebak. Yang tidak ada di basis
+    data tidak muncul di sini, dan antarmuka menuliskannya sebagai "belum ada"
+    alih-alih mengarang. Dua hal yang sering diminta tetapi memang TIDAK ADA:
+    UMR (data SK gubernur, di luar 43 variabel) dan jumlah jalan akses (butuh
+    agregasi jaringan jalan yang belum dikerjakan s4).
+    """
+
+    populasi_100m: float | None = None
+    populasi_usia_produktif: float | None = None
+    n_kompetitor_langsung: float | None = None
+    keragaman_kuliner: float | None = None
+    n_menetap_kuliner: float | None = None
+    jarak_simpul_m: float | None = None
+    waktu_jalan_menit: float | None = None
+    skor_simpul: float | None = None
+    ridership_proksi: float | None = None
+    kepadatan_poi_total: float | None = None
+    kepadatan_kantor: float | None = None
+    kepadatan_kos: float | None = None
+    rasio_weekend: float | None = None
+
+
+class JamSimulasi(BaseModel):
+    """Satu jam pada Commuter Clock, dinormalkan 0..1 terhadap jam tersibuk."""
+
+    jam: int
+    relatif: float
+    pangsa_captive: float | None = None
+
+
+class PeringatanSimulasi(BaseModel):
+    kode: str
+    tingkat: Literal["INFO", "WASPADA", "BAHAYA"]
+    pesan: str
+
+
+class Simulasi(BaseModel):
+    """Satu skenario usaha atas satu heksagon.
+
+    Membawa `keyakinan` seperti setiap skema lain yang menyentuh skor - lihat
+    aturan 3 repo ini. Simulasi yang berdiri di atas tiga titik survei dan yang
+    berdiri di atas empat puluh titik tidak boleh terbaca sama.
+    """
+
+    h3_index: str
+    kawasan: str
+    masukan: MasukanSimulasi
+    sumber: SumberSimulasi
+    terukur: TerukurSimulasi
+    hasil: HasilSimulasi
+    rumus: dict[str, str]
+    peringatan: list[PeringatanSimulasi] = Field(default_factory=list)
+    keyakinan: BadgeKeyakinan
+    jam_teramai: list[int] = Field(
+        default_factory=list, description="Tiga jam dengan transaksi tertinggi"
+    )
+    lingkungan: LingkunganSimulasi = Field(default_factory=LingkunganSimulasi)
+    sensitivitas: list[TitikSensitivitas] = Field(
+        default_factory=list,
+        description="Laba pada beberapa nilai pangsa - rumus yang sama, masukan berbeda",
+    )
+    profil_jam: list[JamSimulasi] = Field(
+        default_factory=list, description="05.00-22.00, dinormalkan ke jam tersibuk"
+    )
+
+
 # --- Detail heksagon -------------------------------------------------------
 
 
@@ -235,8 +379,23 @@ class DetailHeksagon(BaseModel):
 
     skor: SkorHeksagon
     indeks: IndeksKomposit
-    variabel: dict[str, Any] = Field(description="43 variabel analisis, sudah teragregasi")
-    faktor: list[FaktorSkor] = Field(default_factory=list)
+    # KOSONG untuk tamu dan akun gratis. Bukan diblur di frontend - benar-benar
+    # tidak dikirim. Blur adalah lapisan CSS, dan lapisan CSS bisa dilepas siapa
+    # pun yang membuka panel pengembang; yang tidak pernah meninggalkan server
+    # tidak bisa dilepas.
+    variabel: dict[str, Any] = Field(
+        default_factory=dict, description="43 variabel analisis, sudah teragregasi. Premium."
+    )
+    faktor: list[FaktorSkor] = Field(
+        default_factory=list, description="Kontribusi tiap variabel ke skor. Premium."
+    )
+    # Apa yang ditahan, dan kenapa. Frontend menggambar tirai dari daftar ini,
+    # jadi ia tidak pernah bisa menawarkan sesuatu yang backend tidak tahan -
+    # atau membiarkan terbuka sesuatu yang backend sebenarnya sudah kosongkan.
+    terkunci: list[str] = Field(
+        default_factory=list, description="Nama bagian yang ditahan karena tingkat akun"
+    )
+    tingkat_akun: str = Field(default="tamu", description="tamu | gratis | premium")
     commuter_clock: dict[str, float | None] = Field(
         default_factory=dict, description="B01-B04: distribusi transaksi per rentang jam"
     )
@@ -252,6 +411,61 @@ class SimpulTransit(BaseModel):
     kawasan: str
     lat: float
     lon: float
+
+
+class RuteJalan(BaseModel):
+    """Satu jalur jalan kaki dari pusat heksagon ke simpul terdekat.
+
+    Geometrinya rute SUNGGUHAN dari OpenRouteService, mengikuti jalan yang
+    benar-benar ada - bukan garis lurus, bukan lingkaran. Dihitung offline oleh
+    `pipeline/rute_ors.py` dan disimpan di `hex_routes`; backend hanya membaca.
+
+    `urutan` 0 adalah yang tercepat menurut ORS. Sisanya alternatif, dan
+    alternatif di sini bukan basa-basi: ORS diminta hanya mengembalikan jalur
+    yang berbagi paling banyak 60% ruas dengan yang utama, jadi yang muncul
+    memang jalan yang berbeda - bukan rute sama dengan satu belokan bergeser.
+    """
+
+    urutan: int
+    jarak_m: float
+    menit: float
+    utama: bool
+    #: [lon, lat] berurutan, siap dipakai sebagai GeoJSON LineString.
+    koordinat: list[list[float]]
+
+
+class KonteksSimpul(BaseModel):
+    """Hubungan satu heksagon dengan stasiun terdekatnya, untuk digambar di peta.
+
+    TETAP BUKAN ISOCHRONE, dan bedanya tetap harus terlihat. Isochrone adalah
+    BIDANG - "sejauh mana orang sampai dalam 10 menit" - dan tinggal di
+    `catchment_areas`, yang masih kosong. Yang di sini GARIS: satu jalur menuju
+    satu titik. Bentuk yang tidak bisa disalahartikan sebagai kawasan jangkauan.
+
+    Sejak rute ORS masuk, garisnya mengikuti jalan yang sebenarnya. `rute` yang
+    kosong berarti heksagon ini memang belum pernah dirutekan - dan waktu itu
+    `jarak_m` jatuh kembali ke garis lurus, dengan `garis_lurus` menyatakannya
+    supaya antarmuka tidak bisa diam-diam menampilkannya seolah rute.
+
+    `jarak_lurus_m` selalu ikut walaupun rutenya ada, karena selisih keduanya
+    justru informasi: 830 m garis lurus yang ternyata 1.418 m berjalan kaki
+    adalah lokasi yang TERLIHAT dekat stasiun tanpa benar-benar dekat - persis
+    jenis jebakan yang produk ini ada untuk menunjukkannya.
+    """
+
+    h3_index: str
+    lat: float
+    lon: float
+    simpul: SimpulTransit | None = None
+    jarak_m: float | None = Field(default=None, description="Rute jalan kaki kalau ada, kalau tidak garis lurus")
+    menit_jalan: float | None = Field(default=None, description="Menurut ORS kalau ada rute")
+    jarak_lurus_m: float | None = Field(default=None, description="Selalu garis lurus, dari PostGIS")
+    faktor_memutar: float | None = Field(
+        default=None, description="jarak rute / jarak lurus. 1,7 = memutar 70% lebih jauh"
+    )
+    rute: list[RuteJalan] = Field(default_factory=list)
+    garis_lurus: bool = True
+    catatan: str
 
 
 # --- AI Consultant ---------------------------------------------------------
@@ -341,3 +555,268 @@ class JawabanAI(BaseModel):
     hex_disebut: list[str] = Field(
         default_factory=list, description="Heksagon yang dirujuk jawaban ini"
     )
+
+
+# --- Akun, langganan, token ------------------------------------------------
+#
+# Tiga aturan yang ditegakkan di bagian ini:
+#
+#   1. Tidak ada skema yang membawa `sidik_sandi`. Bukan "jangan lupa hapus" -
+#      tidak ada field-nya sama sekali, jadi tidak ada yang bisa lupa.
+#   2. Kata sandi masuk lewat skema TERPISAH dari yang keluar. Satu model yang
+#      dipakai dua arah cepat atau lambat mengembalikan apa yang diterimanya.
+#   3. Yang keluar selalu membawa `tingkat`. Frontend tidak pernah menyimpulkan
+#      tingkat dari ada-tidaknya langganan; ia membaca satu field.
+
+
+class PermintaanDaftar(BaseModel):
+    nama_pengguna: str = Field(min_length=3, max_length=40)
+    email: EmailStr
+    sandi: str = Field(min_length=8, max_length=128)
+    nama_tampilan: str | None = Field(default=None, max_length=80)
+
+    @field_validator("nama_pengguna")
+    @classmethod
+    def _bersih(cls, v: str) -> str:
+        """Huruf, angka, titik, garis bawah, garis pisah. Tidak lebih.
+
+        Nama pengguna ikut tampil di antarmuka dan ikut jadi bagian sapaan.
+        Membatasinya di sini lebih murah daripada meloloskan spasi ganda dan
+        karakter tak terlihat lalu memburunya di setiap tempat yang menampilkannya.
+        """
+        v = v.strip()
+        if not v.replace(".", "").replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Nama pengguna hanya boleh huruf, angka, titik, _ dan -")
+        return v
+
+
+class PermintaanMasuk(BaseModel):
+    """`identitas` menerima nama pengguna ATAU surel - lihat User di models.py."""
+
+    identitas: str = Field(min_length=3, max_length=160)
+    sandi: str = Field(min_length=1, max_length=128)
+
+
+class RingkasLangganan(BaseModel):
+    paket: str
+    selamanya: bool
+    berlaku_sampai: datetime | None = None
+    dimulai_pada: datetime | None = None
+
+
+class PreferensiUsaha(BaseModel):
+    """Preferensi yang diisi saat onboarding premium. Seluruhnya opsional.
+
+    Ini preferensi TAMPILAN, bukan masukan skor: kawasan yang dipilih menyetel
+    saringan peta, jenis usaha menyetel bawaan simulasi. Tidak ada satu angka
+    peringkat pun yang berubah karenanya - peringkat tetap milik pipeline.
+    """
+
+    jenis_usaha: str | None = None
+    kawasan: str | None = None
+    budget_sewa_bulanan: int | None = Field(default=None, ge=0)
+
+
+class Akun(BaseModel):
+    """Bentuk akun yang keluar ke frontend. Tidak pernah memuat sidik sandi."""
+
+    id: int
+    nama_pengguna: str
+    email: str
+    nama_tampilan: str | None = None
+    peran: str
+    tingkat: Literal["gratis", "premium"]
+    saldo_token: int
+    dibuat_pada: datetime | None = None
+    langganan: RingkasLangganan | None = None
+    preferensi: PreferensiUsaha | None = None
+
+
+class SesiAkun(BaseModel):
+    """Balasan daftar dan masuk: tiket + akunnya sekaligus.
+
+    Digabung supaya frontend tidak perlu memanggil /akun/saya persis sesudah
+    masuk. Satu perjalanan bolak-balik lebih sedikit, dan tidak ada jendela di
+    mana antarmuka sudah punya tiket tetapi belum tahu tingkatnya.
+    """
+
+    tiket: str
+    akun: Akun
+
+
+class MutasiTokenKeluar(BaseModel):
+    jumlah: int
+    keperluan: str
+    catatan: str | None = None
+    h3_index: str | None = None
+    saldo_sesudah: int
+    dibuat_pada: datetime
+
+
+class PermintaanLangganan(BaseModel):
+    paket: str = Field(description="Kode paket dari GET /akun/paket")
+
+
+class PermintaanBeliToken(BaseModel):
+    paket: str = Field(description="Kode paket token dari GET /akun/paket")
+
+
+class ButirPantauan(BaseModel):
+    h3_index: str
+    kawasan: str | None = None
+    # Titik tengah heksagon, untuk menggambar pin lokasi tersimpan di peta.
+    # Centroid, BUKAN geometri penuh: pin cuma butuh satu titik, dan geometri
+    # enam-simpul untuk daftar yang bisa berisi puluhan baris cuma menggemukkan
+    # respons.
+    lat: float | None = None
+    lon: float | None = None
+    catatan: str | None = None
+    skor_saat_dipantau: float | None = None
+    skor_sekarang: float | None = None
+    selisih: float | None = None
+    versi_saat_dipantau: str | None = None
+    versi_sekarang: str | None = None
+    kuadran: str | None = None
+    risiko: str | None = None
+    dibuat_pada: datetime
+
+
+class PermintaanPantau(BaseModel):
+    h3_index: str = Field(min_length=15, max_length=20)
+    catatan: str | None = Field(default=None, max_length=200)
+
+
+class TitikRiwayat(BaseModel):
+    versi: str
+    dihitung_pada: datetime | None = None
+    opportunity_score: float | None = None
+    hidden_gem_score: float | None = None
+    kuadran: str | None = None
+    peringkat: int | None = None
+
+
+class RiwayatSkor(BaseModel):
+    """Riwayat skor satu heksagon lintas versi penerbitan.
+
+    `cukup_untuk_tren` jujur, bukan sopan: dengan satu versi saja tidak ada tren
+    apa pun untuk digambar, dan grafik garis dari satu titik adalah kebohongan
+    berbentuk grafik. Frontend membaca field ini dan menuliskan keadaannya apa
+    adanya alih-alih menggambar garis datar yang tampak meyakinkan.
+    """
+
+    h3_index: str
+    titik: list[TitikRiwayat] = Field(default_factory=list)
+    cukup_untuk_tren: bool = False
+    catatan: str
+
+
+class BarisKomparasi(BaseModel):
+    """Satu kolom dalam tabel komparasi berdampingan."""
+
+    h3_index: str
+    kawasan: str
+    opportunity_score: float | None = None
+    hidden_gem_score: float | None = None
+    kuadran: str | None = None
+    peringkat: int | None = None
+    indeks: IndeksKomposit
+    zoneguard: StatusZoneGuard
+    risiko: PeringatanRisiko
+    harga_sewa_per_m2: float | None = None
+    belanja_per_jam: float | None = None
+    waktu_jalan_menit: float | None = None
+    n_kompetitor_langsung: float | None = None
+    keyakinan: BadgeKeyakinan
+
+
+class Komparasi(BaseModel):
+    """Komparasi berdampingan 2-4 heksagon.
+
+    `menang` memuat, untuk tiap metrik, h3_index yang terbaik pada metrik itu -
+    dihitung di sini supaya frontend tidak perlu tahu metrik mana yang "tinggi
+    lebih baik" dan mana yang sebaliknya. IKP dan IBR tinggi itu BURUK, dan
+    aturan itu sudah hidup di backend; menyalinnya ke frontend berarti dua
+    tempat yang harus sepakat.
+    """
+
+    baris: list[BarisKomparasi]
+    menang: dict[str, str | None] = Field(default_factory=dict)
+
+
+class AlasanRekomendasi(BaseModel):
+    """Satu alasan, dan ANGKA yang mendasarinya.
+
+    `nilai` selalu ikut. Alasan tanpa angka ("lokasinya strategis") adalah
+    kalimat pemasaran; alasan dengan angka bisa diperiksa, dibantah, dan
+    dibandingkan dengan lokasi lain.
+    """
+
+    kode: str
+    teks: str
+    nilai: float | None = None
+    #: cocok = mendukung rekomendasi, catatan = hal yang tetap harus diketahui
+    jenis: Literal["cocok", "catatan"] = "cocok"
+
+
+class Rekomendasi(BaseModel):
+    """Satu lokasi yang direkomendasikan untuk SATU orang."""
+
+    skor: SkorHeksagon
+    kawasan: str
+    lat: float | None = None
+    lon: float | None = None
+    harga_sewa_median: float | None = None
+    harga_sewa_per_m2: float | None = None
+    belanja_per_jam: float | None = None
+    waktu_jalan_menit: float | None = None
+    n_kompetitor_langsung: float | None = None
+    indeks_churn: float | None = None
+    zoneguard: StatusZoneGuard
+    risiko: PeringatanRisiko
+    alasan: list[AlasanRekomendasi] = Field(default_factory=list)
+    ringkasan: str
+
+
+class HasilRekomendasi(BaseModel):
+    """Balasan /skor/rekomendasi.
+
+    `kriteria` dikembalikan apa adanya supaya antarmuka bisa menuliskan
+    "berdasarkan: warung makan, Manggarai, di bawah Rp15 jt" - orang berhak
+    tahu atas dasar apa daftar ini disusun, dan bisa langsung melihat kalau
+    salah satu kriterianya ternyata tidak ia maksud.
+
+    `dipotong` benar kalau daftarnya dipendekkan karena tingkat akun. Angka
+    `total_cocok` tetap jujur: yang disembunyikan jumlahnya, bukan
+    keberadaannya.
+    """
+
+    hasil: list[Rekomendasi] = Field(default_factory=list)
+    total_cocok: int = 0
+    kriteria: dict[str, Any] = Field(default_factory=dict)
+    dipotong: bool = False
+    catatan: str
+
+
+class DinamikaKawasan(BaseModel):
+    """Sebaran churn dan aktivitas satu kawasan - fitur Pemantauan.
+
+    Ini BUKAN deret waktu. Basis data baru memuat satu versi skor, dan
+    memperlihatkan dua belas bulan dari satu titik data berarti mengarang
+    sebelas di antaranya. Yang ditampilkan adalah sebaran yang benar-benar ada:
+    persentil churn kawasan, jumlah heksagon per kuadran, dan berapa yang
+    melewati ambang waspada. Begitu pipeline menerbitkan versi kedua, endpoint
+    riwayat yang mengisi sisi waktunya.
+    """
+
+    kawasan: str
+    n_heksagon: int
+    churn_p50: float | None = None
+    churn_p75: float | None = None
+    churn_p90: float | None = None
+    n_waspada: int = 0
+    n_bahaya: int = 0
+    per_kuadran: dict[str, int] = Field(default_factory=dict)
+    rata_opportunity: float | None = None
+    cakupan_survei: float | None = None
+    versi: str
+    catatan: str

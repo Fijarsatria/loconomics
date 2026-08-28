@@ -39,8 +39,58 @@ Termasuk lewat variabel `VITE_` — seluruh variabel `VITE_` ikut ter-bundel ke
 berkas yang bisa dibuka siapa saja. Kalau frontend butuh datanya, backend yang
 memanggil dan meneruskan hasilnya.
 
-Kunci **MAPID Maps** (basemap) boleh di frontend: menurut briefing MAPID, kunci
-itu hanya menghitung pemakaian, bukan mengotorisasi.
+> ### ⚠️ ASUMSI INI TERBUKTI SALAH — diverifikasi 26 Agustus 2026
+>
+> Briefing MAPID menyatakan kunci **MAPID Maps** hanya menghitung pemakaian dan
+> boleh dipasang di frontend. **Kunci yang sama membuka data misi.** Diuji
+> langsung terhadap `POST https://server.mapid.io/web/competition/menugo`:
+>
+> | | |
+> |---|---|
+> | kunci Map Services milik tim | **HTTP 200**, 161 titik Menu Go |
+> | kunci karangan | HTTP 401 |
+> | tanpa kunci | HTTP 400 |
+>
+> Jadi API-nya benar-benar mengotentikasi, dan satu kunci membuka dua pintu.
+>
+> **Keadaan sekarang: kunci itu ada di `frontend/.env` sebagai
+> `VITE_MAPID_MAPS_API_KEY` dan ikut ter-bundel ke `dist/assets/*.js`.** Siapa
+> pun yang membuka JS aplikasi bisa menyalinnya dan menarik seluruh 691 titik
+> survei mentah — melanggar aturan keras #1 sekaligus #2 di berkas ini.
+>
+> Yang membuatnya tidak sepele: basemap MENUNTUT kunci hadir di peramban untuk
+> mengambil tile. Memindahkannya ke backend saja akan mematikan petanya.
+>
+> **Belum diperbaiki.** Tiga jalan, dan yang pertama harus dicoba lebih dulu:
+> 1. Tanyakan ke MAPID lewat Koordinator Tim apakah ada kunci khusus basemap,
+>    atau pembatasan HTTP referrer. Ini mungkin kekeliruan cakupan di sisi mereka
+> 2. Dua kunci terpisah — supaya yang terekspos bisa dicabut tanpa mematikan backend
+> 3. Proksikan tile lewat backend — kunci hilang dari peramban, tetapi setiap
+>    tile lewat server sendiri
+>
+> **Kunci profil akun BUKAN jalan keluarnya — sudah diuji 27 Agu 2026.**
+> Kunci tingkat-profil dari dasbor GEO MAPID (`c2c66e…`, berbeda dari kunci
+> Map Services) sempat terlihat menjanjikan sebagai kunci kedua. Ia bukan:
+>
+> | Diuji | Kunci profil | Kunci Map Services |
+> |---|---|---|
+> | `basemap.mapid.io/styles/light/style.json?key=` | **401** | 200 |
+> | `POST /web/competition/menugo` (`x-api-key`) | **500** ×3 | 200 |
+> | `POST /web/competition/struckgo` | **500** ×3 | 200 |
+> | `POST /web/competition/propertigo` | **500** ×3 | 200 |
+>
+> Jadi ia tidak bisa menggantikan kunci basemap di frontend, dan tidak bisa
+> menggantikan kunci data di backend. Loconomics menyentuh MAPID tepat di dua
+> titik itu, dan kunci ini tidak melayani satu pun.
+>
+> Yang menarik justru **500, bukan 401**: kunci karangan dijawab 401, kunci
+> profil dijawab 500 secara konsisten di ketiga jenis misi. Artinya server
+> MENGENALI kunci ini — ia kunci MAPID yang sah — tetapi akun di baliknya tidak
+> berhak atas data kompetisi, dan penanganannya galat alih-alih menjawab 403.
+> Jangan membaca 500 di sini sebagai "coba lagi nanti"; ia jawaban yang stabil.
+>
+> Konsekuensi praktis: kunci profil tetap **rahasia** (ia kunci akun pribadi,
+> jangan pernah masuk `VITE_`), dan opsi 1 tetap satu-satunya jalan yang bersih.
 
 ### 3. Data MAPID / mitra tidak boleh diredistribusi
 

@@ -4,7 +4,7 @@ geopandas==1.0.1
 shapely==2.0.6
 h3==4.2.1
 osmnx==2.0.1
-scikit-learn==1.6.0
+scikit-learn==1.6.1
 rasterstats==0.20.0
 pydantic==2.10.4
 python-dotenv==1.0.1
@@ -12,3 +12,4 @@ sqlalchemy==2.0.36
 geoalchemy2==0.16.0
 psycopg[binary]==3.2.3
 pyarrow==18.1.0
+rasterio==1.5.1        # baca raster WorldPop (D01); membawa GDAL sendiri

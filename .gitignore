@@ -24,5 +24,9 @@ frontend/.vite/
 # OS / editor
 .DS_Store
 Thumbs.db
+desktop.ini
 .vscode/*
 !.vscode/extensions.json
+
+# Dokumen panitia MAPID - milik penyelenggara, tidak perlu ikut diredistribusi
+Technical Meeting*.pdf

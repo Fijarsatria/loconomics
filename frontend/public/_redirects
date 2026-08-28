@@ -1,0 +1,8 @@
+# Cloudflare Pages - SPA.
+#
+# Tanpa baris ini, memuat ulang di URL apa pun selain "/" menghasilkan 404
+# Cloudflare, bukan aplikasinya. Yang di atasnya lebih spesifik dan harus lebih
+# dulu: berkas nyata tidak boleh ikut ditelan ke index.html.
+/basemap/*   /basemap/:splat   200
+/kartu/*     /kartu/:splat     200
+/*           /index.html       200

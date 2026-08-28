@@ -18,10 +18,22 @@ basis data. Kalau rumusnya salah, itu akan terlihat di peta.
     cd pipeline && python demo_seed.py --isi
     cd pipeline && python demo_seed.py --hapus
 
-SELURUH BARIS DITANDAI. `data_source` sebagian besar berisi `predicted`, dan
-antarmuka menggambar heksagon `predicted` dengan arsir. Jadi begitu dibuka, layar
-sendiri yang mengatakan sebagian besar isinya belum terukur - tanpa perlu ada
-yang mengingatkan. Itu memang perilaku yang diinginkan, bukan kebetulan.
+SELURUH BARIS DITANDAI `predicted`, KEYAKINAN RENDAH, `n_titik_misi = 0`.
+
+Ini diperketat 24 Agustus 2026, dan alasannya layak dibaca sebelum ada yang
+tergoda melonggarkannya lagi. Versi sebelumnya membagikan `n_titik_misi` acak
+(4-45) lalu menandai yang >= 10 sebagai `observed`, sehingga 474 dari 708
+heksagon mengaku disurvei - lengkap dengan badge "Didukung survei secukupnya"
+di layar. Tidak ada satu pun titik survei di basis data: `menu_observations`,
+`receipt_observations`, dan `property_observations` ketiganya nol baris.
+
+Badge keyakinan ADA justru supaya orang tahu seberapa tipis datanya (aturan
+emas 2). Badge yang menyatakan kebalikannya lebih buruk daripada tidak ada
+badge sama sekali - dan pertanyaan "28 titik misi itu dari mana?" tidak punya
+jawaban yang bisa diberikan di depan juri.
+
+Konsekuensinya disengaja: seluruh peta digambar berarsir, dan setiap simulasi
+memunculkan peringatan DATA_TIPIS. Itu memang keadaan yang sebenarnya.
 """
 
 from __future__ import annotations
@@ -35,10 +47,10 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from config import H3_RESOLUSI, JAM_OPERASIONAL, KAWASAN_PILOT
+from config import H3_RESOLUSI, JAM_OPERASIONAL, KAWASAN_PILOT, tingkat_keyakinan
 from s4_spatial import belanja_per_jam, harga_sewa_per_m2, profil_jam
-from s6_score import skor_lengkap
-from s7_publish import _mesin, muat_profil_jam, muat_skor
+from s6_score import rincian_faktor, skor_lengkap
+from s7_publish import _mesin, muat_faktor, muat_profil_jam, muat_skor
 
 # Pusat tiap kawasan, sama dengan yang dipakai frontend.
 PUSAT = {
@@ -152,8 +164,11 @@ def bangkitkan(seed: int = 2026) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
                 else True
             )
 
-            n_misi = int(max(0, rng.normal(26 * dekat + 4, 9)))
-            observed = n_misi >= 10
+            # `berisi` menentukan heksagon mana yang dibangkitkan aktivitasnya
+            # (struk dan properti), supaya keadaan "belum ada data" ikut teruji.
+            # Ia BUKAN penanda kualitas dan tidak pernah menyentuh badge -
+            # lihat catatan di kepala berkas.
+            berisi = int(max(0, rng.normal(26 * dekat + 4, 9))) >= 10
 
             baris.append(
                 {
@@ -203,19 +218,24 @@ def bangkitkan(seed: int = 2026) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
                     "kelas_zona": None if zona is None else ("K-1" if zona else "R-3"),
                     "risiko_banjir": np.clip(rng.normal(0.34, 0.2), 0, 1),
                     # Morfologi
-                    "rasio_tutupan_bangunan": np.clip(rng.normal(0.42 + 0.3 * dekat, 0.11), 0.03, 0.95),
+                    # PERSEN (0-100), sama dengan yang ditulis `s7_publish --bangunan` dari
+                    # OSM. Kalau di sini tetap pecahan, satu kali menjalankan
+                    # demo_seed membalik skala kolomnya tanpa satu pun galat.
+                    "rasio_tutupan_bangunan": np.clip(rng.normal(42 + 30 * dekat, 11), 3, 95),
                     "luas_bangunan_median": max(24, rng.normal(70 + 260 * prestise, 45)),
                     "skor_prestise_visual": float(np.clip(1 + prestise * 4 + rng.normal(0, 0.4), 1, 5)),
-                    # Penanda kualitas
-                    "n_titik_misi": n_misi,
-                    "tingkat_keyakinan": "TINGGI" if n_misi >= 30 else "SEDANG" if n_misi >= 10 else "RENDAH",
-                    "data_source": "observed" if observed else "predicted",
+                    # Penanda kualitas - SELALU nol/predicted/RENDAH, tanpa
+                    # kecuali. Aturannya dibaca dari config.tingkat_keyakinan()
+                    # supaya ambangnya tetap hidup di satu tempat.
+                    "n_titik_misi": 0,
+                    "tingkat_keyakinan": tingkat_keyakinan(0),
+                    "data_source": "predicted",
                 }
             )
 
             # Struk: hanya untuk heksagon yang benar-benar "disurvei". Sisanya
             # sengaja dibiarkan tanpa profil jam, supaya keadaan kosong ikut teruji.
-            if observed:
+            if berisi:
                 for jam in JAM_OPERASIONAL:
                     puncak = 1.0 if jam in (7, 8, 17, 18) else 0.42 if 11 <= jam <= 14 else 0.2
                     n = int(max(0, rng.poisson(14 * puncak * ramai)))
@@ -248,7 +268,7 @@ def bangkitkan(seed: int = 2026) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
     )
 
 
-def isi(seed: int = 2026) -> dict[str, int]:
+def isi(seed: int = 2026, paksa: bool = False) -> dict[str, int]:
     hex_df, struk, prop = bangkitkan(seed)
     print(f"  dibangkitkan  {len(hex_df)} heksagon, {len(struk)} struk, {len(prop)} properti")
 
@@ -259,6 +279,10 @@ def isi(seed: int = 2026) -> dict[str, int]:
     hex_df["harga_sewa_median"] = hex_df["harga_sewa_per_m2"] * hex_df["luas_bangunan_median"] * 0.55
 
     skor = skor_lengkap(hex_df)
+    # DataFrame yang SAMA, bukan salinan yang dihitung ulang: normalisasi
+    # min-max bergantung pada seluruh baris, jadi rincian yang dibangun dari
+    # kumpulan lain akan menjelaskan skor yang berbeda dari yang tersimpan.
+    faktor = rincian_faktor(hex_df)
     print(f"  skor dihitung  {skor['opportunity_score'].notna().sum()} heksagon")
     print("  sebaran kuadran:")
     for k, n in skor["kuadran"].value_counts().items():
@@ -272,6 +296,7 @@ def isi(seed: int = 2026) -> dict[str, int]:
 
     Sesi = sessionmaker(bind=_mesin())
     with Sesi() as db:
+        _pastikan_boleh_menghapus(db, paksa)
         db.execute(text("DELETE FROM transport_nodes"))
         for kawasan, (nama, moda, jalur, ridership) in SIMPUL.items():
             lat, lon = PUSAT[kawasan]
@@ -303,14 +328,69 @@ def isi(seed: int = 2026) -> dict[str, int]:
 
         n_profil = muat_profil_jam(db, profil)
         n_skor = muat_skor(db, skor, "baseline")
+        n_faktor = muat_faktor(db, faktor, "baseline")
         db.commit()
 
-    return {"simpul": len(SIMPUL), "heksagon": len(muat), "profil_jam": n_profil, "skor": n_skor}
+    return {
+        "simpul": len(SIMPUL),
+        "heksagon": len(muat),
+        "profil_jam": n_profil,
+        "skor": n_skor,
+        "faktor": n_faktor,
+    }
 
 
-def hapus() -> int:
+def _data_nyata(db) -> list[str]:
+    """Apa saja di basis data ini yang TIDAK bisa dibangkitkan ulang oleh skrip.
+
+    Daftarnya bukan hiasan. `isi()` dan `hapus()` sama-sama menjalankan
+    `DELETE FROM transport_nodes`, dan `hex_routes` maupun `catchment_areas`
+    menggantung di situ lewat `ON DELETE CASCADE` - jadi satu perintah demo
+    menghapus 1.587 rute OpenRouteService yang butuh berjam-jam kuota untuk
+    dibuat, tanpa menyebutnya sama sekali. `DELETE FROM hex_features` melakukan
+    hal yang sama pada D04 nyata dan seluruh variabel Kompetisi dari OSM.
+
+    Yang membuatnya berbahaya bukan penghapusannya melainkan DIAMNYA: skripnya
+    selesai dengan sukses, angkanya kembali masuk akal, dan satu-satunya cara
+    mengetahui ada yang hilang adalah mengingat bahwa dulu ada.
+    """
+    berisi = []
+    for tabel, sebut in (
+        ("hex_routes", "rute jalan kaki OpenRouteService"),
+        ("catchment_areas", "kawasan jangkau (isochrone) ORS"),
+    ):
+        n = db.execute(text(f"SELECT count(*) FROM {tabel}")).scalar_one()
+        if n:
+            berisi.append(f"{n} {sebut}")
+    n_poi = db.execute(
+        text("SELECT count(*) FROM business_pois WHERE sumber <> 'demo'")
+    ).scalar_one()
+    if n_poi:
+        berisi.append(f"{n_poi} POI usaha dari sumber nyata (OSM/MAPID)")
+    return berisi
+
+
+def _pastikan_boleh_menghapus(db, paksa: bool) -> None:
+    nyata = _data_nyata(db)
+    if not nyata or paksa:
+        return
+    daftar = "\n".join(f"  - {b}" for b in nyata)
+    raise SystemExit(
+        f"""DITOLAK - basis data ini memuat data yang tidak dibangkitkan skrip ini:
+{daftar}
+
+Menjalankan demo_seed akan MENGHAPUS seluruhnya lewat ON DELETE CASCADE, dan
+tidak ada satu pun dari itu yang bisa dibuat ulang tanpa memanggil
+OpenRouteService dan Overpass dari awal.
+
+Kalau memang itu yang diinginkan, ulangi dengan --paksa."""
+    )
+
+
+def hapus(paksa: bool = False) -> int:
     Sesi = sessionmaker(bind=_mesin())
     with Sesi() as db:
+        _pastikan_boleh_menghapus(db, paksa)
         n = db.execute(text("SELECT COUNT(*) FROM hex_features")).scalar_one()
         # ON DELETE CASCADE mengurus location_scores, score_factors, dan
         # hex_hourly_profiles sekaligus.
@@ -325,13 +405,18 @@ if __name__ == "__main__":
     p.add_argument("--isi", action="store_true")
     p.add_argument("--hapus", action="store_true")
     p.add_argument("--seed", type=int, default=2026)
+    p.add_argument(
+        "--paksa",
+        action="store_true",
+        help="Timpa walau basis data memuat rute ORS / POI OSM yang nyata",
+    )
     a = p.parse_args()
 
     if a.hapus:
-        print(f"Dihapus {hapus()} heksagon beserta seluruh turunannya.")
+        print(f"Dihapus {hapus(a.paksa)} heksagon beserta seluruh turunannya.")
     elif a.isi:
         print(f"Membangkitkan data demo untuk {len(KAWASAN_PILOT)} kawasan...")
-        for k, v in isi(a.seed).items():
+        for k, v in isi(a.seed, a.paksa).items():
             print(f"  dimuat  {k:<12} {v} baris")
         print("\nKosongkan cache backend: curl -X POST http://localhost:8000/meta/cache/bersihkan")
     else:

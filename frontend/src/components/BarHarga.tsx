@@ -58,12 +58,12 @@ export default function BarHarga({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="papan tabular text-[20px] leading-none">
+        <span className="papan tabular text-[24px] leading-none">
           {format(nilai) ?? <Kosong />}
         </span>
         {nilai !== null && (
           <span
-            className={`text-[11px] font-semibold ${luar ? 'text-jebakan' : 'text-ink-2'}`}
+            className={`text-[13px] font-semibold ${luar ? 'text-jebakan' : 'text-ink-2'}`}
           >
             {LABEL[posisi]}
           </span>
@@ -102,7 +102,7 @@ export default function BarHarga({
         )}
       </div>
 
-      <div className="flex justify-between text-[10px] text-ink-3">
+      <div className="flex justify-between text-[12px] text-ink-3">
         <span className="tabular">{format(wajar.p25)}</span>
         <span>
           rentang wajar {kawasan}
@@ -112,7 +112,7 @@ export default function BarHarga({
       </div>
 
       {selisih !== null && (
-        <p className="mt-1.5 text-[11.5px] leading-snug text-ink-2">
+        <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">
           {selisih === 0 ? (
             'Persis di median kawasan.'
           ) : (

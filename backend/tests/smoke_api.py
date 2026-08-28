@@ -16,15 +16,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.api import meta, pricelens, skor, transit
 from app.api.bersama import saring_zoneguard, zoneguard
-from app.api.hex import commuter_clock, detail_heksagon, layer_heksagon
+from app.api.hex import commuter_clock, detail_heksagon, layer_heksagon, simpul_terdekat
 from app.core import cache
+from app.core.galat import TidakTerautentikasi
 from app.core.database import SessionLocal
 from app.core.galat import KawasanTidakDikenal, KesalahanAPI, TidakDitemukan
-from app.models import HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
+from app.models import HexFeature, HexHourlyProfile, LocationScore, ScoreFactor, Subscription, User
 
 KAWASAN = "Manggarai"  # harus kawasan pilot sungguhan - validasi menolak yang lain
 PREFIKS = "89smoke"
@@ -196,6 +197,23 @@ def jalankan(db) -> None:
         all(g.skor.h3_index != f"{PREFIKS}0003" for g in gems_semua),
     )
 
+    # ---- Akun pelanggan untuk menguji sisi berbayar -----------------------
+    #
+    # Dibuat di sini, bukan di bawah, karena Commuter Clock dan detail heksagon
+    # sama-sama membutuhkannya. Ikut ter-rollback bersama sisanya.
+    pelanggan = User(
+        nama_pengguna=f"{PREFIKS}_pelanggan",
+        email=f"{PREFIKS}@contoh.invalid",
+        sidik_sandi="scrypt$x$y",  # tidak pernah dipakai masuk di uji ini
+        peran="pengguna",
+    )
+    db.add(pelanggan)
+    db.flush()
+    db.add(
+        Subscription(user_id=pelanggan.id, paket="selamanya", status="aktif", selamanya=True)
+    )
+    db.flush()
+
     # ---- Fitur 1: PriceLens ------------------------------------------------
     print("\n[1] PriceLens - harga per m2 dan belanja per jam")
     kartu = pricelens.kartu_harga(db, hx0)
@@ -220,15 +238,40 @@ def jalankan(db) -> None:
         kosong.harga_sewa_per_m2 is None and kosong.posisi_sewa == "TIDAK_DIKETAHUI",
     )
 
+    # Relatif, bukan mutlak: kawasannya juga berisi heksagon demo sungguhan.
+    # Yang diuji tetap intinya - yang TANPA harga tidak ikut dihitung.
     n_sampel = kartu.wajar_sewa_per_m2.n_sampel
+    n_berharga = db.execute(
+        select(func.count())
+        .select_from(HexFeature)
+        .where(HexFeature.kawasan == KAWASAN, HexFeature.harga_sewa_per_m2.is_not(None))
+    ).scalar_one()
+    n_total_kawasan = db.execute(
+        select(func.count()).select_from(HexFeature).where(HexFeature.kawasan == KAWASAN)
+    ).scalar_one()
     cek(
         "heksagon tanpa harga tidak ikut menghitung persentil",
-        n_sampel == 11,
-        f"- n_sampel {n_sampel}, harusnya 11 dari 12",
+        n_sampel == n_berharga < n_total_kawasan,
+        f"- n_sampel {n_sampel}, berharga {n_berharga}, total {n_total_kawasan}",
     )
 
     lay = pricelens.layer_harga(db=db, kawasan=KAWASAN, hanya_berdata=False)
-    cek("layer harga mengirim 12 fitur", len(lay["features"]) == 12)
+    uji_di_layer = {
+        f["properties"]["h3_index"]
+        for f in lay["features"]
+        if str(f["properties"]["h3_index"]).startswith(PREFIKS)
+    }
+    cek(
+        "layer harga memuat seluruh 12 heksagon uji",
+        len(uji_di_layer) == 12,
+        f"- {len(uji_di_layer)} dari 12 (total layer {len(lay['features'])})",
+    )
+    lay_berdata = pricelens.layer_harga(db=db, kawasan=KAWASAN, hanya_berdata=True)
+    cek(
+        "hanya_berdata membuang yang tanpa harga",
+        len(lay_berdata["features"]) < len(lay["features"]),
+        f"- {len(lay_berdata['features'])} vs {len(lay['features'])}",
+    )
     prop5 = next(
         f["properties"] for f in lay["features"] if f["id"] == f"{PREFIKS}0005"
     )
@@ -236,7 +279,16 @@ def jalankan(db) -> None:
 
     # ---- Fitur 3: Commuter Clock ------------------------------------------
     print("\n[3] Commuter Clock - 05:00-22:00, captive vs choice")
-    ck = commuter_clock(f"{PREFIKS}0000", db)
+    # Gerbangnya diuji lebih dulu. Kalau baris ini suatu saat berhenti melempar,
+    # artinya Commuter Clock diam-diam kembali gratis - dan tidak ada uji lain
+    # di repo ini yang akan menyadarinya.
+    try:
+        commuter_clock(f"{PREFIKS}0000", db, pengguna=None)
+        cek("Commuter Clock menolak tamu", False)
+    except TidakTerautentikasi:
+        cek("Commuter Clock menolak tamu", True)
+
+    ck = commuter_clock(f"{PREFIKS}0000", db, pengguna=pelanggan)
     cek("18 titik jam (05-22)", len(ck.jam) == 18, f"- dapat {len(ck.jam)}")
     cek("rentang benar", ck.jam[0].jam == 5 and ck.jam[-1].jam == 22)
     cek("jam puncak terdeteksi", ck.jam_puncak in (7, 17), f"- dapat {ck.jam_puncak}")
@@ -255,7 +307,7 @@ def jalankan(db) -> None:
     cek("dominasi disimpulkan", ck.dominasi in ("captive", "choice", "seimbang"))
     cek("B01-B04 tetap disajikan berdampingan", ck.ember["pagi_06_09"] == 0.3)
 
-    kosong_jam = commuter_clock(f"{PREFIKS}0001", db)
+    kosong_jam = commuter_clock(f"{PREFIKS}0001", db, pengguna=pelanggan)
     cek(
         "heksagon tanpa profil tetap mengirim 18 titik kosong + catatan",
         len(kosong_jam.jam) == 18
@@ -309,7 +361,19 @@ def jalankan(db) -> None:
 
     # ---- Detail heksagon ---------------------------------------------------
     print("\n[*] Detail heksagon - semua fitur menyatu")
-    d = detail_heksagon(f"{PREFIKS}0000", db)
+    # Diuji DUA KALI, sebagai tamu dan sebagai pelanggan. Sejak ada langganan,
+    # endpoint ini mengirim isi yang berbeda untuk keduanya - dan yang paling
+    # perlu dijaga justru sisi tamunya: kalau 43 variabel ikut keluar untuk yang
+    # belum membayar, tidak ada satu pun uji lain di repo ini yang menangkapnya.
+    tamu = detail_heksagon(f"{PREFIKS}0000", db, pengguna=None)
+    cek("tamu: variabel DITAHAN", tamu.variabel == {}, f"- dapat {len(tamu.variabel)}")
+    cek("tamu: faktor DITAHAN", tamu.faktor == [])
+    cek("tamu: tingkat 'tamu'", tamu.tingkat_akun == "tamu")
+    cek("tamu: yang gratis tetap utuh", tamu.zoneguard is not None and tamu.skor is not None)
+
+    d = detail_heksagon(f"{PREFIKS}0000", db, pengguna=pelanggan)
+    cek("pelanggan: tingkat 'premium'", d.tingkat_akun == "premium")
+    cek("pelanggan: terkunci kosong", d.terkunci == [])
     cek("43 variabel", len(d.variabel) == 43, f"- dapat {len(d.variabel)}")
     cek("zoneguard menyatu di detail", d.zoneguard.status == "DIIZINKAN")
     cek("peringatan risiko menyatu di detail", d.risiko.tingkat in ("AMAN", "WASPADA", "BAHAYA"))
@@ -327,11 +391,33 @@ def jalankan(db) -> None:
     hasil = panggil_fungsi(db, "cek_zona", {"hex_id": f"{PREFIKS}0003"})
     cek("alat cek_zona jalan", hasil["status"] == "DILARANG")
 
-    hasil = panggil_fungsi(db, "cek_harga", {"hex_id": f"{PREFIKS}0000"})
+    # Alat AI BUKAN pintu belakang: yang berbayar lewat HTTP tetap berbayar
+    # lewat sini. Kedua sisinya diuji - ditolak untuk tamu, jalan untuk pelanggan.
+    try:
+        panggil_fungsi(db, "cek_harga", {"hex_id": f"{PREFIKS}0000"}, pengguna=None)
+        cek("alat cek_harga menolak tamu", False)
+    except TidakTerautentikasi:
+        cek("alat cek_harga menolak tamu", True)
+
+    hasil = panggil_fungsi(
+        db, "cek_harga", {"hex_id": f"{PREFIKS}0000"}, pengguna=pelanggan
+    )
     cek("alat cek_harga jalan", hasil["harga_sewa_per_m2"] == 50_000)
 
-    hasil = panggil_fungsi(db, "pola_jam", {"hex_id": f"{PREFIKS}0000"})
+    hasil = panggil_fungsi(
+        db, "pola_jam", {"hex_id": f"{PREFIKS}0000"}, pengguna=pelanggan
+    )
     cek("alat pola_jam jalan", hasil["jam_puncak"] in (7, 17))
+
+    # `pengguna` yang datang dari MODEL harus diabaikan - kalau tidak, model
+    # bisa menulis {"pengguna": ...} di argumennya dan membuka pintunya sendiri.
+    try:
+        panggil_fungsi(
+            db, "cek_harga", {"hex_id": f"{PREFIKS}0000", "pengguna": "palsu"}, pengguna=None
+        )
+        cek("argumen `pengguna` dari model diabaikan", False)
+    except TidakTerautentikasi:
+        cek("argumen `pengguna` dari model diabaikan", True)
 
     hasil = panggil_fungsi(db, "cari_hidden_gem", {"kawasan": KAWASAN, "limit": 10})
     cek("alat cari_hidden_gem jalan", hasil["jumlah"] == 10)
@@ -386,10 +472,23 @@ def jalankan(db) -> None:
         "kedua halaman tidak tumpang tindih",
         not ({h.h3_index for h in hal1} & {h.h3_index for h in hal2}),
     )
+    # Yang diuji: hitungannya menghitung SELURUH hasil (jauh lebih besar dari
+    # satu halaman berisi 5), dan zona terlarang tidak pernah ikut.
+    total_hitung = int(r1.headers["X-Total-Count"])
+    n_boleh = db.execute(
+        select(func.count())
+        .select_from(HexFeature)
+        .join(LocationScore, LocationScore.h3_index == HexFeature.h3_index)
+        .where(
+            HexFeature.kawasan == KAWASAN,
+            HexFeature.zona_izin_komersial.is_not(False),
+            LocationScore.versi == "baseline",
+        )
+    ).scalar_one()
     cek(
         "X-Total-Count menghitung seluruh hasil, bukan satu halaman",
-        r1.headers["X-Total-Count"] == "11",
-        f"- {r1.headers.get('X-Total-Count')} (12 heksagon - 1 zona dilarang)",
+        total_hitung == n_boleh > len(hal1),
+        f"- header {total_hitung}, seharusnya {n_boleh}, halaman {len(hal1)}",
     )
 
     # ---- Versi skor (fitur B3) --------------------------------------------
@@ -453,9 +552,16 @@ def jalankan(db) -> None:
     cek("keenam kawasan pilot selalu muncul", len(kws) == 6, f"- {len(kws)}")
     manggarai = next(k for k in kws if k["kawasan"] == "Manggarai")
     cek("cakupan harga terhitung", 0 < manggarai["cakupan_harga"] <= 1, f"- {manggarai}")
+    # Asersi lama menuntut ADA kawasan berisi nol - benar ketika hanya uji ini
+    # yang mengisi basis data, tetapi keenam kawasan pilot kini berisi data demo.
+    # Yang tetap penting: keenamnya SELALU dilaporkan, berdata atau tidak, dan
+    # tiap barisnya membawa angka yang bisa dibaca.
     cek(
-        "kawasan tanpa data tetap muncul dengan nol",
-        any(k["heksagon"] == 0 and not k["siap_demo"] for k in kws),
+        "tiap kawasan membawa hitungan dan penanda kesiapan",
+        all(
+            isinstance(k["heksagon"], int) and isinstance(k["siap_demo"], bool)
+            for k in kws
+        ),
     )
 
     # ---- Transit -----------------------------------------------------------
@@ -465,6 +571,195 @@ def jalankan(db) -> None:
         cek("simpul tak dikenal jadi 404", False, "- tidak dilempar")
     except TidakDitemukan:
         cek("simpul tak dikenal jadi 404", True)
+
+    # --- Rute jalan kaki ---------------------------------------------------
+    #
+    # Diperiksa terhadap DATA PRODUKSI, bukan terhadap baris yang ditaburkan uji
+    # ini. Alasannya persis pelajaran yang sudah tercatat di CLAUDE.md: uji yang
+    # menaburkan barisnya sendiri lalu memeriksanya tetap HIJAU untuk tabel yang
+    # di produksi kosong melompong - dan itulah bagaimana `score_factors` bisa
+    # nol berbulan-bulan tanpa satu pun alarm.
+    print("\n[+] Rute jalan kaki")
+    n_rute = db.execute(text("SELECT count(*) FROM hex_routes")).scalar_one()
+    cek("hex_routes terisi", n_rute > 0, f"- {n_rute} rute")
+
+    if n_rute:
+        # INVARIAN UTAMA, dan satu-satunya yang bisa menangkap koordinat
+        # tertukar: rute yang mengikuti jalan TIDAK MUNGKIN lebih pendek
+        # daripada garis lurus antara kedua ujungnya. Kalau lon/lat pernah
+        # tertukar, atau kalau ujung rute menempel jauh dari titik yang diminta,
+        # angka ini jatuh di bawah 1 dan asersinya menyala.
+        buruk = db.execute(
+            text(
+                """
+                SELECT count(*)
+                FROM hex_routes r
+                JOIN hex_features h ON h.h3_index = r.h3_index
+                JOIN transport_nodes n ON n.id = r.transport_node_id
+                WHERE r.jarak_m < ST_Distance(
+                    n.geom::geography, ST_Centroid(h.geom)::geography
+                ) - 1
+                """
+            )
+        ).scalar_one()
+        cek("tidak ada rute lebih pendek dari garis lurusnya", buruk == 0, f"- {buruk} melanggar")
+
+        # Ujungnya harus MENYENTUH titik yang diminta. ORS menempelkan titik ke
+        # jaringan jalan terdekat, dan tanpa penjahitan di pipeline, rute yang
+        # tergambar berhenti puluhan meter sebelum heksagon maupun stasiunnya.
+        menggantung = db.execute(
+            text(
+                """
+                SELECT count(*)
+                FROM hex_routes r
+                JOIN hex_features h ON h.h3_index = r.h3_index
+                JOIN transport_nodes n ON n.id = r.transport_node_id
+                WHERE ST_Distance(ST_StartPoint(r.geom)::geography,
+                                  ST_Centroid(h.geom)::geography) > 5
+                   OR ST_Distance(ST_EndPoint(r.geom)::geography, n.geom::geography) > 5
+                """
+            )
+        ).scalar_one()
+        cek("ujung rute menyentuh heksagon dan simpulnya", menggantung == 0, f"- {menggantung} menggantung")
+
+        # urutan 0 wajib yang TERCEPAT. Kalau tidak, `utama` di respons menunjuk
+        # jalur yang bukan rekomendasi, dan seluruh label di peta ikut salah.
+        salah_urut = db.execute(
+            text(
+                """
+                SELECT count(*) FROM (
+                    SELECT h3_index
+                    FROM hex_routes
+                    GROUP BY h3_index
+                    HAVING min(menit) FILTER (WHERE urutan = 0) > min(menit) + 0.01
+                ) x
+                """
+            )
+        ).scalar_one()
+        cek("urutan 0 selalu rute tercepat", salah_urut == 0, f"- {salah_urut} melanggar")
+
+        # Endpoint-nya sendiri, lewat heksagon yang PUNYA rute.
+        h3_rute = db.execute(
+            text("SELECT h3_index FROM hex_routes WHERE urutan = 0 ORDER BY h3_index LIMIT 1")
+        ).scalar_one()
+        k = simpul_terdekat(h3_rute, db)
+        cek("respons membawa rute", len(k.rute) > 0, f"- {len(k.rute)} jalur")
+        cek("garis_lurus false saat rutenya ada", k.garis_lurus is False)
+        cek(
+            "geometri rute punya minimal dua titik",
+            all(len(r.koordinat) >= 2 for r in k.rute),
+        )
+        cek(
+            "koordinat dalam bbox Jabodetabek",
+            all(
+                106.0 < x < 107.5 and -6.9 < y < -5.9
+                for r in k.rute
+                for x, y in r.koordinat
+            ),
+            "- lon/lat mungkin tertukar",
+        )
+        cek(
+            "faktor memutar tidak pernah di bawah 1",
+            k.faktor_memutar is None or k.faktor_memutar >= 1,
+            f"- {k.faktor_memutar}",
+        )
+        cek("tepat satu rute bertanda utama", sum(1 for r in k.rute if r.utama) == 1)
+
+        # Heksagon TANPA rute harus jujur mengatakannya, bukan diam-diam
+        # menyajikan garis lurus seolah rute.
+        h3_tanpa = db.execute(
+            text(
+                """
+                SELECT h.h3_index FROM hex_features h
+                LEFT JOIN hex_routes r ON r.h3_index = h.h3_index
+                WHERE r.h3_index IS NULL LIMIT 1
+                """
+            )
+        ).scalar()
+        if h3_tanpa:
+            kk = simpul_terdekat(h3_tanpa, db)
+            cek(
+                "tanpa rute -> garis_lurus true dan rute kosong",
+                kk.garis_lurus is True and not kk.rute,
+                f"- garis_lurus={kk.garis_lurus} rute={len(kk.rute)} simpul={kk.simpul is not None}",
+            )
+        else:
+            cek("seluruh heksagon sudah dirutekan", True, "- tidak ada yang tersisa")
+
+    # --- Kawasan jangkau (isochrone) ---------------------------------------
+    #
+    # Juga atas DATA PRODUKSI. Tabel ini kosong berbulan-bulan tanpa satu pun
+    # alarm sebelum ini, persis karena tidak ada yang memeriksanya.
+    print("\n[+] Kawasan jangkau")
+    n_iso = db.execute(text("SELECT count(*) FROM catchment_areas")).scalar_one()
+    cek("catchment_areas terisi", n_iso > 0, f"- {n_iso} pita")
+
+    if n_iso:
+        cek(
+            "geometri isochrone sah",
+            db.execute(
+                text("SELECT count(*) FROM catchment_areas WHERE NOT ST_IsValid(geom)")
+            ).scalar_one()
+            == 0,
+        )
+
+        # INVARIAN: kawasan yang dibatasi jaringan jalan TIDAK MUNGKIN lebih luas
+        # daripada lingkaran berjari-jari `menit x 80 m` - kawasan yang bisa
+        # ditembus ke segala arah. Kalau ia melebihi, yang tersimpan bukan
+        # isochrone jalan kaki, dan menggambarnya berarti menjanjikan jangkauan
+        # yang tidak ada.
+        melebihi = db.execute(
+            text(
+                """
+                SELECT count(*) FROM catchment_areas
+                WHERE ST_Area(geom::geography) > pi() * power(menit * 80.0, 2)
+                """
+            )
+        ).scalar_one()
+        cek("tak ada pita melebihi lingkaran bebas-hambatannya", melebihi == 0, f"- {melebihi} melanggar")
+
+        # Pita yang lebih lama harus lebih LUAS. Tertukar tidak menghasilkan
+        # galat, cuma peta yang salah.
+        tidak_bersarang = db.execute(
+            text(
+                """
+                SELECT count(*) FROM (
+                    SELECT transport_node_id
+                    FROM catchment_areas
+                    GROUP BY transport_node_id
+                    HAVING max(CASE WHEN menit = 5 THEN ST_Area(geom::geography) END)
+                         > min(CASE WHEN menit = 15 THEN ST_Area(geom::geography) END)
+                ) x
+                """
+            )
+        ).scalar_one()
+        cek("pita 15 menit selalu lebih luas dari 5 menit", tidak_bersarang == 0)
+
+        # Tiap simpul punya ketiga pitanya, atau tidak sama sekali. Simpul yang
+        # cuma punya sebagian akan menggambar jangkauan yang bolong tanpa ada
+        # yang mengatakannya.
+        sebagian = db.execute(
+            text(
+                """
+                SELECT count(*) FROM (
+                    SELECT transport_node_id FROM catchment_areas
+                    GROUP BY transport_node_id HAVING count(DISTINCT menit) <> 3
+                ) x
+                """
+            )
+        ).scalar_one()
+        cek("tiap simpul punya ketiga pitanya", sebagian == 0, f"- {sebagian} tidak lengkap")
+
+        node = db.execute(
+            text("SELECT transport_node_id FROM catchment_areas ORDER BY transport_node_id LIMIT 1")
+        ).scalar_one()
+        gj = transit.layer_catchment(db, node_id=node)
+        cek("endpoint catchment mengembalikan GeoJSON", gj["type"] == "FeatureCollection")
+        cek("tiga pita untuk satu simpul", len(gj["features"]) == 3, f"- {len(gj['features'])}")
+        cek(
+            "tiap fitur membawa menitnya",
+            sorted(f["properties"]["menit"] for f in gj["features"]) == [5, 10, 15],
+        )
 
 
 def main() -> int:
@@ -481,7 +776,14 @@ def main() -> int:
         db.rollback()
         cache.bersihkan()
         sisa = db.execute(
-            select(func.count()).select_from(HexFeature).where(HexFeature.kawasan == KAWASAN)
+            # Yang dihitung baris UJI, dikenali dari prefiks h3-nya - bukan
+            # seluruh isi kawasan. Sejak demo_seed mengisi Manggarai dengan 122
+            # heksagon sungguhan, hitungan lama selalu melaporkan "122 baris
+            # tersisa" pada uji yang rollback-nya justru sempurna. Alarm yang
+            # selalu menyala adalah alarm yang berhenti dibaca.
+            select(func.count())
+            .select_from(HexFeature)
+            .where(HexFeature.h3_index.like(f"{PREFIKS}%"))
         ).scalar_one()
         db.close()
 

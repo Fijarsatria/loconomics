@@ -3,12 +3,20 @@
 Struktur mengikuti Kamus Data Final (docs/data.md): 43 variabel analisis
 + 3 penanda kualitas, seluruhnya melekat pada satu heksagon H3 resolusi 9.
 
-Tiga kelompok tabel:
-  1. Referensi spasial  - transport_nodes, catchment_areas
+Empat kelompok tabel:
+  1. Referensi spasial  - transport_nodes, catchment_areas, hex_routes
   2. Observasi mentah   - business_pois, *_observations
                           TIDAK PERNAH diekspos lewat API publik (aturan panitia)
   3. Hasil analisis     - hex_features (input), hex_hourly_profiles (Commuter Clock),
                           location_scores + score_factors (output)
+  4. Akun dan langganan - users, subscriptions, token_ledger, premium_unlocks,
+                          watchlist_items
+
+Kelompok keempat tidak bersinggungan sama sekali dengan tiga di atasnya: tidak
+ada kolom akun di hex_features, dan tidak ada kolom heksagon di users. Yang
+menghubungkan keduanya cuma h3_index sebagai teks, di dua tabel terakhir. Batas
+itu sengaja - data misi MAPID dan data pelanggan tidak boleh pernah ikut ter-JOIN
+hanya karena kebetulan duduk di satu diagram.
 """
 
 from datetime import datetime
@@ -62,6 +70,59 @@ class CatchmentArea(Base):
     geom: Mapped[str] = mapped_column(Geometry("POLYGON", srid=4326), nullable=False)
 
     __table_args__ = (UniqueConstraint("transport_node_id", "menit", name="uq_catchment_node_menit"),)
+
+
+class HexRoute(Base):
+    """Rute jalan kaki dari pusat satu heksagon ke simpul transportasi terdekat.
+
+    KENAPA TABEL, BUKAN KOLOM. Satu heksagon punya beberapa rute: yang tercepat
+    plus alternatifnya. Alternatif bukan hiasan - dua jalur yang selisih
+    waktunya tipis tetapi lewat jalan yang sama sekali berbeda adalah informasi
+    nyata bagi orang yang menimbang lokasi, dan itu hubungan satu-ke-banyak.
+
+    KENAPA DISIMPAN, BUKAN DIHITUNG SAAT DIMINTA. Tiga alasan, dan ketiganya
+    berdiri sendiri:
+
+      1. Arsitektur. s4_spatial.py menyatakannya sejak awal - routing jaringan
+         jalan berjalan OFFLINE, backend cuma membaca.
+      2. Kuota. OpenRouteService memberi 2.000 permintaan per hari untuk
+         seluruh akun. Kalau tiap klik heksagon memanggil ORS, kuota sehari
+         habis oleh 2.000 klik pengunjung - dan satu skrip iseng bisa
+         menghabiskannya dalam hitungan menit.
+      3. Waktu tanggap. Panggilan ORS makan ratusan milidetik. Membaca satu
+         baris dari tabel ini tidak.
+
+    Konsekuensinya jujur: heksagon yang belum pernah dirutekan TIDAK punya baris
+    di sini, dan endpoint-nya mengatakan apa adanya alih-alih menggambar garis
+    lurus lalu menyebutnya rute.
+    """
+
+    __tablename__ = "hex_routes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    h3_index: Mapped[str] = mapped_column(
+        ForeignKey("hex_features.h3_index", ondelete="CASCADE"), index=True
+    )
+    transport_node_id: Mapped[int] = mapped_column(
+        ForeignKey("transport_nodes.id", ondelete="CASCADE"), index=True
+    )
+    #: 0 = rute tercepat, 1..n = alternatif. Urutan ditentukan ORS, bukan kami.
+    urutan: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: Panjang rute mengikuti jalan, meter. BUKAN jarak garis lurus.
+    jarak_m: Mapped[float] = mapped_column(Float, nullable=False)
+    #: Lama jalan kaki menurut ORS, menit. Profil foot-walking.
+    menit: Mapped[float] = mapped_column(Float, nullable=False)
+    geom: Mapped[str] = mapped_column(Geometry("LINESTRING", srid=4326), nullable=False)
+    #: Profil ORS yang dipakai. Disimpan supaya rute lama tetap bisa dikenali
+    #: kalau suatu saat profilnya diganti (mis. wheelchair).
+    profil: Mapped[str] = mapped_column(String(24), default="foot-walking", nullable=False)
+    dihitung_pada: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("h3_index", "transport_node_id", "urutan", name="uq_rute_hex_simpul_urutan"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -350,3 +411,157 @@ class AICallLog(Base):
     perlu_review: Mapped[bool] = mapped_column(Boolean, default=False)
     biaya_usd: Mapped[float | None] = mapped_column(Float)
     dibuat_pada: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 4. Akun dan langganan
+# ---------------------------------------------------------------------------
+
+
+class User(Base):
+    """Satu akun.
+
+    `nama_pengguna` DAN `email` sama-sama unik, dan keduanya bisa dipakai masuk.
+    Alasannya sepele tapi nyata: orang yang mendaftar dengan surel panjang
+    hampir selalu mengetik nama pengguna saat kembali, dan formulir yang cuma
+    menerima surel membuat mereka mengira lupa kata sandi.
+
+    `saldo_token` duduk di sini, bukan dihitung ulang dari token_ledger tiap
+    kali. Buku besarnya tetap sumber kebenaran untuk RIWAYAT; saldo ini cache
+    yang ditulis di dalam transaksi yang sama dengan barisnya, jadi keduanya
+    tidak pernah bisa berselisih tanpa ada transaksi yang gagal separuh.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nama_pengguna: Mapped[str] = mapped_column(String(40), nullable=False, unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
+    sidik_sandi: Mapped[str] = mapped_column(String(255), nullable=False)
+    nama_tampilan: Mapped[str | None] = mapped_column(String(80))
+    # "pengguna" | "admin". Admin TIDAK memberi kuasa apa pun di API ini - ia
+    # cuma penanda supaya panel akun bisa menyebutnya dan supaya akun pemilik
+    # gampang dikenali di basis data. Kuasa tambahan yang tidak dibutuhkan
+    # adalah kuasa yang suatu saat bocor.
+    peran: Mapped[str] = mapped_column(String(20), nullable=False, default="pengguna")
+    aktif: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    saldo_token: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Preferensi usaha - JSON sebagai teks: {"jenis_usaha", "kawasan",
+    # "budget_sewa_bulanan"}. Teks, bukan kolom terpisah, karena isinya murni
+    # preferensi tampilan: tidak pernah di-JOIN, tidak pernah disaring SQL, dan
+    # bentuknya boleh tumbuh tanpa migrasi. Yang membacanya cuma ringkas_akun().
+    preferensi: Mapped[str | None] = mapped_column(Text)
+    dibuat_pada: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    terakhir_masuk: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class Subscription(Base):
+    """Satu periode langganan.
+
+    Baris, bukan kolom di users - supaya perpanjangan menumpuk jadi riwayat yang
+    bisa dibaca alih-alih menimpa tanggal sebelumnya. Yang menentukan tingkat
+    seseorang adalah ADA TIDAKNYA baris aktif yang belum lewat, bukan sebuah
+    boolean yang harus diingat untuk dimatikan.
+
+    `selamanya` memisahkan akun yang tidak boleh kedaluwarsa dari tanggal biasa.
+    Tanpa kolom ini, akun pemilik harus diberi tanggal jauh di masa depan - dan
+    tanggal jauh di masa depan tetap tanggal yang suatu saat lewat, biasanya
+    tepat saat sedang dipakai demo.
+    """
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    paket: Mapped[str] = mapped_column(String(30), nullable=False)  # bulanan|selamanya
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="aktif")
+    selamanya: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    harga_rp: Mapped[int | None] = mapped_column(Integer)
+    dimulai_pada: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    berlaku_sampai: Mapped[datetime | None] = mapped_column(DateTime)
+    # Diisi begitu pembayaran QRIS sungguhan terpasang. Sekarang selalu "demo",
+    # dan itu dinyatakan apa adanya di antarmuka - tidak disamarkan jadi seolah
+    # ada uang yang berpindah.
+    metode_bayar: Mapped[str] = mapped_column(String(20), nullable=False, default="demo")
+    referensi_bayar: Mapped[str | None] = mapped_column(String(80))
+
+
+class TokenLedger(Base):
+    """Buku besar token. Satu baris per mutasi, tidak pernah disunting.
+
+    Positif pembelian, negatif pemakaian. Saldo mana pun harus selalu sama
+    dengan jumlah seluruh barisnya; kalau tidak, ada transaksi yang gagal
+    separuh - dan itu harus bisa terlihat, bukan tertutup oleh angka saldo yang
+    kebetulan sudah ditimpa.
+    """
+
+    __tablename__ = "token_ledger"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    jumlah: Mapped[int] = mapped_column(Integer, nullable=False)
+    keperluan: Mapped[str] = mapped_column(String(40), nullable=False)
+    catatan: Mapped[str | None] = mapped_column(String(200))
+    h3_index: Mapped[str | None] = mapped_column(String(20))
+    saldo_sesudah: Mapped[int] = mapped_column(Integer, nullable=False)
+    dibuat_pada: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
+class PremiumUnlock(Base):
+    """Heksagon yang sudah dibuka dengan token oleh satu akun.
+
+    Sekali dibuka, selamanya terbuka untuk akun itu. Token yang dibayarkan untuk
+    melihat satu lokasi tidak boleh hangus hanya karena panelnya ditutup - dan
+    tanpa tabel ini, satu-satunya cara membuktikan seseorang pernah membayar
+    adalah membaca buku besar lalu menafsirkannya, yang berarti aturan yang sama
+    hidup di dua tempat.
+    """
+
+    __tablename__ = "premium_unlocks"
+    __table_args__ = (UniqueConstraint("user_id", "h3_index", "jenis", name="uq_unlock"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    h3_index: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    jenis: Mapped[str] = mapped_column(String(30), nullable=False)  # detail|laporan
+    dibuat_pada: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
+class WatchlistItem(Base):
+    """Heksagon yang dipantau satu akun. Fitur Pemantauan.
+
+    `skor_saat_dipantau` dan `versi_saat_dipantau` DIBEKUKAN saat baris ini
+    dibuat. Itu yang membuat pemantauannya jujur: yang dilaporkan nanti adalah
+    selisih terhadap angka yang benar-benar tercatat ketika orangnya mulai
+    memantau - bukan selisih terhadap angka yang dihitung ulang belakangan dan
+    kebetulan cocok.
+    """
+
+    __tablename__ = "watchlist_items"
+    __table_args__ = (UniqueConstraint("user_id", "h3_index", name="uq_watchlist"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    h3_index: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    catatan: Mapped[str | None] = mapped_column(String(200))
+    skor_saat_dipantau: Mapped[float | None] = mapped_column(Float)
+    versi_saat_dipantau: Mapped[str | None] = mapped_column(String(40))
+    dibuat_pada: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )

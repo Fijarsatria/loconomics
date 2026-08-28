@@ -45,7 +45,7 @@ Ukuran 1 heksagon ≈ 0,10 km²  (lebarnya ± 350 meter ≈ satu blok kota)
 
 **Kenapa heksagon, bukan kotak?** Jarak dari pusat ke semua tetangga sama besar. Pada grid kotak, tetangga diagonal lebih jauh daripada tetangga samping — bikin analisis "sekitar sini" jadi bias.
 
-> **Konsekuensi buat Anda:** tabel utama database Anda adalah `hex_features` — **satu baris = satu heksagon**, berisi 41 variabel analisis + 3 penanda kualitas data. Hampir semua endpoint API Anda pada akhirnya membaca tabel ini.
+> **Konsekuensi buat Anda:** tabel utama database Anda adalah `hex_features` — **satu baris = satu heksagon**, berisi 43 variabel analisis + 3 penanda kualitas data. Hampir semua endpoint API Anda pada akhirnya membaca tabel ini.
 
 ---
 
@@ -60,7 +60,7 @@ flowchart TD
     E --> F["6 · SCORING ENGINE<br/>hitung IPT · IAE · IKP · IBR"]
     F --> G["7 · DATABASE<br/>PostgreSQL + PostGIS"]
     G --> H["8 · BACKEND API<br/>FastAPI"]
-    H --> I["9 · FRONTEND<br/>React + React Leaflet"]
+    H --> I["9 · FRONTEND<br/>React + MapLibre GL"]
     I --> J["10 · AI INSIGHT PANEL<br/>LLM menarasikan hasil"]
 
     style A fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
@@ -157,7 +157,22 @@ Dihitung dengan **OSRM atau Valhalla** (jalan lokal via Docker) untuk tiga tingk
 
 Analisis lain: *zonal statistics* (populasi & bangunan per heksagon), *Shannon entropy* (keragaman jenis usaha), *k-ring 1* (tetangga heksagon, untuk menghitung kompetitor).
 
-> **Wajib diingat:** isochrone dan H3 **di-precompute lalu disimpan ke database**. Backend Anda tidak boleh menghitung ulang jaringan jalan setiap kali peta dibuka.
+**Sudah berjalan: rute per heksagon DAN isochrone.** Keduanya lewat
+OpenRouteService. Jalur jalan kaki dari tiap heksagon ke simpul terdekatnya sudah dihitung
+dan disimpan di `hex_routes` — 1.587 jalur untuk 708 heksagon, lewat
+OpenRouteService profil `foot-walking`. Angkanya membenarkan seluruh keputusan
+di atas: rata-rata orang harus berjalan **1,82 kali** lebih jauh daripada jarak
+lurusnya, dan 470 dari 708 heksagon memutar setidaknya 1,4 kali. Lingkaran
+memang berbohong, dan sekarang kita tahu sebesar apa.
+
+Kawasan jangkaunya sendiri ada di `catchment_areas` — 5/10/15 menit untuk keenam
+simpul, satu permintaan ORS per simpul karena `range` menerima ketiganya
+sekaligus. Luasnya 42–67% dari lingkaran berjari-jari sama, jadi bentuknya
+memang dibatasi jaringan jalan. Yang paling mencolok Manggarai: ia menjangkau
+**17 heksagon dalam 15 menit** sementara stasiun lain 34–41, karena emplasemen
+relnya memotong jalan ke segala arah. Simpul tersibuk, jangkauan kaki tersempit.
+
+> **Wajib diingat:** isochrone, rute, dan H3 **di-precompute lalu disimpan ke database**. Backend Anda tidak boleh menghitung ulang jaringan jalan setiap kali peta dibuka — dan untuk ORS ada alasan kedua: kuota gratisnya 2.000 permintaan per hari untuk seluruh akun, jadi routing saat-diminta berarti pengunjung yang menghabiskannya.
 
 ---
 
@@ -247,7 +262,7 @@ IPTT = norm(rasio_keliling) × norm(skor_ramai) ÷ (1 + norm(n_menetap_kuliner))
 ```mermaid
 flowchart LR
     DB[("PostgreSQL + PostGIS<br/>Supabase<br/><br/>hex_features")] --> API["FastAPI<br/>modular monolith"]
-    API --> FE["React + Vite + TS<br/>React Leaflet"]
+    API --> FE["React + Vite + TS<br/>MapLibre GL"]
     FE --> MAP["MAPID MAPS<br/>basemap wajib"]
 
     style DB fill:#dcfce7,stroke:#22c55e,color:#14532d
@@ -260,13 +275,13 @@ flowchart LR
 
 | Lapisan | Teknologi |
 |---|---|
-| Frontend | React + Vite + TypeScript + React Leaflet + Tailwind |
+| Frontend | React + Vite + TypeScript + MapLibre GL + Tailwind |
 | Backend | FastAPI (Python), modular monolith |
 | Database | PostgreSQL + PostGIS via Supabase |
 | ORM & tooling | SQLAlchemy · GeoAlchemy2 · Alembic · Pydantic |
 | Deploy | Cloudflare Pages · Render · Supabase |
 
-**Tabel inti:** `transport_nodes`, `catchment_areas`, **`h3_cells`**, `business_pois`, `menu_observations`, `receipt_observations`, `property_observations`, `location_scores`, `score_factors` — semuanya dengan **spatial index GiST**.
+**Tabel inti:** `transport_nodes`, `catchment_areas`, `hex_routes`, **`h3_cells`**, `business_pois`, `menu_observations`, `receipt_observations`, `property_observations`, `location_scores`, `score_factors` — semuanya dengan **spatial index GiST**.
 
 **Modul backend:** transit · lokasi usaha · kompetitor · properti · skor · rekomendasi · AI Insight.
 
@@ -418,9 +433,9 @@ OLAH        cleaning → OCR foto jadi rupiah → H3 + isochrone → ML isi yang
 SKOR        Opportunity = 0.35·IPT + 0.35·IAE − 0.20·IKP − 0.10·IBR
                           × 0 kalau zona tidak mengizinkan usaha
                 ↓
-SIMPAN      PostGIS · tabel hex_features · 41 variabel + 3 badge kepercayaan
+SIMPAN      PostGIS · tabel hex_features · 43 variabel + 3 badge kepercayaan
                 ↓
-SAJIKAN     FastAPI → React Leaflet di atas basemap MAPID MAPS
+SAJIKAN     FastAPI → MapLibre GL di atas basemap MAPID MAPS
                 ↓
 JELASKAN    LLM memanggil fungsi, membaca angka dari DB, menarasikannya
             — LLM tidak pernah menghitung sendiri

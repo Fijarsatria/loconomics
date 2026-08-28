@@ -11,3 +11,14 @@ anthropic==0.116.0
 
 # Dipakai fastapi.testclient di backend/tests/
 httpx==0.28.1
+
+# --- Akun dan langganan ----------------------------------------------------
+# Autentikasi TIDAK menambah dependensi: kata sandi disidik hashlib.scrypt dan
+# tiket sesi ditandatangani hmac, keduanya dari pustaka standar. Lihat alasannya
+# di app/core/akun.py.
+#
+# Yang di bawah ini bukan untuk auth:
+# validasi bentuk surel saat mendaftar (pydantic EmailStr)
+email-validator==2.2.0
+# Laporan Kelayakan (PDF). Pure Python - tidak butuh kompilasi di Windows.
+reportlab==4.2.5

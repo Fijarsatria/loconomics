@@ -9,7 +9,7 @@ begitu, dan apa yang belum diputuskan.**
 |---|---|---|---|
 | 1 | [alur-sistem.md](alur-sistem.md) | Bagaimana data mengalir dari lapangan sampai ke layar | Anda baru pertama kali melihat proyek ini |
 | 2 | [produk.md](produk.md) | Apa yang sebenarnya dijual, untuk siapa, apa saja fiturnya | Anda mau tahu "kita membangun apa" |
-| 3 | [data.md](data.md) | 41 variabel, dari mana asalnya, aturan pembersihannya | Anda menyentuh pipeline atau skema database |
+| 3 | [data.md](data.md) | 43 variabel, dari mana asalnya, aturan pembersihannya | Anda menyentuh pipeline atau skema database |
 | 4 | [skoring.md](skoring.md) | Rumus skor, bobot, dan kenapa bobotnya segitu | Anda mengubah `s6_score.py` atau ditanya juri soal metodologi |
 | 5 | [ai.md](ai.md) | 14 fitur AI dalam 3 lapisan, mana yang wajib | Anda mengerjakan OCR, imputasi, atau AI Consultant |
 | 6 | [arsitektur.md](arsitektur.md) | Kenapa MapLibre, kenapa modular monolith, batas free tier | Anda menyentuh backend, frontend, atau deployment |
@@ -25,7 +25,7 @@ Setiap dokumen punya pasangan kodenya. Kalau salah satu berubah, pasangannya
 harus ikut ditinjau.
 
 ```
-docs/data.md        ←→  backend/app/models.py     (41 kolom + 3 penanda kualitas)
+docs/data.md        ←→  backend/app/models.py     (43 kolom + 3 penanda kualitas)
                         pipeline/config.py        (KODE_KE_KOLOM)
 docs/skoring.md     ←→  pipeline/s6_score.py      (satu-satunya tempat skor dihitung)
                         pipeline/config.py        (semua BOBOT_*)

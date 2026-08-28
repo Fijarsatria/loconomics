@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.bersama import periksa_kawasan
+from app.api.bersama import periksa_kawasan_banyak
 from app.core.database import get_db
 from app.core.galat import TidakDitemukan
 from app.models import CatchmentArea, HexFeature, LocationScore, TransportNode
@@ -40,9 +40,9 @@ def daftar_simpul(
         func.ST_Y(TransportNode.geom).label("lat"),
         func.ST_X(TransportNode.geom).label("lon"),
     )
-    kawasan = periksa_kawasan(kawasan)
-    if kawasan:
-        stmt = stmt.where(TransportNode.kawasan == kawasan)
+    daftar_kawasan = periksa_kawasan_banyak(kawasan)
+    if daftar_kawasan:
+        stmt = stmt.where(TransportNode.kawasan.in_(daftar_kawasan))
     if moda:
         stmt = stmt.where(TransportNode.moda == moda)
 

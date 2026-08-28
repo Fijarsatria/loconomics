@@ -24,7 +24,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Float, func, select
 from sqlalchemy.orm import Session
 
-from app.api.bersama import ambil_hex, badge, periksa_kawasan
+from app.api.bersama import ambil_hex, badge, periksa_kawasan_banyak
+from app.core.akun import PenggunaOpsional, wajib_akses_penuh
 from app.core.database import get_db
 from app.models import HexFeature
 from app.schemas import PriceLensHeksagon, RentangWajar
@@ -127,9 +128,9 @@ def layer_harga(
         )
         .limit(limit)
     )
-    kawasan = periksa_kawasan(kawasan)
-    if kawasan:
-        stmt = stmt.where(HexFeature.kawasan == kawasan)
+    daftar_kawasan = periksa_kawasan_banyak(kawasan)
+    if daftar_kawasan:
+        stmt = stmt.where(HexFeature.kawasan.in_(daftar_kawasan))
     if maks_sewa_per_m2 is not None:
         stmt = stmt.where(HexFeature.harga_sewa_per_m2 <= maks_sewa_per_m2)
     if hanya_berdata:
@@ -194,6 +195,13 @@ def ringkasan_kawasan(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
 @router.get(
     "/{h3_index}", response_model=PriceLensHeksagon, summary="Kartu harga satu heksagon"
 )
-def detail_harga(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> PriceLensHeksagon:
+def detail_harga(
+    h3_index: str,
+    db: Annotated[Session, Depends(get_db)],
+    pengguna: PenggunaOpsional = None,
+) -> PriceLensHeksagon:
+    # Layer harga di PETA tetap gratis; yang berbayar kartu rincian per
+    # heksagon ini - sewa/bulan, NJOP, posisi terhadap rentang wajar.
+    wajib_akses_penuh(db, pengguna, h3_index, "Kartu harga PriceLens")
     hx = ambil_hex(db, h3_index)
     return kartu_harga(db, hx)

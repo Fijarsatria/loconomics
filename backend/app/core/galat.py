@@ -91,6 +91,56 @@ class BasisDataBermasalah(KesalahanAPI):
     kode = "BASIS_DATA_BERMASALAH"
 
 
+# --- Akun dan langganan ----------------------------------------------------
+#
+# Empat kode, bukan satu. Frontend memperlakukan keempatnya sangat berbeda:
+# yang pertama membuka dialog masuk, yang kedua membuka dialog langganan, yang
+# ketiga memberi pesan di dalam formulir, yang keempat menawarkan beli token.
+# Menggabungkannya jadi satu 403 memaksa frontend menebak dari teks pesan -
+# persis yang dilarang di kepala berkas ini.
+
+
+class TidakTerautentikasi(KesalahanAPI):
+    """Belum masuk, padahal endpoint ini menuntutnya."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    kode = "TIDAK_TERAUTENTIKASI"
+
+
+class KredensialSalah(KesalahanAPI):
+    """Surel/nama pengguna atau kata sandi tidak cocok.
+
+    Pesannya sengaja TIDAK memberi tahu yang mana yang salah. Pesan "surel tidak
+    terdaftar" mengubah formulir masuk jadi alat pemeriksa keanggotaan: siapa
+    pun bisa mencoba daftar surel dan tahu mana yang punya akun di sini.
+    """
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    kode = "KREDENSIAL_SALAH"
+
+
+class AkunSudahAda(KesalahanAPI):
+    status_code = status.HTTP_409_CONFLICT
+    kode = "AKUN_SUDAH_ADA"
+
+
+class ButuhPremium(KesalahanAPI):
+    """Sudah masuk, tetapi tingkatnya belum cukup.
+
+    402 Payment Required, bukan 403. Statusnya memang jarang dipakai, tetapi ini
+    persis maknanya - dan ia membedakan "Anda tidak boleh" dari "Anda belum
+    membayar", yang di produk ini dua jalan keluar yang berbeda.
+    """
+
+    status_code = status.HTTP_402_PAYMENT_REQUIRED
+    kode = "BUTUH_PREMIUM"
+
+
+class TokenTidakCukup(KesalahanAPI):
+    status_code = status.HTTP_402_PAYMENT_REQUIRED
+    kode = "TOKEN_TIDAK_CUKUP"
+
+
 def _amplop(
     kode: str, pesan: str, status_code: int, request_id: str, detail: Any = None
 ) -> JSONResponse:

@@ -43,7 +43,7 @@ export default function ChartJam({
     <div>
       {/* Keterangan selalu ada untuk dua seri, dan tidak pernah warna saja —
           ada label langsung di sebelah setiap contoh warnanya. */}
-      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-ink-2">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-2">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-[2px] bg-jam-kuat" />
           Captive — tak punya pilihan lain
@@ -113,7 +113,7 @@ export default function ChartJam({
         })}
 
         {sorot && (
-          <div className="pointer-events-none absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-sm bg-ink px-2 py-1 text-[10.5px] text-surface shadow-lg">
+          <div className="pointer-events-none absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-sm bg-ink px-2 py-1 text-[12.5px] text-surface shadow-lg">
             <span className="tabular font-semibold">{String(sorot.jam).padStart(2, '0')}:00</span>
             {' · '}
             <span className="tabular">{sorot.n_transaksi} transaksi</span>
@@ -134,7 +134,7 @@ export default function ChartJam({
 
       {/* Sumbu: hanya jam yang menjadi penanda, bukan kedelapan belasnya.
           Label di setiap batang akan berubah jadi pagar yang tidak terbaca. */}
-      <div className="mt-1 flex text-[9.5px] text-ink-3">
+      <div className="mt-1 flex text-[11.5px] text-ink-3">
         {jam.map((t) => (
           <span key={t.jam} className="tabular flex-1 text-center">
             {[5, 8, 11, 14, 17, 20, 22].includes(t.jam) ? String(t.jam).padStart(2, '0') : ''}

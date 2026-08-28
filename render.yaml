@@ -1,0 +1,60 @@
+# Render Blueprint - backend Loconomics.
+#
+# Cara pakai: Render Dashboard -> New -> Blueprint -> pilih repo ini. Render
+# membaca berkas ini dan membuat layanannya. Nilai rahasia TIDAK ada di sini
+# (`sync: false` berarti "tanyakan ke saya di dashboard"), dan itu disengaja:
+# berkas ini ikut ter-commit ke repo publik.
+#
+# Yang perlu disadari soal free tier, karena ia menentukan cara demo dijalankan:
+# layanan free TIDUR sesudah 15 menit tidak ada permintaan, dan bangunnya
+# memakan puluhan detik. Mitigasinya sudah dikerjakan di dua tempat -
+#   1. gaya basemap disajikan sebagai berkas STATIS dari Cloudflare
+#      (frontend/public/basemap/*.json), jadi peta tetap tergambar walau
+#      backend masih bangun;
+#   2. `/health` sengaja tidak menyentuh basis data, supaya health check Render
+#      tidak menghabiskan koneksi Supabase free tier.
+# Sisanya tetap manual: panggil backend beberapa menit sebelum penjurian.
+
+services:
+  - type: web
+    name: loconomics-api
+    runtime: python
+    plan: free
+    # Jakarta tidak tersedia di free tier; Singapura yang terdekat.
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Murah dan tidak menyentuh basis data - lihat docstring app/api/meta.py.
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      # --- Rahasia. Diisi di dashboard, tidak pernah di repo. ---------------
+      - key: DATABASE_URL
+        sync: false          # Supabase, mode "Transaction pooler"
+      - key: MAPID_MAPS_API_KEY
+        sync: false          # basemap; dipakai HANYA untuk mengambil style.json
+      - key: MAPID_DATA_API_KEY
+        sync: false          # data misi; backend-to-backend, tidak pernah ke peramban
+      - key: LLM_API_KEY
+        sync: false          # AI Consultant
+      - key: ORS_API_KEY
+        sync: false          # openrouteservice; dipakai pipeline, bukan saat melayani
+
+      # --- Bukan rahasia -----------------------------------------------------
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: LLM_MODEL
+        value: claude-opus-5
+      - key: LLM_PLAFON_HARIAN_USD
+        value: "2.0"
+      - key: LINGKUNGAN
+        value: produksi
+      # Domain frontend. WAJIB disetel ulang di dashboard begitu subdomain dari
+      # panitia MAPID keluar - CORS yang salah membuat SELURUH panggilan data
+      # gagal dari peramban sementara curl tetap berhasil, dan itu jenis
+      # kegagalan yang paling lama dikejar.
+      - key: CORS_ORIGINS
+        value: "https://loconomics.pages.dev,http://localhost:5173,http://localhost:4173"

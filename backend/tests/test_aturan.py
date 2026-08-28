@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.api.ai import ALAT_BACKEND, ALAT_FRONTEND, NAMA_FRONTEND, REGISTRI, _argumen_peta
 from app.api.bersama import DIMENSI, SEMUA_VARIABEL
 from app.core.aturan import (
+    TINGKAT_BERPERINGATAN,
     CHURN_LANTAI_ABSOLUT,
     PENJELASAN_ZONA,
     status_zona,
@@ -57,10 +58,155 @@ def test_churn_bertingkat():
     assert tingkat_risiko_churn(0.35, p75=0.40, p90=0.70) == "AMAN"
 
 
-def test_churn_kosong_tidak_meledak():
-    assert tingkat_risiko_churn(None, 0.4, 0.7) == "AMAN"
+def test_churn_kosong_bukan_aman():
+    """Churn kosong TIDAK boleh terbaca sebagai aman.
+
+    Sejak P06 dikosongkan (27 Agu 2026), churn kosong di seluruh 708 heksagon.
+    Memetakannya ke AMAN membuat platform menyatakan "pergantian usaha wajar"
+    untuk setiap lokasi tanpa satu pun data di belakangnya - klaim, bukan diam.
+    """
+    assert tingkat_risiko_churn(None, 0.4, 0.7) == "TIDAK_DIKETAHUI"
+
+
+def test_churn_ada_tanpa_persentil_tetap_bisa_dinilai():
+    """Churn di bawah lantai absolut tetap AMAN walau persentilnya tidak ada -
+    yang hilang di sini pembandingnya, bukan pengukurannya."""
+    assert tingkat_risiko_churn(0.1, None, None) == "AMAN"
     assert tingkat_risiko_churn(0.9, None, None) == "AMAN"
 
+
+def test_tidak_diketahui_bukan_peringatan():
+    """Saringan "tampilkan yang berperingatan saja" tidak boleh berubah jadi
+    "tampilkan yang datanya tidak ada"."""
+    assert "TIDAK_DIKETAHUI" not in TINGKAT_BERPERINGATAN
+    assert "AMAN" not in TINGKAT_BERPERINGATAN
+    assert set(TINGKAT_BERPERINGATAN) == {"WASPADA", "BAHAYA"}
+
+
+# --- Simulasi usaha --------------------------------------------------------
+#
+# Modul ini sebelumnya tidak punya satu pun uji, dan justru ia yang paling
+# mudah rusak diam-diam: seluruh keluarannya boleh None, jadi simulasi yang
+# berhenti menghitung apa pun tetap menjawab 200 dengan bentuk yang benar.
+
+
+_VARIABEL_KOSONG = {
+    "belanja_per_jam": None,
+    "nominal_median_struk": None,
+    "harga_median_porsi": None,
+    "harga_sewa_per_m2": None,
+}
+
+
+def _simulasi(**tambahan):
+    from app.core.simulasi import hitung_simulasi
+
+    variabel = dict(_VARIABEL_KOSONG, **tambahan.pop("variabel", {}))
+    return hitung_simulasi(
+        variabel=variabel,
+        indeks_kompetisi=0.2,
+        indeks_churn=None,
+        zona_izin=True,
+        keyakinan="RENDAH",
+        jenis_usaha="kuliner_ringan",
+        jam_buka=12,
+        luas_m2=18,
+        pangsa_persen=5,
+        margin_persen=28,
+        **tambahan,
+    )
+
+
+def test_simulasi_hidup_tanpa_sebaris_pun_data_survei():
+    """Inti perubahan 27 Agu 2026, dan alasan seluruh fitur ini masih berguna
+    walau 18 variabel kosong.
+
+    Ketiga bahan `pembeli impas` - sewa, harga rata-rata, margin - boleh datang
+    dari penggunanya sendiri. Orang yang menimbang sebuah ruko sudah memegang
+    penawarannya, dan harga jual adalah rencananya sendiri; tidak ada survei
+    yang bisa menggantikan keduanya.
+    """
+    h = _simulasi(sewa_bulanan_diminta=4_500_000, harga_rata_rata=25_000)
+    impas = h["hasil"]["pembeli_impas_per_hari"]
+    assert impas is not None, "harus terhitung walau basis datanya kosong"
+    # 4.500.000 / (26 x 25.000 x 0,28)
+    assert abs(impas - 24.7252) < 0.01
+
+
+def test_simulasi_tanpa_isian_tetap_kosong_bukan_nol():
+    """Aturan 4. Nol pembeli impas berarti sewanya gratis - pernyataan yang
+    jauh lebih kuat daripada 'belum diisi'."""
+    h = _simulasi()
+    assert h["hasil"]["pembeli_impas_per_hari"] is None
+    assert h["hasil"]["sewa_bulanan"] is None
+    kode = {p["kode"] for p in h["peringatan"]}
+    assert {"SEWA_BELUM_DIISI", "HARGA_BELUM_DIISI"} <= kode
+
+
+def test_simulasi_isian_pengguna_menang_atas_basis_data():
+    """Median heksagon menggambarkan ruko LAIN; penawaran yang dipegang orang
+    menggambarkan ruko yang sedang ia timbang."""
+    h = _simulasi(
+        variabel={"harga_sewa_per_m2": 200_000, "nominal_median_struk": 30_000},
+        sewa_bulanan_diminta=4_500_000,
+        harga_rata_rata=25_000,
+    )
+    assert h["hasil"]["sewa_bulanan"] == 4_500_000
+    assert h["sumber"] == {"sewa": "pengguna", "harga_rata_rata": "pengguna"}
+
+
+def test_simulasi_jatuh_ke_basis_data_kalau_tidak_diisi():
+    h = _simulasi(variabel={"harga_sewa_per_m2": 200_000, "nominal_median_struk": 30_000})
+    assert h["sumber"] == {"sewa": "data", "harga_rata_rata": "data"}
+    assert h["hasil"]["sewa_bulanan"] == 3_600_000  # 200rb x 18 m2
+
+
+def test_simulasi_sewa_nol_bukan_sewa_gratis():
+    """Isian 0 harus dibaca 'belum diisi'. Kalau ia diterima apa adanya,
+    pembeli impas jadi 0 dan lokasinya terlihat seperti hadiah."""
+    h = _simulasi(sewa_bulanan_diminta=0, harga_rata_rata=25_000)
+    assert h["sumber"]["sewa"] is None
+    assert h["hasil"]["pembeli_impas_per_hari"] is None
+
+
+def test_simulasi_asal_angka_selalu_ikut():
+    """Tanpa `sumber`, angka yang diketik orang dan angka yang diukur pipeline
+    terlihat sama persis di layar."""
+    h = _simulasi(sewa_bulanan_diminta=4_500_000)
+    assert set(h["sumber"]) == {"sewa", "harga_rata_rata"}
+    assert h["sumber"]["sewa"] == "pengguna"
+    assert h["sumber"]["harga_rata_rata"] is None
+
+
+def test_simulasi_rumus_mengikuti_asal_angkanya():
+    """Menampilkan 'harga sewa per m2 x luas' padahal sewanya diketik orang
+    membuat pembacanya mencari angka yang tidak pernah dipakai."""
+    diisi = _simulasi(sewa_bulanan_diminta=4_500_000, harga_rata_rata=25_000)
+    assert "Anda isi" in diisi["rumus"]["sewa_bulanan"]
+    assert "Anda isi" in diisi["rumus"]["pembeli_impas_per_hari"]
+
+    dari_data = _simulasi(variabel={"harga_sewa_per_m2": 200_000})
+    assert "per m" in dari_data["rumus"]["sewa_bulanan"]
+
+
+def test_simulasi_sewa_per_m2_tersirat_hanya_saat_diisi_sendiri():
+    """Gunanya menyandingkan penawaran dengan sewa terukur - dan itu cuma
+    berarti kalau penawarannya memang datang dari luar basis data."""
+    diisi = _simulasi(sewa_bulanan_diminta=4_500_000)
+    assert diisi["hasil"]["sewa_per_m2_tersirat"] == 250_000  # 4,5jt / 18 m2
+
+    dari_data = _simulasi(variabel={"harga_sewa_per_m2": 200_000})
+    assert dari_data["hasil"]["sewa_per_m2_tersirat"] is None
+
+
+def test_simulasi_omzet_tetap_menuntut_data():
+    """Yang boleh diisi sendiri cuma dua. Omzet - berapa uang yang berputar di
+    heksagon itu - bukan sesuatu yang bisa dijawab siapa pun dari kursinya, dan
+    membiarkannya diisi akan mengubah simulasi jadi mesin pembenar."""
+    h = _simulasi(sewa_bulanan_diminta=4_500_000, harga_rata_rata=25_000)
+    assert h["hasil"]["omzet_bulanan"] is None
+    assert h["hasil"]["pangsa_impas_persen"] is None
+    assert "TANPA_DATA_BELANJA" in {p["kode"] for p in h["peringatan"]}
 
 # --- Kamus Data ------------------------------------------------------------
 
@@ -158,6 +304,60 @@ def test_kawasan_sama_di_tiga_berkas():
     assert len(KAWASAN_PILOT) == 6
 
 
+def test_arti_variabel_lengkap_dan_sama_dengan_frontend():
+    """Kamus bahasa awam ditulis dua kali - backend untuk PDF, frontend untuk
+    layar - karena keduanya proses terpisah. Uji ini satu-satunya yang menjaga
+    keduanya tidak berpisah.
+
+    Kalau berpisah, gejalanya tidak pernah berupa galat: satu variabel tampil
+    sebagai "n_kompetitor_langsung" di layar sementara PDF-nya menulis "Pesaing
+    sejenis", dan pembacanya mengira itu dua hal yang berbeda.
+    """
+    from app.api.bersama import SEMUA_VARIABEL
+    from app.core.aturan import ARTI_INDEKS, ARTI_KODE, ARTI_VARIABEL
+
+    kurang = set(SEMUA_VARIABEL) - set(ARTI_VARIABEL)
+    lebih = set(ARTI_VARIABEL) - set(SEMUA_VARIABEL)
+    assert not kurang, f"variabel tanpa nama awam: {sorted(kurang)}"
+    assert not lebih, f"nama awam untuk variabel yang tidak ada: {sorted(lebih)}"
+    assert len(ARTI_KODE) == 43, "kode variabel harus unik satu per satu"
+    assert set(ARTI_INDEKS) == {"IPT", "IAE", "IKP", "IBR"}
+
+    akar = Path(__file__).resolve().parents[2]
+    ts = (akar / "frontend" / "src" / "config.ts").read_text(encoding="utf-8")
+    for kolom, (kode, nama, satuan) in ARTI_VARIABEL.items():
+        baris = f"{kolom}: {{ kode: '{kode}', nama: '{nama}', satuan: '{satuan}' }}"
+        assert baris in ts, f"frontend/src/config.ts tidak memuat: {baris}"
+
+
+def test_kode_lokasi_terbaca_dan_tidak_bentrok():
+    """Nama heksagon harus stabil, dan rumusnya harus sama dengan frontend.
+
+    Sifat yang paling penting: TANPA KEADAAN. Nomor urut akan bergeser tiap kali
+    satu heksagon masuk, termasuk nomor yang sudah tercetak di Laporan Kelayakan
+    milik orang.
+    """
+    from app.core.aturan import kode_lokasi
+
+    assert kode_lokasi("898c1079dd7ffff", "Manggarai") == "Manggarai-40407"
+    assert kode_lokasi("898c104c5a7ffff", "Bekasi") == "Bekasi-50599"
+    # Sel bertetangga - potongan yang dipakai harus membedakan keduanya.
+    assert kode_lokasi("898c1079dd7ffff", "M") != kode_lokasi("898c1079ddbffff", "M")
+
+    akar = Path(__file__).resolve().parents[2]
+    ts = (akar / "frontend" / "src" / "config.ts").read_text(encoding="utf-8")
+    assert "parseInt(h3.slice(7, 11), 16)" in ts, "rumus kodeLokasi frontend bergeser"
+    assert "padStart(5, '0')" in ts
+
+
+def test_menit_jalan_kosong_tetap_kosong():
+    from app.core.aturan import KECEPATAN_JALAN_M_PER_MENIT, menit_jalan
+
+    assert menit_jalan(None) is None
+    assert menit_jalan(0) == 0.0
+    assert menit_jalan(KECEPATAN_JALAN_M_PER_MENIT * 5) == 5.0
+
+
 def test_jam_operasional_sama_dengan_pipeline():
     """Pipeline mengisi tabel profil jam, backend menyajikannya. Kalau rentangnya
     berbeda, sebagian jam akan hilang tanpa ada yang menyadari."""
@@ -174,6 +374,56 @@ def test_prompt_melarang_menghitung():
     isi = PROMPT_SISTEM.lower()
     assert "tidak pernah menghitung" in isi
     assert "cek_zona" in isi, "prompt harus mewajibkan pemeriksaan zonasi"
+
+
+# --- "Sedikit pesaing" tidak boleh lahir dari peta yang kosong -------------
+#
+# C01 bersumber OpenStreetMap, dan nol di sana punya dua arti yang tidak bisa
+# dibedakan dari kolomnya: tidak ada pesaing, atau belum ada yang memetakan apa
+# pun. Terukur 26 Agu 2026: 312 dari 708 heksagon ber-C01 nol, sebarannya
+# mengikuti kerapatan PEMETAAN dan bukan kerapatan usaha.
+
+
+class _Hex:
+    """Heksagon dengan DUA kolom terisi dan sisanya kosong.
+
+    `__getattr__` mengembalikan None untuk kolom apa pun yang tidak disebut,
+    supaya uji ini tidak ikut merah setiap kali `_alasan_untuk` membaca kolom
+    baru. Yang diuji di sini satu aturan, bukan daftar kolomnya - dan stub yang
+    harus diperbarui tiap ada kolom baru akan berhenti diperbarui."""
+
+    def __init__(self, c01, c02):
+        self.n_kompetitor_langsung = c01
+        self.kepadatan_poi_total = c02
+
+    def __getattr__(self, nama):
+        return None
+
+
+def _kode(hx):
+    from app.api.skor import _alasan_untuk
+
+    return {a.kode for a in _alasan_untuk(hx, None, None, None)}
+
+
+def test_sepi_pesaing_muncul_kalau_petanya_tahu_sesuatu():
+    """Tiga usaha terpetakan, satu sekelas induk -> temuan yang sah."""
+    assert "SEPI_PESAING" in _kode(_Hex(c01=1, c02=3))
+
+
+def test_sepi_pesaing_tidak_muncul_kalau_nol_usaha_terpetakan():
+    """Nol dari nol bukan temuan, melainkan lubang data - dan menyodorkannya
+    sebagai alasan memilih lokasi persis 'Hidden Gem palsu'."""
+    assert "SEPI_PESAING" not in _kode(_Hex(c01=0, c02=0))
+
+
+def test_sepi_pesaing_tidak_muncul_kalau_poi_belum_dihitung():
+    """`None` bukan nol: heksagon yang belum pernah dilewati agregasi OSM."""
+    assert "SEPI_PESAING" not in _kode(_Hex(c01=0, c02=None))
+
+
+def test_sepi_pesaing_tetap_diam_untuk_pesaing_banyak():
+    assert "SEPI_PESAING" not in _kode(_Hex(c01=40, c02=90))
 
 
 if __name__ == "__main__":

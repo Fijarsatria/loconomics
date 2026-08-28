@@ -16,6 +16,7 @@ from s6_score import (
     hitung_iptt,
     hitung_opportunity,
     norm,
+    rincian_faktor,
     skor_lengkap,
     tentukan_kuadran,
     uji_sensitivitas,
@@ -120,6 +121,37 @@ def test_sensitivitas_bobot():
     hasil = uji_sensitivitas(contoh_data(n=300))
     terendah = min(hasil.values())
     assert terendah > SENSITIVITAS_RHO_MIN, f"rho terendah {terendah} <= {SENSITIVITAS_RHO_MIN}"
+
+
+def test_faktor_menjumlah_jadi_indeksnya():
+    """Uji terpenting untuk score_factors: rincian harus MENJELASKAN skornya.
+
+    Kalau jumlah kontribusi sebuah indeks tidak sama dengan nilai indeks yang
+    tersimpan, panel "Kenapa skornya segitu" menampilkan angka yang tidak
+    menghasilkan skor di sebelahnya - dan itu jenis kesalahan yang langsung
+    terlihat begitu juri menjumlahkannya sendiri.
+    """
+    df = contoh_data(n=300)
+    idx = hitung_indeks(df)
+    jml = rincian_faktor(df).groupby(["h3_index", "indeks"])["kontribusi"].sum().unstack()
+    for nama in ("IPT", "IAE", "IKP", "IBR"):
+        beda = (jml[nama].reindex(idx.index) - idx[nama.lower()]).abs().max()
+        assert beda < 1e-9, f"{nama} meleset {beda}"
+
+
+def test_faktor_hanya_variabel_berbobot():
+    """Empat belas variabel, bukan 43. B10 dan P07 tidak membentuk indeks mana pun."""
+    fak = rincian_faktor(contoh_data(n=50))
+    assert len(fak) == 14 * 50, f"harus 14 baris per heksagon, ada {len(fak) / 50}"
+    assert not fak.duplicated(["h3_index", "kode_variabel"]).any()
+    assert set(fak["indeks"]) == {"IPT", "IAE", "IKP", "IBR"}
+    assert {"B10", "P07"}.isdisjoint(set(fak["kode_variabel"]))
+
+
+def test_faktor_persentil_dan_norm_dalam_rentang():
+    fak = rincian_faktor(contoh_data(n=80))
+    assert fak["nilai_normalisasi"].dropna().between(0, 1).all()
+    assert fak["persentil"].dropna().between(0, 100).all()
 
 
 def test_skor_lengkap_bentuk():

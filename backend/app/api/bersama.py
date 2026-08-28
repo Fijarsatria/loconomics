@@ -199,6 +199,31 @@ def periksa_kawasan(kawasan: str | None) -> str | None:
     )
 
 
+def periksa_kawasan_banyak(kawasan: str | None) -> list[str] | None:
+    """Terima satu nama kawasan ATAU beberapa yang dipisah koma.
+
+    Mengembalikan None untuk "jangan disaring", sama dengan `periksa_kawasan`.
+    Tiap nama tetap melewati pemeriksa yang sama satu per satu, jadi satu salah
+    ketik di tengah daftar tetap ditolak dengan pesan yang sama - bukan
+    diam-diam dibuang sehingga hasilnya menyempit tanpa ada yang tahu.
+
+    Duplikat dibuang, urutannya dipertahankan. Urutan dipertahankan karena ia
+    ikut jadi kunci cache: {"Bekasi","Depok Baru"} dan {"Depok Baru","Bekasi"}
+    adalah saringan yang sama, dan menormalkannya di sini membuat keduanya
+    berbagi satu entri cache alih-alih dua.
+    """
+    if kawasan is None or not kawasan.strip():
+        return None
+    keluar: list[str] = []
+    for potong in kawasan.split(","):
+        if not potong.strip():
+            continue
+        nama = periksa_kawasan(potong)
+        if nama and nama not in keluar:
+            keluar.append(nama)
+    return sorted(keluar) or None
+
+
 def ambil_hex(db: Session, h3_index: str) -> HexFeature:
     """Ambil heksagon atau lempar 404 dengan pesan yang seragam."""
     hx = db.get(HexFeature, h3_index)

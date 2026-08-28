@@ -14,6 +14,7 @@ agregat di /hex.
   /skor       peringkat, GemFinder, RiskRadar, ZoneGuard, versi skor
   /ai         AI Consultant
   /meta       kesehatan, kesiapan, cakupan data
+  /akun       akun, langganan, token, pemantauan, Laporan Kelayakan
 
 Backend ini TIDAK menghitung skor. Seluruh perhitungan dilakukan offline oleh
 pipeline/ dan hasilnya dibaca dari basis data - lihat CLAUDE.md aturan 1.
@@ -25,7 +26,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from app.api import ai, hex, meta, pricelens, skor, transit
+from app.api import ai, akun, hex, meta, pricelens, skor, transit
 from app.core import galat
 from app.core.config import settings
 
@@ -41,6 +42,14 @@ KETERANGAN_TAG = [
     {"name": "skor", "description": "Peringkat, GemFinder, RiskRadar, ZoneGuard. Membaca saja - tidak menghitung."},
     {"name": "ai", "description": "AI Consultant. Satu-satunya bagian yang membelanjakan uang sungguhan."},
     {"name": "meta", "description": "Kesehatan, kesiapan, cakupan data."},
+    {
+        "name": "akun",
+        "description": (
+            "Akun, langganan Loconomics Premium, token, pemantauan, Laporan Kelayakan. "
+            "Satu-satunya modul yang menyimpan data pribadi - dan ia tidak pernah "
+            "ikut ter-JOIN dengan data misi MAPID."
+        ),
+    },
 ]
 
 app = FastAPI(
@@ -64,7 +73,10 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
-    expose_headers=[galat.HEADER_REQUEST_ID],
+    # Peramban menyembunyikan setiap header respons yang tidak disebut di sini,
+    # termasuk header buatan sendiri. X-Total-Count adalah janji paginasi
+    # /skor/ranking; tanpa didaftarkan, janji itu cuma berlaku untuk curl.
+    expose_headers=[galat.HEADER_REQUEST_ID, skor.HEADER_TOTAL],
 )
 
 # Kompresi bukan hiasan di sini: satu FeatureCollection berisi ribuan heksagon
@@ -80,3 +92,4 @@ app.include_router(pricelens.router)
 app.include_router(transit.router)
 app.include_router(skor.router)
 app.include_router(ai.router)
+app.include_router(akun.router)

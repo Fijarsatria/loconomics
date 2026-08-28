@@ -23,6 +23,8 @@ import threading
 import time
 from typing import Any, Callable
 
+from sqlalchemy.orm import Session
+
 # Sepuluh menit. Isi tabel hanya berubah saat pipeline dijalankan, yang terjadi
 # beberapa kali sehari saat pengembangan dan tidak sama sekali saat demo. Nilai
 # ini kompromi antara "juri tidak menunggu" dan "perubahan pipeline terlihat
@@ -99,12 +101,25 @@ ABAIKAN = frozenset({"db", "request", "respons", "response"})
 def _kunci_dari(awalan: str, nama_fn: str, args: tuple, kwargs: dict) -> str:
     """Susun kunci dari argumen yang benar-benar memengaruhi hasil.
 
-    Argumen posisional pertama dilewati karena selalu sesi basis data pada
-    pemakaian di proyek ini. Argumen kata-kunci disaring menurut namanya - dan
-    inilah yang penting, karena FastAPI memanggil endpoint dengan kata-kunci,
-    sehingga penyaringan berdasarkan posisi saja tidak cukup.
+    Sesi basis data disaring menurut TIPE, bukan menurut posisi.
+
+    Versi sebelumnya membuang `args[0]` apa adanya, dengan alasan "argumen
+    posisional pertama selalu sesi basis data pada pemakaian di proyek ini".
+    Alasan itu tidak benar: `simpul_terdekat(h3_index, db)` menaruh h3 di
+    posisi itu. Akibatnya dua heksagon yang berbeda berbagi satu kunci, dan
+    yang kedua menerima jawaban milik yang pertama.
+
+    Kegagalannya nyaris tak terlihat, dan itu yang membuatnya berbahaya: lewat
+    HTTP semuanya benar, karena FastAPI memanggil endpoint dengan KATA-KUNCI
+    sehingga `args` kosong. Yang salah cuma pemanggilan langsung dari kode -
+    alat AI, skrip, dan uji - jadi bug ini bisa hidup lama di balik rangkaian
+    uji yang hijau.
+
+    Menyaring menurut tipe menghapus asumsinya sama sekali. Tidak ada lagi
+    posisi yang harus benar.
     """
-    bagian = [awalan, nama_fn, *map(repr, args[1:])]
+    posisi = [repr(a) for a in args if not isinstance(a, Session)]
+    bagian = [awalan, nama_fn, *posisi]
     bagian += [f"{k}={v!r}" for k, v in sorted(kwargs.items()) if k not in ABAIKAN]
     return "|".join(bagian)
 
@@ -117,6 +132,20 @@ def ber_cache(awalan: str, ttl: float = TTL_DETIK) -> Callable:
     pembacaan di dalam transaksi yang belum di-commit. Uji yang bekerja dalam
     transaksi ber-rollback WAJIB memanggil bersihkan() sebelum dan sesudahnya,
     kalau tidak data ujinya bertahan di cache setelah rollback.
+
+    JANGAN PERNAH memasang dekorator ini pada endpoint yang isinya bergantung
+    pada SIAPA yang memanggil. Sejak ada akun dan langganan, sebagian endpoint
+    mengirim isi berbeda untuk pelanggan dan untuk tamu - dan cache yang tidak
+    tahu soal itu akan menyajikan jawaban milik pelanggan kepada tamu berikutnya
+    yang meminta jalur yang sama. Kegagalannya diam: tidak ada galat, cuma data
+    berbayar yang keluar gratis.
+
+    Dua jalan keluar, keduanya sah, tetapi HARUS dipilih sadar:
+      - biarkan endpoint itu tidak di-cache (yang dipilih `/hex/{h3_index}`), atau
+      - masukkan pembeda tingkatnya ke kunci sebagai NILAI, bukan sebagai objek
+        pengguna. `repr()` sebuah objek User memuat alamat memorinya, jadi
+        memakainya sebagai kunci berarti tidak pernah kena cache sekaligus
+        menumbuhkan tabelnya tanpa batas.
     """
 
     def bungkus(fn: Callable) -> Callable:

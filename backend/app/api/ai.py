@@ -31,6 +31,7 @@ peta, bukan sekadar teks.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from typing import Annotated, Any
@@ -41,6 +42,7 @@ from sqlalchemy.orm import Session
 from app.api import pricelens, skor as modul_skor
 from app.api.bersama import ambil_hex, periksa_kawasan, zoneguard
 from app.api.hex import commuter_clock, detail_heksagon
+from app.core.akun import PenggunaOpsional, wajib_akses_penuh
 from app.core.batas import periksa_anggaran, periksa_laju
 from app.core.config import settings
 from app.core.database import get_db
@@ -117,11 +119,16 @@ def cari_lokasi(
     return {"hasil": hasil, "jumlah": len(hasil), "catatan": catatan}
 
 
-def bandingkan(db: Session, hex_a: str, hex_b: str, versi: str = "baseline") -> dict[str, Any]:
+def bandingkan(
+    db: Session, hex_a: str, hex_b: str, versi: str = "baseline", pengguna=None
+) -> dict[str, Any]:
     """Dua heksagon berdampingan, sudah termasuk zonasi dan peringatan risikonya."""
-    a = detail_heksagon(hex_a, db, versi)
-    b = detail_heksagon(hex_b, db, versi)
-    return {
+    # `versi` WAJIB kata-kunci. Pernah dikirim posisional dan mendarat di
+    # parameter `pengguna` yang baru disisipkan - string "baseline" lalu
+    # diperlakukan sebagai objek User dan setiap panggilan alat ini meledak 500.
+    a = detail_heksagon(hex_a, db, pengguna=pengguna, versi=versi)
+    b = detail_heksagon(hex_b, db, pengguna=pengguna, versi=versi)
+    hasil: dict[str, Any] = {
         "a": _ringkas_detail(a),
         "b": _ringkas_detail(b),
         "selisih_skor": (
@@ -130,24 +137,48 @@ def bandingkan(db: Session, hex_a: str, hex_b: str, versi: str = "baseline") -> 
             else None
         ),
     }
+    if a.terkunci or b.terkunci:
+        # Tanpa baris ini model membaca blok `harga` yang seluruhnya null dan
+        # menyimpulkan datanya memang tidak ada - padahal ada, cuma ditahan.
+        # Mengatakan "belum ada data harga" kepada orang yang bisa membukanya
+        # dengan satu token adalah pernyataan yang salah, bukan sekadar kurang.
+        hasil["catatan"] = (
+            "Blok 'harga' pada kedua lokasi ditahan karena pemanggilnya belum "
+            "berlangganan. Nilai null di sana berarti BELUM DIBUKA, bukan tidak "
+            "ada datanya. Jangan katakan datanya kosong - sarankan berlangganan "
+            "atau membuka lokasi itu dengan token."
+        )
+    return hasil
 
 
-def jelaskan_skor(db: Session, hex_id: str, versi: str = "baseline") -> dict[str, Any]:
+def jelaskan_skor(
+    db: Session, hex_id: str, versi: str = "baseline", pengguna=None
+) -> dict[str, Any]:
     """Rincian kontribusi tiap variabel. Bahan mentah narasi "kenapa skornya segitu"."""
-    d = detail_heksagon(hex_id, db, versi)
+    d = detail_heksagon(hex_id, db, pengguna=pengguna, versi=versi)
     ringkas = _ringkas_detail(d)
     ringkas["faktor_teratas"] = [f.model_dump() for f in d.faktor[:8]]
+    if d.terkunci:
+        # Pemanggilnya belum premium, jadi detail_heksagon menahan faktornya -
+        # dan model harus TAHU itu, bukan mengira lokasi ini tidak punya faktor.
+        ringkas["catatan"] = (
+            "Rincian kontribusi variabel ditahan: pembongkaran skor bagian dari "
+            "Loconomics Premium. Sarankan pengguna berlangganan untuk analisis penuh."
+        )
     return ringkas
 
 
-def cek_harga(db: Session, hex_id: str) -> dict[str, Any]:
+def cek_harga(db: Session, hex_id: str, pengguna=None) -> dict[str, Any]:
     """PriceLens satu heksagon: sewa per m², belanja per jam, dan rentang wajarnya."""
+    # Penjaga yang sama dengan endpoint-nya. Alat AI bukan pintu belakang:
+    # kalau kartu harganya berbayar lewat HTTP, ia berbayar lewat sini juga.
+    wajib_akses_penuh(db, pengguna, hex_id, "Kartu harga PriceLens")
     return pricelens.kartu_harga(db, ambil_hex(db, hex_id)).model_dump()
 
 
-def pola_jam(db: Session, hex_id: str) -> dict[str, Any]:
+def pola_jam(db: Session, hex_id: str, pengguna=None) -> dict[str, Any]:
     """Commuter Clock satu heksagon, termasuk pembagian captive dan choice rider."""
-    ck = commuter_clock(hex_id, db)
+    ck = commuter_clock(hex_id, db, pengguna=pengguna)
     # Delapan belas baris penuh terlalu boros untuk konteks model. Yang dikirim
     # hanya jam yang benar-benar berisi, plus ringkasannya.
     return {
@@ -255,7 +286,9 @@ REGISTRI = {
 NAMA_FRONTEND = {"flyTo", "highlight", "setLayer", "filter"}
 
 
-def panggil_fungsi(db: Session, nama: str, argumen: dict[str, Any]) -> Any:
+def panggil_fungsi(
+    db: Session, nama: str, argumen: dict[str, Any], pengguna=None
+) -> Any:
     """Titik masuk tunggal untuk seluruh function call dari LLM.
 
     Validasi di sini bukan formalitas: argumen datang dari keluaran model bahasa,
@@ -272,6 +305,12 @@ def panggil_fungsi(db: Session, nama: str, argumen: dict[str, Any]) -> Any:
             f"Fungsi '{nama}' tidak tersedia.", {"tersedia": sorted(REGISTRI)}
         )
     bersih = {k: v for k, v in argumen.items() if v is not None}
+    # `pengguna` TIDAK pernah datang dari model - model tidak tahu siapa yang
+    # bertanya dan tidak boleh bisa berpura-pura jadi siapa pun. Ia disuntik
+    # dari endpoint /ai/tanya, hanya ke alat yang memang menerimanya.
+    bersih.pop("pengguna", None)
+    if "pengguna" in inspect.signature(fungsi).parameters:
+        bersih["pengguna"] = pengguna
     return fungsi(db, **bersih)
 
 
@@ -543,6 +582,7 @@ def tanya(
     permintaan: PermintaanAI,
     db: Annotated[Session, Depends(get_db)],
     request: Request = None,  # type: ignore[assignment]
+    pengguna: PenggunaOpsional = None,
 ) -> JawabanAI:
     """Alur lengkap satu pertanyaan.
 
@@ -636,7 +676,7 @@ def tanya(
 
             # --- Alat backend: dijalankan, hasilnya kembali ke model ---
             try:
-                hasil = panggil_fungsi(db, blok.name, argumen)
+                hasil = panggil_fungsi(db, blok.name, argumen, pengguna=pengguna)
             except (KesalahanAPI, ValueError, KeyError, TypeError) as e:
                 pesan_galat = getattr(e, "pesan", None) or str(e)
                 log.warning("Alat %s gagal: %s", blok.name, pesan_galat)

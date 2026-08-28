@@ -24,7 +24,7 @@ import { LAYER, type NamaLayer } from '../config'
 import { api } from '../lib/api'
 import type { AksiPeta, JawabanAI, PesanRiwayat, StatusAI } from '../types'
 import type { KendaliPeta, Kriteria } from './PetaInteraktif'
-import { Badge } from './primitif'
+import { Badge, Markdown } from './primitif'
 
 interface Pesan {
   peran: 'pengguna' | 'asisten'
@@ -71,11 +71,21 @@ const CONTOH = [
 export default function PanelAI({
   kendali,
   hexTerpilih,
+  layerAktif,
   terbuka,
   onLipat,
 }: {
   kendali: KendaliPeta
   hexTerpilih: string | null
+  /**
+   * Layer yang sedang tampil, diteruskan ke model sebagai konteks.
+   *
+   * Prompt sistem menyuruh asisten mengganti layer sesuai pertanyaan
+   * ("soal harga -> pricelens"). Tanpa tahu layer mana yang SEDANG aktif, ia
+   * memanggil setLayer untuk layer yang sudah terpasang - peta tidak bergerak,
+   * dan aksi peta yang dijanjikan ketentuan C.2 jadi tidak terlihat.
+   */
+  layerAktif: NamaLayer
   terbuka: boolean
   onLipat: () => void
 }) {
@@ -139,7 +149,12 @@ export default function PanelAI({
         .slice(-20)
         .map((m) => ({ peran: m.peran, teks: m.teks }))
 
-      const jawaban = await api.tanyaAI({ pertanyaan, riwayat, hex_terpilih: hexTerpilih })
+      const jawaban = await api.tanyaAI({
+        pertanyaan,
+        riwayat,
+        hex_terpilih: hexTerpilih,
+        layer_aktif: layerAktif,
+      })
       jawaban.aksi_peta.forEach(jalankanAksi)
       setPesan((s) => [...s, { peran: 'asisten', teks: jawaban.teks, jawaban }])
     } catch (e) {
@@ -153,14 +168,14 @@ export default function PanelAI({
   const mati = status !== null && !status.siap
 
   return (
-    <div className="flex h-full flex-col bg-surface">
-      {/* Bilah judul merangkap tombol lipat. Panel ini bagian wajib dan tidak
-          pernah hilang dari layar, tetapi tidak selalu perlu menghabiskan 19rem -
-          kartu detail heksagon punya tujuh bagian dan butuh ruangnya. */}
+    <div className="flex h-full flex-col">
+      {/* Bilah judul merangkap tombol tutup. Sejak panel ini punya tombol
+          melayang sendiri, ia tidak lagi ikut mengantre ruang vertikal dengan
+          daftar lokasi - dan daftar itu langsung dapat kembali 18rem. */}
       <button
         onClick={onLipat}
         aria-expanded={terbuka}
-        className="flex w-full shrink-0 cursor-pointer items-center justify-between gap-2 border-b border-line px-4 py-2 text-left transition-colors hover:bg-surface-2"
+        className="flex w-full shrink-0 cursor-pointer items-center justify-between gap-2 border-b border-line/70 px-4 py-3 text-left transition-colors hover:bg-surface-2/60"
       >
         <span className="flex items-center gap-1.5">
           <svg
@@ -175,7 +190,7 @@ export default function PanelAI({
           <span className="eyebrow">Konsultan AI</span>
         </span>
         <span
-          className="flex items-center gap-1.5 text-[10px] text-ink-3"
+          className="flex items-center gap-1.5 text-[12px] text-ink-3"
           title={
             status?.siap
               ? `${status.model} · ${status.n_alat_backend} alat data, ${status.n_alat_peta} aksi peta`
@@ -198,11 +213,11 @@ export default function PanelAI({
       <div className="scroll-tipis flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {pesan.length === 0 && (
           <div>
-            <p className="mb-2.5 text-[12.5px] leading-snug text-ink-2">
+            <p className="mb-2.5 text-[14.5px] leading-snug text-ink-2">
               Tanyakan apa saja tentang lokasi. Jawabannya sekaligus menggerakkan peta.
             </p>
             {mati && (
-              <p className="mb-2.5 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[11.5px] leading-snug text-ink-2">
+              <p className="mb-2.5 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[13.5px] leading-snug text-ink-2">
                 Asisten belum aktif — {status?.pesan}. Delapan alat datanya sudah
                 siap dipanggil; yang kurang hanya kuncinya.
               </p>
@@ -213,7 +228,7 @@ export default function PanelAI({
                   key={c}
                   onClick={() => kirim(c)}
                   disabled={mati}
-                  className="block w-full cursor-pointer rounded-sm border border-line px-2.5 py-2 text-left text-[11.5px] leading-snug text-ink-2 transition-colors hover:border-line-2 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="block w-full cursor-pointer rounded-sm border border-line px-2.5 py-2 text-left text-[13.5px] leading-snug text-ink-2 transition-colors hover:border-line-2 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {c}
                 </button>
@@ -225,26 +240,27 @@ export default function PanelAI({
         {pesan.map((m, i) => (
           <div key={i} className={m.peran === 'pengguna' ? 'flex justify-end' : ''}>
             {m.peran === 'pengguna' ? (
-              <p className="max-w-[85%] rounded-md rounded-br-xs bg-ink px-2.5 py-1.5 text-[12.5px] leading-snug text-surface">
+              <p className="max-w-[85%] rounded-md rounded-br-xs bg-ink px-3.5 py-2 text-[14.5px] leading-snug text-surface">
                 {m.teks}
               </p>
             ) : (
-              <div className="max-w-[92%]">
-                <p className="whitespace-pre-line text-[12.5px] leading-relaxed text-ink">
-                  {m.teks}
-                </p>
+              <div className="max-w-[94%] text-[14.5px] text-ink">
+                {/* Jawaban model dirender sebagai Markdown, bukan teks polos.
+                    Prompt A1-A4 memang meminta daftar bernomor dan tebal, dan
+                    sampai sekarang tanda bintangnya tampil apa adanya di layar. */}
+                <Markdown teks={m.teks} />
 
                 {/* Jejak: alat apa yang benar-benar dipanggil. Ditampilkan,
                     bukan disembunyikan — inilah yang membuat prosesnya bisa
                     diperiksa alih-alih hanya terdengar meyakinkan. */}
                 {m.jawaban && m.jawaban.jejak.length > 0 && (
                   <details className="mt-1.5">
-                    <summary className="cursor-pointer list-none text-[10.5px] text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-ink-2">
+                    <summary className="cursor-pointer list-none text-[12.5px] text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-ink-2">
                       {m.jawaban.jejak.length} langkah dijalankan
                     </summary>
                     <ol className="mt-1 space-y-0.5 border-l border-line pl-2.5">
                       {m.jawaban.jejak.map((j, k) => (
-                        <li key={k} className="text-[10.5px] leading-snug text-ink-3">
+                        <li key={k} className="text-[12.5px] leading-snug text-ink-3">
                           <span className="text-ink-2">{NAMA_ALAT[j.fungsi] ?? j.fungsi}</span>
                           {' — '}
                           {j.ringkas_hasil}
@@ -259,7 +275,7 @@ export default function PanelAI({
                     <p className="eyebrow mb-1">Sumber angka</p>
                     <ul className="space-y-0.5">
                       {m.jawaban.sumber_angka.slice(0, 5).map((f) => (
-                        <li key={f.kode_variabel} className="text-[10.5px] text-ink-2">
+                        <li key={f.kode_variabel} className="text-[12.5px] text-ink-2">
                           <span className="font-mono">{f.kode_variabel}</span>
                           {f.persentil !== null && (
                             <span className="text-ink-3">
@@ -284,7 +300,7 @@ export default function PanelAI({
         ))}
 
         {memuat && (
-          <p className="flex items-center gap-1.5 text-[12px] text-ink-3" aria-live="polite">
+          <p className="flex items-center gap-1.5 text-[14px] text-ink-3" aria-live="polite">
             <span className="h-1 w-1 animate-pulse rounded-full bg-ink-3" aria-hidden />
             Menganalisis…
           </p>
@@ -313,12 +329,12 @@ export default function PanelAI({
             placeholder={
               hexTerpilih ? 'Tanya soal heksagon terpilih…' : 'Tanya soal lokasi…'
             }
-            className="min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[12.5px] outline-none transition-colors placeholder:text-ink-3 focus:border-ink-3 focus:bg-surface disabled:opacity-45"
+            className="min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[14.5px] outline-none transition-colors placeholder:text-ink-3 focus:border-ink-3 focus:bg-surface disabled:opacity-45"
           />
           <button
             type="submit"
             disabled={memuat || mati || !input.trim()}
-            className="cursor-pointer rounded-sm bg-ink px-3 py-2 text-[12px] font-semibold text-surface transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-30"
+            className="cursor-pointer rounded-sm bg-ink px-3 py-2 text-[14px] font-semibold text-surface transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-30"
           >
             Kirim
           </button>

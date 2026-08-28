@@ -17,7 +17,7 @@
                                        ▼
                         ┌─────────────────────────────┐
                         │  backend/  FastAPI          │
-                        │  5 modul · tidak menghitung │
+                        │  7 modul · tidak menghitung │
                         └──────────────┬──────────────┘
                                        │ JSON / GeoJSON
                                        ▼
@@ -69,7 +69,7 @@ optimizeDeps: { exclude: ['maplibre-gl'] }
 Setelah mengubahnya, `node_modules/.vite` harus dihapus — cache lama tetap
 dipakai kalau tidak.
 
-## Backend: modular monolith, enam modul
+## Backend: modular monolith, tujuh modul
 
 ```
 backend/app/
@@ -83,19 +83,26 @@ backend/app/
 │   ├── galat.py     amplop galat seragam + request id
 │   ├── cache.py     cache dalam proses ber-TTL
 │   ├── batas.py     pembatas laju + plafon biaya AI
-│   └── llm.py       sambungan penyedia model bahasa
+│   ├── llm.py       sambungan penyedia model bahasa
+│   ├── akun.py      sidik sandi, tiket sesi, tingkat, penjaga fitur berbayar
+│   └── simulasi.py  aritmetika skenario usaha — BUKAN skor, tidak pernah disimpan
 └── api/
     ├── bersama.py   lintas modul: badge, ZoneGuard, persentil, validasi
     ├── meta.py      /health · /meta/siap · /meta/kawasan · /meta/cache/bersihkan
-    ├── hex.py       /hex/layer · /hex/{h3} · /hex/{h3}/commuter-clock
+    ├── hex.py       /hex/layer · /hex/{h3} · commuter-clock · simulasi ·
+    │                simpul-terdekat
     ├── pricelens.py /pricelens/layer · /pricelens/ringkasan · /pricelens/{h3}
     ├── transit.py   /transit/nodes · /transit/simpul/{id} · /transit/catchment
     ├── skor.py      /skor/ranking · hidden-gems · risk-radar · kuadran ·
-    │                zoneguard · versi · banding-versi
-    └── ai.py        /ai/fungsi · /ai/status · /ai/tanya
+    │                zoneguard · versi · banding-versi · komparasi · riwayat ·
+    │                dinamika · rekomendasi
+    ├── ai.py        /ai/fungsi · /ai/status · /ai/tanya
+    └── akun.py      /akun/daftar · masuk · saya · preferensi · paket · langganan ·
+                     token · buka · pantauan · laporan · laporan-komparasi
 ```
 
-Dua puluh sembilan rute. Daftar lengkapnya di `/docs` saat dijalankan lokal.
+Empat puluh enam rute di tujuh router; `bersama.py` sengaja tidak punya router.
+Daftar lengkapnya di `/docs` saat dijalankan lokal.
 
 `bersama.py` ada karena `skor.py` sempat mengimpor `badge()` dari `hex.py`. Pola
 itu berubah jadi impor melingkar begitu modul bertambah; sekarang modul API hanya
@@ -106,10 +113,10 @@ status zona, penjelasan kuadran. Semuanya bisa digeser tanpa mengubah satu pun
 peringkat, dan itu pembeda yang penting: kalau sebuah angka mengubah peringkat,
 ia bukan aturan tampilan dan tempatnya bukan di sana.
 
-### Kenapa bukan tujuh modul
+### Kenapa tidak ada modul lokasi usaha, kompetitor, dan properti
 
-Awalnya masuk akal membuat modul terpisah untuk "lokasi usaha", "kompetitor", dan
-"properti" — ketiganya domain yang berbeda.
+Awalnya masuk akal membuat modul terpisah untuk ketiganya — ketiganya domain
+yang berbeda.
 
 Tapi ketentuan B.7 melarang mengekspos data misi MAPID mentah. Kalau ketiganya
 punya endpoint sendiri, endpoint itu tidak punya apa-apa untuk dikirim selain
@@ -240,10 +247,21 @@ dengan mengubah migrasi yang sudah diterapkan.
 ### Verifikasi terakhir terhadap basis data langsung
 
 ```
-hex_features total kolom: 48
-  variabel analisis     : 41
+hex_features total kolom: 50
+  variabel analisis     : 43
   penanda kualitas      : 3  (n_titik_misi, tingkat_keyakinan, data_source)
+  sisanya               : 4  (h3_index, kawasan, geom, diperbarui_pada)
+
+location_scores       : 708 baris   hex_hourly_profiles : 7.186 baris
+score_factors         : 9.912 baris (14 variabel berbobot x 708 heksagon)
 ```
+
+`score_factors` sempat kosong berbulan-bulan tanpa terlihat sebagai galat:
+`/hex/{h3}` tetap menjawab 200, hanya dengan `faktor: []`. Yang diisi
+`s7_publish.muat_faktor()` sekarang adalah dua janji sekaligus — panel "Kenapa
+skornya segitu" dan `sumber_angka` yang membuat setiap angka jawaban AI bisa
+ditelusuri. Jumlah kontribusi satu indeks selalu sama dengan nilai indeksnya;
+itu ditegakkan `test_s6_score.py::test_faktor_menjumlah_jadi_indeksnya`.
 
 ## Deployment
 

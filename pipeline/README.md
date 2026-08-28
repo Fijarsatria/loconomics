@@ -57,12 +57,12 @@ python -m pytest test_s6_score.py test_s4_spatial.py test_s7_publish.py -v
 | Berkas | Status |
 |---|---|
 | `config.py` | **Siap.** Kecuali `KOLOM_*_GO` — masih kosong, menunggu CSV asli |
-| `s6_score.py` | **Siap & teruji.** 11/11 uji lolos, sensitivitas ρ 0,97–0,99 |
+| `s6_score.py` | **Siap & teruji.** 14/14 uji lolos, sensitivitas ρ 0,97–0,99 |
 | `s4_spatial.py` — Commuter Clock & PriceLens | **Siap & teruji.** `profil_jam()`, `belanja_per_jam()`, `harga_sewa_per_m2()`, 13/13 uji |
 | `test_s6_score.py`, `test_s4_spatial.py` | **Siap.** |
 | `prompts/a1`–`a4` | **Siap.** Prompt produksi, sudah cocok dengan skema Pydantic di `s3_extract.py` |
 | `s2_clean.py` | Sebagian — aturan 9.1–9.6 tertulis, `bersihkan_koordinat()` sudah jalan |
-| `s7_publish.py` | **Siap & teruji.** Muat ke basis data + ekspor GeoJSON statis, 15/15 uji |
+| `s7_publish.py` | **Siap & teruji.** Muat skor, rincian faktor, profil jam, dan variabel ke basis data + ekspor GeoJSON statis, 15/15 uji |
 | `s1`, `s3`, `s5`, sisa `s4` | Kerangka. Badan fungsi sengaja `NotImplementedError` dengan alasan lengkap di docstring |
 
 Kerangka itu bukan TODO kosong. Setiap docstring berisi keputusan yang sudah

@@ -28,7 +28,7 @@ sehingga tidak hanya merekomendasikan, tetapi juga melindungi.
 ```
 pipeline/    Python s1→s7 — dari survei lapangan sampai ke basis data
              Satu-satunya tempat skor dihitung
-backend/     FastAPI — 6 modul + tests/. Membaca basis data, tidak menghitung
+backend/     FastAPI — 7 modul + tests/. Membaca basis data, tidak menghitung
 frontend/    React + Vite + MapLibre GL — peta, insight, AI dalam satu layar
 docs/        7 dokumen. Menjelaskan kenapa, bukan bagaimana
 CLAUDE.md    Panduan untuk sesi AI berikutnya
@@ -98,12 +98,12 @@ frontend. Petanya bergerak sendiri.
 | Bagian | Status |
 |---|---|
 | Skema basis data (43 variabel + 3 penanda + profil jam) | Selesai, migrasi diterapkan |
-| Backend — 6 modul, 29 rute | Selesai, 162 asersi lolos |
+| Backend — 7 modul, 46 rute | Selesai, 219 asersi lolos |
 | Ketahanan produksi | Amplop galat, cache, pembatas laju, plafon biaya AI, GZip |
 | Jembatan pipeline → basis data (`s7_publish`) | Selesai, termasuk ekspor GeoJSON statis |
 | PriceLens · Commuter Clock · ZoneGuard · RiskRadar · GemFinder | Selesai di backend |
 | AI Consultant — 12 alat, loop agentik | Selesai. Butuh `LLM_API_KEY` untuk aktif |
-| Mesin skoring | Selesai — 11/11 uji lolos, sensitivitas ρ 0,97–0,99 |
+| Mesin skoring | Selesai — 14/14 uji lolos, sensitivitas ρ 0,97–0,99 |
 | Prompt AI A1–A4 | Selesai |
 | Frontend (3 bagian wajib) | Sistem visual + Kompas Kuadran + daftar + 3 grafik. Belum pernah dilihat render |
 | Data demo | 708 heksagon lewat pipeline sungguhan (`pipeline/demo_seed.py`) |

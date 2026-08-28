@@ -35,6 +35,11 @@ MODA = ["KRL", "MRT", "LRT", "BRT", "TERMINAL"]
 # Delapan kelas induk. Satu POI hanya boleh masuk SATU kelas, kalau tidak
 # kepadatan kompetitor terhitung dobel dan indeks IKP jadi salah.
 
+#: Dua dari delapan kelas induk yang dihitung sebagai kuliner untuk C04.
+#: Didefinisikan di sini, bukan ditulis {"F1","F2"} di tempat pemakaiannya,
+#: supaya menambah kelas kuliner ketiga tidak menuntut ingatan siapa pun.
+KELAS_KULINER = ("F1", "F2")
+
 KELAS_INDUK = {
     "F1": "Kuliner Duduk",
     "F2": "Kuliner Cepat/Informal",
@@ -47,19 +52,262 @@ KELAS_INDUK = {
 }
 
 
+# --- Tag OpenStreetMap -> kelas induk --------------------------------------
+# Satu POI hanya boleh menghasilkan SATU kelas. OSM tidak menjamin itu: sebuah
+# titik bisa membawa `amenity=restaurant` dan `shop=deli` sekaligus. Karena itu
+# ada urutan kunci - yang lebih menentukan fungsi utamanya menang, dan sisanya
+# diabaikan. Tanpa urutan yang tetap, hasil klasifikasi bergantung pada urutan
+# iterasi dict dan berubah-ubah antar-jalan tanpa sebab yang terlihat.
+URUTAN_TAG_OSM = ("amenity", "shop", "healthcare", "office", "craft", "leisure")
+
+OSM_KE_KELAS: dict[tuple[str, str], str] = {
+    # F1 - Kuliner Duduk
+    ("amenity", "restaurant"): "F1",
+    ("amenity", "cafe"): "F1",
+    ("amenity", "bar"): "F1",
+    ("amenity", "pub"): "F1",
+    ("amenity", "food_court"): "F1",
+    # F2 - Kuliner Cepat/Informal
+    ("amenity", "fast_food"): "F2",
+    ("amenity", "ice_cream"): "F2",
+    ("shop", "bakery"): "F2",
+    ("shop", "pastry"): "F2",
+    ("shop", "confectionery"): "F2",
+    ("shop", "coffee"): "F2",
+    # R1 - Ritel Kebutuhan Harian
+    ("shop", "convenience"): "R1",
+    ("shop", "supermarket"): "R1",
+    ("shop", "greengrocer"): "R1",
+    ("shop", "butcher"): "R1",
+    ("shop", "seafood"): "R1",
+    ("shop", "beverages"): "R1",
+    ("shop", "alcohol"): "R1",
+    ("shop", "kiosk"): "R1",
+    ("shop", "general"): "R1",
+    ("shop", "grocery"): "R1",
+    ("shop", "deli"): "R1",
+    ("shop", "frozen_food"): "R1",
+    ("amenity", "marketplace"): "R1",
+    # R2 - Ritel Non-Pangan
+    ("shop", "clothes"): "R2",
+    ("shop", "shoes"): "R2",
+    ("shop", "bag"): "R2",
+    ("shop", "jewelry"): "R2",
+    ("shop", "electronics"): "R2",
+    ("shop", "mobile_phone"): "R2",
+    ("shop", "computer"): "R2",
+    ("shop", "furniture"): "R2",
+    ("shop", "hardware"): "R2",
+    ("shop", "doityourself"): "R2",
+    ("shop", "books"): "R2",
+    ("shop", "stationery"): "R2",
+    ("shop", "sports"): "R2",
+    ("shop", "toys"): "R2",
+    ("shop", "florist"): "R2",
+    ("shop", "gift"): "R2",
+    ("shop", "variety_store"): "R2",
+    ("shop", "department_store"): "R2",
+    ("shop", "cosmetics"): "R2",
+    ("shop", "pet"): "R2",
+    ("shop", "photo"): "R2",
+    ("shop", "watches"): "R2",
+    ("shop", "fabric"): "R2",
+    ("shop", "houseware"): "R2",
+    # S1 - Jasa Personal
+    ("shop", "hairdresser"): "S1",
+    ("shop", "beauty"): "S1",
+    ("shop", "massage"): "S1",
+    ("shop", "laundry"): "S1",
+    ("shop", "dry_cleaning"): "S1",
+    ("shop", "tailor"): "S1",
+    ("shop", "copyshop"): "S1",
+    ("shop", "travel_agency"): "S1",
+    ("leisure", "fitness_centre"): "S1",
+    # S2 - Kesehatan
+    ("amenity", "pharmacy"): "S2",
+    ("amenity", "clinic"): "S2",
+    ("amenity", "doctors"): "S2",
+    ("amenity", "dentist"): "S2",
+    ("amenity", "hospital"): "S2",
+    ("amenity", "veterinary"): "S2",
+    ("shop", "chemist"): "S2",
+    ("shop", "optician"): "S2",
+    ("shop", "medical_supply"): "S2",
+    ("shop", "herbalist"): "S2",
+    # K1 - Keuangan
+    ("amenity", "bank"): "K1",
+    ("amenity", "atm"): "K1",
+    ("amenity", "bureau_de_change"): "K1",
+    ("office", "financial"): "K1",
+    ("office", "insurance"): "K1",
+    # T1 - Transportasi
+    ("amenity", "fuel"): "T1",
+    ("amenity", "car_rental"): "T1",
+    ("amenity", "car_wash"): "T1",
+    ("amenity", "driving_school"): "T1",
+    ("shop", "car"): "T1",
+    ("shop", "car_repair"): "T1",
+    ("shop", "car_parts"): "T1",
+    ("shop", "motorcycle"): "T1",
+    ("shop", "motorcycle_repair"): "T1",
+    ("shop", "bicycle"): "T1",
+    ("shop", "tyres"): "T1",
+}
+
+#: `healthcare=*` apa pun nilainya masuk S2, dan `craft=*` masuk S1. Keduanya
+#: tag terbuka - nilainya tidak terbatas, jadi memetakannya satu per satu akan
+#: selalu ketinggalan. Kelas induknya sudah pasti sekalipun nilainya belum.
+KUNCI_OSM_TERBUKA = {"healthcare": "S2", "craft": "S1"}
+
+#: Perkantoran TIDAK punya kelas induk, dan itu disengaja. Delapan kelas induk
+#: adalah kelas KOMPETITOR - usaha yang memperebutkan pembeli yang sama. Sebuah
+#: kantor notaris bukan pesaing warung; ia justru pemasok pembelinya. Karena itu
+#: `office=*` hanya mengisi D08 kepadatan_kantor, kecuali dua nilai yang memang
+#: melayani pelanggan langsung dan sudah terdaftar di K1 di atas.
+
+
+def kelas_dari_tag(tag: dict[str, str]) -> tuple[str, str] | None:
+    """Tentukan kelas induk satu POI OSM. None kalau ia bukan usaha.
+
+    Mengembalikan (kelas_induk, kategori_asli). `kategori_asli` WAJIB disimpan
+    ke `business_pois.kategori_asli` - tanpa itu tidak ada cara memeriksa ulang
+    apakah sebuah POI dikelompokkan dengan benar, dan seluruh indeks kompetisi
+    jadi angka yang harus dipercaya begitu saja.
+    """
+    for kunci in URUTAN_TAG_OSM:
+        nilai = tag.get(kunci)
+        if not nilai:
+            continue
+        kelas = OSM_KE_KELAS.get((kunci, nilai))
+        if kelas:
+            return kelas, f"{kunci}={nilai}"
+        terbuka = KUNCI_OSM_TERBUKA.get(kunci)
+        if terbuka:
+            return terbuka, f"{kunci}={nilai}"
+    return None
+
+
+#: Penanda waralaba (C05). OSM memakai `brand` atau `brand:wikidata` untuk merek
+#: yang punya identitas nasional. Ini proksi yang jujur arahnya tetapi tidak
+#: lengkap: warung yang sebenarnya bagian dari jaringan lokal jarang diberi tag
+#: `brand`, jadi pangsa waralaba dari OSM adalah BATAS BAWAH.
+def is_waralaba(tag: dict[str, str]) -> bool:
+    return bool(tag.get("brand") or tag.get("brand:wikidata") or tag.get("operator:wikidata"))
+
+
 # --- Pemetaan nama kolom CSV misi MAPID ------------------------------------
-# WAJIB diverifikasi terhadap berkas CSV asli SEBELUM skrip apa pun dijalankan.
-# Nama kolom di CSV asli sering berbeda dari yang tertulis di PDF ketentuan:
-# ada spasi tambahan, kapitalisasi berbeda, atau disingkat. Satu jam mencocokkan
-# di awal menghemat berjam-jam debugging.
+# Status: DIVERIFIKASI 25 Agustus 2026 terhadap dataset sampel resmi MAPID
+# (mapid.co.id/SampleMenuGo, /SampleStrukGo, /SamplePropertiGo,
+# /SampleActivityMAPIDAPPS). Berkasnya ada di data/01_mentah/, tidak di-commit.
 #
-# Status: BELUM DIVERIFIKASI - dataset sampel belum diunduh.
+# Peringatan yang ternyata benar. Nama kolom asli MEMANG berbeda dari PDF
+# ketentuan, dan bedanya bukan sepele:
+#
+#   Properti Go  nama kolomnya TERPOTONG 10 karakter - batas nama field DBF,
+#                karena CSV-nya diekspor berdampingan dengan shapefile.
+#                "Kategori Properti" jadi "Kategori P", "Foto Spanduk/Papan
+#                Promosi" jadi "Foto Spand". Dan " Tanggal" BERSPASI DI DEPAN.
+#   Struk Go     20 kolom, bukan 8. Tujuh di antaranya bertanda "(Lama)" -
+#                sisa skema lama, dan pada sampel SELURUHNYA kosong.
+#   Menu Go      "Nama Tempat Makan", tanpa garis miring seperti di PDF.
+#
+# Kedua bentuk didaftarkan sekaligus - yang terpotong DAN yang utuh. Ekspor
+# shapefile memberi yang terpotong; API MAPID kemungkinan besar memberi yang
+# utuh, dan kita belum bisa memastikannya sampai kuncinya ada. Memetakan
+# keduanya ke satu nama internal membuat kedua jalur bekerja tanpa cabang.
 
 KOLOM_MENU_GO: dict[str, str] = {
-    # "nama_kolom_di_csv": "nama_internal"
+    "Nama Tempat Makan": "nama",
+    "Nama Tempat/Makan": "nama",  # bentuk di PDF ketentuan
+    "Jenis Tempat Makan": "jenis_tempat",
+    "Tanggal": "tanggal",
+    "Waktu": "waktu",
+    "Foto Tempat": "foto_tempat",
+    "Foto Menu 1 (Foto Menu Utama)": "foto_menu_1",
+    "Foto Menu 2 (Foto Menu Lainnya)": "foto_menu_2",
+    "Menu Dalam Bentuk Link Digital": "menu_digital",
+    "Apa Menu Utama/Andalan Yang Dijual?": "menu_utama",
+    "Berapa Harga Rata-rata Menu Tersebut (Per porsi)?": "harga_porsi",
+    "Bagaimana Kondisi Pembeli Saat Kunjungan Dilakukan?": "kondisi_pembeli",
+    "Apakah Berjualan Dengan Berkeliling (Mobilitas)?": "keliling",
+    "Latitude": "lat",
+    "Longitude": "lon",
 }
-KOLOM_STRUK_GO: dict[str, str] = {}
-KOLOM_PROPERTI_GO: dict[str, str] = {}
+
+KOLOM_STRUK_GO: dict[str, str] = {
+    "Nama Tempat/Merchant": "nama",
+    "Kategori Tempat": "kategori",
+    "Tanggal Transaksi": "tanggal",
+    "Waktu Transaksi": "waktu",
+    "Metode Pembayaran": "metode_bayar",
+    "Foto Struk/Bukti bayar": "foto_struk",
+    "Foto Struk/Bukti Bayar": "foto_struk",  # kapitalisasi di PDF ketentuan
+    "Kontributor": "kontributor",
+    "ID data": "id_mapid",
+    "Latitude": "lat",
+    "Longitude": "lon",
+}
+
+KOLOM_PROPERTI_GO: dict[str, str] = {
+    "Kategori P": "kategori",
+    "Kategori Properti": "kategori",
+    "Jenis Prop": "jenis",
+    "Jenis Properti": "jenis",
+    " Tanggal": "tanggal",  # spasi di depan memang ada di berkasnya
+    "Tanggal": "tanggal",
+    "Alamat": "alamat",
+    "Foto Tampa": "foto_depan",
+    "Foto Tampak Depan": "foto_depan",
+    "Foto Spand": "foto_spanduk",
+    "Foto Spanduk/Papan Promosi": "foto_spanduk",
+    "Latitude": "lat",
+    "Longitude": "lon",
+}
+
+KOLOM_ACTIVITY: dict[str, str] = {
+    "title": "judul",
+    "description": "deskripsi",
+    "latitude": "lat",
+    "longitude": "lon",
+    "images": "gambar",
+    "videos": "video",
+    "medias": "media",
+    "medias_all": "media_semua",
+}
+
+
+# --- Normalisasi nilai kategorikal misi ------------------------------------
+# Nilai di lapangan juga tidak sama dengan yang tertulis di PDF, dan yang ini
+# lebih berbahaya daripada nama kolom: nama kolom yang salah menghasilkan
+# KeyError yang langsung terlihat, sedangkan nilai yang tidak dikenali diam-diam
+# jatuh ke "tidak cocok" dan barisnya hilang dari agregasi tanpa satu pun galat.
+#
+# Ketiganya diverifikasi dari sampel yang sama:
+#   - Properti Go menulis "Disewa"/"Dijual", bukan "Sewa"/"Jual"
+#   - Menu Go menjawab dengan kalimat panjang berkurung, bukan satu kata
+#   - satu nilai mobilitas berspasi di depan
+
+NILAI_JENIS_PROPERTI = {"disewa": "sewa", "sewa": "sewa", "dijual": "jual", "jual": "jual"}
+
+#: Dipakai menghitung D10 skor_ramai_terkoreksi. Skalanya ordinal, dan angkanya
+#: sengaja 0/0,5/1 supaya sudah berada di skala ternormalisasi yang dipakai s6.
+NILAI_KONDISI_PEMBELI = {"sepi": 0.0, "sedang": 0.5, "ramai": 1.0}
+
+#: C07 rasio_keliling. True berarti pedagang berkeliling.
+NILAI_MOBILITAS = {"ya": True, "tidak": False}
+
+
+def kunci_nilai(teks: str | None) -> str:
+    """Ambil kata pertama sebuah jawaban dropdown, dalam huruf kecil.
+
+    "Ramai (Terdapat antrean lebih dari 3 orang / kursi atau meja mayoritas
+    penuh terisi)" -> "ramai". " Tidak (Menetap/Mangkal di satu titik)" ->
+    "tidak". Bentuk panjangnya bisa saja diubah panitia kapan saja; kata
+    pertamanya jauh lebih stabil, dan itulah yang membawa artinya.
+    """
+    if not teks:
+        return ""
+    return teks.strip().split("(")[0].strip().split()[0].lower() if teks.strip() else ""
 
 
 # --- Ambang pembersihan data (docs/data.md bagian 9) -----------------------
@@ -166,6 +414,56 @@ def tingkat_keyakinan(n_titik_misi: int) -> str:
 # --- Bobot skoring (docs/skoring.md) ---------------------------------------
 # Bobot ini yang divariasikan +-0,10 saat uji sensitivitas. Target: korelasi
 # peringkat Spearman terhadap baseline tetap di atas 0,85.
+
+# --- Bobot moda rute untuk D05 `skor_simpul` -------------------------------
+# D05 ditandai TURUNAN di docs/data.md - ia memang dihitung, bukan diukur. Yang
+# dihitung: berapa banyak RUTE berbeda yang berhenti di heksagon itu, masing
+# masing ditimbang menurut berapa banyak orang yang bisa dibawanya.
+#
+# Angkanya kasar dan memang tidak bisa presisi, tetapi urutannya bisa
+# dipertanggungjawabkan dan itu yang menentukan peringkat: satu rangkaian KRL
+# 12 gerbang membawa ~2.000 orang sekali jalan, satu bus gandeng Transjakarta
+# ~150, satu angkot ~12. Rasio 10 : 3 : 1 mengikuti akar dari perbandingan itu,
+# bukan perbandingannya mentah-mentah - memakai 160 : 12 : 1 akan membuat satu
+# stasiun menenggelamkan seluruh jaringan bus di sekitarnya, dan yang kita ukur
+# "seberapa penting simpul ini", bukan "berapa kursi yang lewat".
+#
+# `norm()` di s6 min-max, jadi yang berpengaruh pada skor hanya PERBANDINGAN
+# antar-bobot, bukan besarnya.
+BOBOT_RUTE = {
+    "train": 10.0,
+    "subway": 10.0,
+    "light_rail": 8.0,
+    "monorail": 8.0,
+    "tram": 5.0,
+    "brt": 3.0,          # Transjakarta koridor - lajur khusus, bukan bus biasa
+    # Kereta ANTARKOTA. Terukur 27 Agu 2026: OSM memuat 46 lin `network=KAI`
+    # (Argo Bromo Anggrek, Bima, Brantas...) melawan 4 lin `KAI Commuter`
+    # (A, B, C, R). Ditimbang sama, 46 kereta yang lewat satu-dua kali sehari
+    # menenggelamkan 4 lin yang mengangkut ratusan ribu orang setiap hari -
+    # dan Stasiun Bekasi jadi berskor tiga kali Dukuh Atas. Yang diukur D05
+    # keramaian harian, bukan panjang papan jadwal.
+    "antarkota": 1.5,
+    "bus": 1.0,
+    "trolleybus": 1.0,
+    "minibus": 0.7,      # angkot / mikrolet
+    "share_taxi": 0.7,
+    "ferry": 1.0,
+}
+
+#: Penanda jaringan KOMUTER di dalam `route=train`. Yang TIDAK memuatnya
+#: diperlakukan antarkota. Dicocokkan menurut kata, bukan daftar nama jaringan
+#: yang ditulis tangan: "KAI Commuter" hari ini, dan penamaan operator di OSM
+#: berubah lebih sering daripada layanannya.
+JARINGAN_KOMUTER = ("commuter", "krl")
+
+#: Jaringan yang diperlakukan BRT walau OSM menandainya `route=bus`.
+#: Transjakarta punya lajur terpisah dan kapasitas jauh di atas bus kota;
+#: menyamakannya dengan angkot membuat koridor busway tidak terlihat sama
+#: sekali di D05, padahal di Tanah Abang dan Dukuh Atas justru itu tulang
+#: punggungnya.
+JARINGAN_BRT = ("transjakarta", "trans jakarta", "brt")
+
 
 BOBOT_IPT = {"D05": 0.40, "D06": 0.35, "D04_inv": 0.25}
 BOBOT_IAE = {"D11": 0.30, "D10": 0.25, "B07": 0.25, "B09": 0.20}

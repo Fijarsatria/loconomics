@@ -77,6 +77,66 @@ def hitung_indeks(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+#: Bobot keempat indeks, berkunci nama indeksnya. Dipakai hitung_indeks() dan
+#: rincian_faktor() - keduanya harus membaca daftar yang sama, kalau tidak
+#: rincian yang ditampilkan bisa menjelaskan indeks yang tidak pernah dihitung.
+BOBOT_INDEKS = {"IPT": BOBOT_IPT, "IAE": BOBOT_IAE, "IKP": BOBOT_IKP, "IBR": BOBOT_IBR}
+
+
+def rincian_faktor(df: pd.DataFrame) -> pd.DataFrame:
+    """Kontribusi tiap variabel terhadap indeksnya - isi tabel score_factors.
+
+    Kenapa di sini dan bukan di backend: kontribusi adalah bobot x nilai
+    ternormalisasi, dan itu aritmetika skor. Aturan 1 repo ini mengunci seluruh
+    aritmetika skor di berkas ini; backend hanya membaca hasilnya.
+
+    Keluarannya BERBENTUK PANJANG - satu baris per (heksagon, variabel), empat
+    belas baris per heksagon. Empat belas, bukan 43: hanya variabel yang
+    benar-benar punya bobot yang muncul. B10 dan P07 tidak ikut karena keduanya
+    variabel tampilan PriceLens dan tidak membentuk satu pun indeks; menampilkan
+    mereka di tabel bernama "faktor pembentuk skor" akan menyatakan sesuatu yang
+    tidak benar.
+
+    `kontribusi` disimpan POSITIF terhadap indeksnya sendiri, bukan terhadap
+    skor akhir. IKP dan IBR memang masuk Skor Peluang dengan tanda negatif,
+    tetapi arah itu sudah dinyatakan kolom `indeks` dan dibaca dari sana oleh
+    antarmuka. Menyimpannya bertanda negatif akan membuat pengurutan
+    "kontribusi terbesar" justru menaruh penekan skor terkuat di paling bawah.
+    """
+    keluar: list[pd.DataFrame] = []
+    for indeks, bobot in BOBOT_INDEKS.items():
+        for kunci, w in bobot.items():
+            kode = kunci.removesuffix("_inv")
+            kolom = KODE_KE_KOLOM[kode]
+            mentah = pd.to_numeric(df[kolom], errors="coerce")
+            ternorm = norm(df[kolom], kolom)
+            if kunci.endswith("_inv"):
+                ternorm = 1 - ternorm
+            keluar.append(
+                pd.DataFrame(
+                    {
+                        "h3_index": df.index,
+                        "kode_variabel": kode,
+                        "indeks": indeks,
+                        "nilai_mentah": mentah.to_numpy(),
+                        "nilai_normalisasi": ternorm.to_numpy(),
+                        # Persentil dihitung atas nilai MENTAH, bukan atas nilai
+                        # yang sudah dibalik. Kalimat yang muncul di layar
+                        # berbunyi "lebih tinggi daripada 78 dari 100 lokasi
+                        # lain" - itu pernyataan tentang variabelnya sendiri,
+                        # bukan tentang arah sumbangannya ke indeks.
+                        "persentil": (mentah.rank(pct=True) * 100).to_numpy(),
+                        # fillna(0.5) sama persis dengan _tertimbang(): yang
+                        # hilang dinetralkan, tidak dinolkan. Karena keduanya
+                        # memakai angka yang sama, jumlah kontribusi satu indeks
+                        # selalu sama dengan nilai indeks itu.
+                        "kontribusi": (w * ternorm.fillna(0.5)).to_numpy(),
+                    }
+                )
+            )
+    return pd.concat(keluar, ignore_index=True)
+
+
 def hitung_opportunity(idx: pd.DataFrame, zona_izin: pd.Series, bobot=None) -> pd.Series:
     """Skor Peluang, skala 0-100.
 
