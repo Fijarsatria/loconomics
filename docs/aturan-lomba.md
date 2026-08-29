@@ -149,11 +149,26 @@ Keempat yang tersisa (Terang, Dasar, Jalan, Gelap) seluruhnya melayani ubin dari
 `backend/app/api/meta.py::GAYA_BASEMAP`. Audit peramban menegakkannya: asersi
 "nol ubin dari penyedia lain".
 
-**Catatan operasional:** `basemap.mapid.io` membatasi laju per-IP. Permintaan
-ubin yang beruntun dijawab `401 Authorization Required` untuk SELURUH ubin
-selama beberapa menit — dengan kunci maupun tanpa. Ia pulih sendiri, dan
-`style.json` tetap 200 pada saat yang sama, jadi 401 pada ubin bukan tanda
-kuncinya bermasalah.
+**Catatan operasional — ubin MAPID padam berkala.** Terukur dua kali dalam dua
+hari, sekali berdurasi **11 menit**: `basemap.mapid.io/data/*` menjawab
+`401 Authorization Required` untuk seluruh ubin dan TileJSON, sementara
+`/styles/*` dan `/fonts/*` tetap 200. Selama padam, kedelapan bentuk otentikasi
+yang dicoba ditolak — termasuk `?key=` yang tertulis di style.json MAPID sendiri.
+
+Sempat dikira pembatas laju akibat pengujian kami sendiri. **Bukan:** diuji dari
+jaringan yang berbeda sama sekali saat padam berlangsung, hasilnya 401 juga.
+
+Cara mengenalinya, dan ini yang penting supaya tidak ada yang mengubah kode
+untuk masalah yang bukan miliknya:
+
+| Gejala | Artinya |
+|---|---|
+| Ubin 401, `style.json` **200** | Pemadaman MAPID. Tunggu; ia pulih sendiri |
+| Ubin 401, `style.json` **401** | Kunci bermasalah. Periksa `MAPID_MAPS_API_KEY` |
+
+Aplikasinya sudah menangani ini: pita "Basemap gagal dimuat" muncul dan
+menyatakan bahwa heksagon serta skornya tidak terpengaruh — dan memang tidak,
+karena penanda siap peta dipicu `styledata`, bukan menunggu ubin.
 
 ### Tiga bagian wajib di antarmuka
 
