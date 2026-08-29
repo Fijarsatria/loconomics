@@ -12,6 +12,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+#: Akar repo. Uji di berkas ini membandingkan berkas lintas-bahasa, jadi ia
+#: perlu melihat ke luar backend/.
+AKAR = Path(__file__).resolve().parents[2]
+
+#: Satu-satunya sumber pusat kawasan di sisi Python. Diimpor dari pipeline
+#: LANGSUNG, bukan disalin ke sini - menyalinnya akan mengulangi persis
+#: kesalahan yang uji-uji di bawah ada untuk mencegahnya.
+sys.path.insert(0, str(AKAR / "pipeline"))
+from config import PUSAT as PUSAT_PIPELINE  # noqa: E402
+
 from app.api.ai import ALAT_BACKEND, ALAT_FRONTEND, NAMA_FRONTEND, REGISTRI, _argumen_peta
 from app.api.bersama import DIMENSI, SEMUA_VARIABEL
 from app.core.aturan import (
@@ -424,6 +434,95 @@ def test_sepi_pesaing_tidak_muncul_kalau_poi_belum_dihitung():
 
 def test_sepi_pesaing_tetap_diam_untuk_pesaing_banyak():
     assert "SEPI_PESAING" not in _kode(_Hex(c01=40, c02=90))
+
+
+def test_pusat_kawasan_python_dan_frontend_sama():
+    """Koordinat pusat di TypeScript wajib sama dengan pipeline/config.py.
+
+    Ini uji yang dulu tidak ada, dan ketiadaannya yang membuat pusat Harjamukti
+    bisa meleset 4.443 m dari stasiunnya: daftarnya ditulis tiga kali, ketiganya
+    cocok satu sama lain, dan tidak ada satu pun gejala kecuali penarikan OSM di
+    sana yang tidak pernah menemukan stasiun rel.
+
+    Python sekarang punya satu sumber. Yang tersisa dua bahasa, dan jembatannya
+    uji ini.
+    """
+    import re
+
+    ts = (AKAR / "frontend" / "src" / "config.ts").read_text(encoding="utf-8")
+    blok = re.search(r"KAWASAN_PILOT: Kawasan\[\] = \[(.*?)\n\]", ts, re.S)
+    assert blok, "blok KAWASAN_PILOT tidak ketemu di frontend/src/config.ts"
+
+    fe = {
+        m.group(1): (float(m.group(3)), float(m.group(2)))  # ke (lat, lon)
+        for m in re.finditer(
+            r"nama:\s*'([^']+)',\s*pusat:\s*\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]",
+            blok.group(1),
+        )
+    }
+    assert len(fe) == 6, f"frontend punya {len(fe)} kawasan, bukan 6"
+    assert set(fe) == set(PUSAT_PIPELINE), f"nama berbeda: {set(fe) ^ set(PUSAT_PIPELINE)}"
+
+    for nama, (lat, lon) in PUSAT_PIPELINE.items():
+        dlat, dlon = abs(fe[nama][0] - lat), abs(fe[nama][1] - lon)
+        # 1e-5 derajat kira-kira 1 meter. Lebih longgar dari itu dan uji ini
+        # berhenti menangkap hal yang ia ada untuk menangkap.
+        assert dlat < 1e-5 and dlon < 1e-5, (
+            f"pusat {nama} berbeda: python {(lat, lon)} vs frontend {fe[nama]}"
+        )
+
+
+def test_pusat_harjamukti_di_stasiunnya():
+    """Penjaga khusus, dan ia layak berdiri sendiri.
+
+    Terverifikasi ke OSM node/6720467138 (railway=station, network=LRT Jabodebek)
+    pada 29 Agu 2026. Uji di atas menjaga kedua bahasa tetap SAMA; uji ini
+    menjaga keduanya tetap BENAR — dan itu dua hal berbeda, seperti yang sudah
+    dibuktikan sendiri oleh riwayat berkas ini.
+    """
+    import math
+
+    lat, lon = PUSAT_PIPELINE["Harjamukti"]
+    slat, slon = -6.37389, 106.89567
+    R = 6_371_000.0
+    p1, p2 = math.radians(lat), math.radians(slat)
+    x = (
+        math.sin((p2 - p1) / 2) ** 2
+        + math.cos(p1) * math.cos(p2) * math.sin(math.radians(slon - lon) / 2) ** 2
+    )
+    jarak = 2 * R * math.asin(math.sqrt(x))
+    assert jarak < 100, f"pusat Harjamukti {jarak:.0f} m dari stasiun LRT-nya"
+
+
+def test_setiap_pusat_dekat_simpul_transitnya():
+    """Keenamnya, bukan cuma yang pernah salah.
+
+    Diverifikasi ke OSM 29 Agu 2026. Ambangnya 500 m — kira-kira satu setengah
+    lebar heksagon, cukup longgar untuk perbedaan penempatan titik stasiun di
+    OSM, cukup ketat untuk menangkap pusat yang salah kawasan.
+    """
+    import math
+
+    STASIUN = {
+        "Manggarai": (-6.21017, 106.84994),
+        "Tanah Abang": (-6.18571, 106.81089),
+        "Depok Baru": (-6.39113, 106.82164),
+        "Bekasi": (-6.23621, 106.99874),
+        "Dukuh Atas BNI": (-6.20080, 106.82279),
+        "Harjamukti": (-6.37389, 106.89567),
+    }
+    assert set(STASIUN) == set(PUSAT_PIPELINE)
+
+    R = 6_371_000.0
+    for nama, (lat, lon) in PUSAT_PIPELINE.items():
+        slat, slon = STASIUN[nama]
+        p1, p2 = math.radians(lat), math.radians(slat)
+        x = (
+            math.sin((p2 - p1) / 2) ** 2
+            + math.cos(p1) * math.cos(p2) * math.sin(math.radians(slon - lon) / 2) ** 2
+        )
+        jarak = 2 * R * math.asin(math.sqrt(x))
+        assert jarak < 500, f"pusat {nama} {jarak:.0f} m dari stasiunnya"
 
 
 if __name__ == "__main__":

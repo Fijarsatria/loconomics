@@ -45,7 +45,15 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from config import BBOX, DATA_MENTAH, H3_RESOLUSI, KAWASAN_PILOT, ROOT
+from config import (
+    BBOX,
+    CINCIN_PILOT,
+    DATA_MENTAH,
+    H3_RESOLUSI,
+    KAWASAN_PILOT,
+    PUSAT,
+    ROOT,
+)
 
 # --- Overpass --------------------------------------------------------------
 # HANYA cermin sedunia. Ini bukan kerewelan - lihat catatan tepat di bawah.
@@ -108,17 +116,9 @@ RADIUS_M = 2600
 #: seluruhnya dengan sisa.
 RADIUS_POI_M = 3000
 
-#: Pusat keenam kawasan pilot. SAMA dengan yang dipakai demo_seed dan frontend -
-#: kalau ketiganya berbeda, heksagon dan POI akan diambil dari tempat yang tidak
-#: persis sama dan selisihnya tidak akan pernah memunculkan galat.
-PUSAT = {
-    "Manggarai": (-6.2131, 106.8496),
-    "Tanah Abang": (-6.1858, 106.8117),
-    "Depok Baru": (-6.3906, 106.8194),
-    "Bekasi": (-6.2356, 106.9971),
-    "Dukuh Atas BNI": (-6.2005, 106.8228),
-    "Harjamukti": (-6.3706, 106.8556),
-}
+#: Diimpor dari config, tidak lagi ditulis ulang di sini. Salinan ketiga daftar
+#: ini yang membuat pusat Harjamukti bisa meleset 4,4 km tanpa satu pun uji
+#: menangkapnya - ketiganya cocok satu sama lain, dan ketiganya salah.
 
 
 def _tembak(url: str, kueri: str, batas_waktu: int = 300) -> dict:
@@ -836,7 +836,6 @@ def tarik_osm_poi() -> Path:
 #: setiap bangunan yang mungkin berpusat di dalam salah satu dari 708 heksagon.
 #: Cincin H3 dari pusat kawasan. SAMA dengan `demo_seed.CINCIN` - kalau
 #: keduanya berbeda, grid yang ditarik bukan grid yang diskor.
-CINCIN_PILOT = 6
 
 RADIUS_BANGUNAN_M = 2500
 

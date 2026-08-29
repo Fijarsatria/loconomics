@@ -10,6 +10,10 @@ pydantic==2.10.4
 python-dotenv==1.0.1
 sqlalchemy==2.0.36
 geoalchemy2==0.16.0
+# Dipakai rute_ors.py, yang mengimpor settings milik backend supaya URL basis
+# data tidak ditulis di dua tempat. Skripnya dijalankan dengan venv pipeline,
+# jadi dependensinya harus terdaftar di sini juga.
+pydantic-settings==2.7.1
 psycopg[binary]==3.2.3
 pyarrow==18.1.0
 rasterio==1.5.1        # baca raster WorldPop (D01); membawa GDAL sendiri

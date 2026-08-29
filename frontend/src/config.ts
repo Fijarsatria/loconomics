@@ -371,6 +371,14 @@ export type NamaLayer = keyof typeof LAYER
 // Enam kawasan pilot. Sama persis dengan KAWASAN_PILOT di pipeline/config.py dan
 // app/core/aturan.py — kesamaannya dijaga oleh backend/tests/test_aturan.py.
 // MapLibre memakai urutan [lon, lat], kebalikan dari Leaflet.
+//
+// KOORDINATNYA juga dijaga uji, dan itu perbaikan 29 Agu 2026. Sebelumnya daftar
+// ini salah satu dari TIGA salinan pusat kawasan (bersama pipeline/s1_ingest.py
+// dan pipeline/demo_seed.py). Ketiganya cocok satu sama lain, jadi tidak ada uji
+// yang bisa menangkap bahwa ketiganya sama-sama salah — dan memang ada yang
+// salah: pusat Harjamukti duduk 4.443 m dari stasiun LRT-nya. Sekarang Python
+// punya satu sumber (pipeline/config.py::PUSAT) dan berkas ini dibandingkan
+// dengannya.
 
 export interface Kawasan {
   nama: string
@@ -384,7 +392,8 @@ export const KAWASAN_PILOT: Kawasan[] = [
   { nama: 'Depok Baru', pusat: [106.8194, -6.3906], moda: 'KRL' },
   { nama: 'Bekasi', pusat: [106.9971, -6.2356], moda: 'KRL' },
   { nama: 'Dukuh Atas BNI', pusat: [106.8228, -6.2005], moda: 'MRT' },
-  { nama: 'Harjamukti', pusat: [106.8556, -6.3706], moda: 'LRT' },
+  // OSM node/6720467138, network=LRT Jabodebek. Diperbaiki 29 Agu 2026.
+  { nama: 'Harjamukti', pusat: [106.89567, -6.37389], moda: 'LRT' },
 ]
 
 /**

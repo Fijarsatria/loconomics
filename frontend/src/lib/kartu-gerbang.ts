@@ -25,7 +25,7 @@ export interface KartuGerbang {
 }
 
 /** Tanggal potret terakhir, dinyatakan apa adanya di halamannya. */
-export const DIPOTRET = '2026-08-27'
+export const DIPOTRET = '2026-08-29'
 
 export const KARTU_GERBANG: KartuGerbang[] = [
   {
@@ -39,13 +39,13 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 720,
     "n": 108,
     "kuadran": {
-      "HIDDEN_GEM": 22,
-      "PEMENANG_JELAS": 69,
-      "JEBAKAN_GENGSI": 13,
-      "HINDARI": 4
+      "HIDDEN_GEM": 18,
+      "PEMENANG_JELAS": 73,
+      "JEBAKAN_GENGSI": 14,
+      "HINDARI": 3
     },
     "sorotan": {
-      "nilai": "57",
+      "nilai": "55",
       "label": "skor peluang median"
     }
   },
@@ -60,10 +60,10 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 122,
     "kuadran": {
-      "HIDDEN_GEM": 44,
-      "PEMENANG_JELAS": 44,
-      "JEBAKAN_GENGSI": 29,
-      "HINDARI": 5
+      "PEMENANG_JELAS": 52,
+      "HIDDEN_GEM": 38,
+      "JEBAKAN_GENGSI": 28,
+      "HINDARI": 4
     },
     "sorotan": {
       "nilai": "—",
@@ -81,12 +81,12 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 97,
     "kuadran": {
-      "HIDDEN_GEM": 33,
-      "PEMENANG_JELAS": 55,
-      "JEBAKAN_GENGSI": 9
+      "HIDDEN_GEM": 23,
+      "JEBAKAN_GENGSI": 9,
+      "PEMENANG_JELAS": 65
     },
     "sorotan": {
-      "nilai": "20",
+      "nilai": "11",
       "label": "kandidat Hidden Gem"
     }
   },
@@ -101,10 +101,10 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
-      "HINDARI": 49,
-      "JEBAKAN_GENGSI": 40,
-      "HIDDEN_GEM": 30,
-      "PEMENANG_JELAS": 8
+      "HINDARI": 42,
+      "JEBAKAN_GENGSI": 46,
+      "HIDDEN_GEM": 29,
+      "PEMENANG_JELAS": 10
     },
     "sorotan": {
       "nilai": "0",
@@ -122,9 +122,9 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
-      "HINDARI": 80,
-      "JEBAKAN_GENGSI": 18,
-      "HIDDEN_GEM": 24,
+      "JEBAKAN_GENGSI": 24,
+      "HINDARI": 75,
+      "HIDDEN_GEM": 23,
       "PEMENANG_JELAS": 5
     },
     "sorotan": {
@@ -143,13 +143,13 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
-      "PEMENANG_JELAS": 12,
-      "HINDARI": 54,
-      "JEBAKAN_GENGSI": 52,
-      "HIDDEN_GEM": 9
+      "HINDARI": 84,
+      "JEBAKAN_GENGSI": 23,
+      "HIDDEN_GEM": 15,
+      "PEMENANG_JELAS": 5
     },
     "sorotan": {
-      "nilai": "41",
+      "nilai": "37",
       "label": "skor peluang median"
     }
   }

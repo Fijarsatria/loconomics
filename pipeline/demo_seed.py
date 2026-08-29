@@ -47,20 +47,19 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from config import H3_RESOLUSI, JAM_OPERASIONAL, KAWASAN_PILOT, tingkat_keyakinan
+from config import (
+    CINCIN_PILOT as CINCIN,
+    H3_RESOLUSI,
+    JAM_OPERASIONAL,
+    KAWASAN_PILOT,
+    PUSAT,
+    tingkat_keyakinan,
+)
 from s4_spatial import belanja_per_jam, harga_sewa_per_m2, profil_jam
 from s6_score import rincian_faktor, skor_lengkap
 from s7_publish import _mesin, muat_faktor, muat_profil_jam, muat_skor
 
-# Pusat tiap kawasan, sama dengan yang dipakai frontend.
-PUSAT = {
-    "Manggarai": (-6.2131, 106.8496),
-    "Tanah Abang": (-6.1858, 106.8117),
-    "Depok Baru": (-6.3906, 106.8194),
-    "Bekasi": (-6.2356, 106.9971),
-    "Dukuh Atas BNI": (-6.2005, 106.8228),
-    "Harjamukti": (-6.3706, 106.8556),
-}
+# Pusat kawasan diimpor dari config - lihat catatan di sana.
 
 # Simpul transit sungguhan: nama, moda, dan koordinatnya BUKAN karangan.
 # Isochrone-nya sengaja TIDAK dibangkitkan - poligon jangkauan jalan kaki menuntut
@@ -78,7 +77,6 @@ SIMPUL = {
 
 # Cincin ke-6 dari pusat: sekitar 127 heksagon per kawasan, radius ±2 km.
 # Cukup untuk peta yang terasa berisi, cukup kecil untuk dimuat seketika.
-CINCIN = 6
 
 # Karakter tiap kawasan. Angka-angka ini yang membuat keenamnya tidak terlihat
 # sama, dan dipilih supaya kuadrannya jatuh sesuai dugaan di PRD: Dukuh Atas

@@ -22,6 +22,47 @@ KAWASAN_PILOT = [
 # Bounding box Jabodetabek. Titik di luar ini dibuang saat pembersihan koordinat.
 BBOX = {"lon_min": 106.30, "lon_max": 107.10, "lat_min": -6.95, "lat_max": -5.95}
 
+# --- Pusat kawasan pilot ----------------------------------------------------
+#
+# SATU SUMBER KEBENARAN. Sebelum 29 Agu 2026 daftar ini ditulis TIGA KALI -
+# `s1_ingest.py`, `demo_seed.py`, dan `frontend/src/config.ts` - dan ketiganya
+# cocok satu sama lain, jadi tidak ada uji konsistensi yang bisa menangkap
+# bahwa ketiganya sama-sama salah.
+#
+# Dan memang ada yang salah: pusat Harjamukti duduk di (-6,3706 . 106,8556),
+# **4.443 m** dari Stasiun LRT Harjamukti yang sebenarnya. Seluruh heksagon
+# kawasan itu mengukur jarak ke titik yang bukan stasiun, dan penarikan OSM di
+# sana tidak pernah menemukan satu pun stasiun rel - nol, sementara lima kawasan
+# lain 2-10. Nol itu satu-satunya gejala yang pernah muncul.
+#
+# Keenamnya diverifikasi ulang ke OSM 29 Agu 2026 (Overpass, tag
+# `railway=station` + nama). Lima yang lain meleset 33-328 m, masih di dalam
+# satu heksagon, jadi dibiarkan:
+#
+#   Dukuh Atas BNI    33 m    Tanah Abang   90 m
+#   Bekasi           194 m    Depok Baru   255 m
+#   Manggarai        328 m    Harjamukti  4443 m  <- diperbaiki
+#
+# Frontend memegang salinannya sendiri (peramban tidak bisa mengimpor Python).
+# Yang menjaganya bukan disiplin melainkan uji: `backend/tests/test_aturan.py`
+# membandingkan keduanya dan gagal kalau berbeda lebih dari satu meter.
+PUSAT: dict[str, tuple[float, float]] = {
+    "Manggarai": (-6.2131, 106.8496),
+    "Tanah Abang": (-6.1858, 106.8117),
+    "Depok Baru": (-6.3906, 106.8194),
+    "Bekasi": (-6.2356, 106.9971),
+    "Dukuh Atas BNI": (-6.2005, 106.8228),
+    # OSM node/6720467138, network=LRT Jabodebek. Diperbaiki 29 Agu 2026.
+    "Harjamukti": (-6.37389, 106.89567),
+}
+
+#: Jari-jari grid dalam cincin heksagon. 6 cincin = 127 sel per kawasan.
+CINCIN_PILOT = 6
+
+assert set(PUSAT) == set(KAWASAN_PILOT), "PUSAT dan KAWASAN_PILOT harus sama"
+
+
+
 CRS = "EPSG:4326"
 H3_RESOLUSI = 9  # ±0,10 km², lebar ±350 m
 ISOCHRONE_MENIT = [5, 10, 15]

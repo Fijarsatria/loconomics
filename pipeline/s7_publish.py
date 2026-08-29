@@ -508,6 +508,163 @@ def isi_d04_dari_rute(db: Session) -> dict[str, int]:
     return {"dirutekan": len(hex_df), "diperbarui": n, "tanpa_rute": total - n}
 
 
+# --- Grid heksagon ----------------------------------------------------------
+
+
+def _grid_diharapkan() -> dict[str, list[str]]:
+    """Grid yang SEHARUSNYA ada, diturunkan dari config.PUSAT.
+
+    Salinan logika `demo_seed._grid()`, dan salinan itu disengaja: fungsi ini
+    harus tetap bisa dipanggil setelah `demo_seed` berhenti boleh dijalankan di
+    basis data berisi data nyata. Yang penting keduanya membaca PUSAT yang sama.
+
+    Heksagon yang diklaim dua kawasan jatuh ke pusat TERDEKAT - Manggarai dan
+    Dukuh Atas BNI hanya berjarak ~2,5 km sementara jari-jari cincinnya ~2 km.
+    """
+    import math
+
+    import h3
+
+    from config import CINCIN_PILOT, H3_RESOLUSI, PUSAT
+
+    klaim: dict[str, tuple[str, float]] = {}
+    for kawasan, (lat0, lon0) in PUSAT.items():
+        pusat = h3.latlng_to_cell(lat0, lon0, H3_RESOLUSI)
+        for sel in h3.grid_disk(pusat, CINCIN_PILOT):
+            lat, lon = h3.cell_to_latlng(sel)
+            jarak = math.hypot(lat - lat0, lon - lon0)
+            sudah = klaim.get(sel)
+            if sudah is None or jarak < sudah[1]:
+                klaim[sel] = (kawasan, jarak)
+
+    hasil: dict[str, list[str]] = {k: [] for k in PUSAT}
+    for sel, (kawasan, _) in klaim.items():
+        hasil[kawasan].append(sel)
+    return {k: sorted(v) for k, v in hasil.items()}
+
+
+def _wkt_heksagon(sel: str) -> str:
+    """Batas heksagon sebagai WKT. h3 memberi (lat, lng); PostGIS mau (lng, lat)."""
+    import h3
+
+    titik = h3.cell_to_boundary(sel)
+    cincin = ", ".join(f"{lng} {lat}" for lat, lng in titik)
+    lat0, lng0 = titik[0]
+    return f"SRID=4326;POLYGON(({cincin}, {lng0} {lat0}))"
+
+
+def periksa_grid(db: Session) -> dict[str, object]:
+    """Bandingkan grid basis data dengan yang diturunkan dari config.PUSAT.
+
+    Tidak mengubah apa pun. Dipisah dari `selaraskan_grid` supaya keadaannya
+    bisa ditanyakan tanpa risiko - dan supaya `--grid` tanpa `--muat` selalu
+    aman dijalankan siapa pun.
+    """
+    harap = _grid_diharapkan()
+    milik_harap = {sel: kw for kw, sel_list in harap.items() for sel in sel_list}
+
+    ada = dict(
+        db.execute(text("SELECT h3_index, kawasan FROM hex_features")).all()
+    )
+
+    tambah = sorted(set(milik_harap) - set(ada))
+    buang = sorted(set(ada) - set(milik_harap))
+    pindah_kawasan = sorted(
+        sel for sel in set(ada) & set(milik_harap) if ada[sel] != milik_harap[sel]
+    )
+    return {
+        "diharapkan": len(milik_harap),
+        "di_basis_data": len(ada),
+        "tambah": tambah,
+        "buang": buang,
+        "pindah_kawasan": pindah_kawasan,
+        "milik": milik_harap,
+    }
+
+
+def selaraskan_grid(db: Session, beda: dict[str, object]) -> dict[str, int]:
+    """Terapkan selisihnya. MENGHAPUS heksagon, jadi ia menghapus turunannya juga.
+
+    Yang ikut terhapus lewat ON DELETE CASCADE: `hex_routes`, `location_scores`,
+    `score_factors`, `hex_hourly_profiles`. Yang TIDAK punya cascade dan harus
+    dibereskan sendiri: `business_pois` - ia berkolom `h3_index` tanpa foreign
+    key, jadi barisnya akan tertinggal sebagai POI yatim yang ikut terhitung di
+    variabel kompetisi kawasan lain.
+
+    Heksagon BARU disisipkan kosong: nol titik misi, keyakinan RENDAH, sumber
+    `predicted`. Bukan kelalaian - heksagon yang baru saja dibuat memang belum
+    punya satu pun pengukuran, dan mengisinya dengan apa pun selain kosong
+    adalah persis kesalahan yang aturan 4 larang.
+    """
+    tambah = beda["tambah"]
+    buang = beda["buang"]
+    milik = beda["milik"]
+    n_poi = 0
+
+    if buang:
+        # POI dulu, selagi heksagonnya masih ada - supaya yang dihapus persis
+        # yang termasuk heksagon itu, bukan hasil tebakan sesudahnya.
+        for potongan in _potong([{"h": h} for h in buang], 200):
+            daftar = [b["h"] for b in potongan]
+            n_poi += db.execute(
+                text("DELETE FROM business_pois WHERE h3_index = ANY(:d)"), {"d": daftar}
+            ).rowcount
+            db.execute(
+                text("DELETE FROM hex_features WHERE h3_index = ANY(:d)"), {"d": daftar}
+            )
+
+    if tambah:
+        for potongan in _potong([{"h": h} for h in tambah], 200):
+            db.execute(
+                text(
+                    "INSERT INTO hex_features "
+                    "(h3_index, kawasan, geom, n_titik_misi, tingkat_keyakinan, data_source) "
+                    "VALUES (:h3, :kw, ST_GeomFromEWKT(:wkt), 0, 'RENDAH', 'predicted')"
+                ),
+                [
+                    {"h3": b["h"], "kw": milik[b["h"]], "wkt": _wkt_heksagon(b["h"])}
+                    for b in potongan
+                ],
+            )
+
+    n_pindah = 0
+    for sel in beda["pindah_kawasan"]:
+        n_pindah += db.execute(
+            text("UPDATE hex_features SET kawasan = :kw WHERE h3_index = :h3"),
+            {"kw": milik[sel], "h3": sel},
+        ).rowcount
+
+    return {
+        "dihapus": len(buang),
+        "poi_dihapus": n_poi,
+        "ditambah": len(tambah),
+        "kawasan_diperbarui": n_pindah,
+    }
+
+
+def selaraskan_simpul(db: Session) -> dict[str, int]:
+    """Simpul transit ikut pindah bersama pusat kawasannya.
+
+    UPSERT menurut kawasan, tidak pernah DELETE: `hex_routes` dan
+    `catchment_areas` keduanya ON DELETE CASCADE dari `transport_nodes`, jadi
+    menghapus satu simpul membuang seluruh rute ORS yang menempel padanya.
+    """
+    from config import PUSAT
+
+    n = 0
+    for kawasan, (lat, lon) in PUSAT.items():
+        n += db.execute(
+            text(
+                "UPDATE transport_nodes SET geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) "
+                "WHERE kawasan = :kw AND ST_Distance("
+                "  geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography"
+                ") > 1"
+            ),
+            {"lat": lat, "lon": lon, "kw": kawasan},
+        ).rowcount
+    return {"simpul_dipindah": n}
+
+
 def muat_rdtr(db: Session, berkas: Path | None = None) -> dict[str, int]:
     """Zonasi RDTR ATR/BPN -> L01 izin usaha, L02 kelas zona, L03 risiko banjir.
 
@@ -971,6 +1128,11 @@ def periksa_cakupan() -> pd.DataFrame:
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Terbitkan hasil pipeline")
+    p.add_argument("--grid", action="store_true",
+                   help="Periksa grid heksagon + simpul transit terhadap config.PUSAT")
+    p.add_argument("--terapkan", action="store_true",
+                   help="Bersama --grid: terapkan selisihnya. MENGHAPUS heksagon "
+                        "beserta skor, faktor, rute, dan POI-nya")
     p.add_argument("--muat", action="store_true", help="DataFrame -> basis data")
     p.add_argument("--ekspor", action="store_true", help="Basis data -> GeoJSON statis")
     p.add_argument("--cakupan", action="store_true", help="Tampilkan cakupan data")
@@ -1024,9 +1186,47 @@ if __name__ == "__main__":
 
     if not any([arg.muat, arg.ekspor, arg.cakupan, arg.isi_d04, arg.penduduk,
                 arg.bangunan, arg.osm, arg.misi, arg.rdtr, arg.transit,
-                arg.kosongkan, arg.hitung_ulang]):
+                arg.kosongkan, arg.hitung_ulang, arg.grid]):
         p.print_help()
         raise SystemExit(0)
+
+    # --- Grid ---------------------------------------------------------------
+    #
+    # Dijalankan lebih dulu dan di transaksinya SENDIRI, bukan digabung dengan
+    # pemuatan variabel di bawah. Sebabnya: ia mengubah heksagon MANA yang ada,
+    # dan setiap langkah sesudahnya bekerja atas daftar heksagon. Menggabungkan
+    # keduanya dalam satu transaksi berarti pemuat variabel membaca grid lama
+    # dari snapshot transaksinya sendiri.
+    if arg.grid:
+        Sesi = sessionmaker(bind=_mesin())
+        with Sesi() as db:
+            beda = periksa_grid(db)
+            print("Grid heksagon terhadap config.PUSAT:")
+            print(f"  diharapkan     : {beda['diharapkan']}")
+            print(f"  di basis data  : {beda['di_basis_data']}")
+            print(f"  perlu ditambah : {len(beda['tambah'])}")
+            print(f"  perlu dibuang  : {len(beda['buang'])}")
+            print(f"  pindah kawasan : {len(beda['pindah_kawasan'])}")
+
+            if not arg.terapkan:
+                if beda["tambah"] or beda["buang"] or beda["pindah_kawasan"]:
+                    print("\n  Tambahkan --terapkan untuk menerapkannya.")
+                    print("  PERINGATAN: menghapus heksagon ikut menghapus skor, faktor,")
+                    print("  rute ORS, dan POI-nya lewat ON DELETE CASCADE.")
+                else:
+                    print("\n  Sudah selaras. Tidak ada yang perlu dikerjakan.")
+            else:
+                hasil = selaraskan_grid(db, beda)
+                hasil.update(selaraskan_simpul(db))
+                db.commit()
+                print("\n  Diterapkan:")
+                for k, v in hasil.items():
+                    print(f"    {k:22s} {v}")
+                print("\n  Langkah berikutnya untuk heksagon yang baru:")
+                print("    python s1_ingest.py --poi --bangunan --rute --henti")
+                print("    python s7_publish.py --osm --bangunan --transit --penduduk")
+                print("    python rute_ors.py  &&  python rute_ors.py --isochrone")
+                print("    python s7_publish.py --isi-d04 --misi --hitung-ulang")
 
     # Keduanya menulis, jadi keduanya berbagi satu transaksi: kalau perhitungan
     # ulang gagal, D04 pun tidak jadi berubah. Basis data berisi variabel baru
@@ -1075,7 +1275,7 @@ if __name__ == "__main__":
             db.commit()
         print("\nJangan lupa kosongkan cache backend: POST /meta/cache/bersihkan")
 
-    if arg.muat:
+    if arg.muat and not arg.grid:
         print("Memuat ke basis data...")
         for k, v in muat_semua(arg.versi).items():
             print(f"  {k:12} {v} baris")

@@ -1,3 +1,13 @@
+# Arsip. Sebuah .zip berisi backend/.env pernah nyaris ter-push (29 Agu 2026):
+# 380 MB, 25.850 berkas, termasuk SELURUH kunci API dan kredensial Supabase.
+# Pemeriksaan rahasia yang mencari string kunci di dalam diff TIDAK menangkapnya
+# karena isinya terkompresi - yang terlihat cuma nama berkasnya.
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
 # Rahasia — jangan pernah di-commit
 .env
 .env.local

@@ -623,6 +623,54 @@ Yang tetap menuntut data justru omzet: berapa uang yang berputar di heksagon itu
 bukan sesuatu yang bisa dijawab siapa pun dari kursinya, dan membiarkannya diisi
 sendiri akan mengubah simulasi jadi mesin pembenar.
 
+### 10.8b Kenapa cakupan survei tipis, dan apa yang sebenarnya membatasinya
+
+Pertanyaan yang paling sering muncul melihat pita status: kalau datanya sudah
+nyata, kenapa hanya sebagian kecil heksagon yang punya survei?
+
+Jawabannya bukan soal kualitas data melainkan soal GEOGRAFI, dan angkanya bisa
+dihitung ulang kapan saja lewat `s1_ingest.py --misi`:
+
+| Diukur 29 Agustus 2026 | Angka |
+|---|---|
+| Titik misi MAPID se-Jabodetabek | **988** |
+| Yang jatuh di dalam 708 heksagon kita | **46** |
+| Heksagon yang tersentuh | **31 dari 708** (4,4%) |
+
+Sebabnya sederhana begitu disadari: **API misi MAPID disaring per POLIGON, bukan
+per tim.** Yang kembali adalah kumpulan survei SELURUH peserta lomba, dan tiap
+tim memilih wilayah studinya sendiri. Median jarak seluruh titik ke pusat kawasan
+pilot terdekat kami 11,1 km — mereka mensurvei tempat lain, dan itu wajar.
+
+Sebarannya di dalam grid kami:
+
+| Kawasan | Titik |
+|---|---|
+| Tanah Abang | 17 |
+| Dukuh Atas BNI | 11 |
+| Manggarai | 8 |
+| Depok Baru | 6 |
+| Harjamukti | 3 |
+| Bekasi | 1 |
+
+**Angkanya bertambah sendiri.** Penarikan 27 Agustus menghasilkan 866 titik
+(27 di dalam grid); dua hari kemudian 988 titik (46 di dalam grid) — bertambah
+122 titik se-Jabodetabek dan **+19 di dalam grid kami**, tanpa satu pun anggota
+tim turun ke lapangan. Menarik ulang berkala praktis gratis dan layak dilakukan
+menjelang penjurian.
+
+Tetapi ia tidak akan pernah cukup dengan sendirinya. Yang menentukan bukan
+berapa banyak titik yang ada melainkan berapa banyak yang jatuh di 708 heksagon
+KAMI — dan itu hanya bisa dinaikkan dengan menurunkan tim ke enam kawasan pilot.
+Daftar targetnya di bagian 11.
+
+**Apa yang sebenarnya hilang tanpa survei.** Perlu ditegaskan karena mudah salah
+baca: heksagon tanpa survei BUKAN heksagon tanpa data. Ia tetap membawa POI
+OpenStreetMap, rute jalan kaki OpenRouteService, penduduk WorldPop, zonasi RDTR,
+dan skor simpul dari relasi rute — seluruhnya terukur. Yang belum ada di sana
+hanya variabel yang memang menuntut kunjungan: harga sewa, pola jam transaksi,
+belanja rata-rata, dan indeks churn.
+
 ### 10.9 Nilai tanah: dicari sampai habis, tidak ada sumber terbukanya
 
 Diperiksa 29 Agu 2026. P01/P02 (NJOP) sempat dicatat sebagai "menunggu token
@@ -702,10 +750,10 @@ Yang **tidak** akan datang dari mana pun tanpa survei berulang: P06 churn.
 Dua belas dari 18 variabel kosong hanya bisa diisi oleh orang yang berdiri di
 lokasinya. Tidak ada API yang menggantikannya, dan `LLM_API_KEY` pun tidak:
 OCR bekerja atas foto yang SUDAH ada, dan foto yang sudah ada cuma menyentuh
-23 heksagon.
+25 dari 708 heksagon.
 
 Yang membuat daftar di bawah ini layak dikerjakan lebih dulu adalah satu angka:
-**23 dari 24 heksagon berskor tertinggi belum pernah disurvei sama sekali.**
+**28 dari 30 heksagon berskor tertinggi belum pernah disurvei sama sekali.**
 Itu justru lokasi yang direkomendasikan produk — yang akan diklik juri, dan
 yang paling mahal kalau ternyata salah.
 
@@ -715,50 +763,41 @@ Saringannya tiga, seluruhnya dari basis data:
 2. kuadran `HIDDEN_GEM` atau `PEMENANG_JELAS` — yang direkomendasikan produk
 3. `kepadatan_poi_total > 0` — ada usaha untuk disurvei
 
-260 heksagon lolos ketiganya. Lima teratas per kawasan, menurut
+259 heksagon lolos ketiganya. Lima teratas per kawasan, menurut
 `opportunity_score`:
 
 | h3_index | Kawasan | Kuadran | Skor | Lat | Lon | POI | Menit jalan |
 |---|---|---|---|---|---|---|---|
-| 898c104eeafffff | Bekasi | HIDDEN_GEM | 90,7 | -6,23813 | 107,00026 | 4 | 9 |
-| 898c104e8cbffff | Bekasi | HIDDEN_GEM | 84,8 | -6,23683 | 106,99494 | 1 | 5 |
-| 898c104eea7ffff | Bekasi | HIDDEN_GEM | 79,6 | -6,24116 | 106,99932 | 2 | 12 |
-| 898c104ee37ffff | Bekasi | HIDDEN_GEM | 79,4 | -6,23597 | 106,99807 | 2 | 2 |
-| 898c104ee33ffff | Bekasi | HIDDEN_GEM | 75,4 | -6,23510 | 107,00120 | 4 | 11 |
-| 898c1070543ffff | Depok Baru | HIDDEN_GEM | 67,9 | -6,39595 | 106,81947 | 11 | 9 |
-| 898c107055bffff | Depok Baru | HIDDEN_GEM | 67,2 | -6,39509 | 106,82261 | 6 | 15 |
-| 898c1070087ffff | Depok Baru | HIDDEN_GEM | 66,4 | -6,38989 | 106,82136 | 8 | 6 |
-| 898c1070097ffff | Depok Baru | HIDDEN_GEM | 65,4 | -6,39206 | 106,82355 | 2 | 8 |
-| 898c107054bffff | Depok Baru | HIDDEN_GEM | 65,1 | -6,39292 | 106,82042 | 4 | 5 |
-| 898c1079d2fffff | Dukuh Atas BNI | HIDDEN_GEM | 100,0 | -6,20020 | 106,82589 | 5 | 9 |
-| 898c1079d23ffff | Dukuh Atas BNI | HIDDEN_GEM | 94,1 | -6,20237 | 106,82808 | 3 | 15 |
-| 898c1078acbffff | Dukuh Atas BNI | PEMENANG_JELAS | 90,9 | -6,20626 | 106,82401 | 4 | 15 |
-| 898c1078a43ffff | Dukuh Atas BNI | PEMENANG_JELAS | 84,0 | -6,20192 | 106,81962 | 5 | 7 |
-| 898c1078ac7ffff | Dukuh Atas BNI | PEMENANG_JELAS | 79,1 | -6,21016 | 106,81993 | 12 | 16 |
-| 898c10706cfffff | Harjamukti | HIDDEN_GEM | 60,7 | -6,37391 | 106,84924 | 11 | 13 |
-| 898c1073307ffff | Harjamukti | HIDDEN_GEM | 52,8 | -6,37046 | 106,86177 | 3 | 17 |
-| 898c1073327ffff | Harjamukti | HIDDEN_GEM | 52,5 | -6,37002 | 106,85331 | 1 | 4 |
-| 898c10706cbffff | Harjamukti | HIDDEN_GEM | 51,1 | -6,37305 | 106,85237 | 1 | 7 |
-| 898c107332fffff | Harjamukti | HIDDEN_GEM | 50,5 | -6,36699 | 106,85425 | 1 | 9 |
-| 898c1078367ffff | Manggarai | HIDDEN_GEM | 75,0 | -6,21150 | 106,84531 | 4 | 26 |
-| 898c107838bffff | Manggarai | HIDDEN_GEM | 68,0 | -6,22235 | 106,85626 | 7 | 19 |
-| 898c107836fffff | Manggarai | HIDDEN_GEM | 67,4 | -6,20847 | 106,84625 | 2 | 31 |
-| 898c1078237ffff | Manggarai | HIDDEN_GEM | 67,2 | -6,21456 | 106,86441 | 2 | 31 |
-| 898c1078383ffff | Manggarai | PEMENANG_JELAS | 66,2 | -6,22538 | 106,85532 | 19 | 25 |
-| 898c106a69bffff | Tanah Abang | HIDDEN_GEM | 93,6 | -6,17893 | 106,81243 | 10 | 12 |
-| 898c1079967ffff | Tanah Abang | HIDDEN_GEM | 91,8 | -6,18110 | 106,81462 | 5 | 10 |
-| 898c1079923ffff | Tanah Abang | PEMENANG_JELAS | 88,6 | -6,18717 | 106,81274 | 5 | 3 |
-| 898c106a693ffff | Tanah Abang | PEMENANG_JELAS | 87,5 | -6,18197 | 106,81149 | 3 | 12 |
-| 898c106a697ffff | Tanah Abang | PEMENANG_JELAS | 87,0 | -6,18283 | 106,80836 | 6 | 12 |
-
-Lat/lon adalah **titik tengah heksagon**, bukan alamat usaha. Satu heksagon
-res-9 luasnya 0,105 km2 — kira-kira 350 m ujung ke ujung, jadi titik itu cukup
-untuk sampai, dan usahanya dicari di sekitarnya.
-
-### Apa yang diambil di tiap titik, dan variabel apa yang dibukanya
-
-| Yang difoto / dicatat | Membuka |
-|---|---|
+| 898c104eeafffff | Bekasi | HIDDEN_GEM | 86,8 | -6,23813 | 107,00026 | 4 | 9 |
+| 898c104e8cbffff | Bekasi | HIDDEN_GEM | 80,9 | -6,23683 | 106,99494 | 1 | 5 |
+| 898c104eea7ffff | Bekasi | HIDDEN_GEM | 76,2 | -6,24116 | 106,99932 | 2 | 12 |
+| 898c104ee37ffff | Bekasi | PEMENANG_JELAS | 75,7 | -6,23597 | 106,99807 | 2 | 2 |
+| 898c104ee33ffff | Bekasi | HIDDEN_GEM | 72,1 | -6,23510 | 107,00120 | 4 | 11 |
+| 898c1070543ffff | Depok Baru | HIDDEN_GEM | 64,8 | -6,39595 | 106,81947 | 11 | 9 |
+| 898c107055bffff | Depok Baru | HIDDEN_GEM | 64,3 | -6,39509 | 106,82261 | 6 | 15 |
+| 898c1070087ffff | Depok Baru | PEMENANG_JELAS | 63,3 | -6,38989 | 106,82136 | 8 | 6 |
+| 898c1070097ffff | Depok Baru | HIDDEN_GEM | 62,4 | -6,39206 | 106,82355 | 2 | 8 |
+| 898c107054bffff | Depok Baru | HIDDEN_GEM | 62,0 | -6,39292 | 106,82042 | 4 | 5 |
+| 898c1079d2fffff | Dukuh Atas BNI | HIDDEN_GEM | 95,6 | -6,20020 | 106,82589 | 5 | 9 |
+| 898c1079d23ffff | Dukuh Atas BNI | HIDDEN_GEM | 90,1 | -6,20237 | 106,82808 | 3 | 15 |
+| 898c1078acbffff | Dukuh Atas BNI | PEMENANG_JELAS | 87,1 | -6,20626 | 106,82401 | 4 | 15 |
+| 898c1078a43ffff | Dukuh Atas BNI | PEMENANG_JELAS | 80,3 | -6,20192 | 106,81962 | 5 | 7 |
+| 898c1078ac7ffff | Dukuh Atas BNI | PEMENANG_JELAS | 75,8 | -6,21016 | 106,81993 | 12 | 16 |
+| 898c1073667ffff | Harjamukti | HIDDEN_GEM | 75,9 | -6,37222 | 106,89557 | 2 | 10 |
+| 898c107329bffff | Harjamukti | HIDDEN_GEM | 67,3 | -6,37006 | 106,89338 | 1 | 7 |
+| 898c10732d7ffff | Harjamukti | HIDDEN_GEM | 64,5 | -6,36703 | 106,89433 | 1 | 11 |
+| 898c107360bffff | Harjamukti | HIDDEN_GEM | 57,3 | -6,37569 | 106,90308 | 7 | 25 |
+| 898c1073677ffff | Harjamukti | HIDDEN_GEM | 53,1 | -6,37439 | 106,89776 | 1 | 16 |
+| 898c1078367ffff | Manggarai | PEMENANG_JELAS | 72,1 | -6,21150 | 106,84531 | 4 | 26 |
+| 898c107838bffff | Manggarai | PEMENANG_JELAS | 65,2 | -6,22235 | 106,85626 | 7 | 19 |
+| 898c107836fffff | Manggarai | HIDDEN_GEM | 64,9 | -6,20847 | 106,84625 | 2 | 31 |
+| 898c1078237ffff | Manggarai | HIDDEN_GEM | 64,8 | -6,21456 | 106,86441 | 2 | 31 |
+| 898c1078e57ffff | Manggarai | PEMENANG_JELAS | 63,8 | -6,22015 | 106,83402 | 31 | 40 |
+| 898c106a69bffff | Tanah Abang | PEMENANG_JELAS | 89,6 | -6,17893 | 106,81243 | 10 | 12 |
+| 898c1079967ffff | Tanah Abang | HIDDEN_GEM | 87,7 | -6,18110 | 106,81462 | 5 | 10 |
+| 898c1079923ffff | Tanah Abang | PEMENANG_JELAS | 84,5 | -6,18717 | 106,81274 | 5 | 3 |
+| 898c106a697ffff | Tanah Abang | PEMENANG_JELAS | 83,3 | -6,18283 | 106,80836 | 6 | 12 |
+| 898c1079927ffff | Tanah Abang | PEMENANG_JELAS | 81,8 | -6,18803 | 106,80961 | 5 | 10 |
 | **Struk** — nominal, tanggal, JAM | B01–B05 (empat puncak + rasio weekend), B09, B10, D11 — dan bersamanya **Commuter Clock** |
 | **Menu** — harga tiap item | B08 spread harga, B06 harga median porsi, M03 |
 | **Papan sewa / tanya pemilik** — harga sewa, luas | P05, P07, dan **PriceLens** berhenti kosong |
