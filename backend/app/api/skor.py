@@ -1038,7 +1038,22 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
                 jenis="catatan",
             )
         )
-    if hx.n_titik_misi is not None and hx.n_titik_misi < 10:
+    # Nol dan "beberapa" adalah dua pernyataan yang berbeda, dan menyamakannya
+    # merugikan dua arah sekaligus. "Baru 0 titik survei - angkanya masih bisa
+    # bergeser" terbaca seolah SELURUH angka heksagon ini belum bisa dipercaya,
+    # padahal POI OSM, rute OpenRouteService, penduduk WorldPop, dan zonasi RDTR
+    # di sana terukur seluruhnya. Yang belum ada cuma kunjungan surveyor - dan
+    # itu memang menentukan, tetapi untuk variabel yang lain.
+    if hx.n_titik_misi is not None and hx.n_titik_misi == 0:
+        keluar.append(
+            AlasanRekomendasi(
+                kode="BELUM_DISURVEI",
+                teks="Belum disurvei langsung — harga sewa dan pola jam di sini belum terukur",
+                nilai=0.0,
+                jenis="catatan",
+            )
+        )
+    elif hx.n_titik_misi is not None and hx.n_titik_misi < 10:
         keluar.append(
             AlasanRekomendasi(
                 kode="DATA_TIPIS",

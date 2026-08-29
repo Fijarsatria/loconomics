@@ -498,24 +498,35 @@ function BarKomparasi({
 /**
  * Pita "data demo" di bilah atas.
  *
- * Dipasang HANYA kalau backend menyatakan basis datanya belum memuat satu pun
- * observasi misi MAPID. Sengaja bukan konstanta di frontend: pita yang disetel
- * tangan akan tetap terpasang setelah data sungguhan masuk, dan pernyataan
- * "ini demo" yang salah sama merusaknya dengan pernyataan "ini survei" yang
- * salah. Backend yang menurunkannya dari hitungan baris — lihat
- * `/meta/siap::data_sintetis`.
+ * Dipasang kalau sebagian besar heksagon belum punya survei lapangan. Backend
+ * yang menurunkannya dari hitungan baris — lihat `/meta/siap::data_sintetis`.
+ *
+ * TEKSNYA ikut diturunkan dari angka, dan itu perbaikan 29 Agu 2026. Versi
+ * pertama sudah benar soal pemicunya tetapi menulis labelnya dengan tangan:
+ * "Data demo — belum ada survei lapangan". Begitu 18 variabel sintetis
+ * dikosongkan dan 27 titik misi termuat, KEDUA bagian kalimat itu jadi salah
+ * sekaligus — datanya bukan demo lagi, dan survei lapangannya bukan nol. Ia
+ * memperingatkan hal yang benar dengan kalimat yang keliru, dan itu justru
+ * meremehkan datanya sendiri di depan juri.
+ *
+ * Sekarang ia menyebut angkanya: berapa heksagon yang benar-benar disurvei.
  *
  * Tidak bisa ditutup. Peringatan yang bisa disingkirkan pembacanya berhenti
  * jadi peringatan, dan yang membacanya di sini adalah juri.
  */
 function PitaDemo() {
   const [catatan, setCatatan] = useState<string | null>(null)
+  const [cakupan, setCakupan] = useState<{ disurvei: number; total: number } | null>(null)
   useEffect(() => {
     let batal = false
     api
       .kesiapan()
       .then((k) => {
-        if (!batal && k.data_sintetis) setCatatan(k.catatan_data)
+        if (batal || !k.data_sintetis) return
+        setCatatan(k.catatan_data)
+        const total = k.basis_data.heksagon
+        const belum = k.basis_data.heksagon_predicted
+        if (total && belum !== undefined) setCakupan({ disurvei: total - belum, total })
       })
       // Gagal memeriksa BUKAN alasan memasang pitanya. Kalau backend tidak
       // menjawab, kita tidak tahu isinya apa - dan menuduh tanpa tahu sama
@@ -544,8 +555,14 @@ function PitaDemo() {
         <path d="M10 8.4v3.4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
         <circle cx="10" cy="14.2" r="1" fill="currentColor" />
       </svg>
-      <span className="hidden md:inline">Data demo — belum ada survei lapangan</span>
-      <span className="md:hidden">Data demo</span>
+      <span className="hidden md:inline">
+        {cakupan
+          ? `Survei lapangan baru ${cakupan.disurvei} dari ${cakupan.total} heksagon`
+          : 'Survei lapangan belum merata'}
+      </span>
+      <span className="md:hidden">
+        {cakupan ? `Survei ${cakupan.disurvei}/${cakupan.total}` : 'Survei tipis'}
+      </span>
     </span>
   )
 }

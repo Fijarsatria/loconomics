@@ -377,16 +377,27 @@ export interface JawabanAI {
 }
 
 /**
- * Kesiapan backend. Yang dipakai antarmuka cuma dua field terakhir.
+ * Kesiapan backend.
  *
- * `data_sintetis` DITURUNKAN backend dari jumlah baris observasi misi MAPID,
- * bukan sakelar yang disetel tangan — jadi pitanya hilang sendiri begitu survei
- * pertama masuk, dan tidak bisa berbohong ke arah sebaliknya.
+ * `data_sintetis` DITURUNKAN backend dari jumlah heksagon bertanda `predicted`,
+ * bukan sakelar yang disetel tangan — jadi pitanya menyusut sendiri begitu
+ * survei masuk, dan tidak bisa berbohong ke arah sebaliknya.
+ *
+ * `heksagon_predicted` ikut dibawa supaya TEKS pitanya juga bisa diturunkan dari
+ * angka. Versi pertama menurunkan PEMICUNYA dari data tetapi menulis teksnya
+ * dengan tangan ("Data demo — belum ada survei lapangan"), dan begitu variabel
+ * sintetis dikosongkan, kedua bagian kalimat itu jadi salah sekaligus: datanya
+ * bukan demo, dan survei lapangannya bukan nol.
  */
 export interface Kesiapan {
   siap: boolean
   lingkungan: string
-  basis_data: { terjangkau: boolean; heksagon?: number; observasi_misi?: number }
+  basis_data: {
+    terjangkau: boolean
+    heksagon?: number
+    heksagon_predicted?: number
+    observasi_misi?: number
+  }
   data_sintetis: boolean
   catatan_data: string | null
 }

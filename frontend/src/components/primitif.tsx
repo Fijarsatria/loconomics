@@ -64,8 +64,18 @@ export function Angka({
 export function Badge({ badge, ringkas }: { badge: BadgeKeyakinan; ringkas?: boolean }) {
   const k = KEYAKINAN[badge.tingkat]
   const prediksi = badge.sumber === 'predicted'
-  const judul = `${k.teks} · ${badge.n_titik_misi} titik misi · ${
-    prediksi ? 'nilai hasil imputasi model' : 'hasil survei lapangan'
+  // "hasil imputasi model" SALAH sejak 29 Agu 2026, dan salahnya ke arah yang
+  // paling merugikan: ia membuat angka yang benar-benar TERUKUR - POI OSM, rute
+  // OpenRouteService, penduduk WorldPop, zonasi RDTR - terbaca seperti tebakan
+  // model. Tidak ada satu pun model imputasi yang berjalan; `s5_impute` justru
+  // MENOLAK jalan sampai ground truth-nya cukup.
+  //
+  // `predicted` di basis data ini berarti satu hal saja: heksagon itu belum
+  // pernah dikunjungi surveyor. Bukan pernyataan tentang mutu angkanya.
+  const judul = `${k.teks} · ${badge.n_titik_misi} titik survei lapangan · ${
+    prediksi
+      ? 'heksagon ini belum disurvei langsung — angkanya dari sumber terukur (OSM, rute, penduduk, zonasi)'
+      : 'sebagian angkanya dari survei lapangan'
   }`
 
   return (
@@ -91,7 +101,7 @@ export function Badge({ badge, ringkas }: { badge: BadgeKeyakinan; ringkas?: boo
       {prediksi && (
         <span
           className="arsir text-ink-3 h-3 w-3 rounded-[2px] border border-line-2"
-          title="Nilai ini hasil imputasi model, bukan survei langsung"
+          title="Heksagon ini belum pernah disurvei langsung"
           aria-label="hasil imputasi model"
         />
       )}
