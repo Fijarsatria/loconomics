@@ -786,6 +786,37 @@ def tarik_simpul_transit() -> Path:
     return jalur
 
 
+#: Tag Overpass untuk POI usaha + konteks.
+#:
+#: Konstanta modul, bukan daftar di dalam satu fungsi, karena DUA penarik
+#: memakainya: `tarik_osm_poi` untuk keenam kawasan pilot, dan `tarik_poi_luar`
+#: untuk heksagon berlabel di luar grid. Kalau daftarnya disalin, cepat atau
+#: lambat keduanya berbeda - dan akibatnya bukan galat melainkan model yang
+#: dilatih pada fitur yang tidak sebanding dengan fitur yang diprediksinya.
+#:
+#: Sekolah dan rumah ibadah ikut walau keduanya BUKAN tempat usaha dan tidak
+#: memetakan ke satu pun kelas induk - `kelas_dari_tag` menolaknya, jadi tidak
+#: satu pun masuk business_pois. Keperluannya D09 generator_keramaian, yang
+#: didefinisikan "sekolah, RS, pasar, masjid besar": tanpa keduanya D09
+#: kehilangan separuh definisinya sendiri, dan kehilangannya tidak akan muncul
+#: sebagai galat - cuma sebagai angka yang kebetulan lebih kecil di setiap
+#: heksagon sekaligus.
+TAG_POI = [
+    'node["shop"]', 'way["shop"]',
+    'node["amenity"~"^(restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|'
+    'pharmacy|clinic|doctors|dentist|hospital|bank|atm|bureau_de_change|'
+    'fuel|car_rental|driving_school|marketplace|'
+    'school|college|university|kindergarten|place_of_worship)$"]',
+    'way["amenity"~"^(restaurant|cafe|fast_food|food_court|marketplace|hospital|'
+    'clinic|school|college|university|place_of_worship)$"]',
+    'node["office"]', 'way["office"]',
+    'node["healthcare"]', 'node["craft"]',
+    'node["leisure"~"^(fitness_centre|sports_centre)$"]',
+    'node["tourism"~"^(hotel|guest_house|hostel)$"]',
+    'way["tourism"~"^(hotel|guest_house|hostel)$"]',
+]
+
+
 def tarik_osm_poi() -> Path:
     """POI usaha - bahan dimensi Kompetisi (C01-C08) dan sebagian Permintaan.
 
@@ -793,32 +824,11 @@ def tarik_osm_poi() -> Path:
     (docs/data.md bagian 5). Menarik seluruh `amenity=*` akan membawa bangku
     taman dan tempat sampah, dan keduanya bukan kompetitor siapa pun.
     """
-    # Sekolah dan rumah ibadah ikut ditarik walau keduanya BUKAN tempat usaha
-    # dan tidak memetakan ke satu pun kelas induk - `kelas_dari_tag` menolaknya,
-    # jadi tidak satu pun masuk business_pois. Keperluannya D09
-    # generator_keramaian, yang didefinisikan "sekolah, RS, pasar, masjid besar":
-    # tanpa keduanya D09 kehilangan separuh definisinya sendiri, dan
-    # kehilangannya tidak akan muncul sebagai galat - cuma sebagai angka yang
-    # kebetulan lebih kecil di setiap heksagon sekaligus.
-    tag = [
-        'node["shop"]', 'way["shop"]',
-        'node["amenity"~"^(restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|'
-        'pharmacy|clinic|doctors|dentist|hospital|bank|atm|bureau_de_change|'
-        'fuel|car_rental|driving_school|marketplace|'
-        'school|college|university|kindergarten|place_of_worship)$"]',
-        'way["amenity"~"^(restaurant|cafe|fast_food|food_court|marketplace|hospital|'
-        'clinic|school|college|university|place_of_worship)$"]',
-        'node["office"]', 'way["office"]',
-        'node["healthcare"]', 'node["craft"]',
-        'node["leisure"~"^(fitness_centre|sports_centre)$"]',
-        'node["tourism"~"^(hotel|guest_house|hostel)$"]',
-        'way["tourism"~"^(hotel|guest_house|hostel)$"]',
-    ]
     print("  POI usaha:")
     hasil = _per_kawasan(
         lambda lat, lon: (
             f"[out:json][timeout:240];("
-            + "".join(f"{t}(around:{RADIUS_POI_M},{lat},{lon});" for t in tag)
+            + "".join(f"{t}(around:{RADIUS_POI_M},{lat},{lon});" for t in TAG_POI)
             + ");out center tags;"
         ),
         "POI",
@@ -826,6 +836,160 @@ def tarik_osm_poi() -> Path:
     )
     jalur = _tulis("osm_poi.json", hasil)
     print(f"\n  {len(hasil['elements'])} POI -> {jalur.name}")
+    return jalur
+
+
+# ---------------------------------------------------------------------------
+# POI di sekitar titik misi DI LUAR grid - bahan latih GapFill
+# ---------------------------------------------------------------------------
+#
+# GapFill (`s5_impute.py`) menuntut 30 baris ground truth sebelum boleh melatih
+# apa pun. Di dalam 708 heksagon kita cuma ada 11 untuk B07 - dan itu bukan
+# karena datanya sedikit melainkan karena LETAKNYA. API misi MAPID disaring per
+# POLIGON, bukan per tim, jadi ia mengembalikan survei SELURUH peserta lomba;
+# tiap tim memilih wilayah studinya sendiri.
+#
+# Terukur 30 Agustus 2026: dari 214 titik Menu Go, `harga_rata_rata` terisi di
+# 214/214 - angka native di KOLOM, bukan di foto, jadi B07 tidak pernah menunggu
+# OCR sama sekali. Titik itu menyentuh 112 heksagon res-9 se-Jabodetabek, dan
+# hanya 11 di antaranya milik kita.
+#
+# Yang perlu disadari: ground truth untuk MELATIH tidak harus berada di dalam
+# wilayah studi. Ia cuma perlu punya PREDIKTORNYA. Jadi 101 heksagon berlabel di
+# luar grid bisa dipakai - asalkan prediktornya dihitung dengan cara yang sama
+# persis, lewat fungsi yang sama, dari sumber yang sama. Itu yang ditarik di
+# sini.
+#
+# CAKUPANNYA SEMPIT, DAN ITU DISENGAJA. Ketiga prediktor dari POI - C02
+# kepadatan_poi_total, C05 pangsa_waralaba, D08 kepadatan_kantor - semuanya
+# menghitung isi heksagonnya SENDIRI; tidak satu pun menjangkau k-ring 1 seperti
+# C01. Jadi disc 2.500 m di sekitar pusat induk res-7 sudah menutup seluruh anak
+# res-9-nya dengan bantalan lebih dari satu kilometer, dan 65 kueri kecil jauh
+# lebih mungkin selesai daripada 12 kueri raksasa - yang sudah pernah dijawab
+# 504 berkali-kali di proyek ini.
+
+#: Induk H3 yang dipakai mengelompokkan titik berlabel. Res-7 lingkar luarnya
+#: ~1,4 km, jadi RADIUS_POI_LUAR_M menutupinya dengan bantalan yang lapang.
+RES_KELOMPOK = 7
+RADIUS_POI_LUAR_M = 2500
+
+#: Rentang harga per porsi yang masuk akal, rupiah.
+#:
+#: Terukur atas 214 nilai Menu Go: p2 = Rp2.500, p100 = Rp180.000, dan EMPAT
+#: nilai di bawah Rp1.000 (5, 17, 20, 40) yang jelas satuannya tertukar - orang
+#: menulis ribuan sebagai satuan. Dibuang, TIDAK dikalikan seribu: menebak niat
+#: penulisnya sama saja dengan mengarang angka, dan label karangan merusak model
+#: lebih dalam daripada label yang hilang.
+HARGA_PORSI_WARAS = (1_000.0, 200_000.0)
+
+
+def sel_berlabel_luar_grid(berkas_misi: Path | None = None) -> dict[str, list[float]]:
+    """Heksagon res-9 yang punya harga Menu Go dan ada DI LUAR grid 708.
+
+    Grid dihitung dari `config.PUSAT` + `CINCIN_PILOT`, bukan dibaca dari basis
+    data: modul ini lapisan penarikan dan tidak pernah menyentuh basis data.
+    Keduanya menghasilkan himpunan yang sama, dan `s7_publish.py --grid` yang
+    menjaga janji itu tetap benar.
+    """
+    import h3
+
+    berkas_misi = berkas_misi or DATA_MENTAH / "mapid_misi.json"
+    if not berkas_misi.exists():
+        raise SystemExit(
+            f"{berkas_misi} belum ada. Jalankan dulu:  python s1_ingest.py --misi"
+        )
+
+    grid: set[str] = set()
+    for lat, lon in PUSAT.values():
+        grid |= set(h3.grid_disk(h3.latlng_to_cell(lat, lon, H3_RESOLUSI), CINCIN_PILOT))
+
+    lo, hi = HARGA_PORSI_WARAS
+    keluar: dict[str, list[float]] = {}
+    for baris in json.loads(berkas_misi.read_text(encoding="utf-8")).get("menugo", []):
+        p = baris.get("properties") or {}
+        c = (baris.get("geometry") or {}).get("coordinates")
+        if not (isinstance(c, list) and len(c) >= 2):
+            continue
+        try:
+            harga = float(p.get("harga_rata_rata"))
+        except (TypeError, ValueError):
+            continue
+        if not (lo <= harga <= hi):
+            continue
+        sel = h3.latlng_to_cell(float(c[1]), float(c[0]), H3_RESOLUSI)
+        if sel in grid:
+            continue
+        keluar.setdefault(sel, []).append(harga)
+    return keluar
+
+
+def tarik_poi_luar() -> Path:
+    """POI OSM di sekitar heksagon berlabel yang ada di luar grid.
+
+    Aman diulang berkali-kali: tiap kelompok disinggahkan dan tidak pernah
+    ditarik dua kali - pola yang sama dengan `_per_kawasan`.
+    """
+    import h3
+
+    sel = sel_berlabel_luar_grid()
+    if not sel:
+        raise SystemExit(
+            "Tidak ada heksagon berlabel di luar grid - tidak ada yang perlu ditarik."
+        )
+
+    kelompok = sorted({h3.cell_to_parent(k, RES_KELOMPOK) for k in sel})
+    print(f"  {len(sel)} heksagon berlabel di luar grid")
+    print(f"  dikelompokkan jadi {len(kelompok)} penarikan res-{RES_KELOMPOK}\n")
+
+    kandang = DATA_MENTAH / "_singgah"
+    kandang.mkdir(parents=True, exist_ok=True)
+
+    gabung: dict[tuple[str, int], dict] = {}
+    for i, induk in enumerate(kelompok, 1):
+        berkas = kandang / f"POIluar_{induk}.json"
+        if berkas.exists():
+            hasil = json.loads(berkas.read_text(encoding="utf-8"))
+            asal = "singgahan"
+        else:
+            lat, lon = h3.cell_to_latlng(induk)
+            hasil = _overpass(
+                "[out:json][timeout:240];("
+                + "".join(
+                    f"{t}(around:{RADIUS_POI_LUAR_M},{lat},{lon});" for t in TAG_POI
+                )
+                + ");out center tags;"
+            )
+            berkas.write_text(json.dumps(hasil, ensure_ascii=False), encoding="utf-8")
+            asal = "baru"
+
+        baru = 0
+        for e in hasil.get("elements", []):
+            kunci = (e.get("type"), e.get("id"))
+            if kunci not in gabung:
+                e["_kawasan"] = f"luar:{induk}"
+                gabung[kunci] = e
+                baru += 1
+        print(f"    [{i:>2}/{len(kelompok)}] {induk}  +{baru:>5} POI  ({asal})")
+        if asal == "baru":
+            time.sleep(3.0)
+
+    # Daftar kelompok ikut ditulis, dan itu bukan kerapian.
+    #
+    # `_fitur_luar_grid` mengisi NOL untuk heksagon tanpa POI, dengan alasan
+    # yang benar: disc penarikannya menutup seluruh sel itu, jadi ketiadaan
+    # POI memang temuan. Alasan itu runtuh kalau kelompoknya TIDAK PERNAH
+    # ditarik - nol lalu berarti "belum diperiksa", dan model belajar bahwa
+    # heksagon itu sepi. Terukur saat penarikan masih separuh jalan: 47 dari
+    # 99 heksagon berlabel akan mendapat nol palsu.
+    #
+    # Berkas ini memang hanya ditulis di akhir penarikan yang lengkap, jadi
+    # keberadaannya sudah jadi jaminan. Daftar ini membuat jaminan itu bisa
+    # DIPERIKSA, bukan cuma dipercaya.
+    jalur = _tulis(
+        "osm_poi_luar.json",
+        {"elements": list(gabung.values()), "kelompok": kelompok},
+    )
+    print(f"\n  {len(gabung)} POI -> {jalur.name}")
     return jalur
 
 
@@ -1068,6 +1232,11 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Tarik data mentah")
     p.add_argument("--simpul", action="store_true", help="Simpul transit OSM")
     p.add_argument("--poi", action="store_true", help="POI usaha OSM")
+    p.add_argument(
+        "--poi-luar",
+        action="store_true",
+        help="POI di sekitar titik misi DI LUAR grid - bahan latih GapFill",
+    )
     p.add_argument("--bangunan", action="store_true", help="Footprint bangunan OSM")
     p.add_argument("--semua-osm", action="store_true", help="Ketiganya sekaligus")
     p.add_argument("--misi", action="store_true", help="Data misi MAPID (butuh MAPID_DATA_API_KEY)")
@@ -1079,8 +1248,8 @@ if __name__ == "__main__":
                    help="Titik henti angkutan umum berkoordinat -> D05")
     arg = p.parse_args()
 
-    if not any([arg.simpul, arg.poi, arg.bangunan, arg.semua_osm, arg.misi,
-                arg.rdtr, arg.inarisk, arg.rute, arg.henti]):
+    if not any([arg.simpul, arg.poi, arg.poi_luar, arg.bangunan, arg.semua_osm,
+                arg.misi, arg.rdtr, arg.inarisk, arg.rute, arg.henti]):
         p.print_help()
         print(f"\nWilayah: {', '.join(KAWASAN_PILOT)}")
         print(f"BBOX   : {BBOX}")
@@ -1096,6 +1265,9 @@ if __name__ == "__main__":
         tarik_simpul_transit()
     if arg.poi or arg.semua_osm:
         tarik_osm_poi()
+    if arg.poi_luar:
+        print("POI di luar grid (bahan latih GapFill):")
+        tarik_poi_luar()
     if arg.bangunan or arg.semua_osm:
         tarik_osm_bangunan()
     if arg.rute or arg.semua_osm:

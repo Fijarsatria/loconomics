@@ -52,7 +52,7 @@ implementasinya di tabel `hex_features`. Jembatan keduanya: `KODE_KE_KOLOM` di
 | B04 | `puncak_malam` | Pangsa transaksi 19–23 | **A2** |
 | B05 | `rasio_weekend` | Akhir pekan vs hari kerja, sebagai **kelipatan** — 1,0 berarti sama ramai, dan nilainya BOLEH melewati 1 | Misi |
 | B06 | ✅ `pangsa_digital` | Pangsa pembayaran non-tunai | **A2** |
-| B07 | ✅ `harga_median_porsi` | Median harga satu porsi | **A4** |
+| B07 | ✅ `harga_median_porsi` | Median harga satu porsi | Misi Menu Go — kolom `harga_rata_rata`, **terisi 214/214**. TIDAK pernah menunggu A4; ditandai begitu sampai 30 Agu 2026 tanpa pernah dibuka barisnya |
 | B08 | ✅ `spread_harga` | Sebaran harga **antartempat** dalam heksagon: (maks−min) ÷ median. Satu tempat → **kosong**, karena sebaran dari satu pengamatan tidak ada | Misi Menu Go — **nyata** 26 Agu 2026. Sebaran antar-MENU di satu tempat masih menunggu A4 |
 | B09 | `nominal_median_struk` | Median nominal per struk | **A2** |
 | B10 | `belanja_per_jam` | Rupiah per jam operasional | **A2** |
@@ -253,8 +253,11 @@ Tiga dataset misi, dan jumlah kolom berisi angka rupiah:
 | Struk Go | 8 | **0** |
 | Menu Go | — | satu-satunya yang punya angka native |
 
-Rupiah ada di **foto**, tidak di kolom. Tanpa A1–A4, proyek ini secara harfiah
-tidak punya satu pun angka harga untuk dianalisis. Itu jawaban paling kuat untuk
+Rupiah ada di **foto**, tidak di kolom — untuk **dua dari tiga** dataset. Menu Go
+punya `harga_rata_rata` sebagai angka native, terisi 214/214, dan itu yang
+mengisi B07 tanpa satu pun foto dibaca. Struk Go dan Properti Go memang nol
+kolom rupiah: nominal transaksi ada di `foto_struk`, harga sewa di `foto_spanduk`.
+Tanpa A1–A2, keduanya tidak punya satu pun angka harga. Itu jawaban paling kuat untuk
 pertanyaan "kenapa pakai AI?" — bukan karena sedang tren, tetapi karena tanpa itu
 datanya tidak ada.
 
@@ -703,6 +706,76 @@ ke timur.
 
 L01/L02/L03 berhenti di **328 dari 708 heksagon**, dan itu batas sumbernya,
 bukan batas pekerjaannya.
+
+### 10.12 Ground truth tidak harus berada di dalam wilayah studi
+
+Ditemukan 30 Agustus 2026. Idenya benar dan hasilnya NEGATIF — keduanya
+dicatat di sini karena keduanya berguna.
+
+GapFill (`s5_impute.py`) menuntut `MIN_GROUND_TRUTH = 30` baris sebelum boleh
+melatih apa pun. Di dalam 708 heksagon kita cuma ada **11** untuk B07, jadi ia
+menolak jalan berhari-hari — dan penolakannya benar.
+
+Yang luput: model tidak peduli di mana barisnya berada. Ia cuma perlu pasangan
+(prediktor, label) yang sebanding. Dan titik misi MAPID menyentuh jauh lebih
+banyak heksagon daripada yang kita skor:
+
+| Label tersedia | Di dalam grid | Se-Jabodetabek |
+|---|---|---|
+| B07 harga porsi (kolom Menu Go) | 11 | **112** |
+| Struk (butuh A2) | 12 | 133 |
+| Properti/sewa (butuh A1) | **2** | 198 |
+
+Angka terakhir yang paling perlu diingat sebelum menaruh harapan pada OCR:
+sekalipun A1 sempurna, harga sewa cuma terisi di **2 dari 708 heksagon**. Yang
+membatasi bukan kemampuan membaca foto melainkan letak surveinya — API misi
+MAPID disaring per POLIGON, bukan per tim, jadi ia mengembalikan survei seluruh
+peserta lomba dan tiap tim memilih wilayahnya sendiri.
+
+**Syaratnya satu, dan tidak bisa ditawar.** Prediktor untuk heksagon di luar
+grid wajib dihitung lewat **fungsi yang sama persis** dengan yang di dalam grid
+— bukan salinan yang kebetulan mirip. Model yang dilatih pada fitur yang
+dihitung berbeda dari fitur yang diprediksinya akan tetap melaporkan R² yang
+kelihatan bagus, karena spatial k-fold pun hanya melihat data latihnya. Karena
+itu `TAG_POI` diangkat jadi konstanta modul di `s1_ingest.py`: dua penarik,
+satu daftar, dan tidak ada cara keduanya berpisah diam-diam.
+
+Cakupan penarikannya sengaja sempit. Ketiga prediktor dari POI — C02, C05, D08
+— semuanya menghitung isi heksagonnya sendiri; tidak satu pun menjangkau k-ring
+1 seperti C01. Jadi disc 2.500 m di sekitar pusat induk res-7 sudah cukup, dan
+63 kueri kecil jauh lebih mungkin selesai daripada 12 kueri raksasa.
+
+    cd pipeline && python s1_ingest.py --poi-luar     # 63 tarikan, 19.468 POI
+    cd pipeline && python s7_publish.py --gapfill
+
+**Hasilnya: ditolak, dan itu temuan.** Dijalankan dengan 110 baris latih di 40
+kelompok:
+
+| Target | R² | MAE | MAE menebak rata-rata |
+|---|---|---|---|
+| `harga_median_porsi` (B07) | **−0,092** | 11.581 | 10.775 |
+| `skor_ramai_terkoreksi` (D10) | korelasi **nol** untuk keempat prediktor | | |
+
+Modelnya lebih buruk daripada menebak rata-rata, jadi `s5_impute` menolak
+memuatnya — persis seperti yang seharusnya.
+
+**Sebabnya terukur, bukan ditebak.** Di dalam SATU heksagon saja harga per
+porsi berkisar Rp7.000–25.000; satu heksagon berisi 19 titik merentang
+Rp15.000–50.000. Harga makanan ternyata sifat **tempat usahanya** — warung dan
+kafe di jalan yang sama berbeda tiga kali lipat — bukan sifat lokasinya.
+Mengagregasinya ke median heksagon membuang justru hal yang menentukan
+harganya. Korelasi Spearman terkuat cuma **+0,213** (kepadatan POI, p=0,034),
+dan ia tidak menguat saat labelnya dipertebal (+0,254 pada n≥2, +0,284 pada
+n≥3, keduanya tidak signifikan).
+
+Jadi B07 bukan variabel yang bisa diimputasi dari bentuk kota. Ia menuntut
+pengamatan di lokasinya — dan itu memindahkannya ke daftar yang sama dengan
+P05, B09, dan B10: **butuh survei**, bukan butuh model.
+
+Perangkatnya tetap ada dan tetap berguna: ia membuat hasil negatif ini bisa
+diulang siapa pun, dan begitu survei lapangan masuk — saat tiap heksagon punya
+beberapa pengamatan, bukan satu — targetnya bisa diuji ulang dalam satu
+perintah.
 
 ### 10.11 Ringkasan
 

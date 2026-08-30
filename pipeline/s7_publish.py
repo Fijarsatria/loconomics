@@ -30,6 +30,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterable
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -990,6 +991,195 @@ def muat_survei(db: Session, berkas: Path | None = None) -> dict[str, int]:
     }
 
 
+# ---------------------------------------------------------------------------
+# GapFill: melatih di LUAR grid, memprediksi DI DALAM grid
+# ---------------------------------------------------------------------------
+
+
+def _fitur_luar_grid(elemen: list[dict], sel: list[str]) -> "pd.DataFrame":
+    """Prediktor untuk heksagon di luar grid, dari POI OSM yang sama.
+
+    Memakai FUNGSI YANG SAMA dengan jalur di dalam grid - bukan salinan yang
+    kebetulan mirip. Itu syaratnya: model yang dilatih pada fitur yang dihitung
+    berbeda dari fitur yang diprediksinya akan tetap melaporkan R2 yang
+    kelihatan bagus, karena spatial k-fold pun cuma melihat data latihnya.
+    """
+    from s2_clean import konteks_dari_osm, poi_dari_osm
+    from s4_spatial import kepadatan_poi_total, pangsa_waralaba, dimensi_konteks
+
+    indeks = pd.Index(sel, name="h3_index")
+    poi = poi_dari_osm(elemen)
+
+    f = pd.DataFrame(index=indeks)
+    f["kepadatan_poi_total"] = kepadatan_poi_total(poi).reindex(indeks)
+    f["pangsa_waralaba"] = pangsa_waralaba(poi).reindex(indeks)
+    konteks = dimensi_konteks(konteks_dari_osm(elemen), semua_hex=indeks)
+    f["kepadatan_kantor"] = konteks["kepadatan_kantor"].reindex(indeks)
+
+    # Heksagon yang benar-benar tidak punya POI di dalamnya bernilai NOL, bukan
+    # kosong - disc penarikannya menutup seluruh sel ini, jadi ketiadaan POI
+    # memang temuan. Ini kebalikan dari data misi. Sama persis dengan alasan
+    # `ISI_NOL` di s4_spatial.
+    for k in ("kepadatan_poi_total", "pangsa_waralaba", "kepadatan_kantor"):
+        f[k] = f[k].fillna(0.0)
+    return f
+
+
+def _penduduk_luar_grid(sel: list[str], berkas: Path | None = None) -> "pd.Series":
+    """D01 untuk heksagon di luar grid, dari raster WorldPop yang sama."""
+    import h3
+    import rasterio
+    from rasterio.windows import from_bounds
+
+    from s4_spatial import penduduk_per_heksagon
+
+    berkas = berkas or DATA_MENTAH / "worldpop_idn_2020.tif"
+    if not berkas.exists():
+        raise SystemExit(f"{berkas} belum ada - lihat CLAUDE.md bagian --penduduk.")
+
+    batas = [h3.cell_to_boundary(k) for k in sel]
+    lat = [p[0] for b in batas for p in b]
+    lon = [p[1] for b in batas for p in b]
+    pad = 0.002
+    with rasterio.open(berkas) as r:
+        jendela = from_bounds(
+            min(lon) - pad, min(lat) - pad, max(lon) + pad, max(lat) + pad, r.transform
+        )
+        nilai = r.read(1, window=jendela)
+        t = r.window_transform(jendela)
+        d01 = penduduk_per_heksagon(nilai, t.c, t.f, t.a, -t.e, nodata=r.nodata)
+    return d01.reindex(pd.Index(sel, name="h3_index"))
+
+
+def gapfill_luar(
+    db: Session, target: str = "harga_median_porsi", terapkan: bool = False
+) -> dict[str, object]:
+    """Latih GapFill dengan ground truth SE-JABODETABEK, lalu isi 708 heksagon.
+
+    KENAPA GROUND TRUTH-NYA DARI LUAR GRID
+
+    `s5_impute` menuntut 30 baris; di dalam 708 heksagon kita cuma ada 11 untuk
+    B07. Itu bukan karena datanya sedikit melainkan karena LETAKNYA - API misi
+    MAPID disaring per POLIGON, bukan per tim, jadi ia mengembalikan survei
+    seluruh peserta lomba dan tiap tim memilih wilayahnya sendiri.
+
+    Ground truth untuk MELATIH tidak harus berada di dalam wilayah studi; ia
+    cuma perlu punya prediktornya. Yang ditambahkan di sini 99 heksagon
+    berlabel di luar grid, prediktornya dihitung lewat fungsi yang sama persis.
+
+    HASILNYA SEJAUH INI: DITOLAK, DAN ITU TEMUAN
+
+    Dijalankan 30 Agustus 2026 dengan 110 baris latih di 40 kelompok:
+
+        target                R2       MAE    MAE menebak rata-rata
+        harga_median_porsi  -0,092   11.581   10.775   -> LEBIH BURUK
+        skor_ramai_terkoreksi        korelasi nol untuk keempat prediktor
+
+    Jadi modelnya tidak dimuat, dan `terapkan` pun tidak menolongnya. Sebabnya
+    terukur, bukan ditebak: DI DALAM SATU HEKSAGON saja harga per porsi
+    berkisar Rp7.000-25.000, dan satu heksagon berisi 19 titik merentang
+    Rp15.000-50.000. Harga makanan ternyata sifat TEMPAT USAHANYA - warung dan
+    kafe di jalan yang sama berbeda tiga kali lipat - bukan sifat lokasinya.
+    Mengagregasinya ke median heksagon membuang justru hal yang menentukan
+    harganya, dan tidak ada prediktor bentuk kota yang bisa memulihkan itu.
+    Korelasi Spearman terkuat cuma +0,213 (kepadatan POI), dan ia tidak
+    menguat saat labelnya dipertebal.
+
+    Fungsi ini tetap ada, dan bukan sebagai peninggalan: ia membuat hasil
+    negatif itu bisa DIULANG oleh siapa pun, dan ia akan langsung berguna
+    begitu survei lapangan masuk - saat itu tiap heksagon punya beberapa
+    pengamatan, bukan satu, dan targetnya bisa diuji ulang dalam satu perintah.
+
+    YANG DILAPORKAN APA ADANYA
+
+    R2 dan MAE dari spatial k-fold, beserta pembanding "menebak rata-rata".
+    Kalau modelnya tidak mengalahkan tebakan rata-rata, ia TIDAK dimuat. Peta
+    yang kosong dan mengakuinya lebih baik daripada peta yang penuh dan tidak
+    bisa dipertanggungjawabkan.
+    """
+    import h3
+
+    from s1_ingest import sel_berlabel_luar_grid
+    from s5_impute import DataTidakCukup, latih_model, prediksi_seluruh_heksagon
+
+    berkas = DATA_MENTAH / "osm_poi_luar.json"
+    if not berkas.exists():
+        raise SystemExit(
+            f"{berkas} belum ada. Jalankan dulu:  python s1_ingest.py --poi-luar"
+        )
+    isi = json.loads(berkas.read_text(encoding="utf-8"))
+    elemen = isi.get("elements", [])
+
+    # --- ground truth di luar grid ------------------------------------------
+    label = sel_berlabel_luar_grid()
+    sel = sorted(label)
+
+    # Setiap heksagon berlabel HARUS berada di kelompok yang benar-benar
+    # ditarik. Kalau tidak, `_fitur_luar_grid` mengisinya nol - dan nol di
+    # situ berarti "belum diperiksa", bukan "tidak ada POI". Model yang
+    # belajar dari nol palsu tetap melaporkan R2 yang kelihatan bagus.
+    from s1_ingest import RES_KELOMPOK
+
+    ditarik = set(isi.get("kelompok") or [])
+    if ditarik:
+        kurang = {h3.cell_to_parent(k, RES_KELOMPOK) for k in sel} - ditarik
+        if kurang:
+            raise SystemExit(
+                f"{len(kurang)} kelompok belum ditarik. Ulangi:  "
+                "python s1_ingest.py --poi-luar"
+            )
+    luar = _fitur_luar_grid(elemen, sel)
+    luar["pop_100m"] = _penduduk_luar_grid(sel)
+    luar[target] = pd.Series(
+        {k: float(np.median(v)) for k, v in label.items()}
+    ).reindex(luar.index)
+    # `kawasan` dipakai spatial k-fold sebagai grup. Untuk yang di luar grid,
+    # grupnya induk res-6 - cukup lebar untuk memisahkan wilayah yang berbeda,
+    # cukup sempit untuk menghasilkan banyak lipatan.
+    luar["kawasan"] = [f"luar-{h3.cell_to_parent(k, 6)}" for k in luar.index]
+
+    # --- ground truth di dalam grid -----------------------------------------
+    dalam = pd.read_sql(
+        "SELECT h3_index, kawasan, kepadatan_poi_total, pangsa_waralaba, "
+        f"kepadatan_kantor, pop_100m, {target} FROM hex_features",
+        db.connection(),
+    ).set_index("h3_index")
+
+    latih = pd.concat([dalam[dalam[target].notna()], luar], axis=0)
+
+    try:
+        hasil = latih_model(latih, target)
+    except DataTidakCukup as e:
+        return {"status": "DITOLAK", "alasan": str(e), "n_latih": len(latih)}
+
+    ringkas: dict[str, object] = {
+        "status": "dilatih",
+        "n_latih": hasil.n_latih,
+        "target": target,
+        "n_dalam_grid": int(dalam[target].notna().sum()),
+        "n_luar_grid": len(luar),
+        "kawasan": len(hasil.kawasan),
+        "fitur": hasil.fitur,
+        "r2": round(hasil.r2, 4),
+        "mae": round(hasil.mae, 1),
+        "mae_menebak_rata2": round(hasil.baseline_mae, 1),
+        "lebih_baik": hasil.lebih_baik_dari_menebak,
+    }
+    if not hasil.lebih_baik_dari_menebak:
+        ringkas["status"] = "TIDAK DIMUAT - tidak mengalahkan tebakan rata-rata"
+        return ringkas
+
+    prediksi = prediksi_seluruh_heksagon(hasil, dalam)
+    ringkas["n_diprediksi"] = int(prediksi[target].notna().sum())
+    if not terapkan:
+        ringkas["status"] = "dilatih (tanpa --terapkan, tidak dimuat)"
+        return ringkas
+
+    ringkas["hex_ditulis"] = muat_variabel(db, prediksi[[target]])
+    ringkas["status"] = "DIMUAT"
+    return ringkas
+
+
 def muat_bangunan(db: Session, sumber: Path | None = None) -> dict[str, int]:
     """M01 rasio tutupan dan M02 luas median, dari footprint bangunan OSM.
 
@@ -1321,6 +1511,11 @@ if __name__ == "__main__":
     p.add_argument("--ekspor", action="store_true", help="Basis data -> GeoJSON statis")
     p.add_argument("--cakupan", action="store_true", help="Tampilkan cakupan data")
     p.add_argument(
+        "--gapfill",
+        action="store_true",
+        help="Latih GapFill B07 dengan ground truth se-Jabodetabek, lalu isi 708",
+    )
+    p.add_argument(
         "--isi-d04",
         action="store_true",
         help="Alirkan jarak (D03) + waktu jalan (D04) nyata dari hex_routes",
@@ -1375,7 +1570,7 @@ if __name__ == "__main__":
 
     if not any([arg.muat, arg.ekspor, arg.cakupan, arg.isi_d04, arg.penduduk,
                 arg.bangunan, arg.osm, arg.misi, arg.survei, arg.rdtr, arg.transit,
-                arg.kosongkan, arg.hitung_ulang, arg.grid]):
+                arg.gapfill, arg.kosongkan, arg.hitung_ulang, arg.grid]):
         p.print_help()
         raise SystemExit(0)
 
@@ -1422,8 +1617,8 @@ if __name__ == "__main__":
     # dengan skor lama adalah keadaan yang tidak memunculkan galat apa pun dan
     # hanya ketahuan kalau ada yang menjumlahkan faktornya dengan tangan.
     if (arg.isi_d04 or arg.penduduk or arg.bangunan or arg.osm or arg.misi
-            or arg.survei or arg.rdtr or arg.transit or arg.kosongkan
-            or arg.hitung_ulang):
+            or arg.survei or arg.gapfill or arg.rdtr or arg.transit
+            or arg.kosongkan or arg.hitung_ulang):
         Sesi = sessionmaker(bind=_mesin())
         with Sesi() as db:
             if arg.isi_d04:
@@ -1446,6 +1641,10 @@ if __name__ == "__main__":
                 print("Memuat data misi MAPID...")
                 for k, v in muat_misi(db).items():
                     print(f"  {k:16} {v}")
+            if arg.gapfill:
+                print("GapFill B07 - melatih dengan ground truth se-Jabodetabek...")
+                for k, v in gapfill_luar(db, terapkan=arg.terapkan).items():
+                    print(f"  {k:20} {v}")
             if arg.survei:
                 print("Memuat hasil survei lapangan...")
                 hasil = muat_survei(db)

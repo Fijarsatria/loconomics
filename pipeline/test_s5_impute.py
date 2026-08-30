@@ -224,6 +224,83 @@ def test_laporan_kesiapan_terbaca():
     cek("menyebut ambangnya", "Ambang" in lap2)
 
 
+# ---------------------------------------------------------------------------
+# Ground truth dari LUAR grid
+#
+# Yang diuji di sini bukan "apakah modelnya bagus", melainkan tiga cara bahan
+# latihnya bisa tercemar tanpa memunculkan satu pun galat.
+# ---------------------------------------------------------------------------
+
+
+def _misi(baris):
+    """Berkas misi tiruan berbentuk sama dengan keluaran s1_ingest --misi."""
+    import json
+    import tempfile
+    from pathlib import Path as _P
+
+    f = _P(tempfile.mkdtemp()) / "mapid_misi.json"
+    f.write_text(json.dumps({"menugo": baris}), encoding="utf-8")
+    return f
+
+
+def _titik(lat, lon, harga):
+    return {
+        "geometry": {"coordinates": [lon, lat]},
+        "properties": {"harga_rata_rata": harga},
+    }
+
+
+def test_harga_di_luar_rentang_dibuang_bukan_dikalikan():
+    """Empat nilai Menu Go sungguhan ada di bawah Rp1.000 (5, 17, 20, 40).
+
+    Menebak bahwa penulisnya bermaksud ribuan lalu mengalikan seribu sama saja
+    dengan mengarang label - dan label karangan merusak model lebih dalam
+    daripada label yang hilang, karena ia ikut dipelajari.
+    """
+    from s1_ingest import sel_berlabel_luar_grid
+
+    # Bandung: jauh di luar grid Jabodetabek mana pun.
+    f = _misi([_titik(-6.9147, 107.6098, 20), _titik(-6.9150, 107.6100, 18_000)])
+    sel = sel_berlabel_luar_grid(f)
+    nilai = [v for daftar in sel.values() for v in daftar]
+    cek("harga Rp20 dibuang", 20.0 not in nilai, f"- {nilai}")
+    cek("harga Rp18.000 tetap", 18_000.0 in nilai, f"- {nilai}")
+
+
+def test_harga_terlalu_besar_juga_dibuang():
+    from s1_ingest import sel_berlabel_luar_grid
+
+    f = _misi([_titik(-6.9147, 107.6098, 5_000_000)])
+    cek("Rp5 juta per porsi dibuang", sel_berlabel_luar_grid(f) == {})
+
+
+def test_heksagon_di_dalam_grid_tidak_ikut():
+    """Kalau ikut, ia terhitung dua kali - sekali sebagai bahan latih dan
+    sekali lagi sebagai baris yang diprediksi, dan R2-nya jadi optimistis."""
+    from config import PUSAT
+    from s1_ingest import sel_berlabel_luar_grid
+
+    lat, lon = PUSAT["Manggarai"]
+    f = _misi([_titik(lat, lon, 15_000), _titik(-6.9147, 107.6098, 15_000)])
+    sel = sel_berlabel_luar_grid(f)
+    cek("titik di pusat kawasan pilot tidak ikut", len(sel) == 1, f"- {len(sel)}")
+
+
+def test_daftar_tag_poi_satu_sumber():
+    """Dua penarik memakai TAG_POI yang sama. Kalau salah satunya menyalin
+    daftarnya, model dilatih pada fitur yang tidak sebanding dengan yang
+    diprediksinya - dan itu tidak pernah muncul sebagai galat."""
+    import inspect
+
+    import s1_ingest as m
+
+    cek("TAG_POI konstanta modul", isinstance(m.TAG_POI, list) and len(m.TAG_POI) > 5)
+    for fn in (m.tarik_osm_poi, m.tarik_poi_luar):
+        sumber = inspect.getsource(fn)
+        cek(f"{fn.__name__} memakai TAG_POI", "TAG_POI" in sumber)
+        cek(f"{fn.__name__} tidak menyalin daftar tag", 'node["shop"]' not in sumber)
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):
