@@ -195,8 +195,52 @@ export const api = {
 
   // --- Heksagon ---
   /** `kawasan` boleh satu nama atau beberapa dipisah koma (alat Premium). */
-  layerHeksagon: (p: { kawasan?: string; min_score?: number; versi?: string } = {}) =>
-    ambil<GeoJSON>(`/hex/layer${kueri(p)}`),
+  /**
+   * Grid heksagon. SATU-SATUNYA endpoint yang punya sumber cadangan statis.
+   *
+   * Kenapa hanya yang ini: tanpa heksagon, layar utama produk ini kosong
+   * melompong dan tidak ada satu pun yang bisa ditunjukkan. Sisanya - daftar,
+   * kuadran, detail - boleh gagal dengan pesan yang jujur, karena kegagalannya
+   * terlihat sebagai bagian yang kosong, bukan sebagai aplikasi yang mati.
+   *
+   * Berkasnya dibangkitkan `s7_publish.py --ekspor`, isinya SAMA PERSIS dengan
+   * respons endpoint ini - 708 fitur, 840 KB untuk keenam kawasan. Dipakai
+   * hanya kalau backend tidak bisa dihubungi sama sekali; kalau backend
+   * menjawab dengan galat, galatnya diteruskan apa adanya. Backend yang SALAH
+   * tidak boleh disamarkan jadi backend yang TIDAK ADA.
+   */
+  layerHeksagon: async (p: { kawasan?: string; min_score?: number; versi?: string } = {}) => {
+    const statis = async () => {
+      const nama =
+        !p.kawasan || p.kawasan.includes(',')
+          ? 'semua'
+          : p.kawasan.toLowerCase().replace(/ /g, '-')
+      const res = await fetch(`${import.meta.env.BASE_URL}data/hex-${nama}.geojson`)
+      if (!res.ok) throw new GalatAPI(res.status, 'STATIS_TIDAK_ADA', `data/hex-${nama}.geojson`)
+      return (await res.json()) as GeoJSON
+    }
+
+    // TIDAK ADA backend dan BACKEND YANG MENOLAK adalah dua keadaan berbeda,
+    // dan membedakannya harus dari konfigurasi - bukan dari bentuk galatnya.
+    //
+    // Versi pertama membedakannya lewat `e instanceof GalatAPI`, dan itu salah:
+    // dengan API_BASE kosong, permintaannya jadi relatif dan GitHub Pages
+    // menjawab 404 HTML - yang terbaca persis seperti backend yang menolak.
+    // Jadi cadangannya tidak akan pernah dipakai, tepat di satu-satunya
+    // keadaan yang ia dibuat untuknya.
+    if (!API_BASE) return statis()
+
+    try {
+      return await ambil<GeoJSON>(`/hex/layer${kueri(p)}`)
+    } catch (e) {
+      // Backend DIKONFIGURASI tapi tidak terjangkau (mati, tidur, jaringan
+      // putus): pakai cadangan supaya peta tetap tergambar. Backend yang
+      // menjawab dengan galat diteruskan apa adanya - backend yang SALAH tidak
+      // boleh disamarkan jadi backend yang TIDAK ADA.
+      if (e instanceof GalatAPI) throw e
+      return statis()
+    }
+  },
 
   detailHeksagon: (h3: string, versi?: string) =>
     ambil<DetailHeksagon>(`/hex/${h3}${kueri({ versi })}`),

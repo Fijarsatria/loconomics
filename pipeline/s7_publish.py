@@ -1425,8 +1425,9 @@ def ekspor_geojson(tujuan: Path = EKSPOR, versi: str = "baseline") -> dict[str, 
     Sesi = sessionmaker(bind=_mesin())
     hasil: dict[str, int] = {}
 
-    kueri = text(
-        f"""
+    # String biasa, bukan : ia masih memuat {saring} yang dirakit per
+    # kawasan di bawah.  dipanggil sesudah formatnya lengkap.
+    kueri = f"""
         SELECT h.h3_index, h.kawasan, h.tingkat_keyakinan, h.n_titik_misi,
                h.data_source, h.zona_izin_komersial, h.indeks_churn,
                h.harga_sewa_median, h.harga_sewa_per_m2, h.belanja_per_jam, h.njop_m2,
@@ -1435,13 +1436,29 @@ def ekspor_geojson(tujuan: Path = EKSPOR, versi: str = "baseline") -> dict[str, 
         FROM hex_features h
         LEFT JOIN location_scores s
                ON s.h3_index = h.h3_index AND s.versi = :versi
-        WHERE (:kawasan IS NULL OR h.kawasan = :kawasan)
+        {{saring}}
         """
-    )
 
     with Sesi() as db:
         for kawasan in [*KAWASAN_PILOT, None]:
-            baris = db.execute(kueri, {"versi": versi, "kawasan": kawasan}).mappings().all()
+            # Klausa saringnya DIRAKIT, bukan dimatikan lewat `:kawasan IS NULL`.
+            #
+            # Bentuk itu terlihat rapi dan tidak pernah berhasil sekali pun:
+            # parameter yang hanya muncul di `IS NULL` tidak punya tipe yang bisa
+            # disimpulkan PostgreSQL, dan ia menjawab "could not determine data
+            # type of parameter". Jadi `--ekspor` selalu meledak - sementara
+            # docs/arsitektur.md sudah menyebutnya "tinggal disajikan" dan tidak
+            # ada satu pun uji yang menyentuhnya.
+            #
+            # Nama kawasan TIDAK ditempel ke SQL; ia tetap parameter. Yang
+            # dirakit cuma ada-tidaknya klausanya.
+            q = text(
+                kueri.format(saring="" if kawasan is None else "WHERE h.kawasan = :kawasan")
+            )
+            param: dict[str, object] = {"versi": versi}
+            if kawasan is not None:
+                param["kawasan"] = kawasan
+            baris = db.execute(q, param).mappings().all()
             if not baris and kawasan is not None:
                 continue
 

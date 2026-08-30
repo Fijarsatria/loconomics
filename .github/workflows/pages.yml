@@ -1,0 +1,76 @@
+# Terbitkan frontend ke GitHub Pages.
+#
+# Kenapa GitHub Pages dan bukan Cloudflare: ia tidak menuntut satu pun
+# kredensial baru. Repositori ini sudah publik dan `GITHUB_TOKEN` sudah ada,
+# jadi tim bisa melihat hasilnya hari ini tanpa mendaftar ke layanan mana pun.
+#
+# Yang disajikan di sini SELURUH frontend, termasuk halaman gerbang yang memang
+# tidak butuh backend sama sekali - sembilan bagian, enam kartu peta WebP, nol
+# MapLibre. Peta aplikasinya menggambar heksagon dari GeoJSON statis di
+# `public/data/` selama `VITE_API_BASE_URL` masih kosong; begitu backend hidup,
+# isi variabel itu di Settings > Variables dan jalankan ulang alur ini.
+name: Terbitkan frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Satu penerbitan pada satu waktu. `cancel-in-progress: false` disengaja:
+# membatalkan penerbitan di tengah jalan bisa meninggalkan situs separuh
+# ter-unggah, dan itu lebih buruk daripada menunggu.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  bangun:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Pasang dependensi
+        working-directory: frontend
+        run: npm ci
+
+      - name: Periksa tipe
+        working-directory: frontend
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Bangun
+        working-directory: frontend
+        env:
+          # Repositori disajikan di /<nama-repo>/, bukan di akar.
+          VITE_BASE: /${{ github.event.repository.name }}/
+          # Kosong = pakai GeoJSON statis. Isi dengan URL backend begitu ada.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: npx vite build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  terbitkan:
+    needs: bangun
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.terbit.outputs.page_url }}
+    steps:
+      - id: terbit
+        uses: actions/deploy-pages@v4
