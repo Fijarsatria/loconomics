@@ -672,8 +672,11 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   const [siap, setSiap] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
   /** Galat basemap, terpisah dari galat layer heksagon: sebabnya lain, dan
-      tindak lanjutnya juga lain. */
-  const [galatPeta, setGalatPeta] = useState<string | null>(null)
+      tindak lanjutnya juga lain.
+      `ubin` membedakan dua kegagalan yang menuntut tindakan berbeda: server
+      ubin MAPID yang sedang menolak (tidak ada yang bisa kita lakukan), dan
+      gaya yang memang salah (itu urusan kita). */
+  const [galatPeta, setGalatPeta] = useState<{ pesan: string; ubin: boolean } | null>(null)
   const [sorot, setSorot] = useState<PropertiHeksagon | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
 
@@ -779,7 +782,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       // masih mengabarkan ubin tunggal yang gagal sepanjang penggeseran peta,
       // dan itu normal - menampilkannya berarti memasang peringatan permanen
       // untuk sesuatu yang tidak perlu ditindaklanjuti siapa pun.
-      if (pesan && !m.isStyleLoaded()) setGalatPeta(pesan)
+      if (!pesan || m.isStyleLoaded()) return
+      // URL-nya ada di dua tempat tergantung versi MapLibre: properti `url`
+      // milik AJAXError, dan di dalam pesannya sendiri. Dibaca dari keduanya.
+      const url = (e as unknown as { error?: { url?: string } }).error?.url ?? ''
+      const keUbin = /basemap\.mapid\.io\/data\//.test(url) || /basemap\.mapid\.io\/data\//.test(pesan)
+      setGalatPeta({ pesan, ubin: keUbin })
     })
     // `rotate` dan `pitch` menyala tiap bingkai selama diseret; itu tidak apa-apa
     // karena yang dikirim cuma dua angka dan App membandingkannya sebelum
@@ -1843,14 +1851,42 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       {galatPeta && (
         <div
           role="alert"
-          className="kaca pop absolute bottom-4 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-md px-4 py-3 lg:left-[calc(50%-13rem)]"
+          // bottom-24, bukan bottom-4: kaki peta sudah ditempati pil pertanyaan
+          // layer / ajakan simulasi / baki komparasi, dan pesan ini lebih
+          // tinggi daripada versi satu-barisnya. Ditaruh di atas keduanya.
+          className="kaca pop absolute bottom-24 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-md px-4 py-3 lg:left-[calc(50%-13rem)]"
         >
-          <p className="text-[13.5px] font-semibold text-bahaya">Basemap gagal dimuat</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{galatPeta}</p>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
-            Pilih basemap lain lewat menu di kanan atas; heksagon dan skornya
-            tidak terpengaruh.
+          {/* Dua kegagalan, dua kalimat.
+
+              Versi sebelumnya selalu menulis "Basemap gagal dimuat" lalu
+              menyarankan "pilih basemap lain". Saran itu KELIRU untuk kasus
+              yang paling sering terjadi: keempat gaya menarik ubin dari
+              `basemap.mapid.io/data/mapidtiles` yang sama persis, jadi orang
+              yang menurutinya akan mencoba keempatnya dan gagal keempat kali -
+              lalu menyimpulkan aplikasinya yang rusak.
+
+              Terukur saat pemadaman: ubin menolak SEMUA bentuk otentikasi
+              (dengan kunci pun 401), sementara `styles/*` menjawab 200 dengan
+              kunci yang sama dan `fonts/*` 200 tanpa kunci. Jadi kuncinya sah
+              dan yang padam sisi MAPID. */}
+          <p className="text-[13.5px] font-semibold text-bahaya">
+            {galatPeta.ubin ? 'Server ubin MAPID sedang menolak' : 'Basemap gagal dimuat'}
           </p>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
+            {galatPeta.ubin
+              ? 'Gaya basemap-nya sendiri termuat — ia berkas statis di server ini. Yang ditolak permintaan ubinnya, di sisi MAPID.'
+              : galatPeta.pesan}
+          </p>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+            {galatPeta.ubin
+              ? 'Keempat gaya memakai server ubin yang sama, jadi berganti gaya tidak menolong. Heksagon, skor, dan seluruh analisisnya tidak terpengaruh.'
+              : 'Pilih basemap lain lewat menu di kanan atas; heksagon dan skornya tidak terpengaruh.'}
+          </p>
+          {galatPeta.ubin && (
+            <p className="mt-1.5 font-mono text-[11px] leading-relaxed break-all text-ink-3/80">
+              {galatPeta.pesan}
+            </p>
+          )}
         </div>
       )}
 

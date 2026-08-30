@@ -555,13 +555,27 @@ function PitaDemo() {
         <path d="M10 8.4v3.4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
         <circle cx="10" cy="14.2" r="1" fill="currentColor" />
       </svg>
+      {/* Kalimatnya menyebut DUA angka, dan itu perbaikan atas versi sebelumnya
+          yang cuma menyebut satu.
+
+          "Survei lapangan baru 25 dari 708 heksagon" benar secara harfiah dan
+          menyesatkan secara praktis: ia terbaca sebagai "cuma 25 heksagon yang
+          punya data", padahal KETUJUH RATUS DELAPAN punya. POI OpenStreetMap
+          708/708, skor simpul 708/708, waktu jalan kaki 703/708, penduduk
+          707/708 - dan setiap heksagon punya skor. Yang tipis cuma variabel
+          yang memang menuntut orang berdiri di lokasinya.
+
+          Pemilik repo sendiri salah membacanya, dan itu bukti yang cukup.
+          Aturan umumnya sama dengan yang sudah tercatat untuk pemicunya:
+          kalimat yang menemani sebuah angka harus menyebut cukup banyak angka
+          untuk tidak bisa disalahartikan. */}
       <span className="hidden md:inline">
         {cakupan
-          ? `Survei lapangan baru ${cakupan.disurvei} dari ${cakupan.total} heksagon`
+          ? `${cakupan.total} heksagon terukur · ${cakupan.disurvei} disurvei langsung`
           : 'Survei lapangan belum merata'}
       </span>
       <span className="md:hidden">
-        {cakupan ? `Survei ${cakupan.disurvei}/${cakupan.total}` : 'Survei tipis'}
+        {cakupan ? `Disurvei ${cakupan.disurvei}/${cakupan.total}` : 'Survei tipis'}
       </span>
     </span>
   )
@@ -1066,7 +1080,22 @@ export default function App() {
         </Suspense>
       )}
       {pembuka && (
-        <Suspense fallback={null}>
+        // Fallback WAJIB legap, dan alasannya sama persis dengan alasan gerbang
+        // di atas - tetapi akibatnya lebih buruk, jadi sempat luput.
+        //
+        // `fallback={null}` berarti: selama chunk Pembuka diunduh, TIDAK ADA
+        // yang menutupi layar. Gerbang sudah pergi (gerbang=false) dan chrome
+        // aplikasi sudah dirender, jadi yang terlihat aplikasinya sendiri -
+        // lalu layar pembuka datang belakangan dan menutupinya, lalu pergi
+        // lagi. Urutan yang terbaca "peta muncul - loading - peta lagi".
+        //
+        // Gejalanya cuma muncul di KUNJUNGAN PERTAMA: sesudah chunk-nya
+        // ter-cache, Pembuka terpasang di commit yang sama dan tidak ada
+        // jendela kosong sama sekali. Itu sebabnya ia terlihat seperti
+        // keanehan acak, bukan bug - dan tidak ada uji yang menangkapnya.
+        //
+        // Terukur pada cache dingin: jendela kosongnya 315 ms.
+        <Suspense fallback={<div className="fixed inset-0 z-[100] bg-[#dff6f0]" />}>
           <Pembuka onSelesai={tutupPembuka} />
         </Suspense>
       )}
