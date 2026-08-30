@@ -124,7 +124,14 @@ async function ambil<T>(jalur: string, opsi?: RequestInit): Promise<T> {
         detail = j.galat.detail
       }
     } catch {
-      if (mentah) pesan = `${pesan} — ${mentah.slice(0, 200)}`
+      // Badan yang BUKAN JSON ikut ditempel ke pesan - berguna saat proxy
+      // menjawab teks pendek, dan merusak saat ia menjawab halaman HTML:
+      // yang muncul di layar jadi potongan `<!doctype html><head><meta ...`.
+      // Terlihat di terbitan statis, tempat setiap endpoint backend dijawab
+      // halaman 404 GitHub Pages.
+      const htmlSaja = /^\s*<(!doctype|html)/i.test(mentah)
+      if (mentah && !htmlSaja) pesan = `${pesan} — ${mentah.slice(0, 200)}`
+      else if (htmlSaja) pesan = `${pesan} — mesin data tidak menjawab di alamat ini`
     }
     throw new GalatAPI(res.status, kode, pesan, detail)
   }

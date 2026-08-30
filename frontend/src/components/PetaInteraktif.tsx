@@ -693,6 +693,26 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   onPilihRef.current = onPilihHeksagon
   const onMuatRef = useRef(onMuat)
   onMuatRef.current = onMuat
+  /**
+   * `tampil` lewat ref, BUKAN lewat dependensi efek pemuat.
+   *
+   * Sebagai dependensi, ia membuat seluruh data diminta ulang begitu layar
+   * pembuka menyingkir - dan pemuatan ulang itu memudarkan heksagon KELUAR
+   * lebih dulu, tepat saat efek 'pembuka menyingkir' sedang memudarkannya
+   * MASUK. Dua gelombang berjalan bersamaan di layer yang sama, dan yang
+   * menang adalah yang kebetulan selesai belakangan.
+   *
+   * Terukur di terbitan statis: layer terpasang (L_ISI ada, 708 fitur di
+   * sumbernya) dan tidak satu piksel pun tergambar - opasitasnya berhenti
+   * di 0. Tidak ada galat, tidak ada peringatan; peta cuma kosong.
+   *
+   * Kenapa baru muncul sekarang: tanpa backend, layar pembuka tidak perlu
+   * menunggu /health, jadi ia menyingkir lebih cepat dan urutan keduanya
+   * berbalik. Balapannya sudah ada sejak dulu - yang berubah cuma siapa
+   * yang menang.
+   */
+  const tampilRef = useRef(tampil)
+  tampilRef.current = tampil
   /** Saringan kuadran sebelumnya, untuk membedakan "pengguna menyaring" dari
       "efek ini kebetulan berjalan lagi". */
   const saringLalu = useRef<string | null>(saringKuadran)
@@ -1017,10 +1037,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           // Kawasan berganti: heksagon lama surut dulu ke tepi, baru yang baru
           // mekar. Tanpa jeda ini, satu kawasan berubah jadi kawasan lain dalam
           // satu bingkai dan mata kehilangan jejak apa yang barusan diganti.
-          if (tampil) await jalankanGelombang(T_PENUH, 0, DURASI_KELUAR)
+          if (tampilRef.current) await jalankanGelombang(T_PENUH, 0, DURASI_KELUAR)
           if (batal || !peta.current) return
           ;(sumber as GeoJSONSource).setData(data as never)
-          if (tampil) await jalankanGelombang(0, T_PENUH, DURASI_MASUK)
+          if (tampilRef.current) await jalankanGelombang(0, T_PENUH, DURASI_MASUK)
           return
         }
 
@@ -1461,7 +1481,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           }
         })
 
-        if (tampil) {
+        if (tampilRef.current) {
           await tungguTenang(m)
           if (!batal && peta.current) void jalankanGelombang(0, T_PENUH, DURASI_MASUK)
         }
@@ -1480,7 +1500,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // dipasang ulang, dan satu penangan klik lagi menumpuk setiap kali identitas
     // callback-nya berubah.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kawasan, siap, gaya, tampil, jalankanGelombang])
+  }, [kawasan, siap, gaya, jalankanGelombang])
 
   // Pembuka menyingkir: inilah saat gelombang pertama benar-benar ditonton.
   useEffect(() => {
