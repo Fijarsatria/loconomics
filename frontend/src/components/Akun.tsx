@@ -745,7 +745,7 @@ function DialogLangganan({
                     <ul className="mt-3 space-y-1.5 border-t border-line/60 pt-3">
                       {[
                         'Seluruh grid heksagon di enam kawasan',
-                        'Opportunity Score, Hidden Gem, dan kuadrannya',
+                        'Skor peluang, Hidden Gem, dan keempat kuadrannya',
                         'Status zonasi ZoneGuard dan peringatan RiskRadar',
                         'Daftar lokasi, pencarian, dan Konsultan AI',
                       ].map((r) => (

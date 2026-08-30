@@ -942,6 +942,47 @@ export default function App() {
     },
     [simulasiTerbuka, hexTerpilih, baki, tambahBaki],
   )
+
+  /**
+   * Lepas pilihan heksagon. Satu tempat, dipakai tombol X dan tombol Esc.
+   *
+   * Dipisah jadi fungsi sendiri karena ia dipanggil dari tiga tempat, dan
+   * versi sebelumnya menuliskan isinya sebaris di dalam onClick panel kanan -
+   * jadi tombol X di peta akan jadi salinan keempat yang harus diingat untuk
+   * ikut berubah.
+   *
+   * Ia TIDAK menyentuh baki komparasi: melepas heksagon yang sedang dilihat
+   * tidak sama dengan membatalkan perbandingan yang sedang disusun.
+   */
+  const lepasPilihan = useCallback(() => {
+    setHexTerpilih(null)
+    setHexBanding(null)
+    setSimulasiTerbuka(false)
+    peta.current?.highlight([])
+  }, [])
+
+  /**
+   * Esc melepas apa pun yang sedang terbuka, dari yang paling dalam ke luar.
+   *
+   * Urutannya penting: kalau simulasi terbuka, Esc menutup simulasi dan
+   * MEMBIARKAN heksagonnya terpilih. Menutup keduanya sekaligus membuat satu
+   * ketukan membatalkan dua keputusan, dan yang kedua tidak diminta.
+   */
+  useEffect(() => {
+    const tekan = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      // Dialog menangani Esc-nya sendiri lewat portal; jangan ikut campur.
+      if (document.querySelector('[role="dialog"]')) return
+      if (simulasiTerbuka) {
+        setSimulasiTerbuka(false)
+        return
+      }
+      if (hexTerpilih) lepasPilihan()
+    }
+    window.addEventListener('keydown', tekan)
+    return () => window.removeEventListener('keydown', tekan)
+  }, [simulasiTerbuka, hexTerpilih, lepasPilihan])
+
   /**
    * Bawa kamera ke kawasan `v`. Dipisah dari `gantiKawasan` dengan sengaja.
    *
@@ -1301,10 +1342,23 @@ export default function App() {
                     /* Heksagon sudah dipilih: pertanyaan layer berhenti relevan
                        - pertanyaannya sekarang "kalau saya buka usaha DI SINI,
                        jadinya bagaimana", dan bar ini pintunya. Premium; yang
-                       belum diarahkan ke dialog langganan oleh bukaSimulasi. */
+                       belum diarahkan ke dialog langganan oleh bukaSimulasi.
+
+                       Di sebelahnya tombol BATAL, dan ia ada karena membatalkan
+                       pilihan praktis mustahil sebelum ini. Jalan keluarnya cuma
+                       satu: tombol "Kembali ke daftar lokasi" di dalam panel
+                       kanan - panel yang BISA DILIPAT, dan yang memang dilipat
+                       orang supaya petanya terlihat. Begitu dilipat, satu-satunya
+                       cara melepas heksagon adalah mengklik heksagon lain, yang
+                       bukan melepas melainkan mengganti.
+
+                       Keluarga jebakan yang sama dengan baki komparasi yang
+                       buntu: aksi yang hidup HANYA di dalam wadah yang bisa
+                       disembunyikan sama dengan aksi yang tidak ada. */
+                    <div className="pointer-events-auto flex max-w-full items-center gap-2">
                     <button
                       onClick={bukaSimulasi}
-                      className="group pointer-events-auto flex w-fit max-w-full cursor-pointer items-center gap-3 rounded-full bg-ink px-5 py-2.5 text-surface shadow-lg transition-transform duration-300 ease-jelly hover:scale-[1.03]"
+                      className="group flex w-fit min-w-0 cursor-pointer items-center gap-3 rounded-full bg-ink px-5 py-2.5 text-surface shadow-lg transition-transform duration-300 ease-jelly hover:scale-[1.03]"
                     >
                       <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden className="shrink-0">
                         <path
@@ -1329,6 +1383,22 @@ export default function App() {
                         <path d="M4 1.5 8.5 6 4 10.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
+                    <button
+                      onClick={lepasPilihan}
+                      title="Lepas pilihan (Esc)"
+                      aria-label="Lepas pilihan heksagon"
+                      className="kaca grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full text-ink-2 transition-colors duration-200 hover:bg-surface-2 hover:text-ink"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 14 14" aria-hidden>
+                        <path
+                          d="M2.5 2.5 11.5 11.5M11.5 2.5 2.5 11.5"
+                          stroke="currentColor"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                    </div>
                   ) : (
                   <div className="kaca pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-full px-4 py-2">
                     <span className="truncate text-[13.5px] text-ink-2">
@@ -1596,10 +1666,7 @@ export default function App() {
                       {hexTerpilih && (
                         <div className="masuk-kanan absolute inset-0 z-10 flex flex-col bg-surface">
                           <button
-                            onClick={() => {
-                              setHexTerpilih(null)
-                              peta.current?.highlight([])
-                            }}
+                            onClick={lepasPilihan}
                             className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-line/70 px-4 py-2.5 text-left text-[13px] font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
                           >
                             <svg

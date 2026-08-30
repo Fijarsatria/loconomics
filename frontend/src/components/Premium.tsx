@@ -901,31 +901,39 @@ export function DialogPantauan({
             <div className="rounded-md border border-line bg-surface p-4">
               <p className="papan text-[15px]">{dinamika.kawasan}</p>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                {dinamika.n_heksagon.toLocaleString('id-ID')} heksagon · versi{' '}
-                {dinamika.versi}
+                {dinamika.n_heksagon.toLocaleString('id-ID')} heksagon dihitung
               </p>
 
               <dl className="mt-3.5 space-y-2 border-t border-line/70 pt-3">
-                <BarisAngka label="Churn median" nilai={angka(dinamika.churn_p50, 3)} />
-                <BarisAngka label="Ambang waspada (p75)" nilai={angka(dinamika.churn_p75, 3)} />
-                <BarisAngka label="Ambang bahaya (p90)" nilai={angka(dinamika.churn_p90, 3)} />
                 <BarisAngka
-                  label="Lewat ambang waspada"
-                  nilai={`${dinamika.n_waspada} hex`}
+                  label="Pergantian usaha, lokasi tengah"
+                  nilai={angka(dinamika.churn_p50, 3)}
+                />
+                <BarisAngka
+                  label="Batas mulai waspada"
+                  nilai={angka(dinamika.churn_p75, 3)}
+                />
+                <BarisAngka label="Batas bahaya" nilai={angka(dinamika.churn_p90, 3)} />
+                <BarisAngka
+                  label="Lokasi yang sudah lewat batas waspada"
+                  nilai={`${dinamika.n_waspada} lokasi`}
                   tekan={dinamika.n_waspada > 0}
                 />
                 <BarisAngka
-                  label="Lewat ambang bahaya"
-                  nilai={`${dinamika.n_bahaya} hex`}
+                  label="Lokasi yang sudah lewat batas bahaya"
+                  nilai={`${dinamika.n_bahaya} lokasi`}
                   tekan={dinamika.n_bahaya > 0}
                 />
-                <BarisAngka label="Rata Opportunity" nilai={angka(dinamika.rata_opportunity, 1)} />
                 <BarisAngka
-                  label="Cakupan survei"
+                  label="Skor peluang rata-rata"
+                  nilai={angka(dinamika.rata_opportunity, 1)}
+                />
+                <BarisAngka
+                  label="Sudah disurvei langsung"
                   nilai={
                     dinamika.cakupan_survei === null
                       ? null
-                      : `${Math.round(dinamika.cakupan_survei * 100)}%`
+                      : `${Math.round(dinamika.cakupan_survei * 100)}% lokasi`
                   }
                 />
               </dl>
@@ -1043,7 +1051,9 @@ export function BagianRiwayat({ h3 }: { h3: string }) {
         <ul className="mb-2.5 space-y-1.5">
           {data.titik.map((t) => (
             <li key={t.versi} className="flex items-baseline gap-2 text-[13px]">
-              <span className="font-mono text-[11.5px] text-ink-3">{t.versi}</span>
+              <span className="font-mono text-[11.5px] text-ink-3">
+                {t.versi === 'baseline' ? 'awal' : t.versi}
+              </span>
               <span className="min-w-0 flex-1 truncate text-ink-3">
                 {t.dihitung_pada
                   ? new Date(t.dihitung_pada).toLocaleDateString('id-ID', {

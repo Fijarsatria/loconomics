@@ -27,11 +27,32 @@ class BadgeKeyakinan(BaseModel):
     sumber: SumberData = Field(description="observed = hasil survei, predicted = imputasi model")
 
 
+class CakupanIndeks(BaseModel):
+    """Berapa bahan sebuah indeks yang benar-benar terukur.
+
+    Ada karena variabel kosong DINETRALKAN ke 0,5, bukan dinolkan - benar untuk
+    perhitungan, berbahaya untuk tampilan. Indeks yang seluruh bahannya kosong
+    tetap keluar sebagai angka di sekitar 0,5, dan di layar ia tidak bisa
+    dibedakan dari hasil pengukuran. Antarmuka memakai `layak_tampil` untuk
+    memutuskan menampilkan angkanya atau menuliskan "belum terukur".
+    """
+
+    terukur: int = Field(description="Jumlah bahan yang punya nilai sungguhan")
+    total: int = Field(description="Jumlah bahan seluruhnya")
+    kosong: list[str] = Field(default_factory=list, description="Kode variabel yang kosong")
+    layak_tampil: bool = Field(
+        description="FALSE = angkanya nyaris seluruhnya asumsi, jangan ditampilkan sebagai angka"
+    )
+
+
 class IndeksKomposit(BaseModel):
     ipt: float | None = Field(default=None, description="Indeks Potensi Transit, tinggi = baik")
     iae: float | None = Field(default=None, description="Indeks Aktivitas Ekonomi, tinggi = baik")
     ikp: float | None = Field(default=None, description="Indeks Kompetisi, tinggi = BURUK")
     ibr: float | None = Field(default=None, description="Indeks Biaya & Risiko, tinggi = BURUK")
+    #: Berkunci kode indeks: IPT | IAE | IKP | IBR. Gratis untuk semua tingkat -
+    #: ia keterangan mutu, sekeluarga dengan badge keyakinan, bukan isi berbayar.
+    cakupan: dict[str, CakupanIndeks] = Field(default_factory=dict)
 
 
 class SkorHeksagon(BaseModel):

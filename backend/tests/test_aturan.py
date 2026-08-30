@@ -25,6 +25,7 @@ from config import PUSAT as PUSAT_PIPELINE  # noqa: E402
 from app.api.ai import ALAT_BACKEND, ALAT_FRONTEND, NAMA_FRONTEND, REGISTRI, _argumen_peta
 from app.api.bersama import DIMENSI, SEMUA_VARIABEL
 from app.core.aturan import (
+    cakupan_indeks,
     TINGKAT_BERPERINGATAN,
     CHURN_LANTAI_ABSOLUT,
     PENJELASAN_ZONA,
@@ -523,6 +524,73 @@ def test_setiap_pusat_dekat_simpul_transitnya():
         )
         jarak = 2 * R * math.asin(math.sqrt(x))
         assert jarak < 500, f"pusat {nama} {jarak:.0f} m dari stasiunnya"
+
+
+# ---------------------------------------------------------------------------
+# Kejujuran keempat indeks
+# ---------------------------------------------------------------------------
+
+
+class _Faktor:
+    """Cukup untuk `cakupan_indeks`: ia hanya membaca dua atribut."""
+
+    def __init__(self, indeks, kode_variabel, nilai_normalisasi):
+        self.indeks = indeks
+        self.kode_variabel = kode_variabel
+        self.nilai_normalisasi = nilai_normalisasi
+
+
+def test_cakupan_menghitung_bahan_yang_terukur():
+    c = cakupan_indeks([
+        _Faktor("IPT", "D05", 1.0),
+        _Faktor("IPT", "D04", 0.85),
+        _Faktor("IPT", "D06", None),
+    ])["IPT"]
+    assert c["terukur"] == 2, c
+    assert c["total"] == 3, c
+    assert c["kosong"] == ["D06"], c
+
+
+def test_indeks_yang_nyaris_kosong_TIDAK_layak_tampil():
+    """Inti perbaikannya.
+
+    Variabel kosong dinetralkan ke 0,5, jadi indeks yang seluruh bahannya
+    kosong tetap keluar sebagai angka di sekitar 0,5 - dan di layar ia tidak
+    bisa dibedakan dari hasil pengukuran. IBR sungguhan hari ini: satu dari
+    empat bahan terisi, dan yang satu itu cuma 10% bobotnya.
+    """
+    c = cakupan_indeks([
+        _Faktor("IBR", "P01", None),
+        _Faktor("IBR", "P05", None),
+        _Faktor("IBR", "P06", None),
+        _Faktor("IBR", "L03", 0.37),
+    ])["IBR"]
+    assert c["layak_tampil"] is False, c
+
+
+def test_indeks_yang_penuh_layak_tampil():
+    c = cakupan_indeks([
+        _Faktor("IKP", "C06", 0.05),
+        _Faktor("IKP", "C05", 0.22),
+        _Faktor("IKP", "C03", 0.42),
+    ])["IKP"]
+    assert c["terukur"] == 3 and c["layak_tampil"] is True, c
+
+
+def test_nilai_normalisasi_NOL_tetap_dihitung_terukur():
+    """Jebakan yang paling mudah kena: `if not f.nilai_normalisasi`.
+
+    Nilai ternormalisasi 0,0 SAH - ia berarti "paling rendah di wilayah studi",
+    dan itu pengukuran. Menyamakannya dengan None akan menandai lokasi paling
+    murah, paling sepi, dan paling dekat stasiun sebagai "belum terukur".
+    """
+    c = cakupan_indeks([_Faktor("IPT", "D05", 0.0), _Faktor("IPT", "D06", None)])["IPT"]
+    assert c["terukur"] == 1, c
+    assert c["kosong"] == ["D06"], c
+
+
+def test_cakupan_tanpa_faktor_tidak_meledak():
+    assert cakupan_indeks([]) == {}
 
 
 if __name__ == "__main__":

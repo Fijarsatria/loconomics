@@ -34,6 +34,7 @@ from app.core.aturan import (
     JAM_OPERASIONAL,
     MEMUTAR_MENCOLOK,
     PENJELASAN_KUADRAN,
+    cakupan_indeks,
     faktor_memutar,
     menit_jalan,
 )
@@ -652,6 +653,10 @@ def detail_heksagon(
             iae=skor.iae if skor else None,
             ikp=skor.ikp if skor else None,
             ibr=skor.ibr if skor else None,
+            # Diturunkan dari `faktor`, yang sudah dimuat di atas apa pun tingkat
+            # akunnya. Ini keterangan MUTU, bukan isi berbayar: ia menyebut
+            # berapa bahan yang terukur, tidak menyebut satu pun nilainya.
+            cakupan=cakupan_indeks(faktor),
         ),
         variabel=(
             {nama: getattr(hx, nama) for kolom in DIMENSI.values() for nama in kolom}

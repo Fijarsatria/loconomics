@@ -20,11 +20,30 @@ export interface BadgeKeyakinan {
   sumber: SumberData
 }
 
+/**
+ * Berapa bahan sebuah indeks yang benar-benar terukur.
+ *
+ * Variabel kosong DINETRALKAN ke 0,5, bukan dinolkan - benar untuk perhitungan,
+ * berbahaya untuk tampilan. Tanpa ini, indeks yang seluruh bahannya kosong
+ * tetap tampil sebagai angka di sekitar 0,5 dan tidak bisa dibedakan dari hasil
+ * pengukuran. Terukur 30 Agu 2026: "perputaran uang" 1% terukur, "biaya dan
+ * risiko" 5%.
+ */
+export interface CakupanIndeks {
+  terukur: number
+  total: number
+  kosong: string[]
+  /** false = angkanya nyaris seluruhnya asumsi. Tulis "belum terukur". */
+  layak_tampil: boolean
+}
+
 export interface IndeksKomposit {
   ipt: number | null // Potensi Transit — tinggi = baik
   iae: number | null // Aktivitas Ekonomi — tinggi = baik
   ikp: number | null // Kompetisi — tinggi = BURUK
   ibr: number | null // Biaya & Risiko — tinggi = BURUK
+  /** Berkunci 'IPT' | 'IAE' | 'IKP' | 'IBR'. Gratis untuk semua tingkat. */
+  cakupan: Record<string, CakupanIndeks>
 }
 
 export interface SkorHeksagon {

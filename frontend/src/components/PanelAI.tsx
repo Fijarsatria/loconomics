@@ -280,7 +280,10 @@ export default function PanelAI({
                           {f.persentil !== null && (
                             <span className="text-ink-3">
                               {' '}
-                              · persentil {f.persentil.toFixed(0)}
+                              ·{' '}
+                              {f.persentil >= 99.5
+                                ? 'tertinggi di wilayah studi'
+                                : `lebih tinggi dari ${f.persentil.toFixed(0)}% lokasi lain`}
                             </span>
                           )}
                         </li>

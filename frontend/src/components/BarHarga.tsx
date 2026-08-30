@@ -120,7 +120,7 @@ export default function BarHarga({
               <span className="tabular font-semibold">
                 {Math.abs(selisih).toLocaleString('id-ID', { maximumFractionDigits: 0 })}%
               </span>{' '}
-              {selisih > 0 ? 'lebih mahal' : 'lebih murah'} daripada median {kawasan}.
+              {selisih > 0 ? 'lebih mahal' : 'lebih murah'} daripada harga tengah di {kawasan}.
             </>
           )}
         </p>

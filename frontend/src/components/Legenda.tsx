@@ -215,7 +215,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
             label="Belum ada data churn"
             catatan="bukan berarti stabil"
           />
-          <Kunci arsir label="Nilai hasil imputasi model" catatan="bukan survei langsung" />
+          <Kunci arsir label="Belum disurvei langsung" catatan="angkanya dari sumber terukur, bukan tebakan" />
         </ul>
 
         {/* Kenapa gradasi ini TIDAK memakai label WASPADA/BAHAYA: ambangnya
@@ -225,10 +225,10 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
             tinggi. Penilaian ambangnya muncul di panel detail, tempat
             kawasannya sudah diketahui. */}
         <p className="mt-2.5 border-t border-line/70 pt-2.5 text-[11px] leading-snug text-ink-3">
-          Ambang <strong className="font-semibold text-ink-2">Waspada</strong> dan{' '}
-          <strong className="font-semibold text-ink-2">Bahaya</strong> dihitung per kawasan
-          (persentil 75 dan 90), bukan dari gradasi ini — keduanya muncul saat satu
-          heksagon dibuka.
+          Peringatan <strong className="font-semibold text-ink-2">Waspada</strong> dan{' '}
+          <strong className="font-semibold text-ink-2">Bahaya</strong> dibandingkan dengan
+          kawasannya sendiri — seperempat teratas dan sepersepuluh teratas. Keduanya
+          muncul saat satu heksagon dibuka, bukan dari gradasi ini.
         </p>
       </Bingkai>
     )
@@ -260,7 +260,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
           </div>
         )}
         <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
-          kuartil per m² ·{' '}
+          harga per m² ·{' '}
           {memuat ? (
             <span className="text-ink-3">
               <span className="denyut mr-1 inline-block h-1 w-1 rounded-full bg-ink-3 align-middle" />
@@ -271,7 +271,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
           ) : barisHarga.length > 1 ? (
             // Bukan "belum ada sampel": sampelnya ada, cuma kuartil gabungan
             // beberapa kawasan tidak punya arti. Katakan yang sebenarnya.
-            'pilih satu kawasan untuk melihat kuartilnya'
+            'pilih satu kawasan untuk melihat rentang harganya'
           ) : (
             'belum ada sampel'
           )}
@@ -279,7 +279,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
 
         <ul className="mt-2.5 space-y-1.5 border-t border-line/70 pt-2.5">
           <Kunci warna={ABU_HINDARI} label="Belum ada data harga" catatan="bukan berarti murah" />
-          <Kunci arsir label="Nilai hasil imputasi model" catatan="bukan survei langsung" />
+          <Kunci arsir label="Belum disurvei langsung" catatan="angkanya dari sumber terukur, bukan tebakan" />
         </ul>
         <Cakupan nilai={cakupanHarga} label="Heksagon dengan data harga" />
       </Bingkai>
@@ -302,7 +302,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
           catatan="belum bisa dipastikan, bukan larangan"
           jumlah={zona?.tidak_diketahui}
         />
-        <Kunci arsir label="Nilai hasil imputasi model" />
+        <Kunci arsir label="Belum disurvei langsung" catatan="angkanya dari sumber terukur" />
       </ul>
       {memuat && !zona ? (
         <p className="mt-2.5 border-t border-line/70 pt-2.5 text-[11px] text-ink-3">

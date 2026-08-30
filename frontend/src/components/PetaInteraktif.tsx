@@ -109,20 +109,47 @@ const SUMBER_RUTE = 'rute'
 const L_RUTE_BAYANG = 'rute-bayang'
 const L_RUTE_ALT = 'rute-alt'
 const L_RUTE = 'rute-utama'
+/** Garis putus-putus TIPIS yang mengalir di ATAS rute utama, menuju stasiun. */
+const L_RUTE_ALIR = 'rute-alir'
 const L_RUTE_TEKS = 'rute-teks'
-/** Sumber terpisah lagi untuk titik yang berjalan di sepanjang rute. */
-const SUMBER_DENYUT = 'rute-denyut'
-const L_DENYUT_HALO = 'rute-denyut-halo'
-const L_DENYUT = 'rute-denyut-inti'
 /** Titik awal (pusat heksagon) dan tujuan (simpul). */
+const L_UJUNG_CINCIN = 'rute-ujung-cincin'
 const L_UJUNG = 'rute-ujung'
 
 /** Lama animasi rute menggambar dirinya, milidetik. */
 const GAMBAR_MS = 950
 /** Jeda tiap rute berikutnya berangkat. Berundak, bukan serempak. */
 const UNDAK_MS = 130
-/** Lama satu putaran titik berjalan dari heksagon ke simpul. */
-const DENYUT_MS = 2600
+
+/**
+ * Pola garis putus-putus yang bergeser, urut satu putaran penuh.
+ *
+ * Menggantikan titik yang dulu berjalan di sepanjang rute. Tiga alasan, dan
+ * yang ketiga yang menentukan:
+ *
+ *   1. Satu titik yang berjalan lalu mengulang selalu terbaca sebagai KEJADIAN
+ *      yang berulang, bukan sebagai arah - jebakan yang sama persis dengan
+ *      riak di halaman gerbang. Arus tidak punya kejadian sama sekali.
+ *   2. Titik itu menuntut `titikPada()` dihitung tiap bingkai untuk tiap rute,
+ *      lalu satu `setData` GeoJSON penuh. Menggeser dasharray cuma satu
+ *      `setPaintProperty` pada layer berisi <=4 fitur.
+ *   3. Titik berjalan tidak memberi tahu arah sampai orang menontonnya beberapa
+ *      detik. Garis yang mengalir menyatakannya dalam satu kedipan.
+ *
+ * Nilainya PRA-HITUNG, bukan dihitung dari fase: `line-dasharray` menerima
+ * larik angka, dan menyusun larik baru tiap bingkai membuat sampah yang harus
+ * dibereskan 20 kali sedetik untuk animasi yang tidak pernah berhenti.
+ */
+const POLA_ALIR: number[][] = [
+  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5],
+  [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5],
+  [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5],
+  [0, 3, 3, 1], [0, 3.5, 3, 0.5],
+]
+
+/** Jeda antar-langkah arus. 70 ms = ~14 langkah/detik, cukup halus untuk mata
+ *  dan seperempat ongkos rAF penuh. */
+const ALIR_MS = 70
 
 /**
  * Panjang kumulatif tiap simpul sebuah polyline, dalam derajat.
@@ -1077,12 +1104,42 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           type: 'fill',
           source: SUMBER_ISO,
           paint: {
-            // Cuma pita TERDALAM yang diberi isian, dan sangat tipis. Tiga
-            // isian bertumpuk membuat pusatnya tiga kali lebih pekat daripada
-            // tepinya - gradasi yang tidak dimaksudkan siapa pun, dan yang
-            // terbaca sebagai data.
+            // Ketiga pita DIBERI isian, dan tumpukannya DISENGAJA.
+            //
+            // Versi sebelumnya cuma mengisi pita 5 menit pada 0,1 - dengan
+            // alasan bahwa tiga isian bertumpuk membuat pusatnya tiga kali
+            // lebih pekat daripada tepinya, "gradasi yang tidak dimaksudkan
+            // siapa pun". Alasan itu keliru dua kali. Pertama, hasilnya nyaris
+            // tidak terlihat sama sekali di atas basemap terang. Kedua, dan
+            // lebih penting: gradasi itu justru BENAR. Poligonnya memang
+            // bersarang, dan makin dekat stasiun makin banyak orang yang mau
+            // berjalan ke sana - pusat yang lebih pekat menyatakan hal yang
+            // sungguhan, bukan artefak.
+            //
+            // Yang perlu dijaga cuma alfa per pita tetap rendah, supaya
+            // tumpukan paling dalam berhenti di ~0,26 dan angka di dalam
+            // heksagon tetap terbaca menembusnya.
             'fill-color': WARNA_ISO(gaya),
-            'fill-opacity': ['case', ['==', ['get', 'menit'], 5], 0.1, 0],
+            'fill-opacity': [
+              'interpolate', ['linear'], ['get', 'menit'],
+              5, 0.13,
+              10, 0.09,
+              15, 0.06,
+            ],
+          },
+        })
+        // Garis bayang di BAWAH garis isochrone. Tanpa ini, tepi pita hilang
+        // begitu ia kebetulan melintasi heksagon berwarna senada - dan yang
+        // hilang justru satu-satunya hal yang membuat pita punya bentuk.
+        m.addLayer({
+          id: `${L_ISO_GARIS}-bayang`,
+          type: 'line',
+          source: SUMBER_ISO,
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': WARNA_RUTE_BAYANG(gaya),
+            'line-width': ['interpolate', ['linear'], ['get', 'menit'], 5, 5.5, 15, 3.6],
+            'line-opacity': 0.55,
           },
         })
         m.addLayer({
@@ -1094,9 +1151,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             'line-color': WARNA_ISO(gaya),
             // Makin lama pitanya, makin tipis garisnya - urutan yang sama
             // dengan urutan pentingnya bagi orang yang mencari lokasi.
-            'line-width': ['interpolate', ['linear'], ['get', 'menit'], 5, 2.4, 15, 1.3],
-            'line-opacity': 0.85,
-            'line-dasharray': [3, 2],
+            'line-width': ['interpolate', ['linear'], ['get', 'menit'], 5, 3.2, 15, 1.9],
+            'line-opacity': 1,
+            // Pita TERDALAM utuh, sisanya putus-putus. Bentuknya ikut membawa
+            // arti: yang utuh batas yang paling layak dipercaya sekaligus yang
+            // paling sering dipakai orang.
+            'line-dasharray': ['case', ['==', ['get', 'menit'], 5], ['literal', [1, 0]], ['literal', [2.6, 1.8]]],
           },
         })
         m.addLayer({
@@ -1105,16 +1165,21 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           source: SUMBER_ISO,
           layout: {
             'symbol-placement': 'line',
-            'symbol-spacing': 420,
-            'text-field': ['concat', ['to-string', ['get', 'menit']], ' menit jalan'],
+            'symbol-spacing': 380,
+            // "5 menit jalan kaki", bukan "5 menit jalan". Dua kata lebih
+            // panjang, dan menghapus satu-satunya pertanyaan yang tersisa.
+            'text-field': ['concat', ['to-string', ['get', 'menit']], ' menit jalan kaki'],
             'text-font': FONT_ANGKA,
-            'text-size': 11,
-            'text-offset': [0, -0.9],
+            'text-size': ['case', ['==', ['get', 'menit'], 5], 12.5, 11.5],
+            'text-offset': [0, -1],
+            'text-allow-overlap': false,
+            'text-ignore-placement': false,
           },
           paint: {
             'text-color': WARNA_ISO(gaya),
             'text-halo-color': WARNA_RUTE_BAYANG(gaya),
-            'text-halo-width': 2,
+            'text-halo-width': 2.6,
+            'text-halo-blur': 0.4,
           },
         })
 
@@ -1171,50 +1236,70 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': ['get', 'warna'],
-            'line-width': 4.4,
+            // Sedikit lebih tebal, dan MELEBAR saat di-zoom masuk. Lebar tetap
+            // membuat rute terlihat seperti benang di zoom rendah dan seperti
+            // pita di zoom tinggi; yang melebar terbaca sama di keduanya.
+            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3.6, 15, 5.4, 18, 7],
+          },
+        })
+
+        // Arus. Garis putus-putus terang TIPIS di atas inti rute, bergeser
+        // menuju stasiun. Ia yang menyatakan ARAH - inti rute cuma menyatakan
+        // lintasannya.
+        m.addLayer({
+          id: L_RUTE_ALIR,
+          type: 'line',
+          source: SUMBER_RUTE,
+          filter: ['get', 'utama'],
+          layout: { 'line-cap': 'butt', 'line-join': 'round' },
+          paint: {
+            'line-color': WARNA_RUTE_BAYANG(gaya),
+            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 15, 2.4, 18, 3],
+            'line-opacity': 0.6,
+            'line-dasharray': [0, 4, 3],
           },
         })
 
         // Titik awal dan tujuan. Cincin kecil, bukan pin: pin punya ujung yang
         // menunjuk, dan yang ditunjuknya di sini justru garis yang sudah ada.
+        //
+        // DUA layer, bukan satu. Yang bawah cincin lebar beropasitas rendah -
+        // ia yang membuat ujungnya terbaca sebagai simpul, bukan sebagai
+        // titik yang kebetulan ada di situ. Tujuan dapat cincin lebih besar
+        // daripada asal: yang dituju stasiun, dan stasiun memang lebih penting
+        // daripada titik tengah sebuah heksagon.
+        m.addLayer({
+          id: L_UJUNG_CINCIN,
+          type: 'circle',
+          source: SUMBER_RUTE,
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-radius': ['case', ['get', 'tujuan'], 15, 10],
+            'circle-color': ['get', 'warna'],
+            'circle-opacity': 0.16,
+            'circle-stroke-width': 1.2,
+            'circle-stroke-color': ['get', 'warna'],
+            'circle-stroke-opacity': 0.35,
+          },
+        })
         m.addLayer({
           id: L_UJUNG,
           type: 'circle',
           source: SUMBER_RUTE,
           filter: ['==', ['geometry-type'], 'Point'],
           paint: {
-            'circle-radius': ['case', ['get', 'tujuan'], 7, 5],
-            'circle-color': ['get', 'warna'],
-            'circle-stroke-width': 2.4,
-            'circle-stroke-color': WARNA_RUTE_BAYANG(gaya),
-          },
-        })
-
-        // Titik yang berjalan. Sumbernya sendiri karena ia ditulis ulang tiap
-        // bingkai, sementara garisnya tidak berubah lagi setelah tergambar.
-        m.addSource(SUMBER_DENYUT, {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] } as never,
-        })
-        m.addLayer({
-          id: L_DENYUT_HALO,
-          type: 'circle',
-          source: SUMBER_DENYUT,
-          paint: {
-            'circle-radius': 11,
-            'circle-color': ['get', 'warna'],
-            'circle-opacity': 0.22,
-          },
-        })
-        m.addLayer({
-          id: L_DENYUT,
-          type: 'circle',
-          source: SUMBER_DENYUT,
-          paint: {
-            'circle-radius': 4.2,
-            'circle-color': WARNA_RUTE_BAYANG(gaya),
-            'circle-stroke-width': 2.2,
-            'circle-stroke-color': ['get', 'warna'],
+            'circle-radius': ['case', ['get', 'tujuan'], 7.5, 5],
+            // Tujuan DIBALIK: isian terang bergaris warna, jadi ia terbaca
+            // sebagai lubang/simpul dan bukan sebagai titik yang sama dengan
+            // asalnya. Dua titik berwarna sama di dua ujung satu garis tidak
+            // memberi tahu mana yang mana.
+            'circle-color': [
+              'case', ['get', 'tujuan'], WARNA_RUTE_BAYANG(gaya), ['get', 'warna'],
+            ],
+            'circle-stroke-width': ['case', ['get', 'tujuan'], 3.4, 2.4],
+            'circle-stroke-color': [
+              'case', ['get', 'tujuan'], ['get', 'warna'], WARNA_RUTE_BAYANG(gaya),
+            ],
           },
         })
 
@@ -1570,19 +1655,24 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // - bukan sebaliknya, dan bukan sekadar hiasan yang kebetulan menghubungkan
   // dua benda.
   const rafRute = useRef(0)
+  /** Jam arus rute. setInterval, BUKAN rAF: 14 langkah/detik sudah halus
+   *  untuk mata, dan rAF akan menjalankannya 60 kali - empat kali ongkos
+   *  untuk gerak yang sama. */
+  const jamAlir = useRef<ReturnType<typeof setInterval> | 0>(0)
   const kunciKonteks = perluRute.map((h) => `${h}:${konteks.get(h)?.rute.length ?? -1}`).join('|')
 
   useEffect(() => {
     const m = peta.current
     if (!m || !siap) return
     const sumber = m.getSource(SUMBER_RUTE) as GeoJSONSource | undefined
-    const sumberDenyut = m.getSource(SUMBER_DENYUT) as GeoJSONSource | undefined
-    if (!sumber || !sumberDenyut) return
+    if (!sumber) return
 
     const kosong = { type: 'FeatureCollection', features: [] }
     const berhenti = () => {
       if (rafRute.current) cancelAnimationFrame(rafRute.current)
       rafRute.current = 0
+      if (jamAlir.current) clearInterval(jamAlir.current)
+      jamAlir.current = 0
     }
     berhenti()
 
@@ -1639,7 +1729,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 
     if (!jalur.length) {
       sumber.setData(kosong as never)
-      sumberDenyut.setData(kosong as never)
       return
     }
 
@@ -1657,27 +1746,21 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       ],
     })
 
-    const utama = jalur.filter((j) => j.utama)
-    const mulaiDenyut = () => {
-      const t0 = performance.now()
-      const langkah = () => {
-        const fase = ((performance.now() - t0) % DENYUT_MS) / DENYUT_MS
-        sumberDenyut.setData({
-          type: 'FeatureCollection',
-          features: utama.map((j) => ({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: titikPada(j.k, j.kum, fase) },
-            properties: { warna: j.warna },
-          })),
-        } as never)
-        rafRute.current = requestAnimationFrame(langkah)
-      }
-      rafRute.current = requestAnimationFrame(langkah)
+    // Arus: satu setPaintProperty per langkah, pada layer berisi <=4 fitur.
+    // Menggantikan titik berjalan yang dulu menghitung posisi tiap rute tiap
+    // bingkai lalu menulis ulang seluruh GeoJSON-nya.
+    const mulaiArus = () => {
+      let i = 0
+      jamAlir.current = setInterval(() => {
+        i = (i + 1) % POLA_ALIR.length
+        // Layer bisa sudah hilang kalau gaya basemap diganti tepat di sini.
+        if (!m.getLayer(L_RUTE_ALIR)) return
+        m.setPaintProperty(L_RUTE_ALIR, 'line-dasharray', POLA_ALIR[i])
+      }, ALIR_MS)
     }
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       sumber.setData(garis((j) => j.k, true) as never)
-      sumberDenyut.setData(kosong as never)
       return () => berhenti()
     }
 
@@ -1698,10 +1781,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         rafRute.current = requestAnimationFrame(maju)
       } else {
         sumber.setData(garis((j) => j.k, true) as never)
-        mulaiDenyut()
+        mulaiArus()
       }
     }
-    sumberDenyut.setData(kosong as never)
     rafRute.current = requestAnimationFrame(maju)
 
     return () => berhenti()

@@ -205,7 +205,7 @@ ARTI_VARIABEL: dict[str, tuple[str, str, str]] = {
     "harga_sewa_per_m2": ("P07", "Sewa per m2", "Rp/m2"),
     # Risiko dan izin
     "zona_izin_komersial": ("L01", "Boleh dipakai usaha", ""),
-    "kelas_zona": ("L02", "Kode zona RDTR", ""),
+    "kelas_zona": ("L02", "Jenis zona menurut aturan tata ruang", ""),
     "risiko_banjir": ("L03", "Risiko banjir", ""),
     # Bentuk kawasan
     "rasio_tutupan_bangunan": ("M01", "Padatnya bangunan", "%"),
@@ -324,3 +324,65 @@ PENJELASAN_KUADRAN: dict[str, str] = {
     "JEBAKAN_GENGSI": "Tampilannya mahal tetapi ekonominya tidak mendukung - kuadran yang paling sering menjebak.",
     "HINDARI": "Potensi ekonomi dan daya tarik visualnya sama-sama rendah.",
 }
+
+
+# ---------------------------------------------------------------------------
+# Kejujuran keempat indeks
+# ---------------------------------------------------------------------------
+# Tiap indeks dirakit dari beberapa variabel. Variabel yang KOSONG tidak
+# dinolkan - ia dinetralkan ke 0,5, tengah skala (CLAUDE.md aturan 4). Itu
+# keputusan yang benar untuk PERHITUNGAN, dan berbahaya untuk TAMPILAN: indeks
+# yang seluruh bahannya kosong tetap keluar sebagai angka di sekitar 0,5, dan
+# di layar ia tidak bisa dibedakan dari hasil pengukuran sungguhan.
+#
+# Terukur 30 Agustus 2026 atas 708 heksagon:
+#
+#     IPT akses ke stasiun     65% bobotnya terukur
+#     IKP ketatnya persaingan  75% terukur
+#     IAE perputaran uang       1% terukur   <- praktis seluruhnya netral
+#     IBR biaya dan risiko      5% terukur   <- praktis seluruhnya netral
+#
+# Jadi dua dari empat angka yang selama ini tampil sebagai "0,49" dan "0,487"
+# sebenarnya berarti "belum diketahui". Ini keluarga kesalahan yang sama dengan
+# badge keyakinan yang dulu mengaku disurvei, RiskRadar yang menyebut AMAN untuk
+# lokasi tanpa data, dan ZoneGuard yang diam untuk zona yang diizinkan: nilai
+# netral yang menyamar jadi temuan.
+#
+# Yang dikembalikan di sini BUKAN skor dan tidak memeringkat apa pun - ia
+# menghitung berapa bahan sebuah indeks yang benar-benar punya nilai. Datanya
+# sudah tersimpan di `score_factors`: baris yang variabelnya kosong punya
+# `nilai_normalisasi = NULL` sementara `kontribusi`-nya tetap terisi (bobot x
+# 0,5). Jadi ini pembacaan, bukan perhitungan ulang.
+
+#: Di bawah pangsa ini, indeksnya TIDAK BOLEH ditampilkan sebagai angka.
+#: Sepertiga dipilih karena di bawah itu yang tersisa lebih banyak asumsi
+#: daripada pengukuran, dan angka yang isinya asumsi lebih buruk daripada
+#: kejujuran "belum terukur" - ia terlihat seperti jawaban.
+AMBANG_INDEKS_LAYAK_TAMPIL = 1 / 3
+
+
+def cakupan_indeks(
+    faktor: "list",  # list[ScoreFactor]; tidak diimpor supaya modul ini bebas ORM
+) -> dict[str, dict[str, object]]:
+    """Berapa bahan tiap indeks yang benar-benar terukur, bukan dinetralkan.
+
+    Mengembalikan, per kode indeks: jumlah bahan terukur, jumlah bahan
+    seluruhnya, daftar kode variabel yang kosong, dan apakah angkanya layak
+    ditampilkan sama sekali.
+    """
+    keluar: dict[str, dict[str, object]] = {}
+    for f in faktor:
+        d = keluar.setdefault(
+            f.indeks, {"terukur": 0, "total": 0, "kosong": [], "layak_tampil": False}
+        )
+        d["total"] = int(d["total"]) + 1  # type: ignore[arg-type]
+        if f.nilai_normalisasi is None:
+            d["kosong"].append(f.kode_variabel)  # type: ignore[union-attr]
+        else:
+            d["terukur"] = int(d["terukur"]) + 1  # type: ignore[arg-type]
+
+    for d in keluar.values():
+        total = int(d["total"])  # type: ignore[arg-type]
+        terukur = int(d["terukur"])  # type: ignore[arg-type]
+        d["layak_tampil"] = bool(total and terukur / total >= AMBANG_INDEKS_LAYAK_TAMPIL)
+    return keluar

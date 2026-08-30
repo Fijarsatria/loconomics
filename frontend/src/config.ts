@@ -525,7 +525,7 @@ export const ARTI_VARIABEL: Record<string, { kode: string; nama: string; satuan:
   indeks_churn: { kode: 'P06', nama: 'Seberapa sering usaha berganti', satuan: '' },
   harga_sewa_per_m2: { kode: 'P07', nama: 'Sewa per m2', satuan: 'Rp/m2' },
   zona_izin_komersial: { kode: 'L01', nama: 'Boleh dipakai usaha', satuan: '' },
-  kelas_zona: { kode: 'L02', nama: 'Kode zona RDTR', satuan: '' },
+  kelas_zona: { kode: 'L02', nama: 'Jenis zona menurut aturan tata ruang', satuan: '' },
   risiko_banjir: { kode: 'L03', nama: 'Risiko banjir', satuan: '' },
   rasio_tutupan_bangunan: { kode: 'M01', nama: 'Padatnya bangunan', satuan: '%' },
   luas_bangunan_median: { kode: 'M02', nama: 'Luas bangunan rata-rata', satuan: 'm2' },
@@ -543,6 +543,78 @@ export const ARTI_INDEKS: Record<string, string> = {
   IAE: 'perputaran uang',
   IKP: 'ketatnya persaingan',
   IBR: 'biaya dan risiko',
+}
+
+/**
+ * Pertanyaan yang sebenarnya dijawab tiap indeks, dalam kalimat orang.
+ *
+ * "Indeks Potensi Transit 0,79" tidak menjawab pertanyaan siapa pun. Yang
+ * dicari orang yang sedang menimbang lokasi adalah "gampang nggak orang ke
+ * sini", dan itu yang ditulis di layar.
+ */
+export const TANYA_INDEKS: Record<string, string> = {
+  IPT: 'Gampang tidak orang sampai ke sini?',
+  IAE: 'Ada tidak uang berputar di sini?',
+  IKP: 'Sudah ramai pesaing atau belum?',
+  IBR: 'Mahal dan berisiko tidak?',
+}
+
+/**
+ * Angka 0-1 diterjemahkan jadi KATA, per indeks.
+ *
+ * Empat kosakata terpisah, bukan satu "bagus/sedang/buruk" untuk semuanya, dan
+ * itu bukan hiasan: dua dari empat indeks BERBALIK arah. Persaingan yang tinggi
+ * bukan "bagus", dan biaya yang tinggi bukan "buruk" begitu saja - ia mahal.
+ * Memakai satu kosakata memaksa antarmuka menempelkan "tinggi = buruk" di
+ * sebelahnya, dan itu persis kalimat yang membuat orang berhenti membaca.
+ *
+ * Ambangnya aturan TAMPILAN. Menggesernya mengubah kata yang muncul, tidak
+ * pernah mengubah peringkat satu lokasi pun.
+ */
+const AMBANG_KATA = [0.75, 0.55, 0.35] as const
+
+const KATA_INDEKS: Record<string, readonly [string, string, string, string]> = {
+  // urut dari nilai TERTINGGI ke terendah
+  IPT: ['Sangat mudah', 'Mudah', 'Lumayan', 'Sulit'],
+  IAE: ['Sangat ramai', 'Ramai', 'Sedang', 'Sepi'],
+  IKP: ['Sangat ketat', 'Ketat', 'Sedang', 'Masih longgar'],
+  IBR: ['Mahal', 'Agak mahal', 'Sedang', 'Murah'],
+}
+
+/**
+ * Apakah nilai TINGGI pada indeks ini kabar baik.
+ *
+ * Dipakai untuk mewarnai bilahnya, bukan untuk menempelkan kata "buruk":
+ * lokasi yang persaingannya ketat belum tentu salah dipilih - kadang justru
+ * di situ pembelinya.
+ */
+export const TINGGI_BAIK: Record<string, boolean> = {
+  IPT: true,
+  IAE: true,
+  IKP: false,
+  IBR: false,
+}
+
+/**
+ * Turunkan sebuah label jadi bentuk yang layak di TENGAH kalimat.
+ *
+ * `.toLowerCase()` saja tidak cukup: ia mengecilkan akronim juga, dan
+ * "NJOP tanah" jadi "njop tanah". Yang benar cuma huruf pertama, dan itu pun
+ * tidak kalau kata pertamanya memang ditulis kapital seluruhnya.
+ */
+export function keKalimat(teks: string): string {
+  const kata = teks.split(' ')[0] ?? ''
+  if (kata.length > 1 && kata === kata.toUpperCase()) return teks
+  return teks.charAt(0).toLowerCase() + teks.slice(1)
+}
+
+export function kataIndeks(kode: string, nilai: number | null): string | null {
+  if (nilai === null || !KATA_INDEKS[kode]) return null
+  const kata = KATA_INDEKS[kode]
+  if (nilai >= AMBANG_KATA[0]) return kata[0]
+  if (nilai >= AMBANG_KATA[1]) return kata[1]
+  if (nilai >= AMBANG_KATA[2]) return kata[2]
+  return kata[3]
 }
 
 // --- Badge keyakinan (Q01–Q03) ---------------------------------------------

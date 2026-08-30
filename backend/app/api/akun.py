@@ -815,7 +815,7 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
     isi += [Paragraph("1. Boleh tidak dipakai usaha", g["h2"])]
     isi.append(_tabel([
         ["Status zona (ZoneGuard)", zona.penjelasan],
-        ["Kode zona RDTR", zona.kelas_zona or "belum ada data"],
+        ["Jenis zona menurut aturan tata ruang", zona.kelas_zona or "belum ada data"],
         ["Pergantian usaha (RiskRadar)", f"{risiko.label} — indeks {_angka_id(risiko.indeks_churn)}"],
         ["Risiko banjir", _angka_id(hx.risiko_banjir)],
     ], dok.width, colors))

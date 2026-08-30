@@ -611,7 +611,7 @@ function Cakupan({
               <div className="mb-1 flex items-baseline justify-between gap-2">
                 <span className="text-[14.5px] font-medium">{nama}</span>
                 <span className="tabular text-[13px] text-ink-3">
-                  cakupan RDTR {(cakupan * 100).toFixed(0)}%
+                  aturan tata ruangnya sudah terdata di {(cakupan * 100).toFixed(0)}% lokasi
                 </span>
               </div>
               <div className="flex h-2.5 overflow-hidden rounded-xs bg-ground-2">

@@ -22,7 +22,16 @@
 
 import { useEffect, useState } from 'react'
 
-import { ARTI_INDEKS, ARTI_KODE, ARTI_VARIABEL, kodeLokasi } from '../config'
+import {
+  ARTI_INDEKS,
+  ARTI_KODE,
+  ARTI_VARIABEL,
+  TANYA_INDEKS,
+  TINGGI_BAIK,
+  kataIndeks,
+  keKalimat,
+  kodeLokasi,
+} from '../config'
 import { api, GalatAPI } from '../lib/api'
 import { angka, rupiah } from '../lib/format'
 import type { CommuterClock, DetailHeksagon, KonteksSimpul, PriceLensHeksagon } from '../types'
@@ -84,11 +93,11 @@ function SumbuKuadran({
         />
       </div>
       <p className="mt-1 text-[11px] leading-snug text-ink-3">
-        median {format(batas)} ·{' '}
+        Separuh lokasi ada di bawah {format(batas)}.{' '}
         <span className="font-semibold text-ink-2">
-          {diAtas ? 'di atas' : 'di bawah'} median
+          Yang ini {diAtas ? 'di atas' : 'di bawah'} garis itu
         </span>
-        {tinggiBaik ? ' (menentukan baris atas/bawah)' : ' (menentukan kolom kiri/kanan)'}
+        {tinggiBaik ? ' — itu yang menentukan baris atas/bawah.' : ' — itu yang menentukan kolom kiri/kanan.'}
       </p>
     </div>
   )
@@ -746,36 +755,101 @@ export default function PanelInsight({
       )}
 
       {/* --- 5. Empat indeks ------------------------------------------------ */}
-      <Bagian judul="Empat indeks pembentuk skor">
+      {/* --- Empat hal yang dinilai ----------------------------------------
+          Ditulis ulang 30 Agustus 2026, dan yang berubah bukan cuma kata-katanya.
+
+          Versi lama menampilkan empat angka desimal - "akses ke stasiun 0,79",
+          "biaya dan risiko 0,49" - dengan keterangan "tinggi = buruk" di
+          sebagiannya. Dua hal salah sekaligus di situ.
+
+          Pertama, angkanya tidak menjawab pertanyaan siapa pun. Orang yang
+          sedang menimbang ruko tidak bertanya "berapa indeks potensi transit
+          di sini", ia bertanya "berapa menit jalan kaki ke stasiun" - dan
+          angka itu ADA, sudah diambil, dan sudah tampil beberapa baris di atas.
+
+          Kedua, dan ini yang lebih serius: variabel kosong DINETRALKAN ke 0,5,
+          bukan dinolkan. Terukur atas 708 heksagon, hanya 1% bobot "perputaran
+          uang" dan 5% bobot "biaya dan risiko" yang benar-benar berasal dari
+          pengukuran. Sisanya nilai tengah. Jadi "0,487" di layar berarti
+          "belum diketahui", dan tidak ada satu pun cara pembacanya bisa tahu.
+          Itu keluarga kesalahan yang sama dengan badge yang dulu mengaku
+          disurvei dan RiskRadar yang menyebut AMAN untuk lokasi tanpa data.
+
+          Sekarang: kata, bukan desimal; angka sungguhan kalau ada; dan indeks
+          yang bahannya belum terukur MENGATAKANNYA. */}
+      <Bagian judul="Empat hal yang dinilai">
+        <p className="mb-3 text-[13px] leading-relaxed text-ink-2">
+          Skor lokasi ini disusun dari empat hal di bawah. Semuanya dihitung di
+          luar aplikasi, sekali, dari data yang bisa ditunjuk sumbernya — bukan
+          dikarang saat Anda membukanya.
+        </p>
         {(
           [
-            // Nama dari ARTI_INDEKS, sama dengan yang dipakai daftar faktor
-            // tepat di bawahnya. Dua kosakata untuk benda yang sama di satu
-            // layar membuat pembacanya mengira itu dua hal berbeda.
-            ['ipt', ARTI_INDEKS.IPT, indeks.ipt, false],
-            ['iae', ARTI_INDEKS.IAE, indeks.iae, false],
-            ['ikp', ARTI_INDEKS.IKP, indeks.ikp, true],
-            ['ibr', ARTI_INDEKS.IBR, indeks.ibr, true],
+            ['IPT', indeks.ipt],
+            ['IAE', indeks.iae],
+            ['IKP', indeks.ikp],
+            ['IBR', indeks.ibr],
           ] as const
-        ).map(([kunci, label, nilai, terbalik]) => (
-          <div key={kunci} className="py-[5px]">
-            <div className="mb-1 flex items-baseline justify-between gap-2">
-              <span className="text-[14px] capitalize text-ink-2">
-                {label}
-                {terbalik && <span className="ml-1 text-[12px] text-ink-3">tinggi = buruk</span>}
-              </span>
-              <span className="tabular text-[14px] font-medium">
-                {nilai === null ? <Kosong teks="—" /> : nilai.toFixed(2)}
-              </span>
+        ).map(([kode, nilai]) => {
+          const cakupan = indeks.cakupan?.[kode]
+          // Belum layak tampil = bahannya nyaris seluruhnya kosong. Angkanya
+          // ADA (0,487) tetapi ia nilai tengah, bukan temuan.
+          const terukur = cakupan ? cakupan.layak_tampil : nilai !== null
+          const kata = terukur ? kataIndeks(kode, nilai) : null
+          const baik = TINGGI_BAIK[kode]
+          // Angka sungguhan yang sudah kita punya, gratis, untuk baris ini.
+          const fakta =
+            kode === 'IPT' && konteks?.simpul && konteks.menit_jalan !== null
+              ? `${Math.round(konteks.menit_jalan)} menit jalan kaki ke ${konteks.simpul.nama}`
+              : null
+
+          return (
+            <div key={kode} className="border-t border-line-2 py-2.5 first:border-t-0 first:pt-0">
+              <div className="mb-1 flex items-baseline justify-between gap-3">
+                <span className="text-[14px] font-medium text-ink first-letter:uppercase">
+                  {ARTI_INDEKS[kode]}
+                </span>
+                {kata ? (
+                  <span className="shrink-0 text-[14px] font-semibold text-ink">{kata}</span>
+                ) : (
+                  <span className="shrink-0 text-[13px] text-ink-3">Belum terukur</span>
+                )}
+              </div>
+              <p className="mb-1.5 text-[12.5px] leading-snug text-ink-3">
+                {TANYA_INDEKS[kode]}
+              </p>
+              {terukur ? (
+                <>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-ground-2">
+                    <div
+                      className={`h-full rounded-full ${baik ? 'bg-ink' : 'bg-ink-3'}`}
+                      style={{ width: `${Math.min(100, Math.max(3, (nilai ?? 0) * 100))}%` }}
+                    />
+                  </div>
+                  {fakta && (
+                    <p className="mt-1.5 text-[12.5px] text-ink-2">
+                      <strong className="font-semibold text-ink">{fakta}</strong>
+                    </p>
+                  )}
+                  {cakupan && cakupan.terukur < cakupan.total && (
+                    <p className="mt-1 text-[12px] leading-snug text-ink-3">
+                      {cakupan.terukur} dari {cakupan.total} bahannya sudah terukur. Belum ada:{' '}
+                      {cakupan.kosong.map((k) => keKalimat(ARTI_KODE[k] ?? k)).join(', ')}.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-[12.5px] leading-snug text-ink-3">
+                  {cakupan
+                    ? `Butuh survei lapangan dulu. Belum ada: ${cakupan.kosong
+                        .map((k) => keKalimat(ARTI_KODE[k] ?? k))
+                        .join(', ')}.`
+                    : 'Datanya belum ada untuk lokasi ini.'}
+                </p>
+              )}
             </div>
-            <div className="h-1 overflow-hidden rounded-full bg-ground-2">
-              <div
-                className={`h-full rounded-full ${terbalik ? 'bg-ink-3' : 'bg-ink-2'}`}
-                style={{ width: `${Math.min(100, (nilai ?? 0) * 100)}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </Bagian>
 
       {/* --- 6. Faktor ------------------------------------------------------
@@ -787,7 +861,7 @@ export default function PanelInsight({
         <Bagian judul="Kenapa skornya segitu">
           <Terkunci
             judul="Pembongkaran skor"
-            kalimat="Lihat variabel mana yang menaikkan dan menurunkan skor lokasi ini, lengkap dengan persentilnya."
+            kalimat="Lihat angka mana yang menaikkan dan menurunkan skor lokasi ini, dan seberapa jauh posisinya dibanding lokasi lain."
             labelAksi="Gabung Loconomics Premium"
             baris={4}
             onBuka={ajakanBuka}
@@ -844,17 +918,17 @@ export default function PanelInsight({
 
       {/* --- 7. Variabel lengkap -------------------------------------------- */}
       {terkunci ? (
-        <Bagian judul="Seluruh 43 variabel">
+        <Bagian judul="Seluruh 43 angka lokasi ini">
           <Terkunci
-            judul="43 variabel granular"
-            kalimat="Seluruh angka agregat pembentuk indeks — permintaan, perilaku, kompetisi, biaya, risiko, morfologi."
+            judul="Seluruh 43 angka lokasi ini"
+            kalimat="Semua angka yang dipakai menilai lokasi ini — orang di sekitarnya, kebiasaan belanjanya, pesaingnya, biayanya, risikonya, dan bentuk bangunannya."
             labelAksi="Gabung Loconomics Premium"
             baris={6}
             onBuka={ajakanBuka}
           />
         </Bagian>
       ) : (
-      <Bagian judul="Seluruh 43 variabel">
+      <Bagian judul="Seluruh 43 angka lokasi ini">
         <details className="group">
           <summary className="cursor-pointer list-none text-[14px] text-ink-2 underline decoration-line-2 underline-offset-2 hover:text-ink">
             Tampilkan tabel lengkap
