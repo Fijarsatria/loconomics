@@ -351,18 +351,19 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
       // datang dari GeoJSON di `public/data/`. Sebelum ini, layar pembuka tetap
       // memanggil /health, gagal, lalu MEMBLOKIR seluruh aplikasi di balik
       // pesan galat - padahal petanya sudah siap digambar di baliknya.
-      if (!import.meta.env.VITE_API_BASE_URL) {
-        naik()
-        naik()
-        naik()
-        naik()
-        return
-      }
-      try {
-        await api.sehat()
-      } catch {
-        if (!batal) setGalat('Mesin data belum bisa dihubungi.')
-        return
+      //
+      // Yang dilewati HANYA pemeriksaannya. Percobaan pertama melewati seluruh
+      // urutan lalu `return`, dan akibatnya layar pembuka berhenti di "Siap
+      // 100%" selamanya - `setPergi`/`onSelesai` ada di ujung urutan yang baru
+      // saja dilompati. Gagal yang lebih halus daripada sebelumnya, dan sama
+      // saja memblokir aplikasinya.
+      if (import.meta.env.VITE_API_BASE_URL) {
+        try {
+          await api.sehat()
+        } catch {
+          if (!batal) setGalat('Mesin data belum bisa dihubungi.')
+          return
+        }
       }
       naik()
 
