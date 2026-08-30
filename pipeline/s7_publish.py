@@ -806,6 +806,190 @@ def muat_misi(db: Session, berkas: Path | None = None) -> dict[str, int]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Survei lapangan -> dua belas variabel yang tidak punya sumber lain
+# ---------------------------------------------------------------------------
+
+#: Kolom CSV survei yang boleh masuk basis data.
+#:
+#: Sengaja daftar POSITIF. Berkas isian tangan selalu memuat kolom bantu -
+#: nama surveyor, tanggal, catatan - dan daftar negatif ("semua kecuali...")
+#: akan melewatkan kolom baru yang belum terpikir, diam-diam, ke dalam UPDATE.
+KOLOM_SURVEI: tuple[str, ...] = (
+    "harga_sewa_median", "harga_sewa_per_m2", "harga_median_porsi",
+    "nominal_median_struk", "puncak_pagi", "puncak_siang", "puncak_sore",
+    "puncak_malam", "rasio_weekend", "intensitas_transaksi",
+    "skor_prestise_visual", "indeks_churn",
+)
+
+#: Rentang yang masuk akal per kolom. Nilai di luarnya DITOLAK, tidak dipangkas.
+#:
+#: Memangkas menyembunyikan salah ketik sambil tetap menyimpan angka yang salah;
+#: menolak memaksa orangnya melihat barisnya. Yang paling sering: rupiah ditulis
+#: dalam ribuan ("15" untuk Rp15.000.000) dan skala 1-5 diisi 0.
+RENTANG_SURVEI: dict[str, tuple[float, float]] = {
+    "harga_sewa_median": (5e5, 5e8),
+    "harga_sewa_per_m2": (1e4, 5e6),
+    "harga_median_porsi": (1e3, 5e5),
+    "nominal_median_struk": (1e3, 1e7),
+    "puncak_pagi": (0, 1e4),
+    "puncak_siang": (0, 1e4),
+    "puncak_sore": (0, 1e4),
+    "puncak_malam": (0, 1e4),
+    "rasio_weekend": (0, 100),
+    "intensitas_transaksi": (0, 1e4),
+    "skor_prestise_visual": (1, 5),
+    "indeks_churn": (0, 100),
+}
+
+
+def baca_survei(berkas: Path) -> tuple[pd.DataFrame, pd.Series]:
+    """Urai dan periksa CSV survei. TANPA basis data, supaya bisa diuji murni.
+
+    Dipisahkan dari `muat_survei` dengan sengaja: seluruh cara berkas ini bisa
+    salah - sel kosong, satuan tertukar, kolom asing, kunjungan ganda - hidup
+    di sini, dan tidak satu pun dari empat hal itu memunculkan galat kalau
+    tidak diperiksa. Bagian yang menyentuh basis data tinggal dua UPDATE.
+
+    Mengembalikan (median per heksagon, jumlah kunjungan per heksagon).
+    """
+    df = pd.read_csv(berkas, dtype={"h3_index": str})
+    if "h3_index" not in df.columns:
+        raise ValueError(f"{berkas} tidak punya kolom h3_index")
+
+    tersedia = [k for k in KOLOM_SURVEI if k in df.columns]
+    if not tersedia:
+        raise ValueError(
+            f"{berkas} tidak memuat satu pun kolom survei yang dikenal. "
+            f"Yang diharapkan: {', '.join(KOLOM_SURVEI)}"
+        )
+
+    # Angka, dan yang tidak bisa diurai jadi NaN - bukan 0.
+    for k in tersedia:
+        df[k] = pd.to_numeric(df[k], errors="coerce")
+
+    # Baris yang seluruh kolom surveinya kosong tidak membawa apa pun. Ia bukan
+    # galat (templatnya memang dicetak kosong), jadi cukup dilewati.
+    berisi = df[df[tersedia].notna().any(axis=1)].copy()
+    if berisi.empty:
+        return pd.DataFrame(columns=tersedia), pd.Series(dtype=int)
+
+    ditolak: list[str] = []
+    for k in tersedia:
+        lo, hi = RENTANG_SURVEI[k]
+        buruk = berisi[k].notna() & ((berisi[k] < lo) | (berisi[k] > hi))
+        for h3, nilai in zip(berisi.loc[buruk, "h3_index"], berisi.loc[buruk, k]):
+            ditolak.append(f"{h3} {k}={nilai:g} (di luar {lo:g}..{hi:g})")
+    if ditolak:
+        raise ValueError(
+            "Nilai di luar rentang wajar, dan itu hampir selalu salah ketik "
+            "satuan. Perbaiki berkasnya lalu ulangi:\n  " + "\n  ".join(ditolak[:20])
+        )
+
+    # Median per heksagon, bukan rata-rata dan bukan yang terakhir - lihat
+    # keputusan 2 di docstring `muat_survei`.
+    return berisi.groupby("h3_index")[tersedia].median(), berisi.groupby("h3_index").size()
+
+
+def muat_survei(db: Session, berkas: Path | None = None) -> dict[str, int]:
+    """Muat hasil survei lapangan dari CSV yang dibuat `rencana_survei.py`.
+
+    Ini pintu masuk untuk dua belas variabel yang tidak punya sumber terbuka
+    mana pun - harga sewa, pola jam, belanja, kesan visual, churn. Tanpa
+    fungsi ini, lembar survei cuma formulir: tim pulang membawa angka yang
+    tidak punya tujuan.
+
+    TIGA KEPUTUSAN YANG PERLU DIKETAHUI
+
+    1. Sel kosong tetap KOSONG. Surveyor yang tidak menemukan papan sewa
+       meninggalkan selnya kosong, dan itu pernyataan yang berbeda dari
+       "sewanya nol". Aturan 4, dan di sini paling mudah dilanggar karena
+       `pd.read_csv` dengan senang hati mengubah sel kosong jadi 0 kalau
+       dtype-nya dipaksa.
+
+    2. Beberapa kunjungan ke heksagon yang sama diringkas dengan MEDIAN,
+       bukan rata-rata dan bukan yang terakhir. Median tahan terhadap satu
+       salah ketik; rata-rata tidak, dan "yang terakhir menang" membuat
+       urutan baris di dalam berkas menentukan isinya.
+
+    3. `n_titik_misi` dihitung ULANG DARI NOL, bukan ditambahkan. Fungsi ini
+       memanggil `muat_misi` lebih dulu - yang menulis hitungan misi secara
+       mutlak untuk seluruh heksagon - lalu menambahkan jumlah kunjungan
+       survei di atasnya. Kalau ia menambah tanpa menghitung ulang, menjalankan
+       perintah yang sama dua kali akan menggandakan cakupan survei, badge
+       keyakinan ikut naik, dan tidak ada satu pun galat yang muncul.
+    """
+    berkas = berkas or DATA_MENTAH.parent / "04_survei" / "target_survei.csv"
+    if not berkas.exists():
+        raise FileNotFoundError(
+            f"{berkas} belum ada. Jalankan `python rencana_survei.py --tulis` "
+            "untuk membuat templatnya, isi di lapangan, lalu ulangi perintah ini."
+        )
+
+    ringkas, kunjungan = baca_survei(berkas)
+    if ringkas.empty:
+        return {"baris": 0, "heksagon": 0, "asing": 0, "hex_ditulis": 0}
+
+    sah = {r[0] for r in db.execute(text("SELECT h3_index FROM hex_features")).all()}
+    asing = sorted(set(ringkas.index) - sah)
+    ringkas = ringkas[ringkas.index.isin(sah)]
+    if ringkas.empty:
+        return {"baris": 0, "heksagon": 0, "asing": len(asing), "hex_ditulis": 0}
+
+    # URUTANNYA MENENTUKAN, dan salahnya diam.
+    #
+    # `muat_misi` dijalankan LEBIH DULU, bukan sesudah. Ia menulis dua hal yang
+    # bertabrakan dengan survei: `n_titik_misi` (ditulis mutlak, itu yang
+    # membuat fungsi ini idempoten) dan sebagian VARIABEL yang juga ada di
+    # lembar survei - B07 `harga_median_porsi` di keduanya. Kalau ia jalan
+    # belakangan, angka hasil pengukuran langsung ditimpa balik oleh turunan
+    # misi yang untuk heksagon itu justru kosong.
+    #
+    # Ditangkap uji `heksagon kedua terisi`; tanpa itu ia akan lolos sebagai
+    # "survei dimuat, kolomnya tetap NULL" tanpa satu pun galat.
+    try:
+        muat_misi(db)
+    except FileNotFoundError:
+        log.warning(
+            "Berkas misi MAPID tidak ada; n_titik_misi tidak dihitung ulang. "
+            "Jalankan `s1_ingest.py --misi` supaya cakupan survei tidak menggeser."
+        )
+
+    # Survei menang atas turunan misi: ia pengukuran langsung di lokasinya.
+    n_hex = muat_variabel(db, ringkas)
+
+    sekarang = dict(
+        db.execute(
+            # = ANY(:h), bukan IN :h. Yang kedua menuntut bindparam(expanding=True)
+            # di SQLAlchemy 2 dan tanpa itu tuple-nya dikirim apa adanya sebagai
+            # satu parameter - galatnya "syntax error at or near $1", yang tidak
+            # menyebut-nyebut parameter maupun tuple.
+            text("SELECT h3_index, n_titik_misi FROM hex_features WHERE h3_index = ANY(:h)"),
+            {"h": list(ringkas.index)},
+        ).all()
+    )
+    db.execute(
+        text("UPDATE hex_features SET n_titik_misi = :n, tingkat_keyakinan = :t, "
+             "data_source = :s WHERE h3_index = :h"),
+        [
+            {
+                "h": h3,
+                "n": (n := int(sekarang.get(h3) or 0) + int(kunjungan[h3])),
+                "t": tingkat_keyakinan(n),
+                "s": "observed" if n > 0 else "predicted",
+            }
+            for h3 in ringkas.index
+        ],
+    )
+
+    return {
+        "baris": int(kunjungan.sum()),
+        "heksagon": int(len(ringkas)),
+        "asing": len(asing),
+        "hex_ditulis": n_hex,
+    }
+
+
 def muat_bangunan(db: Session, sumber: Path | None = None) -> dict[str, int]:
     """M01 rasio tutupan dan M02 luas median, dari footprint bangunan OSM.
 
@@ -1152,6 +1336,11 @@ if __name__ == "__main__":
         help="Data misi MAPID -> observasi + B06,B07,B08,C07,C08,D10,D12,P03 + Q01/Q02",
     )
     p.add_argument(
+        "--survei",
+        action="store_true",
+        help="Hasil survei lapangan (CSV) -> 12 variabel yang tidak punya sumber lain",
+    )
+    p.add_argument(
         "--bangunan",
         action="store_true",
         help="osm_bangunan.json -> M01 rasio tutupan + M02 luas median",
@@ -1185,7 +1374,7 @@ if __name__ == "__main__":
     arg = p.parse_args()
 
     if not any([arg.muat, arg.ekspor, arg.cakupan, arg.isi_d04, arg.penduduk,
-                arg.bangunan, arg.osm, arg.misi, arg.rdtr, arg.transit,
+                arg.bangunan, arg.osm, arg.misi, arg.survei, arg.rdtr, arg.transit,
                 arg.kosongkan, arg.hitung_ulang, arg.grid]):
         p.print_help()
         raise SystemExit(0)
@@ -1233,7 +1422,8 @@ if __name__ == "__main__":
     # dengan skor lama adalah keadaan yang tidak memunculkan galat apa pun dan
     # hanya ketahuan kalau ada yang menjumlahkan faktornya dengan tangan.
     if (arg.isi_d04 or arg.penduduk or arg.bangunan or arg.osm or arg.misi
-            or arg.rdtr or arg.transit or arg.kosongkan or arg.hitung_ulang):
+            or arg.survei or arg.rdtr or arg.transit or arg.kosongkan
+            or arg.hitung_ulang):
         Sesi = sessionmaker(bind=_mesin())
         with Sesi() as db:
             if arg.isi_d04:
@@ -1256,6 +1446,15 @@ if __name__ == "__main__":
                 print("Memuat data misi MAPID...")
                 for k, v in muat_misi(db).items():
                     print(f"  {k:16} {v}")
+            if arg.survei:
+                print("Memuat hasil survei lapangan...")
+                hasil = muat_survei(db)
+                for k, v in hasil.items():
+                    print(f"  {k:16} {v}")
+                if hasil["asing"]:
+                    print(f"  PERINGATAN: {hasil['asing']} h3_index tidak ada di grid, dilewati")
+                if not hasil["heksagon"]:
+                    print("  Berkasnya masih kosong - belum ada satu pun sel yang diisi.")
             if arg.rdtr:
                 print("Memuat zonasi RDTR...")
                 for k, v in muat_rdtr(db).items():
