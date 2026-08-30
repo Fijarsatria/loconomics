@@ -670,23 +670,47 @@ export default function PanelInsight({
               format={(n) => (n === null ? null : `${rupiah(n)}/m²`)}
               kawasan={harga.kawasan}
             />
-            <div className="mt-3 border-t border-line pt-2">
-              <Baris label="Sewa per bulan" bantuan="P05 — angka yang tertulis di spanduk">
-                <Angka nilai={rupiah(harga.harga_sewa_median)} />
-              </Baris>
-              <Baris
-                label="Uang berpindah per jam"
-                bantuan="B10 — total nominal struk dibagi jam operasional teramati"
-              >
-                <Angka nilai={rupiah(harga.belanja_per_jam)} />
-              </Baris>
-              <Baris label="Harga makanan per porsi" bantuan="B07">
-                <Angka nilai={rupiah(harga.harga_median_porsi)} />
-              </Baris>
-              <Baris label="NJOP" bantuan="P01 — pembanding independen dari OCR">
-                <Angka nilai={rupiah(harga.njop_m2)} satuan="/m²" />
-              </Baris>
-            </div>
+            {/* Baris yang KOSONG tidak lagi dicetak satu per satu.
+                Sebelumnya keempatnya selalu tampil, dan untuk 708 dari 708
+                heksagon keempatnya berbunyi "belum ada data" - jadi pelanggan
+                yang baru membayar melihat empat kegagalan berturut-turut di
+                bagian yang paling dijanjikan.
+                Terukur 30 Agu 2026: sewa per m2 0/708, sewa per bulan 0/708,
+                uang per jam 0/708, NJOP 0/708, harga porsi 11/708. Yang salah
+                bukan cara menuliskannya melainkan menuliskannya empat kali -
+                satu pernyataan yang benar lebih jujur daripada empat baris
+                yang membuat kekosongan terlihat seperti kerusakan. */}
+            {(() => {
+              const baris = [
+                ['Sewa per bulan', 'P05 — angka yang tertulis di spanduk sewa',
+                  rupiah(harga.harga_sewa_median), undefined],
+                ['Uang berpindah per jam', 'B10 — total nominal struk dibagi jam operasional',
+                  rupiah(harga.belanja_per_jam), undefined],
+                ['Harga makanan per porsi', 'B07 — dari daftar menu yang disurvei',
+                  rupiah(harga.harga_median_porsi), undefined],
+                ['NJOP', 'P01 — pembanding independen', rupiah(harga.njop_m2), '/m²'],
+              ] as const
+              const ada = baris.filter(([, , nilai]) => nilai !== null)
+              const kosong = baris.filter(([, , nilai]) => nilai === null)
+              return (
+                <div className="mt-3 border-t border-line pt-2">
+                  {ada.map(([label, bantuan, nilai, satuan]) => (
+                    <Baris key={label} label={label} bantuan={bantuan}>
+                      <Angka nilai={nilai} satuan={satuan} />
+                    </Baris>
+                  ))}
+                  {kosong.length > 0 && (
+                    <p className="pt-1 text-[12.5px] leading-relaxed text-ink-3">
+                      {kosong.length === baris.length ? 'Belum ada' : 'Belum ada juga'}{' '}
+                      {kosong.map(([l]) => keKalimat(l)).join(', ')} di lokasi ini.{' '}
+                      {kosong.some(([l]) => l === 'NJOP')
+                        ? 'NJOP tidak diterbitkan terbuka oleh Bapenda; sisanya menunggu survei lapangan — ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'
+                        : 'Ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
           </>
         ) : (
           <Kosong teks="Data harga belum tersedia untuk heksagon ini" />
@@ -748,7 +772,20 @@ export default function PanelInsight({
             )}
           </>
         ) : (
-          <Kosong teks="Profil jam belum tersedia" />
+          /* "Profil jam belum tersedia" tidak memberi tahu apa pun kepada
+             orang yang baru saja membayar untuk melihatnya. Terukur 30 Agu
+             2026: `hex_hourly_profiles` NOL baris untuk 708 heksagon - jadi
+             ini bukan keadaan sesekali melainkan keadaan satu-satunya, dan
+             pelanggan berhak tahu bahwa yang kurang bukan koneksinya. */
+          <div className="text-[13px] leading-relaxed text-ink-2">
+            <p className="font-medium text-ink">Belum ada satu pun jam transaksi tercatat.</p>
+            <p className="mt-1 text-ink-3">
+              Pola jam dibaca dari waktu yang tercetak di struk. Struk survei MAPID
+              tidak membawa kolom waktu — jamnya ada di dalam foto struknya, dan
+              pembacaan otomatis foto belum dijalankan. Sampai itu ada, tidak ada
+              satu pun lokasi yang punya profil jam.
+            </p>
+          </div>
         )}
       </Bagian>
 

@@ -539,21 +539,34 @@ function PitaDemo() {
 
   if (!catatan) return null
   return (
+    /* Chip KETERANGAN, bukan peringatan - dan itu koreksi, bukan pelunakan.
+
+       Sebelumnya ia memakai warna Jebakan Gengsi dengan segitiga seru, jadi
+       satu-satunya hal yang permanen di bilah atas produk ini adalah sebuah
+       ALARM. Yang dinyatakannya justru sebagian besar kabar baik: 708 dari 708
+       heksagon punya data terukur - POI OSM 708/708, skor simpul 708/708,
+       waktu jalan 703/708, penduduk 707/708 - dan yang tipis cuma satu sumber
+       di antara lima.
+
+       Segitiga seru dipakai untuk sesuatu yang perlu DITINDAKLANJUTI pembaca.
+       Cakupan survei bukan itu; ia asal-usul data, sekeluarga dengan badge
+       keyakinan - dan badge keyakinan sengaja TIDAK memakai merah-kuning-hijau
+       untuk alasan yang sama persis. Isinya tidak berubah sedikit pun. */
     <span
       title={catatan}
       role="status"
-      className="flex shrink-0 items-center gap-1.5 rounded-full border border-jebakan/35 bg-jebakan-soft px-2.5 py-1 text-[11.5px] font-semibold text-jebakan"
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-ink-2"
     >
       <svg width="11" height="11" viewBox="0 0 20 20" aria-hidden className="shrink-0">
+        <ellipse cx="10" cy="5" rx="6.5" ry="2.6" fill="none" stroke="currentColor" strokeWidth="1.7" />
         <path
-          d="M10 3.5 18 16.5H2Z"
+          d="M3.5 5v10c0 1.4 2.9 2.6 6.5 2.6s6.5-1.2 6.5-2.6V5"
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinejoin="round"
+          strokeWidth="1.7"
+          strokeLinecap="round"
         />
-        <path d="M10 8.4v3.4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-        <circle cx="10" cy="14.2" r="1" fill="currentColor" />
+        <path d="M3.5 10c0 1.4 2.9 2.6 6.5 2.6s6.5-1.2 6.5-2.6" fill="none" stroke="currentColor" strokeWidth="1.7" />
       </svg>
       {/* Kalimatnya menyebut DUA angka, dan itu perbaikan atas versi sebelumnya
           yang cuma menyebut satu.

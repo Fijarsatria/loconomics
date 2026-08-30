@@ -297,7 +297,15 @@ def commuter_clock(
     semua_proxy = bool(baris) and all(b.metode == "proxy" for b in baris)
     catatan = None
     if not baris:
-        catatan = "Belum ada profil jam untuk heksagon ini - jalankan pipeline s4_spatial."
+        # Ini dibaca PELANGGAN, di fitur yang ia bayar. Sebelumnya ia berbunyi
+        # "jalankan pipeline s4_spatial" - instruksi untuk pengembang yang bocor
+        # ke layar orang yang tidak punya pipeline untuk dijalankan. Yang
+        # dibutuhkan pembacanya bukan perintah melainkan sebab.
+        catatan = (
+            "Pola jam dibaca dari waktu yang tercetak di struk. Struk survei MAPID "
+            "tidak membawa kolom waktu - jamnya ada di dalam foto struknya, dan "
+            "pembacaan otomatis foto itu belum dijalankan."
+        )
     elif semua_proxy:
         catatan = (
             "Seluruh angka di sini hasil estimasi dari konteks heksagon, bukan dari jam "
