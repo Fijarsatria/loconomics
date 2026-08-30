@@ -52,39 +52,62 @@ import {
 } from './primitif'
 
 /**
- * Satu sumbu kuadran sebagai batang, dengan MEDIAN sebagai garis tegak.
+ * Satu sumbu kuadran sebagai batang, dengan titik tengah sebagai garis tegak.
  *
  * Bukan bar biasa: yang penting bukan seberapa panjang batangnya melainkan di
- * sisi mana ia berhenti terhadap garis. Karena itu garisnya digambar tebal dan
- * gelap, dan sisi mana yang "tinggi" ditulis apa adanya di bawahnya.
+ * sisi mana ia berhenti terhadap garis.
+ *
+ * Versi sebelumnya menulis MEKANISMENYA di bawah batang - "Separuh lokasi ada
+ * di bawah 0,29. Yang ini di atas garis itu - itu yang menentukan kolom
+ * kiri/kanan." Tiap kata di situ benar, dan gabungannya tetap tidak bisa
+ * dipahami: 0,29 tidak punya arti bagi siapa pun, dan "kolom kiri/kanan"
+ * menuntut pembacanya sudah hafal tata letak Kompas Kuadran.
+ *
+ * Sekarang pemanggilnya mengirim satu KALIMAT yang menyatakan artinya, dan
+ * angka mentah sumbu prestise tidak ditampilkan sama sekali - ia diganti kata.
  */
 function SumbuKuadran({
   label,
+  kalimat,
   nilai,
   batas,
   maks,
-  format,
+  tampilNilai,
   tinggiBaik,
 }: {
   label: string
+  /** Apa artinya, dalam satu kalimat. Menggantikan penjelasan mekanismenya. */
+  kalimat: string
   nilai: number
   batas: number
   maks: number
-  format: (v: number) => string
+  /** Yang dicetak di kanan label. Sengaja string: sumbu prestise tidak punya
+   *  satuan yang berarti bagi siapa pun, jadi ia menampilkan kata. */
+  tampilNilai: string
   tinggiBaik?: boolean
 }) {
   const p = Math.max(0, Math.min(100, (nilai / maks) * 100))
   const pb = Math.max(0, Math.min(100, (batas / maks) * 100))
-  const diAtas = nilai >= batas
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between gap-2 text-[11.5px]">
-        <span className="text-ink-3">{label}</span>
-        <span className="tabular font-semibold text-ink">{format(nilai)}</span>
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-[12.5px] text-ink-2">{label}</span>
+        <span className="shrink-0 text-[12.5px] font-semibold text-ink">{tampilNilai}</span>
       </div>
+      {/* Garis tegak = titik tengah seluruh lokasi. Ia tetap digambar karena
+          ia satu-satunya yang membuat "lebih bagus daripada separuh lokasi
+          lain" bisa DILIHAT, bukan cuma dibaca - tetapi angkanya sendiri tidak
+          lagi ditulis. "Separuh lokasi ada di bawah 0,29" menuntut pembacanya
+          tahu 0,29 itu apa, dan tidak ada satu pun cara ia bisa tahu. */}
       <div className="relative h-2 rounded-full bg-ground-2" aria-hidden>
         <div
-          className="h-full rounded-full bg-ink-3 transition-[width] duration-500 ease-liquid"
+          // Sama dengan bagian "Empat hal yang dinilai": pekat untuk sumbu yang
+          // tinggi = baik, redup untuk yang tidak. Prestise visual TIDAK
+          // diwarnai sebagai buruk - lokasi yang terlihat mahal belum tentu
+          // salah dipilih, ia cuma mahal.
+          className={`h-full rounded-full transition-[width] duration-500 ease-liquid ${
+            tinggiBaik ? 'bg-ink' : 'bg-ink-3'
+          }`}
           style={{ width: `${p}%` }}
         />
         <span
@@ -92,13 +115,7 @@ function SumbuKuadran({
           style={{ left: `calc(${pb}% - 1px)` }}
         />
       </div>
-      <p className="mt-1 text-[11px] leading-snug text-ink-3">
-        Separuh lokasi ada di bawah {format(batas)}.{' '}
-        <span className="font-semibold text-ink-2">
-          Yang ini {diAtas ? 'di atas' : 'di bawah'} garis itu
-        </span>
-        {tinggiBaik ? ' — itu yang menentukan baris atas/bawah.' : ' — itu yang menentukan kolom kiri/kanan.'}
-      </p>
+      <p className="mt-1.5 text-[12px] leading-snug text-ink-2">{kalimat}</p>
     </div>
   )
 }
@@ -302,24 +319,38 @@ export default function PanelInsight({
             terasa sewenang-wenang. */}
         {posisi?.x != null && posisi.y != null && batas?.x != null && batas.y != null && (
           <div className="mt-3 rounded-sm border border-line/70 bg-surface-2/60 px-3 py-2.5">
-            <p className="eyebrow mb-2">Kenapa kuadrannya begitu</p>
+            <p className="eyebrow mb-2.5">Kenapa masuk kuadran ini</p>
             <SumbuKuadran
-              label="Skor peluang"
+              label="Seberapa bagus datanya"
+              kalimat={
+                posisi.y >= batas.y
+                  ? 'Lebih bagus daripada separuh lokasi lain.'
+                  : 'Lebih rendah daripada separuh lokasi lain.'
+              }
               nilai={posisi.y}
               batas={batas.y}
               maks={100}
-              format={(v) => v.toFixed(0)}
+              tampilNilai={`${posisi.y.toFixed(0)} dari 100`}
               tinggiBaik
             />
-            <div className="mt-2">
+            <div className="mt-2.5">
               <SumbuKuadran
-                label="Prestise visual"
+                label="Seberapa mahal kelihatannya"
+                kalimat={
+                  posisi.x >= batas.x
+                    ? 'Bangunan dan tokonya terlihat lebih mahal daripada separuh lokasi lain — sewanya biasanya ikut naik.'
+                    : 'Terlihat biasa saja dibanding separuh lokasi lain — dan justru di situ sewanya masih murah.'
+                }
                 nilai={posisi.x}
                 batas={batas.x}
                 maks={1}
-                format={(v) => v.toFixed(2)}
+                tampilNilai={posisi.x >= batas.x ? 'Di atas rata-rata' : 'Di bawah rata-rata'}
               />
             </div>
+            <p className="mt-2.5 border-t border-line/60 pt-2 text-[11px] leading-snug text-ink-3">
+              Garis tegak pada kedua batang = titik tengah seluruh lokasi di enam kawasan.
+              Sisi mana batangnya berhenti terhadap garis itulah yang menentukan kuadrannya.
+            </p>
           </div>
         )}
       </div>

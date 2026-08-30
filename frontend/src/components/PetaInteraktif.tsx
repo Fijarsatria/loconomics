@@ -704,6 +704,28 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       ubin MAPID yang sedang menolak (tidak ada yang bisa kita lakukan), dan
       gaya yang memang salah (itu urusan kita). */
   const [galatPeta, setGalatPeta] = useState<{ pesan: string; ubin: boolean } | null>(null)
+  /**
+   * Penghitung muat-ulang basemap. Dinaikkan = pasang ulang gaya = ubin diminta lagi.
+   *
+   * Ada karena MapLibre TIDAK PERNAH mencoba ulang ubin yang gagal. Terukur:
+   * dengan ubin diblokir lalu dilepas, menggeser peta menghasilkan NOL
+   * permintaan baru ke sumber vector-nya - ubin yang sudah bertanda gagal
+   * tetap bertanda gagal sampai sumbernya dipasang ulang.
+   *
+   * Akibatnya peringatan "server ubin menolak" dulu menempel selamanya,
+   * bahkan sesudah MAPID pulih - dan pemadaman MAPID memang selalu pulih
+   * sendiri dalam belasan menit, sudah terukur dua kali. Yang terlihat di
+   * layar: peta abu-abu permanen dengan pesan yang sudah tidak benar.
+   *
+   * Percobaan pertama memasang pendengar kejadian (`data` / `sourcedata`) dan
+   * itu tidak akan pernah bekerja - bukan karena bentuk kejadiannya salah
+   * ditebak, melainkan karena kejadiannya memang tidak ada.
+   */
+  const [muatUlang, setMuatUlang] = useState(0)
+  /** Sampai kapan galat ubin boleh memasang ulang peringatannya, dalam
+   *  `performance.now()`. Dibuka tiap kali ubin diminta ulang. */
+  const jendelaUbin = useRef(0)
+
   const [sorot, setSorot] = useState<PropertiHeksagon | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
 
@@ -809,13 +831,28 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       // masih mengabarkan ubin tunggal yang gagal sepanjang penggeseran peta,
       // dan itu normal - menampilkannya berarti memasang peringatan permanen
       // untuk sesuatu yang tidak perlu ditindaklanjuti siapa pun.
-      if (!pesan || m.isStyleLoaded()) return
+      if (!pesan) return
       // URL-nya ada di dua tempat tergantung versi MapLibre: properti `url`
       // milik AJAXError, dan di dalam pesannya sendiri. Dibaca dari keduanya.
       const url = (e as unknown as { error?: { url?: string } }).error?.url ?? ''
       const keUbin = /basemap\.mapid\.io\/data\//.test(url) || /basemap\.mapid\.io\/data\//.test(pesan)
-      setGalatPeta({ pesan, ubin: keUbin })
+
+      // DUA jendela tempat galat boleh dilaporkan, dan yang kedua wajib ada.
+      //
+      // Pertama: selama gaya dimuat. Sesudah gaya siap, MapLibre masih
+      // mengabarkan ubin tunggal yang gagal sepanjang peta digeser, dan itu
+      // normal - melaporkannya berarti memasang peringatan permanen untuk
+      // sesuatu yang tidak perlu ditindaklanjuti siapa pun.
+      //
+      // Kedua: beberapa detik sesudah kita MEMINTA ULANG ubin. Tanpa jendela
+      // ini, percobaan ulang yang gagal akan menghapus peringatannya tanpa
+      // pernah memasangnya kembali - dan yang tersisa peta polos tanpa satu
+      // pun keterangan, yaitu keadaan yang lebih buruk daripada sebelum ada
+      // percobaan ulang sama sekali.
+      const sedangMencoba = keUbin && performance.now() < jendelaUbin.current
+      if (!m.isStyleLoaded() || sedangMencoba) setGalatPeta({ pesan, ubin: keUbin })
     })
+
     // `rotate` dan `pitch` menyala tiap bingkai selama diseret; itu tidak apa-apa
     // karena yang dikirim cuma dua angka dan App membandingkannya sebelum
     // menyetel state.
@@ -831,6 +868,40 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
   }, [])
 
+  /**
+   * Coba muat ulang basemap sendiri selama peringatan ubinnya masih terpasang.
+   *
+   * Pemadaman ubin MAPID terukur pulih dalam belasan menit, dan tanpa ini
+   * petanya tidak akan pernah tahu - MapLibre tidak mencoba ulang ubin yang
+   * sudah gagal. Sepuluh percobaan berjarak semenit menutupi rentang itu;
+   * sesudahnya berhenti, dan tombol di peringatannya tetap ada.
+   *
+   * Berhenti sendiri begitu `galatPeta` hilang, karena efek ini ikut mati.
+   */
+  useEffect(() => {
+    if (!galatPeta?.ubin) return
+    let sisa = 10
+    const jam = setInterval(() => {
+      if (sisa-- <= 0) {
+        clearInterval(jam)
+        return
+      }
+      // `setStyle`, dan itu memang satu-satunya yang bekerja.
+      //
+      // Percobaan pertama memakai `source.setTiles([...tiles])` supaya lebih
+      // murah - tanpa membangun ulang layer dan tanpa meminta heksagon lagi.
+      // Terukur: ia menghasilkan NOL permintaan ubin. Daftar tile yang sama
+      // persis tidak dianggap perubahan, jadi cache ubin gagalnya tetap utuh.
+      // Yang lebih buruk, ia erhasil\ secara diam-diam: peringatannya hilang
+      // karena tidak ada galat baru, bukan karena ubinnya kembali.
+      //
+      // Jendela di bawah memastikan kegagalan yang berulang tetap terlihat.
+      jendelaUbin.current = performance.now() + 12_000
+      setMuatUlang((n) => n + 1)
+    }, 60_000)
+    return () => clearInterval(jam)
+  }, [galatPeta?.ubin])
+
   // --- Ganti gaya basemap ---
   // setStyle membuang seluruh sumber & layer, jadi `siap` direset supaya efek
   // pemuatan heksagon di bawah berjalan ulang setelah gaya baru selesai dimuat.
@@ -840,9 +911,20 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     setSiap(false)
     setGalatPeta(null)
     m.once('styledata', () => setSiap(true))
-    m.setStyle(urlGaya(gaya))
+    // `diff: false` WAJIB, dan itu yang membuat tombol coba-ulang berfungsi.
+    //
+    // Bawaannya `diff: true`: MapLibre membandingkan gaya baru dengan yang
+    // sedang terpasang dan menerapkan selisihnya saja. Untuk gaya yang SAMA
+    // PERSIS - yaitu tepat yang terjadi saat memuat ulang karena ubinnya
+    // gagal - selisihnya nol, jadi ia tidak melakukan apa pun. Terukur: nol
+    // permintaan ubin sesudah tombolnya ditekan.
+    //
+    // Gagalnya diam dan menyesatkan: peringatannya HILANG (karena efek ini
+    // memang mengosongkannya) tanpa satu pun ubin diminta ulang, jadi yang
+    // terlihat peta polos tanpa keterangan apa pun.
+    m.setStyle(urlGaya(gaya), { diff: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gaya])
+  }, [gaya, muatUlang])
 
   /**
    * Menjalankan gelombang dari `dari` ke `ke`. Mengembalikan janji supaya
@@ -1965,9 +2047,23 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               : 'Pilih basemap lain lewat menu di kanan atas; heksagon dan skornya tidak terpengaruh.'}
           </p>
           {galatPeta.ubin && (
-            <p className="mt-1.5 font-mono text-[11px] leading-relaxed break-all text-ink-3/80">
-              {galatPeta.pesan}
-            </p>
+            <>
+              {/* Tombolnya ADA walaupun sudah ada percobaan otomatis. Yang
+                  otomatis berjarak semenit; orang yang melihat petanya abu-abu
+                  tidak akan menunggu semenit tanpa satu pun yang bisa ditekan. */}
+              <button
+                onClick={() => {
+                  jendelaUbin.current = performance.now() + 12_000
+                  setMuatUlang((n) => n + 1)
+                }}
+                className="mt-2 cursor-pointer rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-surface transition-transform duration-200 ease-jelly hover:scale-[1.04]"
+              >
+                Coba muat ulang basemap
+              </button>
+              <p className="mt-1.5 font-mono text-[11px] leading-relaxed break-all text-ink-3/80">
+                {galatPeta.pesan}
+              </p>
+            </>
           )}
         </div>
       )}
