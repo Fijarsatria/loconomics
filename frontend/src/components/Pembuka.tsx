@@ -345,15 +345,23 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
     const naik = () => !batal && setSelesai((n) => n + 1)
 
     const jalan = async () => {
+      // Tanpa backend yang DIKONFIGURASI, jangan mengetuk pintunya sama sekali.
+      //
+      // Terbitan statis (GitHub Pages) sengaja berjalan tanpa backend: heksagon
+      // datang dari GeoJSON di `public/data/`. Sebelum ini, layar pembuka tetap
+      // memanggil /health, gagal, lalu MEMBLOKIR seluruh aplikasi di balik
+      // pesan galat - padahal petanya sudah siap digambar di baliknya.
+      if (!import.meta.env.VITE_API_BASE_URL) {
+        naik()
+        naik()
+        naik()
+        naik()
+        return
+      }
       try {
         await api.sehat()
       } catch {
-        if (!batal)
-          setGalat(
-            'Mesin data tidak menjawab di ' +
-              (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000') +
-              '.',
-          )
+        if (!batal) setGalat('Mesin data belum bisa dihubungi.')
         return
       }
       naik()
@@ -488,26 +496,32 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
           {galat && (
             <div className="mt-4 rounded-md border border-[#0b3d37]/12 bg-white/60 p-4">
               <p className="text-[14px] leading-relaxed text-[#0b3d37]">{galat}</p>
+              {/* Ini layar PERTAMA yang dilihat pengunjung, dan sebelumnya ia
+                  menyuruh mereka menjalankan `uvicorn app.main:app --reload` -
+                  perintah untuk orang yang memegang kode, dibaca orang yang
+                  cuma membuka tautan. Keluarga yang sama dengan catatan
+                  Commuter Clock yang menyuruh "jalankan pipeline s4_spatial".
+
+                  Peta, skor, dan kuadran tetap bisa dilihat tanpa mesin data,
+                  jadi jalan keluarnya disebut lebih dulu - bukan disembunyikan
+                  di tombol kedua. */}
               <p className="mt-2 text-[13.5px] leading-relaxed text-[#2b6a61]">
-                Backend-nya belum dijalankan. Dari akar proyek:
+                Peta, skor, dan kuadran tetap bisa dilihat. Yang belum bisa dibuka
+                hanya bagian yang menuntut mesin data: Konsultan AI, akun, dan
+                rincian per lokasi.
               </p>
-              <code className="mt-2.5 block rounded-sm bg-[#0b3d37]/[0.07] px-3 py-2.5 font-mono text-[12.5px] leading-relaxed text-[#12564d]">
-                cd backend
-                <br />
-                uvicorn app.main:app --reload
-              </code>
               <div className="mt-3.5 flex gap-2">
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={onSelesai}
                   className="cursor-pointer rounded-sm bg-[#0b3d37] px-4 py-2 text-[13.5px] font-semibold text-[#e8fbf6] transition-opacity hover:opacity-85"
                 >
-                  Coba lagi
+                  Lanjutkan ke peta
                 </button>
                 <button
-                  onClick={onSelesai}
+                  onClick={() => window.location.reload()}
                   className="cursor-pointer rounded-sm border border-[#0b3d37]/20 px-4 py-2 text-[13.5px] font-medium text-[#12564d] transition-colors hover:bg-white/60"
                 >
-                  Lanjut tanpa data
+                  Coba lagi
                 </button>
               </div>
             </div>
