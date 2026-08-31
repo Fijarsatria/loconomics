@@ -25,6 +25,7 @@ Dijalankan dari dalam folder ini:
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 from pathlib import Path
@@ -46,6 +47,12 @@ from config import (
 
 # Berkas statis ditulis ke sini lalu di-deploy bersama frontend.
 EKSPOR = ROOT.parent / "frontend" / "public" / "data"
+
+# Ringkasan cakupan untuk halaman gerbang. Modul TypeScript, BUKAN JSON di
+# public/: halaman gerbang adalah satu-satunya bagian yang tetap hidup tanpa
+# backend, jadi ia tidak boleh punya satu pun permintaan jaringan yang bisa
+# gagal. Konstanta yang ikut ter-bundel tidak punya keadaan gagal.
+RINGKASAN_TS = ROOT.parent / "frontend" / "src" / "lib" / "ringkasan-data.ts"
 
 # Ditulis per potongan supaya satu kawasan besar tidak menahan seluruh transaksi
 # di memori. Angka ini kompromi biasa: cukup besar untuk mengurangi round-trip,
@@ -1488,6 +1495,260 @@ def ekspor_geojson(tujuan: Path = EKSPOR, versi: str = "baseline") -> dict[str, 
     return hasil
 
 
+#: Sumber yang menyumbang angka ke peta ini, beserta cara mengukur cakupannya.
+#:
+#: `ukur` bukan hiasan: ia yang membuat "berapa heksagon yang benar-benar
+#: disentuh sumber ini" bisa DIHITUNG alih-alih ditaksir. Sumber yang tidak
+#: menyentuh satu heksagon pun jadi tidak bisa mengaku menyentuh 708 - dan
+#: daftar sumber yang ditulis tangan selalu kedaluwarsa ke arah itu.
+#:
+#: Ekspresinya konstanta modul, tidak pernah datang dari masukan pengguna.
+SUMBER_DATA: list[dict[str, str | None]] = [
+    {
+        "kunci": "activity",
+        "nama": "MAPID Community Maps (Activity)",
+        "lisensi": "Data kompetisi MAPID",
+        "url": "https://mapid.co.id/data-catalog",
+        "mengisi": "D12 aktivitas komunitas",
+        "ukur": "aktivitas_komunitas IS NOT NULL",
+    },
+    {
+        "kunci": "misi",
+        "nama": "MAPID Mission — Menu Go, Struk Go, Properti Go",
+        "lisensi": "Data kompetisi MAPID",
+        "url": "https://mapid.co.id/data-catalog",
+        "mengisi": "B06–B08, C07, C08, D10, P03, dan badge keyakinan Q01–Q03",
+        "ukur": "n_titik_misi > 0",
+    },
+    {
+        "kunci": "basemap",
+        "nama": "MAPID Maps",
+        "lisensi": "Basemap kompetisi",
+        "url": "https://geo.mapid.io/",
+        "mengisi": "Basemap peta — empat gaya, seluruh ubin",
+        "ukur": None,
+    },
+    {
+        "kunci": "osm",
+        "nama": "OpenStreetMap contributors",
+        "lisensi": "ODbL 1.0",
+        "url": "https://www.openstreetmap.org/copyright",
+        "mengisi": "C01–C06 kompetisi, D05 skor simpul, D08, D09, M01, M02",
+        "ukur": "kepadatan_poi_total IS NOT NULL",
+    },
+    {
+        "kunci": "ors",
+        "nama": "openrouteservice",
+        "lisensi": "CC BY-SA 4.0",
+        "url": "https://openrouteservice.org/",
+        "mengisi": "D03 jarak dan D04 waktu jalan kaki, plus kawasan jangkau",
+        "ukur": "waktu_jalan_menit IS NOT NULL",
+    },
+    {
+        "kunci": "worldpop",
+        "nama": "WorldPop 2020 (UN-adjusted, constrained)",
+        "lisensi": "CC BY 4.0",
+        "url": "https://www.worldpop.org/",
+        "mengisi": "D01 jumlah penduduk, dan C06 yang bergantung padanya",
+        "ukur": "pop_100m IS NOT NULL",
+    },
+    {
+        "kunci": "rdtr",
+        "nama": "RDTR ATR/BPN lewat GISTARU",
+        "lisensi": "Data terbuka pemerintah",
+        "url": "https://gistaru.atrbpn.go.id/rdtrinteraktif/",
+        "mengisi": "L01 izin komersial, L02 kelas zona, L03 risiko banjir",
+        "ukur": "kelas_zona IS NOT NULL",
+    },
+]
+
+
+def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
+    """Tulis cakupan data hari ini sebagai modul TypeScript untuk halaman gerbang.
+
+    Kenapa dibangkitkan dan bukan ditulis tangan: halaman gerbang menyebut
+    angka, dan angka yang ditulis tangan di sana sudah pernah kedaluwarsa ke
+    arah yang paling merugikan - ia mengaku "43 variabel per titik" sementara
+    yang terisi 25, dan menjanjikan "18 jam profil harian" sementara tabelnya
+    nol baris. Aturannya sama dengan pita status di bilah atas: kalau sebuah
+    PEMICU perlu dihitung dari data supaya tidak berbohong, KALIMAT yang
+    menyertainya perlu dihitung dari data untuk alasan yang persis sama.
+
+    Batasannya ikut diturunkan, bukan didaftar tangan. Daftar batasan tulis
+    tangan basi ke dua arah sekaligus: ia tetap menyebut kekurangan yang sudah
+    diperbaiki, dan diam soal yang baru muncul.
+
+    Modul TypeScript, bukan JSON di `public/`: halaman gerbang satu-satunya
+    bagian yang tetap hidup tanpa backend, jadi ia tidak boleh punya satu pun
+    permintaan jaringan yang bisa gagal.
+    """
+    Sesi = sessionmaker(bind=_mesin())
+    kolom = list(KODE_KE_KOLOM.values())
+    berukur = [s for s in SUMBER_DATA if s["ukur"]]
+
+    with Sesi() as db:
+        n_hex, n_kawasan, n_predicted = db.execute(
+            text(
+                "SELECT count(*), count(DISTINCT kawasan), "
+                "count(*) FILTER (WHERE data_source <> 'observed') FROM hex_features"
+            )
+        ).one()
+
+        # SATU kueri berisi 43 count(), bukan 43 kueri berisi satu count(). Yang
+        # menentukan biaya bukan berat kuerinya melainkan berapa kali jaringan
+        # ke Supabase diseberangi - terukur ~700 ms sekali jalan.
+        n_terisi = sum(
+            1
+            for n in db.execute(
+                text("SELECT " + ", ".join(f'count("{k}")' for k in kolom) + " FROM hex_features")  # noqa: S608
+            ).one()
+            if n
+        )
+
+        cakupan = dict(
+            zip(
+                (s["kunci"] for s in berukur),
+                db.execute(
+                    text(
+                        "SELECT "
+                        + ", ".join(f"count(*) FILTER (WHERE {s['ukur']})" for s in berukur)
+                        + " FROM hex_features"
+                    )  # noqa: S608
+                ).one(),
+            )
+        )
+
+        n_poi, n_rute, n_jangkau, n_simpul, n_jam, n_menu, n_struk, n_properti = db.execute(
+            text(
+                "SELECT (SELECT count(*) FROM business_pois WHERE sumber = 'osm'),"
+                " (SELECT count(*) FROM hex_routes),"
+                " (SELECT count(*) FROM catchment_areas),"
+                " (SELECT count(*) FROM transport_nodes),"
+                " (SELECT count(*) FROM hex_hourly_profiles),"
+                " (SELECT count(*) FROM menu_observations),"
+                " (SELECT count(*) FROM receipt_observations),"
+                " (SELECT count(*) FROM property_observations)"
+            )
+        ).one()
+
+    # Berapa titik misi yang DITARIK, bukan cuma yang mendarat di wilayah studi.
+    # Dua angka yang berbeda dan dua-duanya perlu disebut: yang pertama
+    # menyatakan berapa banyak survei peserta yang tersedia, yang kedua berapa
+    # yang menyentuh enam kawasan pilot. Menyebut yang pertama saja melebih-
+    # lebihkan; menyebut yang kedua saja meremehkan sumbernya sendiri.
+    berkas_misi = DATA_MENTAH / "mapid_misi.json"
+    ditarik = None
+    if berkas_misi.exists():
+        mentah = json.loads(berkas_misi.read_text(encoding="utf-8"))
+        ditarik = sum(len(v) for v in mentah.values() if isinstance(v, list))
+
+    batasan: list[str] = []
+    if n_terisi < len(kolom):
+        batasan.append(
+            f"{len(kolom) - n_terisi} dari {len(kolom)} variabel belum punya sumber "
+            "yang bisa dikutip. Nilainya dibiarkan kosong, bukan dinolkan — indeks "
+            "yang bahannya kosong dinetralkan ke tengah skala, dan antarmuka "
+            "menuliskan “belum terukur” alih-alih menampilkan angkanya."
+        )
+    if cakupan.get("rdtr", 0) < n_hex:
+        batasan.append(
+            f"Zonasi RDTR baru terbit untuk {cakupan.get('rdtr', 0)} dari {n_hex} "
+            "heksagon. Kota Depok dan Kota Bekasi terkonfirmasi belum punya RDTR "
+            "digital di GISTARU lewat dua indeks yang berbeda, jadi ZoneGuard diam "
+            "untuk keduanya alih-alih menebak."
+        )
+    if not n_jam:
+        batasan.append(
+            "Profil per jam masih kosong. Struk misi MAPID tidak membawa kolom waktu "
+            "transaksi sama sekali — jamnya tercetak di dalam foto struknya, dan "
+            "pembacaan foto itu belum dijalankan."
+        )
+    if cakupan.get("misi", 0) < n_hex:
+        batasan.append(
+            f"Survei lapangan menyentuh {cakupan.get('misi', 0)} dari {n_hex} heksagon; "
+            f"{n_predicted} sisanya ditandai “belum dikunjungi surveyor”. Itu pernyataan "
+            "tentang kunjungan, bukan tentang mutu angkanya — POI, rute, penduduk, dan "
+            "zonasi tetap hasil pengukuran."
+        )
+
+    sumber = [
+        {
+            "nama": s["nama"],
+            "lisensi": s["lisensi"],
+            "url": s["url"],
+            "mengisi": s["mengisi"],
+            "cakupan": cakupan.get(s["kunci"]) if s["ukur"] else None,
+        }
+        for s in SUMBER_DATA
+    ]
+    ringkasan = {
+        "heksagon": n_hex,
+        "kawasan": n_kawasan,
+        "variabelTerisi": n_terisi,
+        "variabelTotal": len(kolom),
+        "heksagonBersurvei": cakupan.get("misi", 0),
+        "titikMisiDitarik": ditarik,
+        "observasiMisi": n_menu + n_struk + n_properti,
+        "poiOsm": n_poi,
+        "ruteOrs": n_rute,
+        "kawasanJangkau": n_jangkau,
+        "simpul": n_simpul,
+        "profilJam": n_jam,
+    }
+
+    def js(nilai: Any) -> str:
+        return json.dumps(nilai, ensure_ascii=False)
+
+    baris = [
+        "/**",
+        " * DIBUAT OTOMATIS oleh `pipeline/s7_publish.py --ekspor`. Jangan disunting tangan.",
+        " *",
+        " * Halaman gerbang menyebut angka soal cakupan datanya sendiri. Angka yang",
+        " * ditulis tangan di sana sudah pernah kedaluwarsa ke arah yang paling",
+        " * merugikan — mengaku 43 variabel saat 25 yang terisi, menjanjikan profil",
+        " * per jam saat tabelnya nol baris. Yang dihitung tidak bisa ketinggalan.",
+        " *",
+        " * Untuk menyegarkannya:",
+        " *",
+        " *   cd pipeline && python s7_publish.py --ekspor",
+        " */",
+        "",
+        "export interface SumberData {",
+        "  nama: string",
+        "  lisensi: string",
+        "  url: string",
+        "  /** Variabel yang diisinya, dengan kode kanonik Kamus Data. */",
+        "  mengisi: string",
+        "  /** Heksagon yang benar-benar disentuh; null kalau tidak diukur per heksagon. */",
+        "  cakupan: number | null",
+        "}",
+        "",
+        "/** Tanggal basis data dibaca. Dinyatakan apa adanya di halamannya. */",
+        f"export const DIUKUR = {js(dt.date.today().isoformat())}",
+        "",
+        "export const RINGKASAN = {",
+        *(f"  {k}: {js(v)}," for k, v in ringkasan.items()),
+        "} as const",
+        "",
+        "export const SUMBER: SumberData[] = [",
+        *(
+            f"  {{ nama: {js(s['nama'])}, lisensi: {js(s['lisensi'])}, "
+            f"url: {js(s['url'])}, mengisi: {js(s['mengisi'])}, cakupan: {js(s['cakupan'])} }},"
+            for s in sumber
+        ),
+        "]",
+        "",
+        "/** Diturunkan dari basis data, bukan didaftar tangan. Lihat docstring pembangkitnya. */",
+        "export const BATASAN: string[] = [",
+        *(f"  {js(b)}," for b in batasan),
+        "]",
+        "",
+    ]
+    tujuan.parent.mkdir(parents=True, exist_ok=True)
+    tujuan.write_text("\n".join(baris), encoding="utf-8")
+    return {**ringkasan, "sumber": len(sumber), "batasan": len(batasan)}
+
+
 def periksa_cakupan() -> pd.DataFrame:
     """Ringkasan cakupan data per kawasan, untuk dilihat sebelum demo.
 
@@ -1700,6 +1961,12 @@ if __name__ == "__main__":
         print(f"Mengekspor GeoJSON ke {EKSPOR}...")
         for k, v in ekspor_geojson(versi=arg.versi).items():
             print(f"  hex-{k}.geojson: {v} fitur")
+        # Satu bendera, bukan dua: berkas GeoJSON dan ringkasan cakupannya HARUS
+        # menggambarkan basis data yang sama. Bendera terpisah membuat keduanya
+        # bisa berselisih, dan yang basi justru kalimat yang dibaca juri.
+        print(f"\nMenulis ringkasan cakupan ke {RINGKASAN_TS.name}...")
+        for k, v in ekspor_ringkasan().items():
+            print(f"  {k:20} {v}")
 
     if arg.cakupan:
         print(periksa_cakupan().to_string(index=False))

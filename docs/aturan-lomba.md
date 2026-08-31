@@ -7,7 +7,7 @@ Berkas ini hanya memuat ketentuan yang **berdampak langsung pada kode**. Ketentu
 administratif (jadwal, format berkas, sistematika laporan) ada di berkas panitia,
 bukan di sini.
 
-## 🔴 Empat aturan keras
+## 🔴 Lima aturan keras
 
 ### 1. Data misi MAPID mentah tidak boleh keluar
 
@@ -126,6 +126,32 @@ Ditulis eksplisit supaya tidak masuk diam-diam:
 
 Kalau butuh data serupa, cari sumber resmi atau kumpulkan lewat survei.
 
+### 5. Fitur berbayar wajib disetujui panitia
+
+Ketentuan B.7, dan ia gampang terlewat karena ia baris terakhir sebuah tabel
+larangan: *"Dilarang menggunakan fitur berbayar yang **tidak dapat diakses
+publik**, kecuali telah disetujui panitia."*
+
+**Repo ini menyentuhnya, dan itu keputusan produk yang disengaja.** Loconomics
+Premium menahan di sisi server — bukan blur CSS — hal-hal berikut:
+
+| Ditahan | Ketentuan yang ikut tersentuh |
+|---|---|
+| 43 variabel granular + faktor skor | B.2 menuntut **tabel informasi atribut** sebagai komponen wajib |
+| PriceLens per heksagon, Commuter Clock, Simulasi | B.2 visualisasi data |
+| Komparasi, riwayat, dinamika, pemantauan, Laporan PDF | B.5 Analisis dan Insight |
+
+Dua jalan keluar, dan keduanya sah:
+
+1. **Minta persetujuan tertulis panitia** atas model freemium-nya. Ketentuannya
+   memang menyediakan pintu ini.
+2. **Buka seluruhnya selama penjurian** — misalnya menyetel akun juri sebagai
+   `selamanya`, atau menonaktifkan penjaganya lewat lingkungan.
+
+**Yang TIDAK boleh:** membiarkannya begitu saja dan berharap tidak diperiksa.
+Ini keputusan pemilik repo, bukan keputusan yang boleh diambil sendiri oleh
+sesi AI mana pun — tetapi ia harus diambil sebelum tenggat.
+
 ## 🟡 Ketentuan produk
 
 ### A.3 — Basemap wajib MAPID Maps
@@ -172,6 +198,9 @@ karena penanda siap peta dipicu `styledata`, bukan menunggu ubin.
 
 ### Tiga bagian wajib di antarmuka
 
+B.5 menyatakannya sebagai minimum mutlak: **Peta Interaktif + Insight + AI
+Interface**. Sisa strukturnya berstatus referensi.
+
 | Bagian | Berkas |
 |---|---|
 | Peta Interaktif | `frontend/src/components/PetaInteraktif.tsx` |
@@ -179,6 +208,51 @@ karena penanda siap peta dipicu `styledata`, bukan menunggu ubin.
 | Antarmuka AI | `frontend/src/components/PanelAI.tsx` |
 
 Ketiganya tampil bersamaan dalam satu layar.
+
+### B.2 — Komponen wajib, satu per satu
+
+Yang paling sering luput bukan petanya, melainkan dua kata di tengah daftar
+interaksi: **tabel informasi atribut**. Ia komponen WAJIB, dan di repo ini ia
+hidup di balik langganan — lihat aturan keras 5.
+
+| Komponen B.2 | Di mana |
+|---|---|
+| Peta interaktif jadi elemen utama | `PetaInteraktif.tsx` |
+| Basemap MAPID Maps | `public/basemap/*.json`, empat gaya |
+| Zoom, klik objek, filter, layer control | `App.tsx` + `Legenda.tsx` |
+| Tabel lokasi | `DaftarLokasi.tsx` |
+| **Tabel informasi atribut** | `PanelInsight.tsx` — **berbayar** |
+| Visualisasi (grafik, chart) | `ChartJam.tsx`, `BarHarga.tsx`, `KompasKuadran.tsx` |
+| AI di dalam interface | `PanelAI.tsx` |
+| Akses publik | GitHub Pages + Render |
+
+### B.5 — Metodologi dan Sumber Data
+
+Berstatus referensi, tetapi justru bagian inilah yang dibaca juri untuk menilai
+B.3 (alur pengolahan) dan A.1 (sumber dicantumkan). Ia hidup di halaman gerbang
+sebagai bagian **`#sumber`**, dan angkanya TIDAK ditulis tangan: dibangkitkan
+`s7_publish.py --ekspor` ke `frontend/src/lib/ringkasan-data.ts`.
+
+Kenapa dibangkitkan, dan kenapa itu bukan kerumitan yang berlebihan: halaman
+gerbang pernah menjanjikan "43 variabel per titik" saat 25 yang terisi, dan "18
+jam profil harian" saat tabelnya nol baris. Keduanya gagal DIAM — tidak ada uji
+yang bisa menangkap kalimat yang basi. Aturannya sama dengan pita status di
+bilah atas: kalau sebuah pemicu perlu dihitung dari data supaya tidak berbohong,
+kalimat yang menyertainya perlu dihitung dari data untuk alasan yang persis sama.
+
+### A.6 — Survey activities wajib bagi 50 tim terkurasi
+
+Bukan anjuran: *"Tim terkurasi **wajib** mengikuti survey activities menggunakan
+MAPID APPS"*, dan *"Data hasil survey activities **wajib** digunakan untuk
+memperkaya analisis dan WebGIS."*
+
+Yang gampang salah dibaca, dan sudah pernah: **data misi yang ditarik lewat MAPID
+Data API BUKAN survei tim ini.** API-nya disaring per POLIGON, jadi yang pulang
+kumpulan survei SELURUH peserta. Ia memenuhi A.2 (memakai data mission), tidak
+memenuhi A.6 (melakukan survey activities sendiri).
+
+Rencananya sudah ada dan diturunkan dari basis data — `docs/data.md` bagian 11,
+30 heksagon berkoordinat. Pelaksanaannya belum.
 
 ### C.1 — Proses AI harus bisa dijelaskan
 
@@ -236,3 +310,13 @@ Dijalankan sekali lagi menjelang tenggat, bukan hanya saat mulai:
 - [ ] Minimal satu aksi peta benar-benar tereksekusi dari jawaban AI
 - [ ] Setiap skor di layar disertai badge keyakinan
 - [ ] Prompt AI ada sebagai berkas dan sesuai dengan yang benar-benar dipakai
+- [ ] **Tautan publiknya benar-benar dibuka dan diklik** — bukan cuma di-`curl`.
+      Terbitan GitHub Pages pernah hidup dengan `VITE_API_BASE_URL` kosong, jadi
+      yang tergambar cuma heksagon statis: nol panel detail, nol daftar lokasi,
+      nol Konsultan AI. Semua uji tetap hijau, karena semuanya berjalan lokal
+- [ ] `GET /ai/status` menjawab `siap: true` di lingkungan yang akan dinilai
+- [ ] Keputusan soal fitur berbayar sudah diambil (aturan keras 5)
+- [ ] Halaman gerbang dibuka di **390px** — tidak boleh bisa digulir mendatar
+- [ ] `ringkasan-data.ts` disegarkan sesudah basis datanya berubah
+      (`python s7_publish.py --ekspor`), supaya angka di gerbang tidak basi
+- [ ] Setiap sumber data yang dikutip di layar ikut disebut di atribusi peta

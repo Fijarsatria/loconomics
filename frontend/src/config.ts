@@ -272,7 +272,7 @@ export const PENDIRI: Pendiri[] = [
     nama: 'Ajis',
     peran: 'Data Analyst',
     inisial: 'AJ',
-    kerja: 'Mengubah hasil misi survei MAPID jadi 43 variabel per heksagon — termasuk membiarkan yang kosong tetap kosong.',
+    kerja: 'Mengubah hasil misi survei MAPID jadi Kamus Data 43 variabel per heksagon — termasuk membiarkan yang kosong tetap kosong.',
   },
   {
     nama: 'Ukas',

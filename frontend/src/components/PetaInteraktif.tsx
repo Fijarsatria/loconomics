@@ -797,6 +797,11 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>',
           '<a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">© openrouteservice</a>',
           '<a href="https://www.worldpop.org/" target="_blank" rel="noreferrer">© WorldPop (CC BY 4.0)</a>',
+          // ZoneGuard menggambar status perizinan dari RDTR ATR/BPN, dan panel
+          // detail mengutipnya sampai ke nama zonanya. Sumber yang dikutip
+          // sampai sedetail itu wajib disebut - A.1 menuntutnya untuk setiap
+          // data pendukung, bukan hanya untuk yang berlisensi share-alike.
+          '<a href="https://gistaru.atrbpn.go.id/rdtrinteraktif/" target="_blank" rel="noreferrer">© RDTR ATR/BPN (GISTARU)</a>',
         ],
       }),
       'bottom-left',

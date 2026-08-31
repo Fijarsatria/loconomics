@@ -69,10 +69,12 @@ def klien():
         return _klien
 
     if not settings.llm_api_key:
-        raise LLMBelumSiap(
-            "LLM_API_KEY belum diisi di backend/.env. "
-            "Seluruh fungsi backend AI Consultant sudah siap; yang kurang hanya kuncinya."
-        )
+        # Sebabnya ke LOG, kalimatnya ke pengguna. Pesan galat ini sampai apa
+        # adanya ke layar - ia salah satu dari sedikit galat yang memang
+        # disengaja diteruskan - jadi ia tidak boleh menyebut nama berkas,
+        # nama variabel lingkungan, maupun perintah yang harus dijalankan.
+        log.warning("LLM_API_KEY belum diisi di backend/.env - Konsultan AI dimatikan")
+        raise LLMBelumSiap("Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh.")
 
     try:
         import anthropic

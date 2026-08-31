@@ -36,7 +36,7 @@ interface Pesan {
 function pesanGalat(e: unknown): string {
   const teks = e instanceof Error ? e.message : String(e)
   if (teks.includes('501'))
-    return 'Asisten belum aktif — LLM_API_KEY belum diisi di backend. Seluruh jalur fungsinya sudah siap.'
+    return 'Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta — skor, kuadran, ZoneGuard, dan rekomendasi — tidak terpengaruh.'
   if (teks.includes('ANGGARAN_AI_HABIS'))
     return 'Plafon biaya AI untuk hari ini sudah tercapai. Asisten aktif lagi besok.'
   if (teks.includes('TERLALU_BANYAK'))
@@ -216,10 +216,14 @@ export default function PanelAI({
             <p className="mb-2.5 text-[14.5px] leading-snug text-ink-2">
               Tanyakan apa saja tentang lokasi. Jawabannya sekaligus menggerakkan peta.
             </p>
+            {/* Pesannya dipakai APA ADANYA, tidak lagi disisipkan ke tengah
+                kalimat yang dirakit di sini. Kalimat rakitan itulah yang dulu
+                membuat teks backend terbaca sebagai instruksi untuk
+                pembacanya, dan ia akan mengulanginya untuk setiap sebab
+                berikutnya. */}
             {mati && (
               <p className="mb-2.5 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[13.5px] leading-snug text-ink-2">
-                Asisten belum aktif — {status?.pesan}. Delapan alat datanya sudah
-                siap dipanggil; yang kurang hanya kuncinya.
+                {status?.pesan}
               </p>
             )}
             <div className="space-y-1.5">

@@ -53,6 +53,7 @@ import { Glif, PapanNama } from './primitif'
 import { TombolAkun } from './Akun'
 import DekKawasan, { type PilihanKawasan } from './GerbangPeta'
 import { DIPOTRET, KARTU_GERBANG } from '../lib/kartu-gerbang'
+import { BATASAN, DIUKUR, RINGKASAN, SUMBER } from '../lib/ringkasan-data'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -123,9 +124,14 @@ const LANGKAH_TESIS: { kunci: string; kepala: string; isi: string }[] = [
 const PIPA: { nomor: string; kepala: string; isi: string; tanda: string }[] = [
   {
     nomor: '01',
-    kepala: 'Survei misi MAPID, lalu OCR',
-    isi: 'Data lapangan dari misi survei MAPID, ditambah pembacaan otomatis papan sewa dan struk. Hasilnya 43 variabel per titik — dan yang belum tersurvei tetap kosong, tidak pernah diisi nol.',
-    tanda: '43 variabel',
+    kepala: 'Lima sumber terbuka, satu kamus data',
+    // Sebelumnya baris ini menjanjikan "43 variabel per titik" dan menyebut OCR
+    // sebagai bagian dari alur yang berjalan. Keduanya belum benar: yang terisi
+    // 25, dan pembacaan foto struk belum pernah dijalankan. Angkanya sekarang
+    // datang dari basis data lewat `lib/ringkasan-data.ts`, jadi ia tidak bisa
+    // lagi kedaluwarsa tanpa ada yang memberi tahu.
+    isi: 'Survei misi MAPID, POI OpenStreetMap, rute openrouteservice, penduduk WorldPop, dan zonasi RDTR ATR/BPN. Kamus datanya 43 variabel berkode; yang belum punya sumber dibiarkan kosong, tidak pernah diisi nol.',
+    tanda: `${RINGKASAN.variabelTerisi} dari ${RINGKASAN.variabelTotal} terisi`,
   },
   {
     nomor: '02',
@@ -153,11 +159,38 @@ const PIPA: { nomor: string; kepala: string; isi: string; tanda: string }[] = [
   },
 ]
 
+/**
+ * Empat angka yang boleh dipamerkan, SELURUHNYA dibaca dari basis data.
+ *
+ * Versi sebelumnya ditulis tangan dan dua dari empatnya sudah tidak benar:
+ * "43 variabel per heksagon" saat 25 yang terisi, dan "18 jam profil harian"
+ * saat `hex_hourly_profiles` nol baris. Keduanya gagal diam-diam - tidak ada
+ * uji yang bisa menangkap kalimat yang basi.
+ *
+ * Yang menggantikannya sengaja dipilih dari angka yang cakupannya PENUH, jadi
+ * ia tetap bisa dipamerkan tanpa satu pun catatan kaki yang meralatnya.
+ */
 const ANGKA: { nilai: number; satuan: string; catatan: string }[] = [
-  { nilai: 708, satuan: 'heksagon terpetakan', catatan: 'lewat pipeline yang sama dengan produksi' },
-  { nilai: 6, satuan: 'kawasan pilot', catatan: 'KRL, MRT, dan LRT Jabodetabek' },
-  { nilai: 43, satuan: 'variabel per heksagon', catatan: 'berkode D, B, C, L, P — semuanya bernama' },
-  { nilai: 18, satuan: 'jam profil harian', catatan: 'pukul 05.00 sampai 22.00' },
+  {
+    nilai: RINGKASAN.heksagon,
+    satuan: 'heksagon terukur',
+    catatan: 'H3 resolusi 9, sekitar 0,1 km² per sel',
+  },
+  {
+    nilai: RINGKASAN.kawasan,
+    satuan: 'kawasan pilot',
+    catatan: 'KRL, MRT, dan LRT Jabodetabek',
+  },
+  {
+    nilai: RINGKASAN.poiOsm,
+    satuan: 'POI usaha OpenStreetMap',
+    catatan: 'menggerakkan seluruh dimensi kompetisi',
+  },
+  {
+    nilai: RINGKASAN.ruteOrs,
+    satuan: 'rute jalan kaki terhitung',
+    catatan: 'jarak lewat jalan sebenarnya, bukan garis lurus',
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -369,6 +402,14 @@ function Pembatas() {
   )
 }
 
+/**
+ * Sudut ketujuh sumber di motif latar bagian "sumber". Dihitung sekali di sini,
+ * bukan dua kali di dalam komposisinya: heksagon dan garis alirnya harus duduk
+ * pada sudut yang SAMA, dan dua daftar yang harus cocok adalah dua daftar yang
+ * suatu saat tidak cocok.
+ */
+const SUDUT_SUMBER = Array.from({ length: 7 }, (_, i) => (360 / 7) * i)
+
 /** Satu heksagon berjari-jari r, dipindah ke (x, y). */
 function heks(r: number, x = 0, y = 0, kunci?: string | number) {
   return (
@@ -458,6 +499,25 @@ const KOMPOSISI: Record<string, ReactNode> = {
     </>
   ),
 
+  // Tujuh sumber mengalir ke satu heksagon di tengah. Susunannya mengacu pada
+  // isi bagiannya, seperti keenam motif lain: banyak asal, satu peta.
+  sumber: (
+    <>
+      {heks(28)}
+      {SUDUT_SUMBER.map((a) => {
+        const rad = (Math.PI / 180) * a
+        return heks(12, Math.cos(rad) * 84, Math.sin(rad) * 84, a)
+      })}
+      {SUDUT_SUMBER.map((a) => {
+        const rad = (Math.PI / 180) * a
+        const p = (jarak: number) =>
+          `${(Math.cos(rad) * jarak).toFixed(1)} ${(Math.sin(rad) * jarak).toFixed(1)}`
+        return <path key={`alir-${a}`} d={`M${p(68)} L${p(36)}`} />
+      })}
+      {heks(98)}
+    </>
+  ),
+
   // Terowongan lagi, lebih dalam - jembatan menuju jurang di bawahnya.
   penutup: <>{[96, 74, 55, 39, 26, 15, 7].map((r) => heks(r))}</>,
 }
@@ -470,6 +530,7 @@ const PUTAR: Record<string, number> = {
   'cara-kerja': -13,
   fitur: 10,
   angka: -11,
+  sumber: 8,
   penutup: 14,
 }
 
@@ -2110,8 +2171,14 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           di dalam wadah yang punya backdrop-filter di salah satu leluhurnya
           adalah kelas jebakan yang sudah pernah kena di repo ini. */}
       <div className="sticky top-0 z-50 px-4 pt-4 sm:px-6">
+        {/* Jarak dan bantalan MENGECIL di bawah sm, dan itu bukan kosmetik.
+            Terukur di 390px: logo + tombol akun + ajakan berjumlah 403px di
+            dalam 390px, jadi halaman gerbang bisa digulir MENDATAR - persis
+            gejala yang dilarang B.6 "nyaman di berbagai ukuran layar". Yang
+            TIDAK dilakukan: menyembunyikan salah satu tombolnya. Aksi navigasi
+            yang harus dicari dulu bukan aksi navigasi. */}
         <nav
-          className={`mx-auto flex max-w-[72rem] items-center gap-4 rounded-full py-2 pl-5 pr-2 transition-colors duration-500 ease-liquid ${
+          className={`mx-auto flex max-w-[72rem] items-center gap-2 rounded-full py-2 pl-4 pr-2 transition-colors duration-500 ease-liquid sm:gap-4 sm:pl-5 ${
             navGelap ? 'g-nav-gelap' : 'g-nav'
           }`}
         >
@@ -2145,7 +2212,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
             <TombolAkun varian="gerbang" />
             <button
               onClick={() => onMasuk()}
-              className={`cursor-pointer rounded-full px-5 py-2.5 text-[13.5px] font-semibold ${
+              className={`cursor-pointer rounded-full px-4 py-2.5 text-[13.5px] font-semibold sm:px-5 ${
                 navGelap ? 'g-nav-terbalik' : 'g-utama'
               }`}
             >
@@ -2556,14 +2623,124 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           ))}
         </div>
 
-        <p className="mx-auto mt-8 max-w-[42rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
-          Angka di atas berasal dari data demo yang dijalankan lewat pipeline sungguhan, bukan dari
-          survei lapangan penuh. Begitu data survei masuk, uji sensitivitasnya diulang dan hasilnya
-          dilaporkan apa adanya.
+        {/* Catatan kakinya ikut diturunkan dari angka. Yang lama menyatakan
+            "berasal dari data demo" - benar sewaktu demo_seed mengisi peta, dan
+            justru meremehkan datanya sendiri di depan juri sesudah 18 variabel
+            sintetis dikosongkan dan sumber terbuka masuk. Kalau sebuah pemicu
+            perlu dihitung supaya tidak berbohong, kalimatnya perlu dihitung
+            untuk alasan yang persis sama. */}
+        <p className="mx-auto mt-8 max-w-[44rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
+          Keempatnya dibaca langsung dari basis data pada {DIUKUR}, bukan ditulis tangan. Yang masih
+          tipis satu hal, dan disebutkan apa adanya di bawah: survei lapangan baru menyentuh{' '}
+          {RINGKASAN.heksagonBersurvei} dari {RINGKASAN.heksagon} heksagon.
         </p>
       </section>
 
-      {/* ================= 8 · PENUTUP ================================== */}
+      {/* ================= 8 · SUMBER DATA & BATASAN ==================== */}
+      <Pembatas />
+
+      <section
+        id="sumber"
+        className="g-adegan relative flex min-h-screen flex-col justify-center px-6 py-28"
+      >
+        <LatarBagian motif="sumber" />
+        <div className="mx-auto max-w-[48rem] text-center">
+          <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Dari mana angkanya</p>
+          <h2 className="g-tirai papan text-[clamp(1.7rem,4.4vw,3rem)] leading-tight">
+            Tujuh sumber, dan yang belum ada disebut juga
+          </h2>
+          <p className="g-tirai mx-auto mt-5 max-w-[38rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+            Kolom cakupan menyatakan berapa heksagon yang benar-benar disentuh sumbernya — bukan
+            berapa yang seharusnya. Angkanya dihitung dari basis data pada {DIUKUR}.
+          </p>
+        </div>
+
+        {/* `g-tirai` dipasang pada PEMBUNGKUS, tidak pada tiap <tr>.
+            Dua sebabnya, dan yang kedua yang menentukan: clip-path pada elemen
+            tabel bukan jalur yang bisa diandalkan, dan `gsap.from` yang
+            pemicunya tidak pernah menyala meninggalkan elemennya di keadaan
+            AWAL - untuk tirai itu berarti baris yang tergunting habis, tanpa
+            satu pun galat. Baris tabel adalah isi, bukan hiasan; ia tidak boleh
+            bergantung pada animasi yang menyala. */}
+        {/* Tabelnya duduk di atas PERMUKAAN, bukan langsung di atas latar.
+            Motif heksagon di belakang bagian ini bergaris dan bergerak; tanpa
+            permukaan, garisnya melintas persis di tengah bacaan - keluarga yang
+            sama dengan kaca mode gelap yang dulu terlalu tembus sehingga
+            gelombang kisi terbaca seolah di ATAS teksnya. Yang menutup bukan
+            putihnya melainkan kepekatannya. */}
+        <div className="g-tirai mx-auto mt-12 w-full max-w-[68rem] overflow-hidden rounded-[24px] border border-[color:var(--g-kaca-tepi)] bg-[color:var(--g-kaca-isi-tebal)] px-6 py-1.5">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[38rem] border-collapse text-left text-[13px]">
+              <caption className="sr-only">
+                Sumber data Loconomics beserta lisensi, variabel yang diisinya, dan cakupannya
+              </caption>
+              <thead>
+                <tr className="border-b border-[color:var(--g-ink)]/12 text-[11.5px] uppercase tracking-[0.06em] text-[color:var(--g-ink-4)]">
+                  <th scope="col" className="py-3 pr-4 font-medium">Sumber</th>
+                  <th scope="col" className="py-3 pr-4 font-medium">Lisensi</th>
+                  <th scope="col" className="py-3 pr-4 font-medium">Mengisi</th>
+                  <th scope="col" className="py-3 text-right font-medium">Cakupan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SUMBER.map((s) => (
+                  <tr key={s.nama} className="border-b border-[color:var(--g-ink)]/8 align-top">
+                    <th scope="row" className="py-3.5 pr-4 font-semibold">
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline decoration-[color:var(--g-ink)]/25 underline-offset-[3px] transition-colors hover:decoration-[color:var(--g-teal)]"
+                      >
+                        {s.nama}
+                      </a>
+                    </th>
+                    <td className="py-3.5 pr-4 text-[color:var(--g-ink-2)]">{s.lisensi}</td>
+                    <td className="py-3.5 pr-4 text-[color:var(--g-ink-2)]">{s.mengisi}</td>
+                    {/* `null` dan `0` dua hal yang berbeda dan gampang dilebur:
+                        yang pertama berarti "tidak diukur per heksagon" (basemap),
+                        yang kedua berarti "tidak menyentuh satu pun". Menuliskan
+                        keduanya sebagai "0" akan menuduh basemap tidak dipakai. */}
+                    <td className="tabular py-3.5 text-right font-semibold">
+                      {s.cakupan === null ? (
+                        <span className="font-normal text-[color:var(--g-ink-4)]">seluruh peta</span>
+                      ) : (
+                        <>
+                          {s.cakupan.toLocaleString('id-ID')}
+                          <span className="font-normal text-[color:var(--g-ink-4)]">
+                            {' / '}
+                            {RINGKASAN.heksagon.toLocaleString('id-ID')}
+                          </span>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="mx-auto mt-14 w-full max-w-[68rem]">
+          <p className="g-tirai eyebrow mb-5 text-[color:var(--g-ink-3)]">Batasan datanya</p>
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {BATASAN.map((b) => (
+              <li key={b} className="g-buram g-panel rounded-[20px] p-6">
+                <p className="text-[13.5px] leading-relaxed text-[color:var(--g-ink-2)]">{b}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="g-tirai mx-auto mt-8 max-w-[46rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
+            Rencana survei lapangan diturunkan dari basis data, bukan ditulis tangan: 30 heksagon
+            berkoordinat, dipilih dari yang berskor tinggi tetapi belum pernah dikunjungi. Dari{' '}
+            {RINGKASAN.titikMisiDitarik?.toLocaleString('id-ID')} titik misi MAPID yang ditarik,{' '}
+            {RINGKASAN.observasiMisi} jatuh di dalam keenam kawasan pilot — sisanya tersebar
+            se-Jabodetabek dan dipakai melatih model pengisi, bukan dibuang.
+          </p>
+        </div>
+      </section>
+
+      {/* ================= 9 · PENUTUP ================================== */}
       <section className="g-adegan g-penutup relative overflow-hidden px-6 pb-14 pt-28">
         <LatarBagian motif="penutup" />
         {/* Tanpa `blur-[70px]`. Elemen sebesar 62vh x 86vw yang di-blur lalu
@@ -2630,7 +2807,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </div>
       </section>
 
-      {/* ================= 9 · JURANG → TIM ============================== */}
+      {/* ================= 10 · JURANG → TIM ============================= */}
       <section id="tim" className="g-jurang relative">
         {/* Latar jurang. `sticky` supaya ia menutupi layar selama bagian ini
             dilewati, dan margin bawah negatif setinggi dirinya sendiri supaya

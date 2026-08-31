@@ -558,7 +558,12 @@ def status() -> dict[str, Any]:
         "model": model_aktif() if siap else None,
         "n_alat_backend": len(ALAT_BACKEND),
         "n_alat_peta": len(ALAT_FRONTEND),
-        "pesan": None if siap else "LLM_API_KEY belum diisi di backend/.env",
+        # Kalimat untuk PENGGUNA, bukan untuk pengembang. Yang membaca field
+        # ini orang yang membuka panel Konsultan AI, dan "LLM_API_KEY belum
+        # diisi di backend/.env" adalah instruksi untuk orang yang punya
+        # backend-nya. Sebabnya tetap sampai ke yang perlu: core/llm.py
+        # mencatatnya ke log server pada percobaan pertama.
+        "pesan": None if siap else "Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh.",
     }
 
 

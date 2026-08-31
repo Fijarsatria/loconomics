@@ -48,26 +48,42 @@ from app.models import (
 #: POI yang kita turunkan sendiri jadi angka kompetisi. Dua hal yang kebetulan
 #: berbunyi mirip.
 #:
-#: Daftarnya kosong selama datanya belum termuat, supaya ia tidak pernah
-#: menyebut sumber yang tidak menyumbang satu angka pun.
+#: Daftarnya disaring PER ENTRI menurut kolom yang membuktikan sumbernya
+#: benar-benar termuat, supaya ia tidak pernah menyebut sumber yang tidak
+#: menyumbang satu angka pun. Sebelumnya penyaringnya satu untuk seluruh daftar
+#: ("kalau ada POI OSM ATAU rute, sebut semuanya") - bentuk yang mengaku memakai
+#: WorldPop dan RDTR pada basis data yang belum pernah disentuh keduanya.
+#:
+#: `bukti` adalah kolom `hex_features` yang hanya bisa terisi kalau sumber itu
+#: dimuat. Nama kolomnya konstanta di dalam kode, tidak pernah dari pengguna.
 ATRIBUSI = [
     {
         "nama": "OpenStreetMap contributors",
         "lisensi": "ODbL 1.0",
         "url": "https://www.openstreetmap.org/copyright",
         "dipakai": "POI usaha, simpul transit, jaringan jalan",
+        "bukti": "kepadatan_poi_total",
     },
     {
         "nama": "openrouteservice",
         "lisensi": "CC BY-SA 4.0",
         "url": "https://openrouteservice.org/",
         "dipakai": "Rute jalan kaki dan kawasan jangkau",
+        "bukti": "waktu_jalan_menit",
     },
     {
         "nama": "WorldPop",
         "lisensi": "CC BY 4.0",
         "url": "https://www.worldpop.org/",
         "dipakai": "Jumlah penduduk per heksagon (D01)",
+        "bukti": "pop_100m",
+    },
+    {
+        "nama": "RDTR ATR/BPN (GISTARU)",
+        "lisensi": "Data terbuka pemerintah",
+        "url": "https://gistaru.atrbpn.go.id/rdtrinteraktif/",
+        "dipakai": "Zonasi, izin komersial, dan risiko banjir (L01-L03)",
+        "bukti": "kelas_zona",
     },
 ]
 
@@ -184,12 +200,27 @@ def kesiapan(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
             )  # noqa: S608
         ).one()
         n_terisi = sum(1 for n in ikhtisar if n and n > 0)
+
+        # WorldPop dan RDTR menyusul di sini, bukan di atas bersama OSM dan ORS:
+        # cakupannya diukur dari KOLOM, dan kolomnya baru terhitung sekarang.
+        # Tanpa keduanya, `catatan_data` menyatakan "seluruhnya dari sumber yang
+        # bisa dikutip" lalu menyebut dua dari empat - meremehkan datanya sendiri
+        # tepat di kalimat yang dibaca juri.
+        if ikhtisar.pop_100m:
+            nyata.append(f"{ikhtisar.pop_100m} heksagon berpenduduk WorldPop (D01)")
+        if ikhtisar.kelas_zona:
+            nyata.append(f"{ikhtisar.kelas_zona} heksagon berzonasi RDTR ATR/BPN (L01-L03)")
+
         hasil["basis_data"]["variabel_terisi"] = n_terisi
         hasil["basis_data"]["variabel_total"] = len(SEMUA_VARIABEL)
         hasil["basis_data"]["poi_osm"] = n_poi_osm
         hasil["basis_data"]["rute"] = n_rute
         hasil["sumber_terbuka"] = nyata
-        hasil["atribusi"] = ATRIBUSI if n_poi_osm or n_rute else []
+        hasil["atribusi"] = [
+            {k: v for k, v in a.items() if k != "bukti"}
+            for a in ATRIBUSI
+            if getattr(ikhtisar, str(a["bukti"]), 0)
+        ]
 
         # Diturunkan dari SEBERAPA BANYAK heksagon yang masih `predicted`, bukan
         # dari ada-tidaknya satu baris observasi. Bedanya menentukan: 27 titik
