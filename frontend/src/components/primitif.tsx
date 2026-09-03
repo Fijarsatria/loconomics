@@ -148,23 +148,107 @@ export function ChipKuadran({ kuadran }: { kuadran: NamaKuadran | null }) {
 
 // --- Struktur panel --------------------------------------------------------
 
+/**
+ * Nada warna sebuah bagian panel.
+ *
+ * Ada karena panel detail heksagon punya SEBELAS bagian berurutan dan sampai
+ * 3 September 2026 seluruhnya berwarna sama - tinta di atas putih, dari atas
+ * sampai bawah. Akibatnya bukan soal selera: tanpa satu pun penanda, mencari
+ * "di mana bagian harga tadi" menuntut membaca judul demi judul, dan panel
+ * yang harus DIBACA untuk bisa DILEWATI adalah panel yang tidak bisa dipindai.
+ *
+ * Warnanya diambil dari palet yang sudah ada, bukan palet baru: `gem` untuk
+ * yang menerangkan skor, `jebakan` untuk uang dan waktu, `bahaya` untuk
+ * peringatan, `netral` untuk lampiran. Merah TIDAK PERNAH dipakai sekadar
+ * sebagai warna keempat - aturan itu sudah tertulis di kepala palet.
+ */
+export type NadaBagian = 'gem' | 'pemenang' | 'jebakan' | 'bahaya' | 'netral'
+
+/** Kelas ditulis UTUH, tidak dirangkai. Tailwind memindai sumber sebagai teks;
+ *  kelas yang dibangun dari potongan string tidak pernah ikut ter-generate,
+ *  dan gagalnya diam - kelasnya ada di DOM, aturannya tidak ada di CSS. */
+const NADA: Record<NadaBagian, { chip: string; judul: string }> = {
+  gem: { chip: 'bg-gem-soft text-gem', judul: 'text-gem' },
+  pemenang: { chip: 'bg-pemenang-soft text-pemenang', judul: 'text-pemenang' },
+  jebakan: { chip: 'bg-jebakan-soft text-jebakan', judul: 'text-jebakan' },
+  bahaya: { chip: 'bg-bahaya-soft text-bahaya', judul: 'text-bahaya' },
+  netral: { chip: 'bg-ground-2 text-ink-3', judul: 'text-ink-3' },
+}
+
 export function Bagian({
   judul,
   aksi,
+  ikon,
+  nada = 'netral',
   children,
 }: {
   judul: string
   aksi?: ReactNode
+  /** Glif 16x16 dalam viewBox "0 0 16 16", memakai `currentColor`. */
+  ikon?: ReactNode
+  nada?: NadaBagian
   children: ReactNode
 }) {
+  const n = NADA[nada]
   return (
     <section className="border-t border-line px-4 py-3.5 first:border-t-0">
-      <div className="mb-2.5 flex items-baseline justify-between gap-2">
-        <h3 className="eyebrow">{judul}</h3>
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {ikon && (
+            <span
+              className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[7px] ${n.chip}`}
+              aria-hidden
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                {ikon}
+              </svg>
+            </span>
+          )}
+          <h3 className={`eyebrow truncate ${ikon ? n.judul : ''}`}>{judul}</h3>
+        </div>
         {aksi}
       </div>
       {children}
     </section>
+  )
+}
+
+/**
+ * Keterangan panjang yang dilipat.
+ *
+ * Panel detail pernah menumpuk sebelas paragraf penjelas berturut-turut, dan
+ * tiap paragrafnya punya alasan yang benar - keterangan itu yang membedakan
+ * "44 dari 100" dari angka yang dikarang. Masalahnya bukan isinya melainkan
+ * bahwa SEMUANYA terbuka sekaligus, kepada pembaca yang datang untuk menimbang
+ * satu ruko dan bukan untuk mengaudit metodologi.
+ *
+ * Dilipat, bukan dibuang. Membuangnya akan menghapus satu-satunya hal yang
+ * membuat angka di panel ini bisa dipertanggungjawabkan; melipatnya cuma
+ * memindahkan keputusan membacanya ke pembacanya.
+ *
+ * `<details>` asli, bukan state React: ia sudah bisa dibuka keyboard, sudah
+ * dibaca pembaca layar sebagai daerah yang bisa dilipat, dan isinya ikut
+ * ditemukan Ctrl+F peramban.
+ */
+export function Rinci({ ringkas, children }: { ringkas: string; children: ReactNode }) {
+  return (
+    <details className="group mt-1.5">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-ink-3 transition-colors hover:text-ink-2 [&::-webkit-details-marker]:hidden">
+        {ringkas}
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 12 12"
+          aria-hidden
+          className="shrink-0 transition-transform duration-300 ease-liquid group-open:rotate-180"
+        >
+          <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </summary>
+      <div className="mt-1.5 border-l-2 border-line pl-2.5 text-[11.5px] leading-snug text-ink-3">
+        {children}
+      </div>
+    </details>
   )
 }
 

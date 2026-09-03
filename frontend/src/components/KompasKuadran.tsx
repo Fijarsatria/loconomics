@@ -63,7 +63,7 @@ const BANTAL = 3
 /** Prestise 0..1 -> persen dari kiri. */
 const keX = (x: number) => BANTAL + x * (100 - 2 * BANTAL)
 
-/** Skor peluang 0..100 -> persen dari bawah. */
+/** Opportunity Score 0..100 -> persen dari bawah. */
 const keY = (y: number) => BANTAL + (y / 100) * (100 - 2 * BANTAL)
 
 /**
@@ -135,7 +135,7 @@ export default function KompasKuadran({
         {/* Sumbu tegak. Ditulis vertikal karena mendampingi sumbu yang vertikal —
             bukan demi gaya. */}
         <span className="eyebrow shrink-0 self-center [writing-mode:vertical-rl] rotate-180 tracking-[0.14em]">
-          Skor peluang
+          Opportunity Score
         </span>
 
         <div

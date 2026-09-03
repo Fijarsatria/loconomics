@@ -129,7 +129,7 @@ PENJELASAN_ZONA: dict[str, str] = {
     "DIIZINKAN": "Zona RDTR di lokasi ini mengizinkan kegiatan usaha.",
     "DILARANG": (
         "Zona RDTR di lokasi ini tidak mengizinkan kegiatan usaha. "
-        "Skor peluang dinolkan dan lokasi ini tidak pernah direkomendasikan, "
+        "Opportunity Score dinolkan dan lokasi ini tidak pernah direkomendasikan, "
         "berapa pun nilai variabel lainnya."
     ),
     "TIDAK_DIKETAHUI": (
@@ -237,7 +237,11 @@ LABEL_KUADRAN: dict[str, str] = {
     # tentang APA yang menang, dan yang membacanya di layar adalah orang yang
     # baru pertama kali melihat kuadran ini. Kuncinya tetap PEMENANG_JELAS -
     # itu yang tersimpan di basis data dan dipakai pipeline.
-    "PEMENANG_JELAS": "Aman tapi Mahal",
+    # Dipendekkan lagi 3 September 2026 jadi "Aman". "Aman tapi Mahal" memuat
+    # dua pernyataan sekaligus, dan yang kedua sudah dikatakan ARTI_KUADRAN di
+    # bawah - jadi yang tersisa cuma nama panjang yang sulit dibaca di lencana
+    # peta dan di judul kartu. Kuncinya tetap PEMENANG_JELAS.
+    "PEMENANG_JELAS": "Aman",
     "JEBAKAN_GENGSI": "Jebakan Gengsi",
     "HINDARI": "Hindari",
 }
@@ -386,3 +390,83 @@ def cakupan_indeks(
         terukur = int(d["terukur"])  # type: ignore[arg-type]
         d["layak_tampil"] = bool(total and terukur / total >= AMBANG_INDEKS_LAYAK_TAMPIL)
     return keluar
+
+
+# ---------------------------------------------------------------------------
+# Cakupan sumbu prestise
+# ---------------------------------------------------------------------------
+#
+# Sumbu datar Kompas Kuadran adalah SETENGAH tesis produk ini: "apa kata mata"
+# yang diadu dengan "apa kata data". Ia dihitung
+# `pipeline/s6_score.py::hitung_prestise_visual()` sebagai rata-rata lima bahan
+# dengan `skipna=True` - jadi bahan yang kosong dilewati begitu saja dan
+# sumbunya tetap menghasilkan angka untuk setiap heksagon.
+#
+# Terukur 2 September 2026 atas 708 heksagon: DUA bahan kosong seluruhnya, dan
+# keduanya justru satu-satunya yang menilai TAMPILAN secara langsung - M03
+# (kesan mewah, dinilai dari foto) dan P02 (posisi NJOP). Yang menggerakkan
+# sumbunya tinggal porsi waralaba dan bentuk bangunan: proksi yang masuk akal,
+# tetapi proksi. 390 heksagon berdiri di atas tiga bahan, 309 di atas dua, dan
+# sembilan di atas SATU.
+#
+# Keluarga kesalahan yang sama dengan badge yang dulu mengaku disurvei dan
+# RiskRadar yang menyebut AMAN tanpa data: angkanya benar, kalimat di sebelahnya
+# yang menjanjikan lebih banyak daripada yang diukur.
+#
+# Yang dikembalikan di sini BUKAN skor. Ia tidak memindahkan satu pun titik,
+# tidak menggeser batas kuadran, dan tidak menyembunyikan sumbunya - ia cuma
+# menyebutkan sumbu itu berdiri di atas apa.
+#
+# AMBANG_INDEKS_LAYAK_TAMPIL sengaja TIDAK dipakai di sini, dan alasannya layak
+# dicatat: tiga dari lima bahan terisi = 60%, jadi ambang berbasis JUMLAH akan
+# lolos dengan mulus justru pada keadaan yang jadi masalahnya - dua bahan yang
+# mendefinisikan arti sumbunya yang hilang. Yang menentukan di sini bukan
+# BERAPA bahannya, melainkan bahan yang MANA, jadi yang dilaporkan daftarnya.
+
+#: Kelima bahan sumbu prestise, URUT PERSIS seperti
+#: `pipeline/s6_score.py::hitung_prestise_visual`. Urutan itu yang muncul di
+#: layar sebagai daftar, jadi ia bukan selera - dijaga
+#: `test_bahan_prestise_sama_dengan_pipeline`.
+BAHAN_PRESTISE: tuple[tuple[str, str], ...] = (
+    ("P02", "njop_persentil"),
+    ("C05", "pangsa_waralaba"),
+    ("M03", "skor_prestise_visual"),
+    ("M02", "luas_bangunan_median"),
+    ("M01", "rasio_tutupan_bangunan"),
+)
+
+#: Dua bahan yang menilai tampilan SECARA LANGSUNG. Ketiga sisanya
+#: menyimpulkannya dari hal lain: berapa gerai waralaba di sekitarnya, seberapa
+#: besar dan rapat bangunannya. Selama kedua ini kosong, kata "visual" pada nama
+#: sumbunya adalah kesimpulan, bukan pengukuran - dan itulah yang wajib
+#: dinyatakan di layar.
+BAHAN_PRESTISE_LANGSUNG: frozenset[str] = frozenset({"M03", "P02"})
+
+
+def cakupan_prestise(fitur: "list") -> dict[str, object]:
+    """Bahan sumbu prestise mana yang benar-benar terukur.
+
+    Menerima SATU ATAU BANYAK baris `HexFeature`, dan artinya menyesuaikan: satu
+    baris menjawab "lokasi ini berdiri di atas apa", banyak baris menjawab
+    "sumbu ini, untuk titik yang sedang ditampilkan, berdiri di atas apa".
+
+    Sebuah bahan disebut terisi kalau SETIDAKNYA SATU baris punya nilainya. Untuk
+    satu baris itu makna biasa; untuk banyak baris ia pernyataan paling lemah
+    yang masih benar, dan itu memang yang dibutuhkan keterangan diagram. Yang
+    lebih halus - C05 terisi di 390 dari 708 - tempatnya di panel per-heksagon,
+    tempat ia muncul sendiri sebagai selisih antara "tiga bahan" dan "dua bahan".
+
+    Terisi berarti kolomnya tidak NULL, bukan tidak nol: `norm()` di s6
+    mengembalikan NaN HANYA untuk nilai yang memang hilang. Nol itu pengukuran -
+    jebakan yang sama dengan `nilai_normalisasi = 0,0` di `cakupan_indeks`.
+    """
+    terisi: list[str] = []
+    kosong: list[str] = []
+    for kode, kolom in BAHAN_PRESTISE:
+        ada = any(getattr(f, kolom, None) is not None for f in fitur)
+        (terisi if ada else kosong).append(kode)
+    return {
+        "terisi": terisi,
+        "kosong": kosong,
+        "diukur_langsung": bool(BAHAN_PRESTISE_LANGSUNG.intersection(terisi)),
+    }

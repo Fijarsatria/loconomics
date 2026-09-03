@@ -120,7 +120,7 @@ function ringkasKartu(data: { features: unknown[] }, layer: NamaLayer): RingkasK
     n: f.length,
     kuadran,
     sorotan:
-      m === null ? kosong('skor') : { nilai: String(Math.round(m)), label: 'skor peluang median' },
+      m === null ? kosong('skor') : { nilai: String(Math.round(m)), label: 'opportunity score median' },
   }
 }
 

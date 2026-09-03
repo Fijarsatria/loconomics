@@ -7,12 +7,19 @@
 #
 # Yang perlu disadari soal free tier, karena ia menentukan cara demo dijalankan:
 # layanan free TIDUR sesudah 15 menit tidak ada permintaan, dan bangunnya
-# memakan puluhan detik. Mitigasinya sudah dikerjakan di dua tempat -
-#   1. gaya basemap disajikan sebagai berkas STATIS dari Cloudflare
+# memakan puluhan detik. Mitigasinya dikerjakan di empat tempat -
+#   1. gaya basemap disajikan sebagai berkas STATIS dari frontend
 #      (frontend/public/basemap/*.json), jadi peta tetap tergambar walau
 #      backend masih bangun;
 #   2. `/health` sengaja tidak menyentuh basis data, supaya health check Render
-#      tidak menghabiskan koneksi Supabase free tier.
+#      tidak menghabiskan koneksi Supabase free tier;
+#   3. `bangunkan()` di frontend/src/main.tsx mengetuk /health saat halaman
+#      DIBUKA - puluhan detik sebelum peta membutuhkannya, karena gerbang di
+#      antaranya memang dibuat untuk dibaca. Cold start dibayar oleh waktu
+#      yang sudah dihabiskan orang membaca, bukan oleh waktu tunggunya;
+#   4. layar pembuka MENCOBA ULANG alih-alih menyimpulkan backend mati, dan
+#      membedakan keduanya: habis waktu / 502-504 ditunggu, sambungan yang
+#      ditolak tidak. Lihat `tungguMesinData` di components/Pembuka.tsx.
 # Sisanya tetap manual: panggil backend beberapa menit sebelum penjurian.
 
 services:
@@ -43,6 +50,20 @@ services:
       - key: ORS_API_KEY
         sync: false          # openrouteservice; dipakai pipeline, bukan saat melayani
 
+      # Kunci penandatangan tiket sesi. TIDAK BOLEH hilang di produksi, dan
+      # hilangnya gagal DIAM: `_kunci()` di app/core/akun.py dipanggil saat
+      # MELAYANI permintaan, bukan saat impor - jadi server tetap naik, health
+      # check tetap hijau, peta tetap tergambar, dan yang mati cuma
+      # daftar/masuk. Juri yang membuat akun menerima 500 di layar pertama
+      # yang menuntut identitas.
+      #
+      # `generateValue` dan bukan `sync: false`: nilainya tidak perlu diketahui
+      # siapa pun, jadi satu isian manual yang bisa terlupa lebih baik
+      # ditiadakan daripada didokumentasikan. Render membangkitkannya sekali
+      # dan menyimpannya - tiket tidak hangus tiap deploy.
+      - key: AUTH_SECRET
+        generateValue: true
+
       # --- Bukan rahasia -----------------------------------------------------
       - key: LLM_PROVIDER
         value: anthropic
@@ -56,5 +77,17 @@ services:
       # panitia MAPID keluar - CORS yang salah membuat SELURUH panggilan data
       # gagal dari peramban sementara curl tetap berhasil, dan itu jenis
       # kegagalan yang paling lama dikejar.
+      #
+      # Yang tertulis di sini sebelumnya `loconomics.pages.dev` - domain
+      # Cloudflare yang tidak pernah jadi dipakai. Terbitannya GitHub Pages,
+      # dan ASALNYA tidak memuat jalur: `https://fijarsatria.github.io`, bukan
+      # `.../loconomics/`. Diuji: dengan daftar yang lama, permintaan dari asal
+      # yang sebenarnya pulang TANPA `access-control-allow-origin` sama sekali
+      # dan preflight-nya dijawab 400 - persis kegagalan yang diperingatkan
+      # komentar di atas, sudah tertulis di berkasnya sendiri selama ini.
+      #
+      # Asal yang tidak kita miliki sengaja TIDAK didaftarkan. Produk ini punya
+      # akun dan fitur berbayar, jadi asal asing di daftar ini bukan sekadar
+      # baris mati - ia izin memanggil API ini dengan tiket orang lain.
       - key: CORS_ORIGINS
-        value: "https://loconomics.pages.dev,http://localhost:5173,http://localhost:4173"
+        value: "https://fijarsatria.github.io,http://localhost:5173,http://localhost:4173"

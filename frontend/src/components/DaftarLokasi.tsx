@@ -9,7 +9,7 @@
  * ISINYA MENGIKUTI LAYER AKTIF. Satu komponen, lima isi, dijalankan oleh state
  * yang sama dengan peta dan legendanya:
  *
- *   opportunity  -> peringkat skor peluang
+ *   opportunity  -> peringkat Opportunity Score
  *   hidden_gem   -> GemFinder, lengkap dengan rangkuman alasan terpilihnya
  *   risk_radar   -> RiskRadar, lengkap dengan label peringatannya
  *   pricelens    -> rentang harga wajar + cakupan data harga per kawasan
@@ -363,7 +363,7 @@ export default function DaftarLokasi({
                 onPilih={onPilih}
                 kuadran={t.kuadran}
                 nilai={t.y_peluang?.toFixed(0) ?? '—'}
-                satuan="skor peluang"
+                satuan="Opportunity Score"
                 badge={t.keyakinan}
               >
                 {/* Label peringatan — inti kriteria penerimaan RiskRadar. */}
@@ -411,7 +411,7 @@ export default function DaftarLokasi({
                   onPilih={onPilih}
                   kuadran={s.kuadran}
                   nilai={s.opportunity_score?.toFixed(0) ?? '—'}
-                  satuan="skor peluang"
+                  satuan="Opportunity Score"
                   badge={s.keyakinan}
                 >
                   {s.kuadran && (

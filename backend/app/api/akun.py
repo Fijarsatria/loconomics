@@ -826,7 +826,7 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
         LABEL_KUADRAN.get(sc.kuadran, sc.kuadran) if sc and sc.kuadran else "belum ada data"
     )
     isi.append(_tabel([
-        ["Skor peluang (0-100)", _angka_id(sc.opportunity_score if sc else None, desimal=0)],
+        ["Opportunity Score (0-100)", _angka_id(sc.opportunity_score if sc else None, desimal=0)],
         ["Kelompok lokasi", kuadran],
         ["Peringkat", str(sc.peringkat) if sc and sc.peringkat else "belum ada data"],
         ["Skor hidden gem", _angka_id(sc.hidden_gem_score if sc else None)],
@@ -960,7 +960,7 @@ def _rakit_pdf_komparasi(baris, user) -> bytes:
         ]
 
     METRIK = [
-        ("Skor peluang (0-100)", lambda b: b.opportunity_score, "", 0, "tinggi"),
+        ("Opportunity Score (0-100)", lambda b: b.opportunity_score, "", 0, "tinggi"),
         ("Kelompok lokasi", lambda b: LABEL_KUADRAN.get(b.kuadran, b.kuadran), "", 0, None),
         ("Sewa per m2", lambda b: b.harga_sewa_per_m2, "Rp", 0, "rendah"),
         ("Uang berpindah per jam", lambda b: b.belanja_per_jam, "Rp", 0, "tinggi"),

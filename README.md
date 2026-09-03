@@ -30,7 +30,7 @@ pipeline/    Python s1→s7 — dari survei lapangan sampai ke basis data
              Satu-satunya tempat skor dihitung
 backend/     FastAPI — 7 modul + tests/. Membaca basis data, tidak menghitung
 frontend/    React + Vite + MapLibre GL — peta, insight, AI dalam satu layar
-docs/        7 dokumen. Menjelaskan kenapa, bukan bagaimana
+docs/        9 dokumen. Menjelaskan kenapa, bukan bagaimana
 CLAUDE.md    Panduan untuk sesi AI berikutnya
 ```
 
@@ -111,7 +111,7 @@ frontend. Petanya bergerak sendiri.
 | Data survei lapangan | Menunggu tim survei |
 
 Daftar lengkap yang belum dikerjakan beserta apa yang menghalanginya:
-[CLAUDE.md](CLAUDE.md#belum-dikerjakan--di-sinilah-pekerjaan-berikutnya).
+[docs/status.md](docs/status.md#belum-dikerjakan--di-sinilah-pekerjaan-berikutnya).
 
 ## Aturan yang mengikat
 

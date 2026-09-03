@@ -1,5 +1,10 @@
 # Cloudflare Pages - SPA.
 #
+# TIDAK BERLAKU DI TERBITAN SEKARANG - GitHub Pages mengabaikannya; jalur
+# dalam yang tidak ada dijawab 404. Tidak ada yang hilang: aplikasi ini tidak
+# memakai router sama sekali, jadi tidak ada jalur dalam yang perlu
+# dikembalikan ke index.html. Lihat docs/arsitektur.md.
+#
 # Tanpa baris ini, memuat ulang di URL apa pun selain "/" menghasilkan 404
 # Cloudflare, bukan aplikasinya. Yang di atasnya lebih spesifik dan harus lebih
 # dulu: berkas nyata tidak boleh ikut ditelan ke index.html.

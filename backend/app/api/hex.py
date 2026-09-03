@@ -7,7 +7,7 @@ karena ketentuan lomba melarang data misi MAPID mentah diekspos ke publik.
 
 import json
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select, text
@@ -35,6 +35,7 @@ from app.core.aturan import (
     MEMUTAR_MENCOLOK,
     PENJELASAN_KUADRAN,
     cakupan_indeks,
+    cakupan_prestise,
     faktor_memutar,
     menit_jalan,
 )
@@ -51,6 +52,7 @@ from app.core.galat import KesalahanAPI
 from app.core.database import get_db
 from app.models import HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
 from app.schemas import (
+    CakupanPrestise,
     CommuterClock,
     DetailHeksagon,
     KonteksSimpul,
@@ -338,6 +340,10 @@ def commuter_clock(
 def simpul_terdekat(
     h3_index: str,
     db: Annotated[Session, Depends(get_db)],
+    profil: Annotated[
+        Literal["foot-walking", "driving-car"],
+        Query(description="Profil rute. Motor tidak ada di ORS."),
+    ] = "foot-walking",
 ) -> KonteksSimpul:
     """Stasiun mana yang terdekat, lewat mana jalannya, berapa jauh, berapa menit.
 
@@ -415,14 +421,25 @@ def simpul_terdekat(
     rute_baris = db.execute(
         text(
             """
-            SELECT urutan, jarak_m, menit, ST_AsGeoJSON(geom, 5) AS geojson
+            SELECT urutan, jarak_m, menit, profil, ST_AsGeoJSON(geom, 5) AS geojson
             FROM hex_routes
-            WHERE h3_index = :h3
+            WHERE h3_index = :h3 AND profil = :profil
             ORDER BY urutan
             """
         ),
-        {"h3": h3_index},
+        {"h3": h3_index, "profil": profil},
     ).mappings().all()
+
+    # Profil apa saja yang PUNYA baris untuk heksagon ini. Dikirim supaya
+    # antarmuka tidak menawarkan tombol yang isinya kosong - rute mobil ditarik
+    # terpisah dan mungkin belum pernah dijalankan sama sekali.
+    tersedia = [
+        r[0]
+        for r in db.execute(
+            text("SELECT DISTINCT profil FROM hex_routes WHERE h3_index = :h3 ORDER BY profil"),
+            {"h3": h3_index},
+        ).all()
+    ]
 
     rute = [
         RuteJalan(
@@ -430,6 +447,7 @@ def simpul_terdekat(
             jarak_m=round(float(r["jarak_m"])),
             menit=round(float(r["menit"]), 1),
             utama=r["urutan"] == 0,
+            profil=r["profil"],
             koordinat=json.loads(r["geojson"])["coordinates"],
         )
         for r in rute_baris
@@ -444,11 +462,14 @@ def simpul_terdekat(
             jarak_m=lurus,
             menit_jalan=menit_jalan(lurus),
             jarak_lurus_m=lurus,
+            profil=profil,
+            profil_tersedia=tersedia,
             garis_lurus=True,
             catatan=(
-                f"Garis lurus ke {baris['nama']}. Rute jalan kaki yang sebenarnya "
-                "lebih panjang karena mengikuti jalan - heksagon ini belum "
-                "dirutekan."
+                f"Garis lurus ke {baris['nama']}. Rute "
+                f"{'mobil' if profil == 'driving-car' else 'jalan kaki'} yang "
+                "sebenarnya lebih panjang karena mengikuti jalan - heksagon ini "
+                "belum dirutekan untuk profil itu."
             ),
         )
 
@@ -458,7 +479,8 @@ def simpul_terdekat(
     # Kalimatnya menyebut angka yang paling berguna lebih dulu, dan menambahkan
     # peringatan HANYA kalau memang ada yang perlu diperingatkan. Catatan yang
     # selalu berisi peringatan berhenti dibaca sebagai peringatan.
-    catatan = f"{utama.menit:.0f} menit jalan kaki ke {baris['nama']}, lewat jalan yang ada."
+    cara = "berkendara" if profil == "driving-car" else "jalan kaki"
+    catatan = f"{utama.menit:.0f} menit {cara} ke {baris['nama']}, lewat jalan yang ada."
     if memutar and memutar >= MEMUTAR_MENCOLOK:
         catatan += (
             f" Jalurnya memutar {memutar:.1f}x dari jarak lurusnya"
@@ -477,6 +499,8 @@ def simpul_terdekat(
         jarak_lurus_m=lurus,
         faktor_memutar=memutar,
         rute=rute,
+        profil=profil,
+        profil_tersedia=tersedia,
         garis_lurus=False,
         catatan=catatan,
     )
@@ -699,4 +723,10 @@ def detail_heksagon(
         kuadran_penjelasan=(
             PENJELASAN_KUADRAN.get(skor.kuadran) if skor and skor.kuadran else None
         ),
+        # Alasannya sama dengan `cakupan` di atas, dan taruhannya lebih besar:
+        # kuadran adalah tesis produk ini, dan sumbu datarnya berdiri di atas
+        # bahan yang dua di antaranya kosong di SELURUH wilayah studi. Yang
+        # dikirim daftar kodenya saja - tidak satu pun nilai, jadi ia tetap di
+        # sisi gratis bersama kuadrannya sendiri.
+        cakupan_prestise=CakupanPrestise(**cakupan_prestise([hx])),  # type: ignore[arg-type]
     )

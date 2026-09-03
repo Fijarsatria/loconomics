@@ -297,11 +297,27 @@ export const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification>
   // di bawah ~0,55 warna kuadran mulai tercampur warna basemap dan Kompas
   // Kuadran menerangkan warna yang tidak lagi ada di layar. 0,60-0,66 adalah
   // rentang tempat keduanya masih benar. Yang kosong (0,11) tidak disentuh.
-  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.26, 0.44],
-  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.08, 0.48],
-  risk_radar: ['case', ['==', ['get', 'indeks_churn'], null], 0.08, 0.46],
-  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.08, 0.48],
-  zoneguard: 0.4,
+  //
+  // Diturunkan ~25% lagi pada 3 September 2026, permintaan ketiga pemilik repo
+  // dengan alasan yang sama seperti dua kali sebelumnya: jalan dan blok
+  // bangunan masih tertelan isian.
+  //
+  // Turunan ketiga ini AMAN justru karena dua turunan sebelumnya sudah membayar
+  // ongkosnya di muka. Yang menahan bentuk heksagon sejak 24 Agustus bukan lagi
+  // isiannya melainkan garis batasnya (1,4 px / 0,85) - jadi peringatan lama
+  // "di bawah 0,55 warna kuadran melebur ke basemap" tidak berlaku di sini: ia
+  // ditulis untuk isian yang berdiri sendirian.
+  //
+  // Yang TIDAK ikut turun: heksagon kosong (0,08). Jarak antara "terukur" dan
+  // "belum ada data" harus tetap terbaca tanpa membuka legenda, dan menurunkan
+  // keduanya bersama-sama justru memampatkan jarak itu.
+  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.18, 0.33],
+  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.08, 0.36],
+  risk_radar: ['case', ['==', ['get', 'indeks_churn'], null], 0.08, 0.34],
+  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.08, 0.36],
+  // ZoneGuard turun paling sedikit. Ia satu-satunya layer yang menyatakan
+  // LARANGAN, dan larangan yang nyaris tidak terlihat berhenti jadi larangan.
+  zoneguard: 0.34,
 }
 
 /**

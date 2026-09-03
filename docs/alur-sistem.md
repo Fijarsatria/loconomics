@@ -279,7 +279,7 @@ flowchart LR
 | Backend | FastAPI (Python), modular monolith |
 | Database | PostgreSQL + PostGIS via Supabase |
 | ORM & tooling | SQLAlchemy · GeoAlchemy2 · Alembic · Pydantic |
-| Deploy | Cloudflare Pages · Render · Supabase |
+| Deploy | GitHub Pages · Azure App Service · Supabase |
 
 **Tabel inti:** `transport_nodes`, `catchment_areas`, `hex_routes`, **`h3_cells`**, `business_pois`, `menu_observations`, `receipt_observations`, `property_observations`, `location_scores`, `score_factors` — semuanya dengan **spatial index GiST**.
 

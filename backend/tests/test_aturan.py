@@ -25,7 +25,9 @@ from config import PUSAT as PUSAT_PIPELINE  # noqa: E402
 from app.api.ai import ALAT_BACKEND, ALAT_FRONTEND, NAMA_FRONTEND, REGISTRI, _argumen_peta
 from app.api.bersama import DIMENSI, SEMUA_VARIABEL
 from app.core.aturan import (
+    BAHAN_PRESTISE,
     cakupan_indeks,
+    cakupan_prestise,
     TINGKAT_BERPERINGATAN,
     CHURN_LANTAI_ABSOLUT,
     PENJELASAN_ZONA,
@@ -473,6 +475,71 @@ def test_pusat_kawasan_python_dan_frontend_sama():
         )
 
 
+def test_jenis_usaha_python_dan_frontend_sama():
+    """`JENIS_USAHA` di backend wajib sama persis dengan `BAWAAN` di frontend.
+
+    Uji ini ada karena kegagalannya DIAM di satu arah dan berisik di arah lain,
+    dan yang diam itu yang berbahaya.
+
+    Berisik: jenis yang ada di frontend tetapi tidak di backend. `/hex/{h3}/
+    simulasi` menolaknya dengan 400, orangnya melihat galat, dan ada yang
+    melapor.
+
+    Diam: jenis yang bawaannya BERGESER - misalnya margin bakery diubah di
+    backend saja. Simulasinya tetap jalan, angkanya tetap keluar, dan yang
+    terjadi cuma penggeser di layar berangkat dari titik yang berbeda dengan
+    yang dipakai menghitung. Tidak ada galat, tidak ada yang melapor, dan
+    angkanya salah sejak bingkai pertama.
+
+    Ditulis saat daftarnya diperluas dari 4 jadi 16 (3 Sep 2026): dengan enam
+    belas baris di dua bahasa, menjaganya "manual" berhenti jadi rencana.
+    """
+    import re
+
+    from app.core.simulasi import JENIS_USAHA
+
+    ts = (AKAR / "frontend" / "src" / "components" / "Simulasi.tsx").read_text(
+        encoding="utf-8"
+    )
+
+    blok = re.search(
+        r"const BAWAAN: Record<string, \{[^}]*\}> = \{(.*?)\n\}", ts, re.S
+    )
+    assert blok, "blok BAWAAN tidak ketemu di frontend/src/components/Simulasi.tsx"
+
+    fe = {
+        m.group(1): (int(m.group(2)), int(m.group(3)), int(m.group(4)))
+        for m in re.finditer(
+            r"(\w+):\s*\{\s*jam:\s*(\d+),\s*luas:\s*(\d+),\s*margin:\s*(\d+)\s*\}",
+            blok.group(1),
+        )
+    }
+    assert fe, "tidak satu pun baris BAWAAN terbaca - polanya berubah?"
+
+    # Kunci yang dipakai TOMBOL, bukan cuma yang punya bawaan. Keduanya harus
+    # sama; kalau tombolnya ada tanpa bawaan, penggesernya berangkat dari nilai
+    # global dan itu justru kesalahan yang sedang dicegah di sini.
+    blok_jenis = re.search(r"const JENIS = \[(.*?)\n\] as const", ts, re.S)
+    assert blok_jenis, "blok JENIS tidak ketemu"
+    tombol = set(re.findall(r"nilai:\s*'([^']+)'", blok_jenis.group(1)))
+
+    assert tombol == set(fe), f"JENIS vs BAWAAN berbeda: {tombol ^ set(fe)}"
+    assert set(fe) == set(JENIS_USAHA), (
+        f"backend vs frontend berbeda: {set(fe) ^ set(JENIS_USAHA)}"
+    )
+
+    for kunci, (jam, luas, margin) in fe.items():
+        be = JENIS_USAHA[kunci]
+        assert (int(be["jam"]), int(be["luas"]), float(be["margin"])) == (
+            jam,
+            luas,
+            float(margin),
+        ), (
+            f"bawaan '{kunci}' berbeda: backend "
+            f"{(be['jam'], be['luas'], be['margin'])} vs frontend {(jam, luas, margin)}"
+        )
+
+
 def test_pusat_harjamukti_di_stasiunnya():
     """Penjaga khusus, dan ia layak berdiri sendiri.
 
@@ -591,6 +658,271 @@ def test_nilai_normalisasi_NOL_tetap_dihitung_terukur():
 
 def test_cakupan_tanpa_faktor_tidak_meledak():
     assert cakupan_indeks([]) == {}
+
+
+# ---------------------------------------------------------------------------
+# Halaman temuan di gerbang
+# ---------------------------------------------------------------------------
+#
+# Bagian `#temuan` menyatakan KESIMPULAN di depan juri, dan kesimpulan yang basi
+# tidak terbaca sebagai angka lama - ia terbaca sebagai tim yang tidak memeriksa
+# pekerjaannya. Keenam angkanya sudah pernah meleset seluruhnya sekali, saat
+# masih hidup sebagai catatan tangan di CLAUDE.md.
+#
+# Karena itu seluruh isinya - termasuk kalimatnya - dibangkitkan
+# `s7_publish.hitung_temuan()`. Kedua uji di bawah menjaga BENTUK yang
+# diterbitkan pembangkitnya.
+#
+# Yang menjaga bahwa komponennya tidak menulis angkanya sendiri TIDAK ada di
+# sini, dan itu keputusan yang dibayar sekali: uji pemindai-sumber sempat
+# ditulis, lolos, lalu ketahuan lolos atas STRING KOSONG - pengupas `{...}`
+# berulangnya ikut memakan badan setiap fungsi, karena badan fungsi juga
+# `{...}`. Ia disisipi satu angka tulis tangan dan tetap hijau.
+#
+# Penggantinya di `frontend/scripts/audit-prd.mjs`: setiap angka yang TERLIHAT
+# di bagian `#temuan` wajib ada di dalam `ringkasan-data.ts`. Diuji atas teks
+# yang benar-benar dirender, bukan atas sumber yang ditebak-tebak - dan itu
+# satu-satunya tempat pertanyaannya bisa dijawab dengan benar.
+
+
+def _temuan_ts() -> str:
+    return (
+        Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "ringkasan-data.ts"
+    ).read_text(encoding="utf-8")
+
+
+def _temuan_terbit() -> list[dict]:
+    """Baca larik TEMUAN dari modul yang dibangkitkan.
+
+    Diurai sebagai JSON, bukan diimpor: berkasnya TypeScript, dan satu-satunya
+    proses yang bisa menjalankannya adalah proses yang tidak sedang menguji.
+    """
+    import json
+    import re
+
+    teks = _temuan_ts()
+    m = re.search(r"export const TEMUAN: Temuan\[\] = \[\n(.*?)\n\]", teks, re.S)
+    assert m, "TEMUAN tidak ada di ringkasan-data.ts - jalankan s7_publish.py --ekspor"
+    return [json.loads(b.strip().rstrip(",")) for b in m.group(1).splitlines() if b.strip()]
+
+
+def test_setiap_temuan_lengkap_bidangnya():
+    """Temuan separuh jadi lebih buruk daripada temuan yang tidak diterbitkan.
+
+    Pembangkitnya melewati temuan yang bahannya tidak ada, jadi daftar yang
+    lebih pendek itu sah. Yang tidak sah: temuan yang terbit dengan salah satu
+    bidangnya kosong - judul tanpa uraian, atau angka tanpa satuan.
+    """
+    temuan = _temuan_terbit()
+    assert temuan, "nol temuan terbit - basis datanya kosong, atau --ekspor belum dijalankan"
+
+    wajib = ("kunci", "dugaan", "judul", "angka", "satuan", "uraian", "akibat", "deretSatuan")
+    for t in temuan:
+        for bidang in wajib:
+            assert t.get(bidang), f"temuan '{t.get('kunci')}': bidang '{bidang}' kosong"
+        assert len(t["deret"]) >= 2, f"temuan '{t['kunci']}': deret perlu >= 2 batang"
+        ditekan = [b for b in t["deret"] if b.get("tekan")]
+        assert len(ditekan) == 1, (
+            f"temuan '{t['kunci']}': tepat satu batang harus ditekan, ada {len(ditekan)}. "
+            "Nol batang ditekan berarti pembacanya harus mencari sendiri mana yang jadi "
+            "pokoknya; lebih dari satu berarti tidak ada pokoknya."
+        )
+
+
+def test_temuan_menyebut_angkanya_di_dalam_kalimat():
+    """Judul yang tidak memuat angkanya berhenti jadi temuan dan jadi slogan.
+
+    Ini yang membuat pembangkitan itu perlu: kalau judulnya boleh bebas angka,
+    ia bisa ditulis tangan tanpa ada yang keberatan - lalu ia basi sendirian
+    sementara grafik di sebelahnya tetap benar.
+    """
+    for t in _temuan_terbit():
+        assert any(c.isdigit() for c in t["judul"]), (
+            f"temuan '{t['kunci']}': judulnya tidak memuat satu pun angka"
+        )
+        assert any(c.isdigit() for c in t["uraian"]), (
+            f"temuan '{t['kunci']}': uraiannya tidak memuat satu pun angka"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Kejujuran sumbu prestise
+# ---------------------------------------------------------------------------
+#
+# Sumbu datar kuadran dirata-ratakan dari lima bahan dengan `skipna=True`, jadi
+# bahan yang kosong dilewati dan sumbunya tetap menghasilkan angka. Dua bahan
+# kosong di seluruh 708 heksagon, dan keduanya justru satu-satunya yang menilai
+# tampilan secara langsung. Uji di bawah menjaga supaya keadaan itu tetap
+# TERBACA di layar, dan supaya daftar bahannya tidak bisa berpisah dari pipeline.
+
+
+class _Fitur:
+    """Cukup untuk `cakupan_prestise`: ia hanya membaca lima kolom."""
+
+    def __init__(self, **terisi):
+        for _, kolom in BAHAN_PRESTISE:
+            setattr(self, kolom, None)
+        for kolom, nilai in terisi.items():
+            setattr(self, kolom, nilai)
+
+
+def test_bahan_prestise_sama_dengan_pipeline():
+    """Daftar bahan di backend wajib sama PERSIS dengan yang dirata-ratakan s6.
+
+    Termasuk urutannya: urutan itu yang muncul di layar sebagai daftar, jadi
+    daftar yang diam-diam berbeda akan menyebutkan bahan yang tidak pernah ikut
+    dihitung - bentuk kesalahan yang sama dengan legenda yang dulu menerangkan
+    warna yang tidak ada di peta.
+
+    Diperiksa terhadap SUMBERNYA, bukan terhadap salinan lain. Keluarga yang
+    sama dengan uji `PUSAT` yang membandingkan ke koordinat OSM.
+    """
+    import re
+
+    sumber = (AKAR / "pipeline" / "s6_score.py").read_text(encoding="utf-8")
+    awal = sumber.index("def hitung_prestise_visual")
+    badan = sumber[awal : sumber.index("\ndef ", awal + 1)]
+    urut = re.findall(r'df\["([a-z0-9_]+)"\]', badan)
+    assert urut == [kolom for _, kolom in BAHAN_PRESTISE], (
+        f"pipeline merata-ratakan {urut}, aturan.py mendaftar "
+        f"{[k for _, k in BAHAN_PRESTISE]}"
+    )
+
+
+def test_cakupan_prestise_memisahkan_yang_terisi_dari_yang_kosong():
+    c = cakupan_prestise([
+        _Fitur(rasio_tutupan_bangunan=41.2, luas_bangunan_median=88.0, pangsa_waralaba=6.5)
+    ])
+    assert c["terisi"] == ["C05", "M02", "M01"], c
+    assert c["kosong"] == ["P02", "M03"], c
+
+
+def test_cakupan_prestise_urut_seperti_pipeline():
+    """Bukan urutan abjad, bukan yang-terisi-dulu.
+
+    Yang dibaca orang di layar adalah daftar ini apa adanya, dan satu-satunya
+    urutan yang bisa dipertanggungjawabkan adalah urutan bahan itu benar-benar
+    dijumlahkan.
+    """
+    c = cakupan_prestise([_Fitur(rasio_tutupan_bangunan=1.0, njop_persentil=50.0)])
+    assert c["terisi"] == ["P02", "M01"], c
+    assert c["kosong"] == ["C05", "M03", "M02"], c
+
+
+def test_cakupan_prestise_nilai_NOL_tetap_terukur():
+    """Jebakan yang sama dengan `nilai_normalisasi = 0,0` di cakupan_indeks.
+
+    Porsi waralaba 0% itu PENGUKURAN - ia berarti tidak ada satu pun gerai
+    waralaba di sana, dan itu justru temuan yang menggerakkan sumbunya ke kiri.
+    Menyamakannya dengan kosong akan menandai lokasi paling tidak bermerek di
+    wilayah studi sebagai lokasi yang belum diukur.
+    """
+    c = cakupan_prestise([_Fitur(pangsa_waralaba=0.0, rasio_tutupan_bangunan=0.0)])
+    assert c["terisi"] == ["C05", "M01"], c
+
+
+def test_cakupan_prestise_banyak_baris_cukup_satu_yang_punya():
+    """Untuk keterangan diagram, "terisi" berarti setidaknya satu titik punya.
+
+    Pernyataan paling lemah yang masih benar. Yang lebih halus - C05 terisi di
+    390 dari 708 - memang tempatnya di panel per-heksagon, tempat ia muncul
+    sendiri sebagai selisih antara "tiga bahan" dan "dua bahan".
+    """
+    c = cakupan_prestise([
+        _Fitur(rasio_tutupan_bangunan=12.0),
+        _Fitur(rasio_tutupan_bangunan=15.0, pangsa_waralaba=3.0),
+    ])
+    assert c["terisi"] == ["C05", "M01"], c
+
+
+def test_prestise_tanpa_penilai_langsung_ditandai():
+    """Inti perbaikannya, dan alasan ambang berbasis JUMLAH tidak dipakai.
+
+    Tiga dari lima bahan terisi = 60%, jadi ambang apa pun lolos dengan mulus -
+    justru pada keadaan yang jadi masalahnya, yaitu saat dua bahan yang
+    mendefinisikan arti sumbunya yang hilang. Keadaan produksi hari ini persis
+    itu, dan yang menandainya harus `diukur_langsung`, bukan pecahannya.
+    """
+    tiga_proksi = cakupan_prestise([
+        _Fitur(rasio_tutupan_bangunan=41.2, luas_bangunan_median=88.0, pangsa_waralaba=6.5)
+    ])
+    assert len(tiga_proksi["terisi"]) == 3, tiga_proksi
+    assert tiga_proksi["diukur_langsung"] is False, (
+        "tiga dari lima terisi, tetapi tidak satu pun menilai tampilan secara langsung"
+    )
+
+    # Arah sebaliknya, dan ini yang membuat uji di atas berarti: satu penilai
+    # langsung sudah cukup mencabut penandanya.
+    for kolom in ("skor_prestise_visual", "njop_persentil"):
+        c = cakupan_prestise([_Fitur(**{kolom: 3.8})])
+        assert c["diukur_langsung"] is True, (kolom, c)
+
+
+def test_cakupan_prestise_tanpa_baris_tidak_meledak():
+    c = cakupan_prestise([])
+    assert c["terisi"] == [] and len(c["kosong"]) == 5, c
+    assert c["diukur_langsung"] is False, c
+
+
+def test_frontend_membangkitkan_kalimat_prestise_bukan_menulisnya():
+    """`frasaPrestise` harus MENURUNKAN kalimatnya dari daftar bahan.
+
+    Kalau kalimatnya ditulis tetap, ia akan tetap menyebut "dua bahan belum
+    terukur" berbulan-bulan sesudah M03 masuk - keluarga yang sama dengan
+    halaman gerbang yang menjanjikan 43 variabel saat 25 yang terisi. Yang
+    dijaga di sini bentuk paling kasarnya: nama bahan diambil dari ARTI_KODE,
+    jumlahnya dihitung dari panjang larik, dan kelima-limanya terisi berarti
+    tidak ada kalimat sama sekali.
+    """
+    ts = (AKAR / "frontend" / "src" / "config.ts").read_text(encoding="utf-8")
+    assert "export function frasaPrestise(" in ts, "frasaPrestise hilang dari config.ts"
+    badan = ts[ts.index("export function frasaPrestise(") :]
+    badan = badan[: badan.index("\nexport function ", 1)]
+    assert "ARTI_KODE[kode]" in badan, "nama bahan wajib dari ARTI_KODE, bukan ditulis ulang"
+    assert "terisi.length" in badan, "jumlah bahan wajib dihitung, bukan ditulis tetap"
+    assert "kosong.length === 0" in badan, (
+        "kelima bahan terisi wajib menghasilkan larik kosong - tanpa itu, "
+        "keterangan ini tidak akan pernah hilang sendiri"
+    )
+    for tulisan in ("dua bahan", "2 dari 5", "tiga dari lima"):
+        assert tulisan not in badan, f"'{tulisan}' ditulis tangan di dalam frasaPrestise"
+
+
+def test_klaim_melihat_bangunan_tidak_ada_lagi_di_mana_pun():
+    """Kalimat lama tidak boleh tersisa di satu berkas pun di `src/`.
+
+    Panel kuadran dulu menulis "Bangunan dan tokonya TERLIHAT lebih mahal" - dan
+    itu mengaku ada yang melihat, padahal kedua bahan yang menilai tampilan
+    secara langsung kosong di seluruh 708 heksagon.
+
+    Kenapa uji ini ada di samping penjaga di peramban, bukan digantikan olehnya:
+    kalimat itu punya DUA cabang, di atas median dan di bawahnya, dan audit
+    peramban cuma pernah melihat cabang yang kebetulan dirender heksagon yang
+    dikliknya. Percobaan pertama menulisnya sebagai asersi negatif di sana - ia
+    TETAP HIJAU saat klaim lamanya sengaja dikembalikan, karena yang
+    dikembalikan cabang yang lain. Yang di peramban sekarang asersi POSITIF atas
+    kalimat yang benar-benar dirender; yang di sini menyapu KEDUA cabang
+    sekaligus, dan sekalian setiap tempat lain yang mungkin menyalinnya.
+
+    Bentuk pemeriksaannya sengaja paling bodoh yang mungkin - substring, tanpa
+    pengupasan apa pun. Pemindai sumber yang pintar sudah pernah dicoba di repo
+    ini dan lolos atas STRING KOSONG.
+    """
+    terlarang = [
+        "Bangunan dan tokonya terlihat lebih mahal",
+        "Terlihat biasa saja dibanding separuh lokasi lain",
+    ]
+    src = AKAR / "frontend" / "src"
+    ketemu = [
+        f"{p.relative_to(src)}: {kalimat!r}"
+        for p in sorted(src.rglob("*.ts*"))
+        for kalimat in terlarang
+        if kalimat in p.read_text(encoding="utf-8")
+    ]
+    assert not ketemu, (
+        "klaim lama masih hidup di: " + "; ".join(ketemu) + ". Sumbu prestise "
+        "berdiri di atas proksi, jadi kalimatnya wajib berbunyi perkiraan."
+    )
 
 
 if __name__ == "__main__":

@@ -78,9 +78,12 @@ memanggil dan meneruskan hasilnya.
 >    statis di `frontend/public/basemap/` (224 KB, di-commit)
 > 3. Frontend memuatnya satu-asal. Tidak ada `VITE_` berisi kunci apa pun lagi
 >
-> Statis, bukan proksi langsung, karena Render free tier tidur: kalau peramban
-> meminta gayanya ke backend saat peta dibuka, basemap ikut mati selama puluhan
-> detik pertama — persis saat juri membuka tautan.
+> Statis, bukan proksi langsung. Alasan aslinya Render free tier yang tidur:
+> kalau peramban meminta gayanya ke backend saat peta dibuka, basemap ikut mati
+> selama puluhan detik pertama — persis saat juri membuka tautan. Backend kini
+> di Azure dan tidak tidur, tetapi keputusannya TIDAK dicabut: basemap yang
+> tidak bergantung pada backend tetap tergambar walaupun backend mati, dan itu
+> berlaku untuk sebab apa pun, bukan cuma cold start.
 >
 > Dijaga empat asersi di `backend/tests/test_infra.py` dan satu di
 > `frontend/scripts/audit-prd.mjs` ("nol URL membawa key/access_token"). Build
@@ -224,7 +227,7 @@ hidup di balik langganan — lihat aturan keras 5.
 | **Tabel informasi atribut** | `PanelInsight.tsx` — **berbayar** |
 | Visualisasi (grafik, chart) | `ChartJam.tsx`, `BarHarga.tsx`, `KompasKuadran.tsx` |
 | AI di dalam interface | `PanelAI.tsx` |
-| Akses publik | GitHub Pages + Render |
+| Akses publik | GitHub Pages + Azure App Service |
 
 ### B.5 — Metodologi dan Sumber Data
 

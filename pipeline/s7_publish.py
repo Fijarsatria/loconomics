@@ -1563,6 +1563,259 @@ SUMBER_DATA: list[dict[str, str | None]] = [
 ]
 
 
+def _id(nilai: float, desimal: int = 2) -> str:
+    """Angka dalam bentuk yang dibaca orang Indonesia: koma, bukan titik.
+
+    Dipakai di dalam KALIMAT temuan, bukan cuma di kolom angka - dan itu yang
+    membuatnya perlu ada di Python alih-alih di frontend. Kalimatnya sendiri
+    dirangkai di sini supaya tidak ada satu pun angka yang bisa berpisah dari
+    prosa yang menerangkannya.
+    """
+    return f"{nilai:,.{desimal}f}".replace(",", " ").replace(".", ",")
+
+
+def _batang(label: str, nilai: float, tekan: bool = False) -> dict[str, Any]:
+    """Satu batang di grafik kecil temuan.
+
+    `tekan` DIHILANGKAN kalau salah, tidak ditulis sebagai `false`. Bukan soal
+    ukuran berkas: keempat temuan merangkai deretnya dengan cara yang berbeda -
+    sebagian dari literal, sebagian dari hasil kueri - dan tanpa satu pintu
+    keluar bersama, keluarannya berbeda bentuk untuk data yang sama artinya.
+    """
+    batang: dict[str, Any] = {"label": label, "nilai": nilai}
+    if tekan:
+        batang["tekan"] = True
+    return batang
+
+
+def hitung_temuan(db: Session, n_hex: int) -> list[dict[str, Any]]:
+    """Empat kali pengukuran membantah dugaan yang wajar. Diturunkan, bukan ditulis.
+
+    Ini bagian `#temuan` di halaman gerbang, dan alasannya ada di sini alih-alih
+    ditulis tangan di komponennya sama dengan alasan `BATASAN` ada di sini:
+    angka yang ditulis tangan di halaman gerbang sudah pernah kedaluwarsa ke arah
+    yang paling merugikan. Kali ini taruhannya lebih besar, karena yang basi bukan
+    cuma angka melainkan KESIMPULAN - dan kesimpulan yang basi tidak terbaca
+    sebagai angka lama, ia terbaca sebagai tim yang tidak memeriksa pekerjaannya.
+
+    Bukti bahwa kekhawatiran itu bukan hipotesis: keenam angka yang tercatat di
+    `CLAUDE.md` untuk temuan-temuan ini SUDAH meleset seluruhnya saat berkas ini
+    ditulis - rasio memutar 1,82 melawan 1,78 yang terukur, jangkauan Manggarai
+    17 heksagon melawan 9, selisih kerapatan OSM "sepuluh kali" melawan 16, dan
+    ZoneGuard "2 heksagon dilarang" melawan 13. Semuanya bergeser saat grid
+    Harjamukti dibangun ulang, dan tidak satu pun memunculkan galat.
+
+    Kontraknya satu: **temuan yang bahannya tidak ada tidak diterbitkan.**
+    Tabel kosong menghasilkan daftar yang lebih pendek, bukan kalimat yang
+    mengarang. Itu sebabnya tiap blok di bawah memeriksa dulu barisnya ada.
+    """
+    temuan: list[dict[str, Any]] = []
+
+    # --- 1 · Jarak lurus berbohong -----------------------------------------
+    #
+    # `urutan = 0` adalah rute TERCEPAT, bukan yang pertama dikembalikan ORS -
+    # penomorannya sudah diurutkan ulang menurut durasi oleh `rute_ors --rapikan`.
+    r = db.execute(
+        text("""
+            WITH r AS (
+                SELECT hr.jarak_m,
+                       ST_Distance(ST_Centroid(hf.geom::geometry)::geography,
+                                   tn.geom::geography) AS lurus
+                FROM hex_routes hr
+                JOIN hex_features hf ON hf.h3_index = hr.h3_index
+                JOIN transport_nodes tn ON tn.id = hr.transport_node_id
+                WHERE hr.urutan = 0
+            ), s AS (SELECT jarak_m / NULLIF(lurus, 0) AS rasio FROM r)
+            SELECT count(*),
+                   avg(rasio),
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY rasio),
+                   max(rasio),
+                   count(*) FILTER (WHERE rasio < 1.2),
+                   count(*) FILTER (WHERE rasio >= 1.2 AND rasio < 1.5),
+                   count(*) FILTER (WHERE rasio >= 1.5 AND rasio < 2.0),
+                   count(*) FILTER (WHERE rasio >= 2.0),
+                   count(*) FILTER (WHERE rasio < 1.0)
+            FROM s
+        """)
+    ).one()
+    if r[0]:
+        n, rata, median, maks, b1, b2, b3, b4, lebih_pendek = r
+        temuan.append({
+            "kunci": "rute",
+            "dugaan": "Jarak lurus ke stasiun cukup untuk memperkirakan jalan kakinya.",
+            "judul": f"Rute jalan kaki rata-rata {_id(rata)}× lebih panjang daripada garis lurusnya",
+            "angka": f"{_id(rata)}×",
+            "satuan": "rata-rata rute memutar",
+            "uraian": (
+                f"{_id(n, 0)} rute tercepat dihitung openrouteservice dari pusat tiap heksagon "
+                f"ke simpul terdekatnya, lalu dibandingkan dengan jarak lurus ke titik yang sama. "
+                f"Median {_id(median)}×, dan yang terjauh memutar {_id(maks)}× — "
+                f"{_id(b4, 0)} heksagon harus berjalan dua kali lipat jarak lurusnya atau lebih. "
+                f"Tidak satu pun rute lebih pendek daripada garis lurusnya ({lebih_pendek} dari "
+                f"{_id(n, 0)}), dan itu invarian yang sengaja diuji: kalau ada, "
+                "lintang dan bujurnya tertukar."
+            ),
+            "akibat": (
+                "Garis lurus putus-putus dicabut dari peta. Yang tergambar sekarang jalur yang "
+                "benar-benar bisa dijalani, dan menit yang tertulis di panel dibaca dari jalur itu."
+            ),
+            "deret": [
+                _batang("di bawah 1,2×", b1),
+                _batang("1,2–1,5×", b2),
+                _batang("1,5–2×", b3),
+                _batang("2× ke atas", b4, tekan=True),
+            ],
+            "deretSatuan": "heksagon",
+            "desimal": 0,
+        })
+
+    # --- 2 · Kawasan jangkau yang dipotong jaringannya sendiri --------------
+    #
+    # Dihitung per SIMPUL, bukan per kawasan: yang memotongnya emplasemen rel,
+    # dan itu sifat stasiunnya. Luas dari geografi, jadi satuannya benar-benar
+    # km2 dan bukan derajat persegi.
+    baris = db.execute(
+        text("""
+            SELECT tn.nama, tn.moda,
+                   ST_Area(ca.geom::geography) / 1e6 AS km2,
+                   (SELECT count(*) FROM hex_features hf
+                     WHERE ST_Contains(ca.geom::geometry,
+                                       ST_Centroid(hf.geom::geometry))) AS n_hex
+            FROM catchment_areas ca
+            JOIN transport_nodes tn ON tn.id = ca.transport_node_id
+            WHERE ca.menit = 15
+            ORDER BY km2
+        """)
+    ).all()
+    if len(baris) >= 2:
+        sempit, luas = baris[0], baris[-1]
+        rasio = luas[2] / sempit[2] if sempit[2] else 0
+        temuan.append({
+            "kunci": "jangkau",
+            "dugaan": "Stasiun yang lebih sibuk menjangkau kawasan yang lebih luas.",
+            "judul": (
+                f"{sempit[0]} justru punya kawasan jangkau tersempit — "
+                f"{_id(rasio, 1)}× lebih kecil daripada {luas[0]}"
+            ),
+            "angka": f"{_id(sempit[2])} km²",
+            "satuan": f"jangkauan 15 menit {sempit[0]}",
+            "uraian": (
+                f"Kawasan jangkau ditarik dari openrouteservice sebagai isochrone berjalan kaki, "
+                f"lalu luasnya diukur di atas geografi bumi. Dalam 15 menit, {sempit[0]} hanya "
+                f"menjangkau {_id(sempit[3], 0)} dari {_id(n_hex, 0)} heksagon, sementara "
+                f"{luas[0]} menjangkau {_id(luas[3], 0)}. Bukan soal ukuran stasiunnya: "
+                "emplasemen rel yang lebar memotong jalan kaki ke segala arah, dan yang "
+                "tersisa cuma dua sisi peron."
+            ),
+            "akibat": (
+                "Kawasan jangkau digambar sebagai bentuk yang diukur, bukan sebagai lingkaran "
+                "berjari-jari sekian meter. Lingkaran akan menjanjikan pembeli dari arah "
+                "yang tidak ada jalannya."
+            ),
+            "deret": [
+                _batang(f"{n} · {m}", round(k, 2), tekan=n == sempit[0])
+                for n, m, k, _ in baris
+            ],
+            "deretSatuan": "km² dalam 15 menit",
+            "desimal": 2,
+        })
+
+    # --- 3 · Kerapatan pemetaan bukan kerapatan usaha -----------------------
+    #
+    # Temuan yang paling gampang salah dipakai, dan justru itu sebabnya ia ada
+    # di halaman ini: "tidak ada kompetitor" adalah kalimat yang paling menggoda
+    # untuk dibaca sebagai peluang.
+    baris = db.execute(
+        text("""
+            SELECT hf.kawasan,
+                   count(DISTINCT hf.h3_index) AS n_hex,
+                   count(bp.id)::numeric / count(DISTINCT hf.h3_index) AS per_hex,
+                   count(DISTINCT hf.h3_index)
+                     FILTER (WHERE hf.kepadatan_poi_total = 0) AS nol
+            FROM hex_features hf
+            LEFT JOIN business_pois bp
+              ON bp.h3_index = hf.h3_index AND bp.sumber = 'osm'
+            GROUP BY hf.kawasan
+            ORDER BY per_hex DESC
+        """)
+    ).all()
+    n_nol = sum(b[3] for b in baris)
+    if baris and baris[-1][2] and n_nol:
+        rapat, jarang = baris[0], baris[-1]
+        temuan.append({
+            "kunci": "pemetaan",
+            "dugaan": "Heksagon tanpa kompetitor terpetakan berarti pasar yang belum terlayani.",
+            "judul": (
+                f"OpenStreetMap memetakan {rapat[0]} {_id(rapat[2] / jarang[2], 0)}× lebih rapat "
+                f"daripada {jarang[0]}"
+            ),
+            "angka": f"{_id(n_nol, 0)}",
+            "satuan": f"dari {_id(n_hex, 0)} heksagon tanpa satu pun usaha terpetakan",
+            "uraian": (
+                f"{_id(rapat[2])} POI usaha per heksagon di {rapat[0]}, melawan "
+                f"{_id(jarang[2])} di {jarang[0]}. Sebagian selisih itu memang kenyataan — "
+                f"kawasan yang belum matang memang lebih sepi. Sebagian lagi kerapatan "
+                f"PEMETAANNYA, dan dari data saja keduanya tidak bisa dipisahkan. "
+                f"{_id(jarang[3], 0)} dari {_id(jarang[1], 0)} heksagon "
+                f"{jarang[0]} tercatat nol kompetitor."
+            ),
+            "akibat": (
+                "Insight “sepi pesaing” dijaga syarat kepadatan POI di atas nol. Lubang data "
+                "tidak pernah boleh disodorkan sebagai alasan memilih lokasi — itu persis "
+                "Hidden Gem palsu yang jadi alasan produk ini ada."
+            ),
+            "deret": [
+                _batang(b[0], round(float(b[2]), 2), tekan=b[0] == jarang[0])
+                for b in baris
+            ],
+            "deretSatuan": "POI usaha per heksagon",
+            "desimal": 2,
+        })
+
+    # --- 4 · ZoneGuard menolkan, dan diam kalau tidak tahu ------------------
+    r = db.execute(
+        text("""
+            SELECT count(*) FILTER (WHERE zona_izin_komersial IS TRUE),
+                   count(*) FILTER (WHERE zona_izin_komersial IS FALSE),
+                   count(*) FILTER (WHERE zona_izin_komersial IS NULL)
+            FROM hex_features
+        """)
+    ).one()
+    izin, larang, belum = r
+    if larang:
+        temuan.append({
+            "kunci": "zonasi",
+            "dugaan": "Peruntukan lahan bisa disimpulkan dari apa yang terlihat berdiri di sana.",
+            "judul": (
+                f"{_id(larang, 0)} heksagon berskor nol karena zonasinya — dan {_id(belum, 0)} "
+                "lainnya sengaja tidak dinilai sama sekali"
+            ),
+            "angka": f"{_id(larang, 0)}",
+            "satuan": "heksagon dinolkan zonasinya",
+            "uraian": (
+                "Zonasi RDTR ATR/BPN disampel per POLIGON heksagon dan ditimbang menurut luas "
+                "perpotongannya, bukan ditanyakan di satu titik tengah — satu heksagon Manggarai "
+                "memotong lima poligon di empat zona berbeda, dan titik tengahnya hanya menjawab "
+                f"salah satunya. Hasilnya {_id(izin, 0)} heksagon diizinkan, {_id(larang, 0)} "
+                f"dilarang, dan {_id(belum, 0)} belum punya RDTR digital sama sekali."
+            ),
+            "akibat": (
+                "Yang dilarang berskor nol berapa pun angka ekonominya, dan tidak pernah muncul "
+                "di daftar rekomendasi. Yang belum berzona dinyatakan “belum bisa dipastikan” — "
+                "diam yang jujur, bukan tebakan aman."
+            ),
+            "deret": [
+                _batang("Diizinkan", izin),
+                _batang("Dilarang", larang, tekan=True),
+                _batang("RDTR belum terbit", belum),
+            ],
+            "deretSatuan": "heksagon",
+            "desimal": 0,
+        })
+
+    return temuan
+
+
 def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
     """Tulis cakupan data hari ini sebagai modul TypeScript untuk halaman gerbang.
 
@@ -1630,6 +1883,12 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
                 " (SELECT count(*) FROM property_observations)"
             )
         ).one()
+
+        # Di dalam sesi yang sama - temuan menanyakan tabel yang berbeda, tetapi
+        # tidak boleh menanyakan basis data yang berbeda. Ringkasan dan temuan
+        # yang dibaca dari dua potret waktu bisa saling membantah di halaman
+        # yang sama, dan itu jenis salah yang tidak akan pernah terlihat.
+        temuan = hitung_temuan(db, n_hex)
 
     # Berapa titik misi yang DITARIK, bukan cuma yang mendarat di wilayah studi.
     # Dua angka yang berbeda dan dua-duanya perlu disebut: yang pertama
@@ -1723,6 +1982,33 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
         "  cakupan: number | null",
         "}",
         "",
+        "export interface DeretTemuan {",
+        "  label: string",
+        "  nilai: number",
+        "  /** Batang yang jadi pokok temuannya; diberi warna aksen, bukan netral. */",
+        "  tekan?: boolean",
+        "}",
+        "",
+        "export interface Temuan {",
+        "  /** Kunci stabil untuk React. Tidak pernah tampil di layar. */",
+        "  kunci: string",
+        "  /** Dugaan wajar yang dibantah pengukurannya. */",
+        "  dugaan: string",
+        "  /** Temuannya sebagai satu kalimat, angkanya sudah di dalam. */",
+        "  judul: string",
+        "  /** Angka yang dicetak besar, sudah berformat Indonesia. */",
+        "  angka: string",
+        "  satuan: string",
+        "  /** Bagaimana diukurnya, dan apa yang tidak bisa disimpulkan darinya. */",
+        "  uraian: string",
+        "  /** Yang berubah di produk karena temuan ini. */",
+        "  akibat: string",
+        "  deret: DeretTemuan[]",
+        "  deretSatuan: string",
+        "  /** Angka desimal saat deretnya dicetak. */",
+        "  desimal: number",
+        "}",
+        "",
         "/** Tanggal basis data dibaca. Dinyatakan apa adanya di halamannya. */",
         f"export const DIUKUR = {js(dt.date.today().isoformat())}",
         "",
@@ -1743,10 +2029,21 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
         *(f"  {js(b)}," for b in batasan),
         "]",
         "",
+        "/**",
+        " * Empat kali pengukuran membantah dugaan yang wajar. Seluruhnya — termasuk",
+        " * KALIMATNYA — dirangkai `s7_publish.hitung_temuan()` dari basis data.",
+        " *",
+        " * Temuan yang bahannya tidak ada tidak diterbitkan, jadi daftar ini boleh",
+        " * lebih pendek. Komponen yang membacanya wajib tahan terhadap daftar kosong.",
+        " */",
+        "export const TEMUAN: Temuan[] = [",
+        *(f"  {js(t)}," for t in temuan),
+        "]",
+        "",
     ]
     tujuan.parent.mkdir(parents=True, exist_ok=True)
     tujuan.write_text("\n".join(baris), encoding="utf-8")
-    return {**ringkasan, "sumber": len(sumber), "batasan": len(batasan)}
+    return {**ringkasan, "sumber": len(sumber), "batasan": len(batasan), "temuan": len(temuan)}
 
 
 def periksa_cakupan() -> pd.DataFrame:

@@ -62,6 +62,38 @@ const NAMA_ALAT: Record<string, string> = {
   filter: 'menyaring peta',
 }
 
+/**
+ * Nama produk yang berombak selama asisten menjawab.
+ *
+ * Menggantikan "Menganalisis…" dengan titik berdenyut. Bedanya bukan
+ * kemeriahan: titik berdenyut menyatakan SESUATU sedang berjalan, sementara
+ * yang sebenarnya ingin diketahui orang yang baru menekan kirim adalah bahwa
+ * pertanyaannya SAMPAI dan sedang dikerjakan - dan tidak ada yang menyatakan
+ * itu sebaik nama yang mengerjakannya.
+ *
+ * Hurufnya dipecah supaya tiap huruf bisa berangkat pada waktunya sendiri;
+ * itu yang membuat geraknya terbaca sebagai gelombang yang MENJALAR, bukan
+ * sebagai kata yang naik-turun serempak.
+ *
+ * `aria-label` memakai kalimat biasa, dan hurufnya disembunyikan dari pembaca
+ * layar: "L-o-c-o-n-o-m-i-c-s" dieja satu per satu bukan kabar yang berguna.
+ */
+function OmbakBerpikir() {
+  return (
+    <p
+      className="ai-ombak flex items-center text-[15px] font-semibold tracking-tight text-ink"
+      role="status"
+      aria-label="Konsultan sedang menganalisis"
+    >
+      {'Loconomics'.split('').map((h, i) => (
+        <span key={i} aria-hidden style={{ animationDelay: `${i * 85}ms` }}>
+          {h}
+        </span>
+      ))}
+    </p>
+  )
+}
+
 const CONTOH = [
   'Lokasi kopi di bawah 3 juta per bulan dekat Manggarai',
   'Kenapa skor heksagon ini segitu?',
@@ -306,12 +338,7 @@ export default function PanelAI({
           </div>
         ))}
 
-        {memuat && (
-          <p className="flex items-center gap-1.5 text-[14px] text-ink-3" aria-live="polite">
-            <span className="h-1 w-1 animate-pulse rounded-full bg-ink-3" aria-hidden />
-            Menganalisis…
-          </p>
-        )}
+        {memuat && <OmbakBerpikir />}
         <div ref={akhir} />
       </div>
       )}
@@ -324,7 +351,11 @@ export default function PanelAI({
         }}
         className="shrink-0 border-t border-line p-2.5"
       >
-        <div className="flex gap-1.5">
+        {/* Kaca cair. `data-berpikir` yang menyalakan cincin warnanya - satu
+            atribut, dan seluruh animasinya hidup di CSS. Tidak ada satu pun
+            nilai animasi yang ditulis dari JavaScript per bingkai. */}
+        <div className="ai-kaca flex items-center gap-1.5 rounded-full p-1.5" data-berpikir={memuat}>
+          <span className="ai-cincin" aria-hidden />
           <label className="sr-only" htmlFor="tanya-ai">
             Pertanyaan untuk konsultan AI
           </label>
@@ -336,14 +367,34 @@ export default function PanelAI({
             placeholder={
               hexTerpilih ? 'Tanya soal heksagon terpilih…' : 'Tanya soal lokasi…'
             }
-            className="min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[14.5px] outline-none transition-colors placeholder:text-ink-3 focus:border-ink-3 focus:bg-surface disabled:opacity-45"
+            className="min-w-0 flex-1 bg-transparent px-3 py-1.5 text-[14.5px] outline-none disabled:opacity-45"
           />
+          {/* Ikon saja, tanpa kata "Kirim".
+
+              Panah ke atas adalah kosakata yang sudah dipakai setiap kotak
+              tanya yang pernah dipakai pembacanya, jadi ia tidak menuntut
+              dibaca. Yang didapat bukan cuma ruang: tombol bundar seukuran
+              jempol jauh lebih gampang ditekan di ponsel daripada pil teks
+              setinggi 34px.
+
+              `aria-label` menggantikan katanya untuk pembaca layar - ikon
+              tanpa nama adalah tombol tanpa nama. */}
           <button
             type="submit"
             disabled={memuat || mati || !input.trim()}
-            className="cursor-pointer rounded-sm bg-ink px-3 py-2 text-[14px] font-semibold text-surface transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Kirim pertanyaan"
+            className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full bg-white text-[#101a16] transition-all duration-300 ease-jelly hover:scale-[1.07] disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:scale-100 ai-kirim"
           >
-            Kirim
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M8 13V3.4M3.8 7.6 8 3.4l4.2 4.2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </div>
       </form>

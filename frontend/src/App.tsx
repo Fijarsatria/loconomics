@@ -46,13 +46,19 @@ import {
   SEMUA_KAWASAN,
   LAYER,
   frasaKawasan,
+  frasaPrestise,
   kodeLokasi,
   nomorLokasi,
   type NamaGaya,
   type NamaLayer,
 } from './config'
 import { api } from './lib/api'
-import type { DiagramKuadran, Kuadran as NamaKuadran, SimpulTransit } from './types'
+import type {
+  DiagramKuadran,
+  Kuadran as NamaKuadran,
+  ProfilRute,
+  SimpulTransit,
+} from './types'
 import DaftarLokasi from './components/DaftarLokasi'
 import KompasKuadran from './components/KompasKuadran'
 import Legenda from './components/Legenda'
@@ -99,7 +105,7 @@ import { Glif, Menu, MenuPengaturan, PapanNama, PilihBasemap } from './component
  *
  * `risk_radar` dikeluarkan 22 Agustus 2026: sejak ia diwarnai oleh indeks churn,
  * Kompas di sampingnya menerangkan warna yang sudah tidak ada di layar. Itu
- * persis keluhan "RiskRadar kelihatan sama saja dengan Skor Peluang" - keduanya
+ * persis keluhan "RiskRadar kelihatan sama saja dengan Opportunity Score" - keduanya
  * memang menampilkan legenda yang sama.
  *
  * `hidden_gem` tetap di sini: gradasinya berjalan dari warna lembut ke warna
@@ -495,105 +501,6 @@ function BarKomparasi({
   )
 }
 
-/**
- * Pita "data demo" di bilah atas.
- *
- * Dipasang kalau sebagian besar heksagon belum punya survei lapangan. Backend
- * yang menurunkannya dari hitungan baris — lihat `/meta/siap::data_sintetis`.
- *
- * TEKSNYA ikut diturunkan dari angka, dan itu perbaikan 29 Agu 2026. Versi
- * pertama sudah benar soal pemicunya tetapi menulis labelnya dengan tangan:
- * "Data demo — belum ada survei lapangan". Begitu 18 variabel sintetis
- * dikosongkan dan 27 titik misi termuat, KEDUA bagian kalimat itu jadi salah
- * sekaligus — datanya bukan demo lagi, dan survei lapangannya bukan nol. Ia
- * memperingatkan hal yang benar dengan kalimat yang keliru, dan itu justru
- * meremehkan datanya sendiri di depan juri.
- *
- * Sekarang ia menyebut angkanya: berapa heksagon yang benar-benar disurvei.
- *
- * Tidak bisa ditutup. Peringatan yang bisa disingkirkan pembacanya berhenti
- * jadi peringatan, dan yang membacanya di sini adalah juri.
- */
-function PitaDemo() {
-  const [catatan, setCatatan] = useState<string | null>(null)
-  const [cakupan, setCakupan] = useState<{ disurvei: number; total: number } | null>(null)
-  useEffect(() => {
-    let batal = false
-    api
-      .kesiapan()
-      .then((k) => {
-        if (batal || !k.data_sintetis) return
-        setCatatan(k.catatan_data)
-        const total = k.basis_data.heksagon
-        const belum = k.basis_data.heksagon_predicted
-        if (total && belum !== undefined) setCakupan({ disurvei: total - belum, total })
-      })
-      // Gagal memeriksa BUKAN alasan memasang pitanya. Kalau backend tidak
-      // menjawab, kita tidak tahu isinya apa - dan menuduh tanpa tahu sama
-      // tidak jujurnya dengan diam tanpa tahu.
-      .catch(() => {})
-    return () => {
-      batal = true
-    }
-  }, [])
-
-  if (!catatan) return null
-  return (
-    /* Chip KETERANGAN, bukan peringatan - dan itu koreksi, bukan pelunakan.
-
-       Sebelumnya ia memakai warna Jebakan Gengsi dengan segitiga seru, jadi
-       satu-satunya hal yang permanen di bilah atas produk ini adalah sebuah
-       ALARM. Yang dinyatakannya justru sebagian besar kabar baik: 708 dari 708
-       heksagon punya data terukur - POI OSM 708/708, skor simpul 708/708,
-       waktu jalan 703/708, penduduk 707/708 - dan yang tipis cuma satu sumber
-       di antara lima.
-
-       Segitiga seru dipakai untuk sesuatu yang perlu DITINDAKLANJUTI pembaca.
-       Cakupan survei bukan itu; ia asal-usul data, sekeluarga dengan badge
-       keyakinan - dan badge keyakinan sengaja TIDAK memakai merah-kuning-hijau
-       untuk alasan yang sama persis. Isinya tidak berubah sedikit pun. */
-    <span
-      title={catatan}
-      role="status"
-      className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-ink-2"
-    >
-      <svg width="11" height="11" viewBox="0 0 20 20" aria-hidden className="shrink-0">
-        <ellipse cx="10" cy="5" rx="6.5" ry="2.6" fill="none" stroke="currentColor" strokeWidth="1.7" />
-        <path
-          d="M3.5 5v10c0 1.4 2.9 2.6 6.5 2.6s6.5-1.2 6.5-2.6V5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-        />
-        <path d="M3.5 10c0 1.4 2.9 2.6 6.5 2.6s6.5-1.2 6.5-2.6" fill="none" stroke="currentColor" strokeWidth="1.7" />
-      </svg>
-      {/* Kalimatnya menyebut DUA angka, dan itu perbaikan atas versi sebelumnya
-          yang cuma menyebut satu.
-
-          "Survei lapangan baru 25 dari 708 heksagon" benar secara harfiah dan
-          menyesatkan secara praktis: ia terbaca sebagai "cuma 25 heksagon yang
-          punya data", padahal KETUJUH RATUS DELAPAN punya. POI OpenStreetMap
-          708/708, skor simpul 708/708, waktu jalan kaki 703/708, penduduk
-          707/708 - dan setiap heksagon punya skor. Yang tipis cuma variabel
-          yang memang menuntut orang berdiri di lokasinya.
-
-          Pemilik repo sendiri salah membacanya, dan itu bukti yang cukup.
-          Aturan umumnya sama dengan yang sudah tercatat untuk pemicunya:
-          kalimat yang menemani sebuah angka harus menyebut cukup banyak angka
-          untuk tidak bisa disalahartikan. */}
-      <span className="hidden md:inline">
-        {cakupan
-          ? `${cakupan.total} heksagon terukur · ${cakupan.disurvei} disurvei langsung`
-          : 'Survei lapangan belum merata'}
-      </span>
-      <span className="md:hidden">
-        {cakupan ? `Disurvei ${cakupan.disurvei}/${cakupan.total}` : 'Survei tipis'}
-      </span>
-    </span>
-  )
-}
-
 export default function App() {
   /**
    * Kawasan yang sedang disaring. SEMUA_KAWASAN ('') = tidak disaring.
@@ -694,8 +601,56 @@ export default function App() {
   /** Heksagon pembanding di simulasi, dipilih dengan mengklik peta. */
   const [hexBanding, setHexBanding] = useState<string | null>(null)
 
-  const { premium, akun, terbuka, mintaLangganan, mintaMasuk, mintaPreferensi, sinyalSimpan } =
-    useSesi()
+  /**
+   * Profil rute yang sedang digambar: jalan kaki atau mobil.
+   *
+   * Tinggal di App, bukan di panel maupun di peta, karena KEDUANYA memakainya:
+   * panel memilih dan menyebut angkanya, peta menggambar garisnya. Dua salinan
+   * dari nilai yang sama adalah dua salinan yang suatu saat berselisih - dan
+   * yang terlihat waktu itu garis mobil dengan keterangan jalan kaki.
+   */
+  const [profilRute, setProfilRute] = useState<ProfilRute>('foot-walking')
+
+  const {
+    premium,
+    akun,
+    terbuka,
+    mintaLangganan,
+    mintaMasuk,
+    mintaPreferensi,
+    sinyalSimpan,
+    catatSimpan,
+  } = useSesi()
+
+  /**
+   * Simpan lokasi lewat klik dua kali di peta.
+   *
+   * Penjaganya SAMA PERSIS dengan tombol "Simpan lokasi" di panel detail -
+   * belum masuk diminta masuk, sudah masuk tapi belum berlangganan diminta
+   * berlangganan. Disalin sengaja alih-alih dilonggarkan: kalau jalan pintas
+   * ini punya syarat yang lebih longgar, "menyimpan lokasi butuh langganan"
+   * berhenti benar, dan yang membuktikannya bukan uji melainkan pengguna.
+   *
+   * `catatSimpan()` yang membuat pinnya langsung muncul. Tanpa itu, pin baru
+   * datang setelah muat ulang - dan pin yang menunggu muat ulang bukan fitur.
+   */
+  const simpanCepat = useCallback(
+    async (h3: string) => {
+      if (!akun) return mintaMasuk('Buat akun dulu untuk menyimpan lokasi.')
+      if (!premium)
+        return mintaLangganan('Menyimpan dan memantau lokasi bagian dari Loconomics Premium.')
+      try {
+        await api.pantau(h3)
+        catatSimpan()
+      } catch {
+        // Diam di sini disengaja. Klik dua kali di peta tidak punya tempat
+        // menampilkan galat, dan satu-satunya sebab yang wajar - lokasinya
+        // sudah tersimpan - bukan kabar yang perlu disampaikan sebagai galat.
+        // Panel detail tetap melaporkan sebabnya kalau ditekan dari sana.
+      }
+    },
+    [akun, premium, mintaMasuk, mintaLangganan, catatSimpan],
+  )
   /**
    * Baki komparasi: heksagon yang dikumpulkan untuk dibandingkan berdampingan.
    *
@@ -1109,6 +1064,19 @@ export default function App() {
   const pakaiKompas = LAYER_KUADRAN.includes(layer)
 
   /**
+   * Sumbu datar diagram ini berdiri di atas bahan apa.
+   *
+   * Ikut TERSARING KAWASAN, karena backend menghitungnya dari titik yang
+   * dikembalikan - keterangan sumbu harus menerangkan diagram yang sedang
+   * dilihat orangnya, bukan basis data seluruhnya. Larik kosong = kelima
+   * bahannya terukur dan tidak ada yang perlu dinyatakan.
+   */
+  const frasaSumbuX = useMemo(
+    () => frasaPrestise(diagram?.cakupan_prestise, 'wilayah'),
+    [diagram],
+  )
+
+  /**
    * Skor ringkas untuk bar komparasi, diambil dari titik kuadran yang SUDAH
    * dimuat. Tidak ada permintaan tambahan: bar cuma perlu angka dan kuadran,
    * dan keduanya sudah ada di tangan sejak Kompas dimuat.
@@ -1189,6 +1157,8 @@ export default function App() {
             saringKuadran={saringKuadran}
             dibandingkan={baki}
             onPilihHeksagon={pilihHeksagon}
+            onSimpanCepat={simpanCepat}
+            profilRute={profilRute}
             onMuat={catatMuat}
             // Gelombang heksagon menunggu GERBANG juga, bukan cuma layar
             // pembuka. Kalau tidak, ia habis diputar di balik halaman
@@ -1240,7 +1210,6 @@ export default function App() {
             <div className="flex shrink-0 items-baseline gap-2.5">
               <PapanNama teks="Loconomics" />
             </div>
-            <PitaDemo />
 
             <Cari
               simpul={simpul}
@@ -1703,6 +1672,8 @@ export default function App() {
                           <div className="min-h-0 flex-1 overflow-hidden">
                             <PanelInsight
                               h3={hexTerpilih}
+                              profilRute={profilRute}
+                              onGantiProfil={setProfilRute}
                               posisi={posisi}
                               batas={
                                 diagram ? { x: diagram.batas_x, y: diagram.batas_y } : undefined
@@ -1850,7 +1821,7 @@ export default function App() {
                     <h3 className="eyebrow mb-2">Cara membacanya</h3>
                     <p className="text-[13px] leading-relaxed text-ink-2">
                       Kuadran <strong className="font-semibold text-ink">tidak</strong> ditentukan
-                      oleh skor peluang saja. Sumbu tegak skor peluang, sumbu datar prestise
+                      oleh Opportunity Score saja. Sumbu tegak Opportunity Score, sumbu datar prestise
                       visual, dan batas keduanya adalah <strong className="font-semibold text-ink">median</strong>{' '}
                       seluruh heksagon — bukan angka bulat.
                     </p>
@@ -1858,6 +1829,23 @@ export default function App() {
                       Karena itu skor 58 bisa jatuh di Hidden Gem sementara 50 jatuh di Aman tapi
                       Mahal: keduanya di atas median, dan yang membedakan prestise visualnya.
                     </p>
+                    {/* Sumbu datar itu SETENGAH tesis produk ini, dan sampai hari
+                        ini dua dari lima bahannya kosong — termasuk keduanya yang
+                        menilai tampilan secara langsung. Panel ini satu-satunya
+                        tempat sumbu itu DIJELASKAN, jadi ia tempat yang benar
+                        untuk menyatakannya; label sumbu di kompas tidak punya
+                        ruang, dan menempelkan keterangan di sana akan mengubah
+                        legenda jadi paragraf. */}
+                    {frasaSumbuX.length > 0 && (
+                      <div className="mt-3 space-y-1.5 border-t border-line/60 pt-2.5">
+                        <p className="eyebrow">Sumbu datar berdiri di atas apa</p>
+                        {frasaSumbuX.map((k) => (
+                          <p key={k} className="text-[12.5px] leading-snug text-ink-3">
+                            {k}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <p className="mt-3.5 text-[12.5px] leading-snug text-ink-3">
                     {diagram

@@ -25,7 +25,7 @@ export interface KartuGerbang {
 }
 
 /** Tanggal potret terakhir, dinyatakan apa adanya di halamannya. */
-export const DIPOTRET = '2026-08-29'
+export const DIPOTRET = '2026-09-03'
 
 export const KARTU_GERBANG: KartuGerbang[] = [
   {
@@ -46,7 +46,7 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     },
     "sorotan": {
       "nilai": "55",
-      "label": "skor peluang median"
+      "label": "opportunity score median"
     }
   },
   {
@@ -81,8 +81,8 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 97,
     "kuadran": {
-      "HIDDEN_GEM": 23,
       "JEBAKAN_GENGSI": 9,
+      "HIDDEN_GEM": 23,
       "PEMENANG_JELAS": 65
     },
     "sorotan": {
@@ -150,7 +150,7 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     },
     "sorotan": {
       "nilai": "37",
-      "label": "skor peluang median"
+      "label": "opportunity score median"
     }
   }
 ]

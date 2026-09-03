@@ -158,9 +158,9 @@ kadang potongan connection string. Setiap galat sekarang keluar sebagai
 untuk manusia. Pesan galat tak terduga TIDAK pernah diteruskan apa adanya;
 yang keluar hanya `request_id`, isinya lengkap ada di log server.
 
-**Cache dalam proses** (`core/cache.py`). Bukan Redis: Render free tier hanya
-memberi satu proses tanpa layanan tambahan, dan menambah Redis berarti menambah
-satu lagi hal yang bisa mati saat demo. Yang di-cache hanya bacaan mahal yang
+**Cache dalam proses** (`core/cache.py`). Bukan Redis: terbitannya satu proses
+tanpa layanan tambahan - benar di Azure App Service maupun di Render - dan
+menambah Redis berarti menambah satu lagi hal yang bisa mati saat demo. Yang di-cache hanya bacaan mahal yang
 jarang berubah — persentil kawasan dan layer GeoJSON. Setelah pipeline memuat
 data baru, panggil `POST /meta/cache/bersihkan`.
 
@@ -269,39 +269,76 @@ Berkas konfigurasinya sudah ada di repo, jadi ini bukan lagi rencana:
 
 | Bagian | Layanan | Berkas | Catatan |
 |---|---|---|---|
-| Frontend | Cloudflare Pages | `frontend/public/_headers`, `_redirects` | Build `npm run build`, keluaran `dist/` |
-| Backend | Render | `render.yaml` | Free tier **tidur setelah 15 menit** |
+| Frontend | GitHub Pages | `.github/workflows/pages.yml` | Build `npm run build`, keluaran `dist/` |
+| Backend | Azure App Service | `.github/workflows/backend-azure.yml` | Kredit Azure for Students, **tidak tidur** |
 | Basis data | Supabase | — | Connection string mode *Transaction pooler* |
 | Subdomain | Disediakan panitia MAPID | — | Alurnya di berkas briefing Technical Meeting |
 
-`render.yaml` adalah Blueprint: Render Dashboard → New → Blueprint → pilih repo.
-Seluruh rahasia ditandai `sync: false`, artinya Render menanyakannya di dashboard
-dan tidak satu pun nilainya ada di repo.
+Backend terbit lewat GitHub Actions. Alurnya menguji dulu (`test_infra` +
+`test_ai_loop`, keduanya sengaja lolos tanpa `.env`), menerbitkan, lalu
+**memeriksa terbitan yang baru naik DARI LUAR**: `/health`, header CORS untuk
+asal frontend yang sebenarnya, dan satu tiket karangan `Bearer a.b.c` ke
+`/akun/saya` yang harus dijawab 401 - 500 di situ berarti `AUTH_SECRET` belum
+disetel. Daftar Application settings yang harus diisi ada di kepala berkas
+alurnya, dan satu uji di `test_infra.py` memaksa setiap field `Settings`
+DISEBUT di sana - sebagai isian, atau sebagai pengecualian berikut alasannya.
+
+**Kenapa bukan Render.** `render.yaml` ditulis lebih dulu dan masih ada, sudah
+dibetulkan dan dijaga sembilan asersi. Yang menggugurkannya bukan harga - plan
+`free`-nya memang gratis - melainkan kartu: Render meminta kartu, Azure for
+Students memberi $100/12 bulan tanpa kartu. Free tier Render juga tidur 15
+menit dan cuma 0,1 CPU. Ia dipertahankan sebagai CADANGAN: kalau Azure
+bermasalah menjelang penjurian, Blueprint-nya tinggal dipakai.
 
 **Yang wajib disetel ulang begitu subdomain MAPID keluar:** `CORS_ORIGINS` di
-dashboard Render. CORS yang salah membuat SELURUH panggilan data gagal dari
+Application settings. CORS yang salah membuat SELURUH panggilan data gagal dari
 peramban sementara `curl` tetap berhasil — jenis kegagalan yang paling lama
 dikejar karena gejalanya menunjuk ke tempat yang salah.
 
-### Mitigasi free tier
+### Ketahanan saat backend belum siap
 
-Backend Render tidur dan butuh puluhan detik untuk bangun. Kalau juri membuka
-tautan lebih dulu, halaman bisa terlihat rusak. Tiga sudah terpasang, satu masih
-manual:
+Dulu berjudul "mitigasi free tier" dan seluruhnya soal Render yang tidur.
+Azure tidak tidur, tetapi tidak satu pun butir di bawah dicabut - dan itu
+disengaja. Yang dijaga bukan cold start melainkan pertanyaan yang lebih umum:
+**apa yang terlihat kalau backend belum menjawab?** Sebabnya bisa deploy yang
+sedang berjalan, jaringan juri, kuota Azure habis, atau Render kalau cadangan
+itu yang jadi dipakai.
 
-1. **Gaya basemap disajikan statis dari Cloudflare** — `frontend/public/basemap/`,
+1. **Gaya basemap disajikan statis dari GitHub Pages** — `frontend/public/basemap/`,
    empat berkas, 224 KB. Peta tergambar lengkap dengan jalan dan nama tempat
-   walaupun backend masih bangun. Dibangkitkan `scripts/gaya-basemap.mjs`.
+   walaupun backend belum menjawab. Dibangkitkan `scripts/gaya-basemap.mjs`.
 2. **Heksagon tidak menunggu ubin basemap.** Penanda siap peta dipicu
    `styledata`, bukan hanya `load`. Terukur: dengan basemap diblokir penuh
    (MAPID sedang membatasi laju), 28 dari 29 asersi audit tetap lolos.
-3. **`/health` tidak menyentuh basis data.** Render memanggilnya tiap beberapa
-   detik; kalau ia membuka koneksi, Supabase free tier habis sendiri.
+3. **`/health` tidak menyentuh basis data.** Health check platform memanggilnya
+   tiap beberapa detik; kalau ia membuka koneksi, Supabase free tier habis
+   sendiri.
 4. **Layer heksagon sebagai GeoJSON statis — BELUM.** `s7_publish.py --ekspor`
-   sudah membangkitkan berkasnya; menyajikannya dari Cloudflare belum dikerjakan.
+   sudah membangkitkan berkasnya; menyajikannya dari GitHub Pages belum
+   dikerjakan.
 
-Sisanya manual: **panggil backend beberapa menit sebelum demo** supaya sudah
-bangun, dan **jangan kosongkan cache AI** — lihat `pipeline/README.md`.
+Satu lagi yang tetap manual apa pun platformnya: **jangan kosongkan cache AI**
+menjelang demo — lihat `pipeline/README.md`.
+
+### `_headers` dan `_redirects` TIDAK berlaku di GitHub Pages
+
+Keduanya format **Cloudflare Pages**, dan Cloudflare tidak pernah jadi dipakai.
+GitHub Pages mengabaikan kedua berkas itu sepenuhnya. Diukur di terbitan yang
+sedang hidup, 2 Sep 2026:
+
+- respons `fijarsatria.github.io/loconomics/` **tidak memuat satu pun** dari
+  empat header yang dijanjikan `_headers` — `X-Content-Type-Options`,
+  `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`
+- jalur dalam yang tidak ada dijawab **404**, jadi aturan SPA di `_redirects`
+  juga tidak pernah dibaca
+
+Yang hilang cuma keempat header itu. Aturan SPA-nya memang tidak dibutuhkan:
+aplikasi ini tidak memakai router sama sekali (nol `react-router`, nol
+`pushState`), jadi tidak ada jalur dalam yang perlu dikembalikan ke
+`index.html`. Kalau keempat header itu diinginkan, GitHub Pages tidak bisa
+memasangnya — jalurnya `<meta http-equiv>` untuk sebagian, atau CDN di
+depannya. Belum diputuskan; yang penting berkasnya berhenti terbaca seolah
+sudah bekerja.
 
 ### Proksi gaya basemap
 

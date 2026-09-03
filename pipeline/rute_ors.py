@@ -64,7 +64,22 @@ from app.core.database import SessionLocal  # noqa: E402
 from app.models import CatchmentArea, HexRoute  # noqa: E402
 
 URL_ORS = "https://api.openrouteservice.org/v2/directions/{profil}/geojson"
-PROFIL = "foot-walking"
+
+#: Profil yang boleh ditarik, beserta batas kewajaran jaraknya masing-masing.
+#:
+#: MOTOR TIDAK ADA, dan itu bukan kelalaian: OpenRouteService tidak menyediakan
+#: profil sepeda motor. Menyodorkan `driving-car` sebagai "kira-kira motor"
+#: akan salah ke arah yang paling merugikan - motor melewati gang yang mobil
+#: tidak bisa, jadi rute mobil MELEBIH-LEBIHKAN jaraknya. Lebih baik tidak ada
+#: daripada ada dan menyesatkan.
+PROFIL_JALAN = "foot-walking"
+PROFIL_MOBIL = "driving-car"
+
+#: Profil yang SEDANG ditarik. Disetel sekali di `main()` dari benderanya.
+#: Modul-level supaya `minta_rute` dan `simpan` tidak perlu meneruskannya
+#: lewat lima lapis pemanggilan yang tidak memakainya untuk apa pun selain
+#: meneruskan.
+PROFIL = PROFIL_JALAN
 
 #: Batas ORS 40/menit. 1,7 dtk memberi ~35/menit - cukup di bawah batas supaya
 #: satu permintaan yang kebetulan lambat tidak mendorong yang berikutnya lewat.
@@ -324,13 +339,22 @@ def ambil_target(db, kawasan: str | None, ulang: bool, batas: int | None) -> lis
             ORDER BY n.geom <-> ST_Centroid(h.geom)
             LIMIT 1
         ) s
-        LEFT JOIN (SELECT DISTINCT h3_index FROM hex_routes) r ON r.h3_index = h.h3_index
+        -- Disaring per PROFIL. Tanpa `WHERE profil = :profil` di sini,
+        -- penarikan mobil akan melewati seluruh 708 heksagon dengan alasan
+        -- "sudah ada rutenya" - padahal yang ada rute jalan kakinya. Nol
+        -- permintaan terkirim, nol baris bertambah, dan skripnya melaporkan
+        -- sukses. Gagal diam, dan gejalanya cuma tabel yang tidak tumbuh.
+        LEFT JOIN (
+            SELECT DISTINCT h3_index FROM hex_routes WHERE profil = :profil
+        ) r ON r.h3_index = h.h3_index
         WHERE TRUE {saring_kawasan} {saring_ulang}
         ORDER BY h.kawasan, h.h3_index
     """
     if batas:
         sql += f" LIMIT {int(batas)}"
-    p = {"kawasan": kawasan} if kawasan else {}
+    p: dict[str, str] = {"profil": PROFIL}
+    if kawasan:
+        p["kawasan"] = kawasan
     return [dict(r) for r in db.execute(text(sql), p).mappings()]
 
 
@@ -578,6 +602,14 @@ def status(db) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Rute jalan kaki heksagon -> simpul, lewat ORS.")
+    ap.add_argument(
+        "--mobil",
+        action="store_true",
+        help=(
+            "tarik profil driving-car, bukan foot-walking. Rute mobil DITAMBAHKAN "
+            "di sebelah rute jalan kaki, tidak menggantikannya. Motor tidak ada di ORS."
+        ),
+    )
     ap.add_argument("--kawasan", help="batasi ke satu kawasan pilot")
     ap.add_argument("--ulang", action="store_true", help="hitung ulang yang sudah ada")
     ap.add_argument("--batas", type=int, help="maksimal berapa heksagon")
@@ -596,6 +628,10 @@ def main() -> int:
         ),
     )
     a = ap.parse_args()
+
+    global PROFIL
+    if a.mobil:
+        PROFIL = PROFIL_MOBIL
 
     db = SessionLocal()
     try:
@@ -625,7 +661,10 @@ def main() -> int:
             return 0
 
         n = len(target)
-        print(f"\n  {n} heksagon, ~{n * JEDA_DETIK / 60:.0f} menit dengan jeda {JEDA_DETIK} dtk\n")
+        print(
+            f"\n  profil {PROFIL} - {n} heksagon, "
+            f"~{n * JEDA_DETIK / 60:.0f} menit dengan jeda {JEDA_DETIK} dtk\n"
+        )
         ok = gagal = jauh = 0
         n_rute = 0
         gagal_contoh: list[str] = []

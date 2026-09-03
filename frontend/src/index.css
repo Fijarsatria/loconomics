@@ -1340,8 +1340,15 @@ input:focus-visible {
    ditulis cuma `y`, dan `will-change` dibiarkan MATI: delapan lapisan komposit
    permanen untuk hiasan yang cuma bergerak saat digulir adalah harga yang tidak
    sepadan, dan itu jebakan yang sudah tercatat di CLAUDE.md. */
+/* `will-change` memberi motif ini lapisan compositor sendiri.
+
+   Tanpa itu, tiap penulisan transform per bingkai gulir menyuruh perender
+   melukis ulang SVG-nya di lapisan bersama halaman. Yang paling menderita
+   bagian kuadran: di sana isinya diam (sticky), jadi motif ini satu-satunya
+   yang bergerak dan tiap bingkai yang jatuh terbaca sebagai getaran. */
 .g-motif {
   opacity: 0.85;
+  will-change: transform;
 }
 
 /* --- Lensa kursor di hero -------------------------------------------------
@@ -1479,6 +1486,232 @@ input:focus-visible {
 .g-gelap {
   background:
     radial-gradient(120% 90% at 50% 0%, #0a1f1b 0%, #04100e 55%, #010806 100%);
+}
+
+/* Baris tabel sumber. Sorotan tipis saja: tabel ini dibaca menyamping (nama ->
+   lisensi -> variabel -> cakupan), dan tanpa penanda baris mata gampang
+   melompat satu baris di kolom terakhir. */
+.g-baris-sumber:hover {
+  background: color-mix(in oklab, var(--g-ink) 3.5%, transparent);
+}
+
+/* ==========================================================================
+   Konsultan AI — kaca cair
+
+   Bahannya SENGAJA berlawanan dengan chrome di sekitarnya: gelap saat aplikasi
+   terang, terang saat aplikasi gelap. Alasannya bukan gaya. Kotak tanya ini
+   satu-satunya tempat di layar tempat orang MENULIS, dan ia duduk di dalam
+   panel yang seluruhnya berisi angka yang dibaca. Permukaan yang berlawanan
+   membuatnya berhenti terbaca sebagai satu baris lagi di daftar.
+
+   `backdrop-filter` dipakai apa adanya, tanpa lapisan blur tiruan: yang di
+   belakangnya peta yang bergerak, dan menirunya dengan gradien statis akan
+   ketahuan begitu petanya digeser.
+   ========================================================================== */
+.ai-kaca {
+  position: relative;
+  isolation: isolate;
+  background: rgb(16 26 22 / 0.9);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    0 12px 30px -14px rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  transition:
+    background 400ms var(--ease-liquid),
+    border-color 400ms var(--ease-liquid);
+}
+
+/* Dibalik di mode gelap. Kaca gelap di atas chrome gelap hilang sama sekali -
+   pelajaran yang sama persis dengan kaca yang dulu cuma digelapkan bahannya
+   tanpa menukar tokennya. */
+.peta-gelap .ai-kaca {
+  background: rgb(244 247 245 / 0.92);
+  border-color: rgb(0 0 0 / 0.1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 12px 30px -16px rgb(0 0 0 / 0.35);
+}
+
+.ai-kaca input {
+  color: #eef5f1;
+}
+.ai-kaca input::placeholder {
+  color: rgb(238 245 241 / 0.42);
+}
+.peta-gelap .ai-kaca input {
+  color: #16211c;
+}
+.peta-gelap .ai-kaca input::placeholder {
+  color: rgb(22 33 28 / 0.4);
+}
+
+/* Cincin warna yang berputar di balik kacanya, hanya SELAMA menjawab.
+
+   Dibuat dari elemen yang benar-benar diputar, bukan dari `@property` +
+   conic-gradient bersudut animasi: yang kedua lebih ringkas dan tidak dijamin
+   ada di setiap peramban yang dipakai juri. Yang ini tinggal transform, dan
+   transform tidak pernah tidak didukung.
+
+   `filter: blur()` yang membuatnya terbaca sebagai CAHAYA, bukan sebagai roda
+   berwarna - dan itu bedanya dengan cincin gradien biasa. */
+.ai-cincin {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  overflow: hidden;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 520ms var(--ease-liquid);
+}
+
+.ai-kaca[data-berpikir='true'] .ai-cincin {
+  opacity: 1;
+}
+
+.ai-cincin::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background: conic-gradient(
+    from 0deg,
+    #4c93f7,
+    #6dd5c4,
+    #a78bfa,
+    #f0a94a,
+    #4c93f7
+  );
+  filter: blur(14px);
+  animation: ai-putar 3.6s linear infinite;
+}
+
+@keyframes ai-putar {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Tombol kirim ikut dibalik bersama kacanya. Ditulis di CSS, BUKAN sebagai
+   varian Tailwind `peta-gelap:` - varian itu tidak ada, dan kelas yang tidak
+   dikenal Tailwind tidak menghasilkan galat apa pun: ia cuma tidak pernah
+   muncul di CSS. Gagalnya diam, dan yang terlihat tombol putih di atas kaca
+   putih. */
+.peta-gelap .ai-kirim {
+  background: #16211c;
+  color: #f4f7f5;
+}
+
+/* --- Wordmark yang berombak selama berpikir -------------------------------
+   Menggantikan "Menganalisis…". Titik tiga yang berdenyut menyatakan SESUATU
+   sedang berjalan; nama produknya yang berombak menyatakan SIAPA yang sedang
+   mengerjakannya - dan panel ini satu-satunya tempat di aplikasi tempat
+   jawabannya dirangkai, bukan dibaca dari tabel. */
+.ai-ombak span {
+  display: inline-block;
+  animation: ai-ombak 1.55s var(--ease-liquid) infinite;
+}
+
+@keyframes ai-ombak {
+  0%,
+  62%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.42;
+  }
+  31% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-cincin::before,
+  .ai-ombak span {
+    animation: none;
+  }
+  .ai-ombak span {
+    opacity: 0.75;
+  }
+}
+
+/* --- Baris temuan di halaman gerbang -------------------------------------
+   Disorot maupun difokus keyboard memberi hasil yang SAMA. Dipisah, yang
+   memakai keyboard mendapat versi yang lebih miskin tanpa alasan. */
+.g-baris-temuan:hover,
+.g-baris-temuan:focus-visible {
+  background: color-mix(in oklab, var(--g-ink) 4.5%, transparent);
+}
+
+.g-baris-temuan:focus-visible {
+  box-shadow: 0 0 0 2px var(--g-teal);
+}
+
+/* Kilau yang berjalan di atas batang yang ditekan.
+
+   HIASAN, dan sengaja dibuat begitu: lebar batangnya - satu-satunya hal di
+   sini yang membawa isi - digambar dari nilai aslinya dan tidak menyentuh
+   animasi ini sama sekali. Kalau kilaunya tidak pernah menyala, tidak ada satu
+   angka pun yang berubah. */
+.g-batang-tekan {
+  position: relative;
+  overflow: hidden;
+}
+
+.g-batang-tekan::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.55) 50%,
+    transparent 80%
+  );
+  transform: translateX(-100%);
+  animation: g-kilau 3.4s var(--ease-liquid) infinite;
+}
+
+@keyframes g-kilau {
+  0%,
+  55% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g-batang-tekan::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* Ambang jurang: ramp warna di KAKI bagian penutup, sebelum jurangnya mulai.
+
+   Ada karena `.g-gelap` sendirian tidak cukup. Ia hidup di dalam `#tim`, jadi
+   gelapnya paling awal baru bisa mulai saat jurang menyentuh bawah layar - dan
+   sampai detik itu latarnya masih hijau mint penuh. Yang terlihat: mint, mint,
+   mint, lalu hitam. Ramp-nya ada tetapi seluruhnya terjadi sesudah batas
+   bagian, jadi yang terbaca justru ketiadaan transisi.
+
+   Strip ini memindahkan sebagian ramp ke SEBELUM batas itu, dan ia gradien
+   statis - tidak bergantung pada satu pun pemicu gulir yang bisa gagal menyala.
+   Huruf raksasa `.g-raksasa` sengaja dibiarkan di bawahnya supaya ia tenggelam
+   duluan; itu yang membuat turunnya terbaca sebagai turun.
+
+   Di tema gelap ia nyaris tidak terlihat, dan memang tidak perlu: latar gerbang
+   di sana SUDAH warna dasar jurang. */
+.g-ambang {
+  background: linear-gradient(
+    to bottom,
+    rgb(1 8 6 / 0) 0%,
+    rgb(1 8 6 / 0.18) 45%,
+    rgb(1 8 6 / 0.55) 78%,
+    rgb(1 8 6 / 0.86) 100%
+  );
 }
 
 /* Kartu di dasar jurang. Bahan yang sama dengan .g-kaca, dibalik arahnya:
@@ -1814,18 +2047,35 @@ input:focus-visible {
    pin adalah pilihan PENGGUNA, dan memberinya warna kuadran akan membuatnya
    terbaca sebagai penilaian platform. */
 .pin-simpan {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50% 50% 50% 4px;
-  background: var(--color-ink);
-  color: var(--color-surface);
+  background: var(--color-gem);
+  color: #ffffff;
   border: 2px solid var(--color-surface);
-  box-shadow: 0 4px 10px rgb(10 20 16 / 0.35);
+  box-shadow: 0 4px 12px rgb(10 20 16 / 0.4);
   cursor: pointer;
   transform: rotate(0deg);
   transition: transform 0.25s var(--ease-jelly);
+}
+
+/* Cincin diam yang menandai kakinya. Bukan denyut: pin ini bisa ada belasan
+   sekaligus, dan belasan benda berdenyut di atas peta berhenti jadi penanda
+   dan jadi kebisingan. Yang dibutuhkan cuma alas supaya pin terbaca sebagai
+   sesuatu yang BERDIRI di satu titik, bukan melayang di atasnya. */
+.pin-simpan::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 5px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgb(10 20 16 / 0.22);
 }
 .pin-simpan:hover {
   transform: translateY(-2px) scale(1.12);

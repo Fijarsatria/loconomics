@@ -52,6 +52,7 @@ import { FITUR, IDENTITAS, KUADRAN, PENDIRI, URUTAN_KUADRAN } from '../config'
 import { Glif, PapanNama } from './primitif'
 import { TombolAkun } from './Akun'
 import DekKawasan, { type PilihanKawasan } from './GerbangPeta'
+import BagianTemuan from './GerbangTemuan'
 import { DIPOTRET, KARTU_GERBANG } from '../lib/kartu-gerbang'
 import { BATASAN, DIUKUR, RINGKASAN, SUMBER } from '../lib/ringkasan-data'
 
@@ -63,7 +64,7 @@ const AJAKAN = 'Masuk ke peta'
 /**
  * Nama tampilan untuk `opportunity_score` di halaman ini.
  *
- * HANYA di halaman ini. Di dalam aplikasi ia tetap "Skor Peluang" — nama itu
+ * HANYA di halaman ini. Di dalam aplikasi ia bernama "Opportunity Score" — nama
  * dipakai di layer, panel, daftar, dokumen lomba, dan di kontrak alat yang
  * dikirim ke penyedia LLM.
  */
@@ -499,6 +500,19 @@ const KOMPOSISI: Record<string, ReactNode> = {
     </>
   ),
 
+  // Satu heksagon yang sama, digambar DUA KALI dan tidak berimpit - dugaan dan
+  // hasil ukurnya. Yang jadi isi bagian ini bukan salah satunya melainkan
+  // JARAK di antara keduanya, jadi jarak itu yang diberi garis.
+  temuan: (
+    <>
+      {heks(86)}
+      {heks(86, 30, 17)}
+      {heks(26)}
+      {heks(26, 30, 17)}
+      <path d="M0 0 L30 17" />
+    </>
+  ),
+
   // Tujuh sumber mengalir ke satu heksagon di tengah. Susunannya mengacu pada
   // isi bagiannya, seperti keenam motif lain: banyak asal, satu peta.
   sumber: (
@@ -526,10 +540,20 @@ const KOMPOSISI: Record<string, ReactNode> = {
 const PUTAR: Record<string, number> = {
   pendirian: 12,
   kawasan: -9,
-  kuadran: 15,
+  // Bagian kuadran dapat jatah putaran JAUH lebih besar daripada yang lain, dan
+  // sebabnya bukan selera: di sana gulirnya di tempat (sticky, empat panel
+  // digeser mendatar), jadi motif ini satu-satunya yang menandakan bahwa gulir
+  // Anda benar-benar berjalan. Dengan 15 derajat seperti bagian lain, yang
+  // terlihat cuma heksagon yang diam.
+  //
+  // 60 dipilih karena heksagon bersimetri enam: satu putaran penuh 60 derajat
+  // mendaratkan motifnya kembali sefase, jadi ujung bagian ini tidak pernah
+  // memperlihatkan potongan yang miring separuh.
+  kuadran: 60,
   'cara-kerja': -13,
   fitur: 10,
   angka: -11,
+  temuan: 9,
   sumber: 8,
   penutup: 14,
 }
@@ -1014,23 +1038,39 @@ function PanelKuadran({
 }
 
 /** Heksagon bergaris yang tergambar sendiri — bingkai tiap angka besar. */
+/**
+ * Heksagon pemegang angka di bagian "Yang sudah berdiri".
+ *
+ * Ukurannya dinaikkan dari 92x104 ke 148x168, dan itu perbaikan cacat, bukan
+ * selera. Heksagon runcing-atas hanya selebar `1,73 x r` di pinggangnya, jadi
+ * ruang teks yang benar-benar tersedia di 92 px cuma sekitar 70 px. "3.444" dan
+ * "1.549" di ukuran huruf papan sudah melewatinya - angka terpanjanglah yang
+ * menentukan, dan dua dari empat angka di sini memang lima karakter.
+ *
+ * Dua lingkar: satu tipis sebagai dasar, satu digores masuk sebagai aksen.
+ * Angkanya duduk di PINGGANG heksagon (tengah tegak), satu-satunya tempat
+ * lebarnya maksimum.
+ */
 function HeksagonAngka({ anak }: { anak: ReactNode }) {
   return (
-    <div className="relative grid h-[104px] w-[92px] shrink-0 place-items-center">
+    <div className="relative grid h-[168px] w-[148px] shrink-0 place-items-center">
       <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full" aria-hidden>
-        <polygon points={jalurHeks(44)} fill="var(--g-kartu-pekat)" stroke="var(--g-garis-halus-2)" strokeWidth="1.5" />
+        <polygon points={jalurHeks(46)} fill="var(--g-kartu-pekat)" stroke="var(--g-garis-halus-2)" strokeWidth="1.2" />
+        {/* Heksagon dalam - memberi kedalaman tanpa menambah satu elemen pun
+            yang harus dianimasikan terpisah. */}
+        <polygon points={jalurHeks(38)} fill="none" stroke="var(--g-garis-halus)" strokeWidth="0.8" />
         <polygon
-          points={jalurHeks(44)}
+          points={jalurHeks(46)}
           fill="none"
           stroke="var(--q-gem)"
-          strokeWidth="2.4"
+          strokeWidth="2.2"
           strokeLinejoin="round"
           pathLength={100}
           strokeDasharray="100"
           className="g-gores"
         />
       </svg>
-      <span className="relative">{anak}</span>
+      <span className="relative px-2 text-center">{anak}</span>
     </div>
   )
 }
@@ -1898,7 +1938,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         {
           opacity: 1,
           ease: 'none',
-          scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top 72%', end: 'top -5%', scrub: 0.4 },
+          scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top bottom', end: 'top 8%', scrub: 0.6 },
         },
       )
       gsap.fromTo(
@@ -1909,14 +1949,14 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           opacity: 0.32,
           rotate: 26,
           ease: 'none',
-          scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top 85%', end: 'top -20%', scrub: 0.5 },
+          scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top bottom', end: 'top -15%', scrub: 0.7 },
         },
       )
       gsap.to('.g-turun', {
         y: -70,
         opacity: 0,
         ease: 'none',
-        scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top 55%', end: 'top 5%', scrub: 0.4 },
+        scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top 40%', end: 'top -18%', scrub: 0.4 },
       })
       // Bilah atas ikut turun ke gelap. Ambangnya sedikit lebih awal daripada
       // saat hitamnya penuh, supaya bilahnya tidak sempat jadi papan putih
@@ -1924,7 +1964,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
       ScrollTrigger.create({
         scroller,
         trigger: '.g-jurang',
-        start: 'top 46%',
+        start: 'top 34%',
         end: 'bottom top',
         onEnter: () => setNavGelap(true),
         onEnterBack: () => setNavGelap(true),
@@ -2004,17 +2044,29 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
       // 3.250 px membuat motifnya berjalan 550 px - jauh keluar dari bagiannya
       // sendiri, lalu tergunting. Dinyatakan sebagai pecahan perjalanan,
       // jaraknya selalu ±amp berapa pun tinggi bagiannya.
-      let kotak = motif.map((el) => {
-        const s = el.offsetParent as HTMLElement | null
-        return { atas: s?.offsetTop ?? 0, tinggi: s?.offsetHeight ?? 1 }
-      })
+      // `sisi` (tinggi motifnya sendiri) IKUT diukur di sini, dan itu bukan
+      // kerapian - itu perbaikan bug.
+      //
+      // Sebelumnya ia dibaca `motif[i].offsetHeight` DI DALAM loop per-bingkai,
+      // tepat sesudah `tulis[]` menulis transform di iterasi sebelumnya. Tiap
+      // pembacaan itu memaksa peramban menghitung ulang layout - sembilan
+      // paksaan per bingkai gulir, murni untuk mendapat angka yang tidak pernah
+      // berubah kecuali saat layar diubah ukurannya.
+      //
+      // Di bagian lain akibatnya tersamar karena isinya ikut bergeser. Di
+      // bagian kuadran isinya DIAM - ia sticky, gulirnya di tempat - jadi motif
+      // ini satu-satunya yang bergerak, dan tiap bingkai yang jatuh terbaca
+      // langsung sebagai getaran. Itu gejala yang dilaporkan.
+      const ukur = () =>
+        motif.map((el) => {
+          const s = el.offsetParent as HTMLElement | null
+          return { atas: s?.offsetTop ?? 0, tinggi: s?.offsetHeight ?? 1, sisi: el.offsetHeight }
+        })
+      let kotak = ukur()
       let layar = scroller.clientHeight
       const ukurUlang = () => {
         layar = scroller.clientHeight
-        kotak = motif.map((el) => {
-          const s = el.offsetParent as HTMLElement | null
-          return { atas: s?.offsetTop ?? 0, tinggi: s?.offsetHeight ?? 1 }
-        })
+        kotak = ukur()
       }
 
       let rafGeser = 0
@@ -2022,8 +2074,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         rafGeser = 0
         const y = scroller.scrollTop
         for (let i = 0; i < motif.length; i++) {
-          const { atas, tinggi } = kotak[i]
-          const sisi = motif[i].offsetHeight
+          const { atas, tinggi, sisi } = kotak[i]
           // -1 saat bagiannya baru mau masuk dari bawah, +1 saat ia baru saja
           // keluar di atas, 0 tepat saat pusatnya di pusat layar.
           const p = Math.max(-1, Math.min(1, (y + layar / 2 - (atas + tinggi / 2)) / ((layar + tinggi) / 2)))
@@ -2603,22 +2654,31 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           </h2>
         </div>
 
+        {/* Tegak, bukan mendatar. Susunan lama menaruh heksagon di SEBELAH
+            teksnya, jadi lebar heksagon dibatasi sisa ruang kartu - dan itu
+            yang memaksanya mengecil sampai angkanya tidak muat. Ditumpuk, ia
+            boleh selebar kartunya. */}
         <div className="mx-auto grid w-full max-w-[74rem] gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {ANGKA.map((a) => (
-            <div key={a.satuan} className="g-buram g-panel flex items-center gap-4 rounded-[22px] p-6">
+            <div
+              key={a.satuan}
+              className="g-buram g-panel flex flex-col items-center rounded-[24px] px-6 pb-7 pt-6 text-center"
+            >
               <HeksagonAngka
                 anak={
-                  <span className="papan tabular text-[clamp(1.4rem,2.6vw,1.9rem)] leading-none">
+                  <span className="papan tabular text-[clamp(1.5rem,2.4vw,2.05rem)] leading-none">
                     <span className="g-hitung" data-nilai={a.nilai}>
                       {a.nilai.toLocaleString('id-ID')}
                     </span>
                   </span>
                 }
               />
-              <div className="min-w-0">
-                <p className="text-[13.5px] font-semibold leading-snug text-[color:var(--g-ink-2)]">{a.satuan}</p>
-                <p className="mt-1 text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">{a.catatan}</p>
-              </div>
+              <p className="mt-5 text-[14px] font-semibold leading-snug text-[color:var(--g-ink)]">
+                {a.satuan}
+              </p>
+              <p className="mt-1.5 text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
+                {a.catatan}
+              </p>
             </div>
           ))}
         </div>
@@ -2636,7 +2696,28 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </p>
       </section>
 
-      {/* ================= 8 · SUMBER DATA & BATASAN ==================== */}
+      {/* ================= 8 · TEMUAN =================================== */}
+      {/*
+        Duduk di antara ANGKA dan SUMBER, dan urutan itu disengaja: angka
+        menyatakan apa yang berdiri, temuan menyatakan apa yang dikatakannya,
+        sumber menunjukkan dari mana asalnya. Menaruh temuan sesudah sumber
+        membalik urutan membaca yang wajar - pembacanya akan diminta menilai
+        provenance sebelum tahu ada yang layak dinilai.
+
+        Seluruh isinya dari `lib/ringkasan-data.ts`; bagian ini tidak memuat
+        satu pun angka yang ditulis tangan. Lihat `GerbangTemuan.tsx`.
+      */}
+      <Pembatas />
+
+      <section
+        id="temuan"
+        className="g-adegan relative flex min-h-screen flex-col justify-center px-6 py-28"
+      >
+        <LatarBagian motif="temuan" />
+        <BagianTemuan />
+      </section>
+
+      {/* ================= 9 · SUMBER DATA & BATASAN ==================== */}
       <Pembatas />
 
       <section
@@ -2645,13 +2726,26 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
       >
         <LatarBagian motif="sumber" />
         <div className="mx-auto max-w-[48rem] text-center">
+          {/* Judulnya diganti 3 September 2026.
+
+              "Tujuh sumber, dan yang belum ada disebut juga" menyatakan hal
+              yang benar dengan nada yang salah: ia membuka bagian terkuat
+              halaman ini dengan permintaan maaf. Yang sebenarnya terjadi
+              kebalikannya - tujuh sumber berlisensi terbuka, tiap angkanya
+              bisa dibuka tautannya dan dihitung ulang dari basis data.
+
+              Menyebut yang belum ada TETAP dilakukan, di bawah, dan justru itu
+              yang layak dibanggakan: sedikit sekali produk yang menerbitkan
+              batasnya sendiri. Bedanya cuma satu - ia dinyatakan sebagai
+              standar kerja, bukan sebagai kekurangan yang disesali. */}
           <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Dari mana angkanya</p>
           <h2 className="g-tirai papan text-[clamp(1.7rem,4.4vw,3rem)] leading-tight">
-            Tujuh sumber, dan yang belum ada disebut juga
+            Tujuh sumber terbuka, tiap angkanya bisa ditelusuri
           </h2>
           <p className="g-tirai mx-auto mt-5 max-w-[38rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
-            Kolom cakupan menyatakan berapa heksagon yang benar-benar disentuh sumbernya — bukan
-            berapa yang seharusnya. Angkanya dihitung dari basis data pada {DIUKUR}.
+            Semuanya berlisensi yang mengizinkan pemakaian ini, dan tiap namanya adalah tautan yang
+            bisa dibuka. Kolom cakupan menyatakan berapa heksagon yang benar-benar disentuh
+            sumbernya — bukan berapa yang seharusnya. Dihitung ulang dari basis data pada {DIUKUR}.
           </p>
         </div>
 
@@ -2684,7 +2778,10 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
               </thead>
               <tbody>
                 {SUMBER.map((s) => (
-                  <tr key={s.nama} className="border-b border-[color:var(--g-ink)]/8 align-top">
+                  <tr
+                    key={s.nama}
+                    className="g-baris-sumber border-b border-[color:var(--g-ink)]/8 align-top transition-colors duration-300"
+                  >
                     <th scope="row" className="py-3.5 pr-4 font-semibold">
                       <a
                         href={s.url}
@@ -2695,13 +2792,21 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                         {s.nama}
                       </a>
                     </th>
-                    <td className="py-3.5 pr-4 text-[color:var(--g-ink-2)]">{s.lisensi}</td>
+                    {/* Lisensi sebagai PIL, bukan teks lepas. Ia satu-satunya
+                        kolom yang isinya kosakata tertutup - ODbL, CC BY, dan
+                        seterusnya - dan kolom berkosakata tertutup terbaca jauh
+                        lebih cepat sebagai label daripada sebagai kalimat. */}
+                    <td className="py-3.5 pr-4">
+                      <span className="inline-block whitespace-nowrap rounded-full border border-[color:var(--g-ink)]/12 px-2.5 py-1 text-[11.5px] font-medium text-[color:var(--g-ink-2)]">
+                        {s.lisensi}
+                      </span>
+                    </td>
                     <td className="py-3.5 pr-4 text-[color:var(--g-ink-2)]">{s.mengisi}</td>
                     {/* `null` dan `0` dua hal yang berbeda dan gampang dilebur:
                         yang pertama berarti "tidak diukur per heksagon" (basemap),
                         yang kedua berarti "tidak menyentuh satu pun". Menuliskan
                         keduanya sebagai "0" akan menuduh basemap tidak dipakai. */}
-                    <td className="tabular py-3.5 text-right font-semibold">
+                    <td className="tabular py-3.5 pl-3 text-right font-semibold">
                       {s.cakupan === null ? (
                         <span className="font-normal text-[color:var(--g-ink-4)]">seluruh peta</span>
                       ) : (
@@ -2710,6 +2815,25 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                           <span className="font-normal text-[color:var(--g-ink-4)]">
                             {' / '}
                             {RINGKASAN.heksagon.toLocaleString('id-ID')}
+                          </span>
+                          {/* Rel cakupan. Tidak menambah satu angka pun ke
+                              layar - ia menggambar perbandingan yang SUDAH
+                              tertulis di sebelahnya. Gunanya: "703 / 708" dan
+                              "364 / 708" butuh dibaca dan dibandingkan, dua
+                              batang tidak. */}
+                          <span
+                            className="mt-1.5 ml-auto block h-[5px] w-[72px] overflow-hidden rounded-full bg-[color:var(--g-ink)]/[0.09]"
+                            aria-hidden
+                          >
+                            <span
+                              className="block h-full rounded-full bg-[color:var(--g-teal)]"
+                              style={{
+                                width: `${Math.max(
+                                  (s.cakupan / Math.max(RINGKASAN.heksagon, 1)) * 100,
+                                  2,
+                                )}%`,
+                              }}
+                            />
                           </span>
                         </>
                       )}
@@ -2722,10 +2846,40 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </div>
 
         <div className="mx-auto mt-14 w-full max-w-[68rem]">
-          <p className="g-tirai eyebrow mb-5 text-[color:var(--g-ink-3)]">Batasan datanya</p>
+          {/* "Batasan datanya" saja terbaca sebagai daftar kekurangan, dan itu
+              menjual murah satu-satunya hal di halaman ini yang paling sulit
+              ditiru pesaing: produk yang MENERBITKAN batasnya sendiri, dihitung
+              dari basis datanya sendiri, di halaman depannya sendiri.
+
+              Kalimat kartunya tidak disentuh - ia dibangkitkan
+              `s7_publish.py --ekspor` dan tidak boleh ditulis tangan. Yang
+              diganti cuma bingkainya. */}
+          <div className="g-tirai mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+            <p className="eyebrow text-[color:var(--g-ink-3)]">Yang belum terukur — kami sebut sendiri</p>
+            <p className="text-[12px] leading-snug text-[color:var(--g-ink-4)]">
+              Dihitung dari basis data, bukan ditulis tangan
+            </p>
+          </div>
           <ul className="grid gap-4 sm:grid-cols-2">
-            {BATASAN.map((b) => (
-              <li key={b} className="g-buram g-panel rounded-[20px] p-6">
+            {BATASAN.map((b, i) => (
+              <li key={b} className="g-buram g-panel flex gap-4 rounded-[20px] p-6">
+                {/* Nomor dalam heksagon. Bentuknya bukan hiasan - ia bentuk
+                    data proyek ini, dan di kartu yang isinya SOAL cakupan
+                    heksagon ia sekaligus menandai apa yang sedang dibicarakan. */}
+                <span className="relative grid h-9 w-8 shrink-0 place-items-center" aria-hidden>
+                  <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
+                    <polygon
+                      points={jalurHeks(46)}
+                      fill="none"
+                      stroke="var(--g-ink)"
+                      strokeOpacity="0.22"
+                      strokeWidth="3"
+                    />
+                  </svg>
+                  <span className="tabular relative text-[11.5px] font-semibold text-[color:var(--g-ink-3)]">
+                    {i + 1}
+                  </span>
+                </span>
                 <p className="text-[13.5px] leading-relaxed text-[color:var(--g-ink-2)]">{b}</p>
               </li>
             ))}
@@ -2740,7 +2894,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </div>
       </section>
 
-      {/* ================= 9 · PENUTUP ================================== */}
+      {/* ================= 10 · PENUTUP ================================= */}
       <section className="g-adegan g-penutup relative overflow-hidden px-6 pb-14 pt-28">
         <LatarBagian motif="penutup" />
         {/* Tanpa `blur-[70px]`. Elemen sebesar 62vh x 86vw yang di-blur lalu
@@ -2751,6 +2905,9 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         <div className="g-raksasa papan pointer-events-none absolute inset-x-0 bottom-0 select-none text-center" aria-hidden>
           {NAMA}
         </div>
+        {/* SESUDAH huruf raksasa, bukan sebelumnya: urutannya yang membuat
+            hurufnya tenggelam lebih dulu ke dalam gelap. */}
+        <div className="g-ambang pointer-events-none absolute inset-x-0 bottom-0 h-[46vh]" aria-hidden />
 
         {/* Judul penutup dibuat benar-benar setebal benda, bukan diberi bayangan
             yang menyerupainya: delapan salinan huruf ditumpuk mundur di sumbu Z.
@@ -2807,7 +2964,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </div>
       </section>
 
-      {/* ================= 10 · JURANG → TIM ============================= */}
+      {/* ================= 11 · JURANG → TIM ============================ */}
       <section id="tim" className="g-jurang relative">
         {/* Latar jurang. `sticky` supaya ia menutupi layar selama bagian ini
             dilewati, dan margin bawah negatif setinggi dirinya sendiri supaya
@@ -2824,7 +2981,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           </svg>
         </div>
 
-        <div className="relative flex h-[115vh] flex-col items-center justify-center px-6 text-center">
+        <div className="relative flex h-[170vh] flex-col items-center justify-center px-6 text-center">
           <p className="g-turun eyebrow mb-4 text-[color:var(--g-ink-3)]">Terakhir</p>
           <p className="g-turun papan max-w-[26rem] text-[clamp(1.3rem,3.4vw,2.1rem)] leading-tight">
             Turun lebih dalam

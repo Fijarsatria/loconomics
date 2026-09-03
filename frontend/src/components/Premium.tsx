@@ -331,7 +331,7 @@ const METRIK: {
 }[] = [
   {
     kunci: 'opportunity_score',
-    label: 'Skor peluang',
+    label: 'Opportunity Score',
     bantuan: 'ringkasan semuanya, 0-100',
     ambil: (b) => b.opportunity_score,
     format: (v) => angka(v, 0),
@@ -627,16 +627,20 @@ export function DialogKomparasi({
             {data.baris.map((b, i) => {
               const q = b.kuadran ? KUADRAN[b.kuadran as NamaKuadran] : null
               const menang = skorMenang.get(b.h3_index) ?? 0
-              const unggul = menang > 0 && menang === terbanyak && data.baris.length > 1
+              const dilarang = b.zoneguard.filter_mutlak
+              const unggul =
+                !dilarang && menang > 0 && menang === terbanyak && data.baris.length > 1
               return (
                 <button
                   key={b.h3_index}
                   onClick={() => onPilih(b.h3_index)}
                   title="Buka di peta"
                   className={`cursor-pointer rounded-lg border p-3.5 text-left transition-all duration-300 ease-jelly hover:-translate-y-0.5 ${
-                    unggul
-                      ? 'border-gem bg-gem-soft/45 shadow-[0_0_0_1px_var(--color-gem)]'
-                      : 'border-line bg-surface hover:border-line-2'
+                    dilarang
+                      ? 'border-bahaya bg-bahaya-soft/40'
+                      : unggul
+                        ? 'border-gem bg-gem-soft/45 shadow-[0_0_0_1px_var(--color-gem)]'
+                        : 'border-line bg-surface hover:border-line-2'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -671,11 +675,25 @@ export function DialogKomparasi({
                   )}
 
                   <div className="mt-2.5 border-t border-line/60 pt-2.5">
-                    <span
-                      className={`text-[11.5px] font-semibold ${unggul ? 'text-gem' : 'text-ink-3'}`}
-                    >
-                      {unggul && '★ '}Unggul di {menang} dari {METRIK.length} hal
-                    </span>
+                    {/* Satu kalimat kesimpulan, di kartu, sebelum sembilan
+                        baris metrik di bawahnya. Yang dicari orang awam di
+                        layar ini "jadi yang mana?", dan sampai sekarang
+                        jawabannya cuma bisa disimpulkan sendiri dari sembilan
+                        pasang batang. */}
+                    {dilarang ? (
+                      <span className="block text-[11.5px] font-semibold leading-snug text-bahaya">
+                        Zona melarang usaha — berapa pun skornya
+                      </span>
+                    ) : (
+                      <span
+                        className={`block text-[11.5px] font-semibold leading-snug ${
+                          unggul ? 'text-gem' : 'text-ink-3'
+                        }`}
+                      >
+                        {unggul && '★ '}
+                        Unggul di {menang} dari {METRIK.length} hal
+                      </span>
+                    )}
                     <span className="mt-1.5 block">
                       <Badge badge={b.keyakinan} ringkas />
                     </span>
@@ -904,16 +922,29 @@ export function DialogPantauan({
                 {dinamika.n_heksagon.toLocaleString('id-ID')} heksagon dihitung
               </p>
 
+              {dinamika.churn_p50 === null &&
+              dinamika.churn_p75 === null &&
+              dinamika.churn_p90 === null ? (
+                <p className="mt-3.5 rounded-sm border border-line/70 bg-surface-2 px-3 py-2.5 text-[12px] leading-snug text-ink-3">
+                  <span className="font-medium text-ink-2">Pergantian usaha belum terukur.</span>{' '}
+                  Ketiga ambangnya — tengah, waspada, bahaya — dihitung dari data yang belum ada
+                  sumbernya, jadi kawasan ini belum bisa dinilai risikonya.
+                </p>
+              ) : (
+                <dl className="mt-3.5 space-y-2 border-t border-line/70 pt-3">
+                  <BarisAngka
+                    label="Pergantian usaha, lokasi tengah"
+                    nilai={angka(dinamika.churn_p50, 3)}
+                  />
+                  <BarisAngka
+                    label="Batas mulai waspada"
+                    nilai={angka(dinamika.churn_p75, 3)}
+                  />
+                  <BarisAngka label="Batas bahaya" nilai={angka(dinamika.churn_p90, 3)} />
+                </dl>
+              )}
+
               <dl className="mt-3.5 space-y-2 border-t border-line/70 pt-3">
-                <BarisAngka
-                  label="Pergantian usaha, lokasi tengah"
-                  nilai={angka(dinamika.churn_p50, 3)}
-                />
-                <BarisAngka
-                  label="Batas mulai waspada"
-                  nilai={angka(dinamika.churn_p75, 3)}
-                />
-                <BarisAngka label="Batas bahaya" nilai={angka(dinamika.churn_p90, 3)} />
                 <BarisAngka
                   label="Lokasi yang sudah lewat batas waspada"
                   nilai={`${dinamika.n_waspada} lokasi`}
@@ -925,7 +956,7 @@ export function DialogPantauan({
                   tekan={dinamika.n_bahaya > 0}
                 />
                 <BarisAngka
-                  label="Skor peluang rata-rata"
+                  label="Opportunity Score rata-rata"
                   nilai={angka(dinamika.rata_opportunity, 1)}
                 />
                 <BarisAngka
@@ -940,19 +971,55 @@ export function DialogPantauan({
 
               <div className="mt-3.5 border-t border-line/70 pt-3">
                 <p className="eyebrow mb-2">Komposisi kuadran</p>
-                <ul className="space-y-1.5">
-                  {Object.entries(dinamika.per_kuadran)
-                    .sort((a, z) => z[1] - a[1])
-                    .map(([k, n]) => (
-                      <li key={k} className="flex items-center gap-2 text-[12.5px]">
-                        {k in KUADRAN && <Glif kuadran={k} ukuran={10} />}
-                        <span className="truncate text-ink-2">
-                          {KUADRAN[k as NamaKuadran]?.nama ?? k.replace(/_/g, ' ').toLowerCase()}
-                        </span>
-                        <span className="tabular ml-auto font-medium text-ink">{n}</span>
-                      </li>
-                    ))}
-                </ul>
+                {/* Satu pita bersusun DI ATAS daftarnya.
+
+                    Daftar angka menjawab "berapa banyak"; yang sebenarnya
+                    ditanyakan orang saat membuka panel bernama komposisi adalah
+                    "kawasan ini isinya apa" - dan itu pertanyaan tentang
+                    PROPORSI, yang tidak bisa dijawab dengan membandingkan 52,
+                    38, 28, dan 4 di kepala sendiri.
+
+                    Warnanya warna kuadran yang sama persis dengan di peta, jadi
+                    pita ini terbaca sebagai ringkasan petaknya - bukan sebagai
+                    palet baru yang harus dipelajari lagi. */}
+                {(() => {
+                  const urut = Object.entries(dinamika.per_kuadran).sort((a, z) => z[1] - a[1])
+                  const total = urut.reduce((s, [, n]) => s + n, 0)
+                  return (
+                    <>
+                      {total > 0 && (
+                        <div className="mb-2.5 flex h-2.5 overflow-hidden rounded-full bg-ground-2">
+                          {urut.map(([k, n]) => (
+                            <span
+                              key={k}
+                              title={`${KUADRAN[k as NamaKuadran]?.nama ?? k}: ${n}`}
+                              style={{
+                                width: `${(n / total) * 100}%`,
+                                background: KUADRAN[k as NamaKuadran]?.warna ?? 'var(--color-ink-3)',
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <ul className="space-y-1.5">
+                        {urut.map(([k, n]) => (
+                          <li key={k} className="flex items-center gap-2 text-[12.5px]">
+                            {k in KUADRAN && <Glif kuadran={k} ukuran={10} />}
+                            <span className="truncate text-ink-2">
+                              {KUADRAN[k as NamaKuadran]?.nama ?? k.replace(/_/g, ' ').toLowerCase()}
+                            </span>
+                            <span className="tabular ml-auto font-medium text-ink">{n}</span>
+                            {/* Persennya dihitung dari dua angka yang SUDAH di
+                                layar (n dan totalnya), bukan angka baru. */}
+                            <span className="tabular w-9 shrink-0 text-right text-[11.5px] text-ink-3">
+                              {total > 0 ? `${Math.round((n / total) * 100)}%` : '—'}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )
+                })()}
               </div>
 
               {/* Catatan backend ditampilkan APA ADANYA. Ia yang menyatakan

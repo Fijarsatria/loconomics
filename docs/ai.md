@@ -188,8 +188,8 @@ yang paling mungkin panggilan berulang dari bug.
 
 Riwayat dikirim ulang frontend setiap giliran, **tidak disimpan di server**.
 Backend jadi tanpa-status: tidak ada sesi yang perlu dibersihkan, tidak ada
-kebocoran percakapan antarpengguna, dan proses Render yang tidur lalu bangun
-tidak kehilangan apa pun. Dibatasi 20 pesan karena seluruh riwayat ikut dikirim
+kebocoran percakapan antarpengguna, dan proses yang dimulai ulang — deploy
+baru, atau instans yang didaur platform — tidak kehilangan apa pun. Dibatasi 20 pesan karena seluruh riwayat ikut dikirim
 ke model setiap giliran — biayanya tumbuh kuadratik terhadap panjang percakapan.
 
 Hasil alat dari giliran lama sengaja tidak ikut diputar ulang. Yang perlu diingat

@@ -33,6 +33,7 @@ Yang TIDAK dilakukan di sini, sengaja:
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -218,7 +219,21 @@ def baca_tiket(tiket: str) -> int | None:
     except ValueError:
         return None
     harapan = hmac.new(_kunci(), f"{kepala}.{isi}".encode(), hashlib.sha256).digest()
-    if not hmac.compare_digest(_nyah_b64(tanda), harapan):
+    # `_nyah_b64` MELEDAK untuk base64 yang bentuknya rusak - `binascii.Error`,
+    # bukan nilai yang salah. Sebelum ini ia tidak ditangkap, jadi satu header
+    # `Authorization: Bearer a.b.c` menjawab **500**, bukan 401: docstring di
+    # atas menjanjikan None untuk "bentuk rusak" dan kodenya tidak menepatinya.
+    #
+    # Bukan cuma soal kerapian. Amplop galat memberi setiap 500 sebuah
+    # `request_id` dan mencatatnya sebagai galat tak terduga di log server -
+    # jadi tiket usang di localStorage seseorang, atau satu pemindai yang lewat,
+    # menyamar jadi kerusakan backend di tempat yang justru dibaca saat ada
+    # kerusakan sungguhan.
+    try:
+        diterima = _nyah_b64(tanda)
+    except (ValueError, binascii.Error):
+        return None
+    if not hmac.compare_digest(diterima, harapan):
         return None
     try:
         muatan = json.loads(_nyah_b64(isi))

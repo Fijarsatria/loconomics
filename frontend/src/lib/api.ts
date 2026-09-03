@@ -24,6 +24,7 @@ import type {
   Kesiapan,
   Komparasi,
   KonteksSimpul,
+  ProfilRute,
   JawabanAI,
   PeringatanRisiko,
   PermintaanAI,
@@ -100,11 +101,30 @@ export class GalatAPI extends Error {
   }
 }
 
+/**
+ * Batas waktu satu permintaan. Jaring pengaman, bukan mekanisme utama.
+ *
+ * `fetch` tanpa `signal` menunggu SELAMANYA - peramban baru menyerah setelah
+ * satu-dua menit, dan sampai saat itu tidak ada satu pun galat yang bisa
+ * ditangkap. Itu jadi masalah nyata begitu backend duduk di Render free tier:
+ * layanannya TIDUR sesudah 15 menit menganggur dan bangunnya memakan puluhan
+ * detik, jadi permintaan pertama tidak gagal - ia menggantung. Yang terlihat
+ * di layar bukan pesan galat melainkan antarmuka yang membeku, dan cadangan
+ * statis di `layerHeksagon` tidak pernah menyala karena tidak ada yang dilempar.
+ *
+ * 25 detik, bukan lima: yang dijaga di sini backend yang TIDAK MENJAWAB, bukan
+ * backend yang lambat. `/meta/siap` sendiri butuh 2,6 dtk lewat Supabase, dan
+ * memutus permintaan yang sebenarnya masih dalam perjalanan menghasilkan
+ * kegagalan yang kita karang sendiri.
+ */
+const BATAS_WAKTU_MS = 25_000
+
 async function ambil<T>(jalur: string, opsi?: RequestInit): Promise<T> {
   const kepala: Record<string, string> = { 'Content-Type': 'application/json' }
   if (tiketSekarang) kepala.Authorization = `Bearer ${tiketSekarang}`
 
   const res = await fetch(`${API_BASE}${jalur}`, {
+    signal: AbortSignal.timeout(BATAS_WAKTU_MS),
     ...opsi,
     headers: { ...kepala, ...(opsi?.headers as Record<string, string> | undefined) },
   })
@@ -187,8 +207,36 @@ async function unduhPdf(jalur: string, namaBerkas: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
+/**
+ * Ketuk backend sekali saat halaman dibuka, lalu lupakan hasilnya.
+ *
+ * Render free tier TIDUR sesudah 15 menit menganggur, dan bangunnya memakan
+ * puluhan detik. Yang menanggung ongkos itu selalu permintaan PERTAMA - dan di
+ * alur produk ini permintaan pertama jatuh tepat di layar pembuka, yaitu satu
+ * dari dua layar yang pasti dilihat juri.
+ *
+ * Yang membuat ini nyaris gratis: urutannya gerbang -> pembuka -> peta, dan
+ * gerbang adalah halaman scrollytelling sembilan bagian yang sengaja dibuat
+ * untuk dibaca. Puluhan detik itu sudah ada di sana, dan sebelumnya dihabiskan
+ * dengan backend yang tetap tertidur. Sesudah ini ia dipakai membangunkannya.
+ *
+ * Sengaja `void` dan tanpa penanganan galat: tidak ada satu pun keputusan di
+ * antarmuka yang bergantung pada jawabannya. Yang memeriksa kesiapan tetap
+ * layar pembuka, dengan percobaan ulangnya sendiri.
+ */
+export function bangunkan(): void {
+  if (!API_BASE) return
+  void fetch(`${API_BASE}/health`, {
+    signal: AbortSignal.timeout(BATAS_WAKTU_MS),
+  }).catch(() => null)
+}
+
 export const api = {
-  sehat: () => ambil<{ status: string }>('/health'),
+  /**
+   * `opsi` ada untuk satu pemanggil: layar pembuka, yang memeriksa berkali-kali
+   * dengan batas waktu pendek alih-alih sekali dengan batas waktu panjang.
+   */
+  sehat: (opsi?: RequestInit) => ambil<{ status: string }>('/health', opsi),
 
   /**
    * Kesiapan backend, dipanggil sekali saat memuat.
@@ -256,7 +304,10 @@ export const api = {
    * Stasiun terdekat + jarak garis lurus, untuk garis penghubung di peta.
    * GRATIS: ini konteks peta, bukan kedalaman data.
    */
-  simpulTerdekat: (h3: string) => ambil<KonteksSimpul>(`/hex/${h3}/simpul-terdekat`),
+  simpulTerdekat: (h3: string, profil?: ProfilRute) =>
+    ambil<KonteksSimpul>(
+      `/hex/${h3}/simpul-terdekat${profil ? `?profil=${encodeURIComponent(profil)}` : ''}`,
+    ),
 
   /** Commuter Clock — 18 titik jam, captive vs choice rider. */
   commuterClock: (h3: string) => ambil<CommuterClock>(`/hex/${h3}/commuter-clock`),

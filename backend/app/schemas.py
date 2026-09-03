@@ -45,6 +45,29 @@ class CakupanIndeks(BaseModel):
     )
 
 
+class CakupanPrestise(BaseModel):
+    """Bahan sumbu DATAR kuadran mana yang benar-benar terukur.
+
+    Sekeluarga dengan `CakupanIndeks`, dengan satu perbedaan yang disengaja: di
+    sini tidak ada `layak_tampil`. Sumbu prestise tidak pernah disembunyikan - ia
+    yang menentukan kuadran, dan kuadrannya sudah tergambar di peta;
+    menyembunyikan penjelasannya cuma membuat penempatan yang sama jadi tidak
+    bisa ditanyakan. Yang dilaporkan DAFTAR bahannya, karena yang menentukan arti
+    sumbu ini bukan berapa bahan yang terisi melainkan bahan yang mana.
+
+    Gratis untuk semua tingkat, alasannya sama dengan `CakupanIndeks`: ia
+    keterangan mutu, dan ia tidak menyebut satu pun nilai.
+    """
+
+    terisi: list[str] = Field(
+        default_factory=list, description="Kode variabel yang punya nilai, urut seperti pipeline"
+    )
+    kosong: list[str] = Field(default_factory=list, description="Kode variabel yang kosong")
+    diukur_langsung: bool = Field(
+        description="FALSE = tidak ada satu pun bahan yang menilai tampilan secara langsung"
+    )
+
+
 class IndeksKomposit(BaseModel):
     ipt: float | None = Field(default=None, description="Indeks Potensi Transit, tinggi = baik")
     iae: float | None = Field(default=None, description="Indeks Aktivitas Ekonomi, tinggi = baik")
@@ -198,7 +221,7 @@ class PeringatanRisiko(BaseModel):
 class TitikKuadran(BaseModel):
     """Satu titik di diagram kuadran interaktif.
 
-    x = prestise visual (bagaimana lokasi terlihat), y = skor peluang (apa kata
+    x = prestise visual (bagaimana lokasi terlihat), y = Opportunity Score (apa kata
     datanya). Keduanya sengaja diukur dari sumber yang berbeda; kalau keduanya
     berkorelasi kuat, diagramnya kehilangan arti.
     """
@@ -216,8 +239,14 @@ class TitikKuadran(BaseModel):
 class DiagramKuadran(BaseModel):
     titik: list[TitikKuadran]
     batas_x: float | None = Field(default=None, description="Median prestise - garis pemisah")
-    batas_y: float | None = Field(default=None, description="Median skor peluang - garis pemisah")
+    batas_y: float | None = Field(default=None, description="Median Opportunity Score - garis pemisah")
     keterangan: dict[str, str] = Field(default_factory=dict)
+    #: Dihitung dari TITIK YANG DIKEMBALIKAN, bukan dari seluruh basis data -
+    #: keterangan sumbu harus menerangkan diagram yang sedang dilihat orangnya,
+    #: dan diagram itu bisa tersaring per kawasan.
+    cakupan_prestise: CakupanPrestise | None = Field(
+        default=None, description="Bahan sumbu datar yang terukur pada titik yang ditampilkan"
+    )
 
 
 # --- GemFinder (fitur 6) ---------------------------------------------------
@@ -423,6 +452,10 @@ class DetailHeksagon(BaseModel):
     zoneguard: StatusZoneGuard
     risiko: PeringatanRisiko
     kuadran_penjelasan: str | None = None
+    #: Sumbu datar kuadran berdiri di atas bahan apa UNTUK HEKSAGON INI. Gratis,
+    #: sama dengan `indeks.cakupan`: kuadrannya gratis, jadi keterangan yang
+    #: menjaganya supaya tidak dibaca berlebihan harus ikut gratis.
+    cakupan_prestise: CakupanPrestise | None = None
 
 
 class SimpulTransit(BaseModel):
@@ -451,6 +484,11 @@ class RuteJalan(BaseModel):
     jarak_m: float
     menit: float
     utama: bool
+    #: "foot-walking" atau "driving-car". IKUT DIKIRIM, bukan disimpulkan dari
+    #: parameter permintaan: antarmuka menggambar dua profil dengan gaya garis
+    #: yang berbeda, dan gaya yang ditebak dari parameter akan salah begitu ada
+    #: respons yang memuat keduanya sekaligus.
+    profil: str = "foot-walking"
     #: [lon, lat] berurutan, siap dipakai sebagai GeoJSON LineString.
     koordinat: list[list[float]]
 
@@ -485,6 +523,15 @@ class KonteksSimpul(BaseModel):
         default=None, description="jarak rute / jarak lurus. 1,7 = memutar 70% lebih jauh"
     )
     rute: list[RuteJalan] = Field(default_factory=list)
+    #: Profil yang benar-benar dipakai menyusun `rute` di respons ini.
+    profil: str = "foot-walking"
+    #: Profil apa saja yang PUNYA baris untuk heksagon ini.
+    #:
+    #: Dikirim supaya antarmuka bisa menonaktifkan pilihan yang datanya belum
+    #: ada, alih-alih menawarkannya lalu menampilkan panel kosong. Rute mobil
+    #: ditarik terpisah dan mungkin belum pernah dijalankan - itu keadaan yang
+    #: harus terbaca sebelum diklik, bukan sesudah.
+    profil_tersedia: list[str] = Field(default_factory=list)
     garis_lurus: bool = True
     catatan: str
 

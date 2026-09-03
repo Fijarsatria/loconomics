@@ -24,17 +24,25 @@ import { useEffect, useState } from 'react'
 
 import {
   ARTI_INDEKS,
+  KUADRAN,
   ARTI_KODE,
   ARTI_VARIABEL,
   TANYA_INDEKS,
   TINGGI_BAIK,
+  frasaPrestise,
   kataIndeks,
   keKalimat,
   kodeLokasi,
 } from '../config'
 import { api, GalatAPI } from '../lib/api'
 import { angka, rupiah } from '../lib/format'
-import type { CommuterClock, DetailHeksagon, KonteksSimpul, PriceLensHeksagon } from '../types'
+import type {
+  CommuterClock,
+  DetailHeksagon,
+  KonteksSimpul,
+  PriceLensHeksagon,
+  ProfilRute,
+} from '../types'
 import BarHarga from './BarHarga'
 import ChartJam from './ChartJam'
 import { useSesi } from './Akun'
@@ -47,6 +55,7 @@ import {
   Baris,
   ChipKuadran,
   Kosong,
+  Rinci,
   Terkunci,
   Memuat,
 } from './primitif'
@@ -69,6 +78,7 @@ import {
 function SumbuKuadran({
   label,
   kalimat,
+  catatan,
   nilai,
   batas,
   maks,
@@ -78,6 +88,10 @@ function SumbuKuadran({
   label: string
   /** Apa artinya, dalam satu kalimat. Menggantikan penjelasan mekanismenya. */
   kalimat: string
+  /** Sumbu ini berdiri di atas apa. Kosong = tidak ada yang perlu dinyatakan.
+   *  Dibangkitkan `frasaPrestise()` dari cakupan bahan, bukan ditulis tetap —
+   *  begitu bahannya terisi, catatannya hilang sendiri. */
+  catatan?: string[]
   nilai: number
   batas: number
   maks: number
@@ -116,6 +130,23 @@ function SumbuKuadran({
         />
       </div>
       <p className="mt-1.5 text-[12px] leading-snug text-ink-2">{kalimat}</p>
+      {/* TIDAK dilipat, dan itu keputusan yang sudah dibayar sekali.
+
+          Percobaan melipatnya ke <details> bersama keterangan panjang lain di
+          panel ini langsung membuat dua asersi `audit-prd.mjs` merah. Alasannya
+          benar: kalimat ini menyatakan sumbu prestise berdiri di atas TIGA dari
+          lima bahan, dan bahwa dua yang menilai tampilan secara langsung kosong.
+          Yang dijanjikan bukan "bisa dibuka" melainkan bahwa layar
+          MENYEBUTKANNYA - dan kalimat di balik lipatan tidak menyebutkan apa
+          pun sampai ada yang membukanya.
+
+          Keterangan lain di panel ini boleh dilipat justru karena tidak ada
+          yang berjanji atas namanya. */}
+      {catatan?.map((c) => (
+        <p key={c} className="mt-1 text-[11.5px] leading-snug text-ink-3">
+          {c}
+        </p>
+      ))}
     </div>
   )
 }
@@ -128,6 +159,8 @@ export default function PanelInsight({
   onBukaSimulasi,
   onBandingkan,
   sedangDibandingkan,
+  profilRute = 'foot-walking',
+  onGantiProfil,
 }: {
   h3: string | null
   onBukaKuadran: () => void
@@ -141,6 +174,9 @@ export default function PanelInsight({
   onBandingkan?: (h3: string) => void
   /** Sudah ada di baki komparasi. */
   sedangDibandingkan?: boolean
+  /** Profil rute yang sedang digambar. Dimiliki App, dipakai bersama peta. */
+  profilRute?: ProfilRute
+  onGantiProfil?: (p: ProfilRute) => void
 }) {
   const { premium, mintaLangganan, mintaMasuk, akun, segarkan, tandaiTerbuka, terbuka, catatSimpan } =
     useSesi()
@@ -194,7 +230,7 @@ export default function PanelInsight({
       // GRATIS, jadi tidak ikut penjaga di atas. Peta sudah memintanya untuk
       // menggambar garisnya, dan backend men-cache-nya 15 menit - jadi yang ini
       // hampir selalu dijawab dari cache, bukan dari basis data.
-      api.simpulTerdekat(h3),
+      api.simpulTerdekat(h3, profilRute),
     ])
       .then(([d, p, c, s]) => {
         if (batal) return
@@ -213,7 +249,7 @@ export default function PanelInsight({
     // ULANG supaya 43 variabelnya benar-benar datang. Respons yang sudah ada di
     // state dibuat untuk tingkat yang lama, dan tidak ada cara menambalnya di
     // frontend - isinya memang tidak pernah dikirim.
-  }, [h3, premium, terbuka])
+  }, [h3, premium, terbuka, profilRute])
 
   if (!h3)
     return (
@@ -259,7 +295,24 @@ export default function PanelInsight({
   return (
     <div key={h3} className="masuk scroll-tipis h-full overflow-y-auto">
       {/* --- Kepala --------------------------------------------------------- */}
-      <div className="border-b border-line bg-surface px-4 py-3">
+      {/* Kepala diberi warna KUADRANNYA, bukan putih polos.
+
+          Warnanya sudah dipakai di peta untuk heksagon yang sama, jadi ini
+          bukan hiasan: ia menyambungkan petak yang baru diklik dengan panel
+          yang baru terbuka. Tanpa itu, satu-satunya yang menyatakan keduanya
+          benda yang sama adalah nama lokasinya - dan nama itu baru dibaca
+          sesudah mata mencarinya.
+
+          Kepekatannya rendah dan berhenti sebelum teks: yang diwarnai LATAR,
+          dan kontras tulisan terhadapnya tidak berubah sama sekali. */}
+      <div
+        className="border-b border-line px-4 py-3"
+        style={{
+          background: skor.kuadran
+            ? `linear-gradient(180deg, ${KUADRAN[skor.kuadran].lembut} 0%, var(--color-surface) 78%)`
+            : 'var(--color-surface)',
+        }}
+      >
         {/* Nama yang bisa dibaca di depan, indeks H3 di belakangnya dan
             kecil. Indeksnya TETAP ada - ia yang dipakai kalau seseorang perlu
             menelusuri ke basis data - tapi ia bukan yang dicari mata saat
@@ -289,7 +342,7 @@ export default function PanelInsight({
               <span className="text-[13px] text-ink-3">/ 100</span>
             </div>
             <p className="eyebrow mt-1">
-              Skor peluang
+              Opportunity Score
               {skor.peringkat !== null && ` · peringkat ${skor.peringkat}`}
             </p>
           </div>
@@ -310,7 +363,7 @@ export default function PanelInsight({
 
         {/* --- Kenapa kuadrannya begitu --------------------------------------
             Pertanyaan yang paling sering muncul soal layar ini: kenapa skor 58
-            bisa Hidden Gem sementara 50 justru Aman tapi Mahal. Jawabannya
+            bisa Hidden Gem sementara 50 justru Aman. Jawabannya
             selalu ada tapi tidak pernah terlihat - kuadran ditentukan DUA sumbu,
             dan panel ini cuma pernah menampilkan satu.
 
@@ -333,24 +386,37 @@ export default function PanelInsight({
               tampilNilai={`${posisi.y.toFixed(0)} dari 100`}
               tinggiBaik
             />
+            {/* "Diperkirakan tampak", bukan "terlihat".
+                Kalimat lamanya berbunyi "Bangunan dan tokonya TERLIHAT lebih
+                mahal" - dan itu mengaku ada yang melihat. Tidak ada: dari lima
+                bahan sumbu ini, dua yang menilai tampilan secara langsung (M03
+                dari foto, P02 dari nilai tanah) kosong di seluruh 708 heksagon,
+                jadi posisinya disimpulkan dari bentuk bangunan dan porsi
+                waralaba. Kesimpulan yang masuk akal - tetapi kesimpulan, dan
+                bedanya harus terbaca. `catatan` menyebut bahan yang tersisa itu
+                apa saja; ia dibangkitkan, jadi ia ikut berubah begitu M03 masuk
+                dan hilang sendiri begitu kelimanya terisi. */}
             <div className="mt-2.5">
               <SumbuKuadran
                 label="Seberapa mahal kelihatannya"
                 kalimat={
                   posisi.x >= batas.x
-                    ? 'Bangunan dan tokonya terlihat lebih mahal daripada separuh lokasi lain — sewanya biasanya ikut naik.'
-                    : 'Terlihat biasa saja dibanding separuh lokasi lain — dan justru di situ sewanya masih murah.'
+                    ? 'Diperkirakan tampak lebih mahal daripada separuh lokasi lain — sewanya biasanya ikut naik.'
+                    : 'Diperkirakan tampak lebih biasa daripada separuh lokasi lain — dan justru di situ sewanya masih murah.'
                 }
+                catatan={frasaPrestise(detail.cakupan_prestise, 'lokasi')}
                 nilai={posisi.x}
                 batas={batas.x}
                 maks={1}
                 tampilNilai={posisi.x >= batas.x ? 'Di atas rata-rata' : 'Di bawah rata-rata'}
               />
             </div>
-            <p className="mt-2.5 border-t border-line/60 pt-2 text-[11px] leading-snug text-ink-3">
-              Garis tegak pada kedua batang = titik tengah seluruh lokasi di enam kawasan.
-              Sisi mana batangnya berhenti terhadap garis itulah yang menentukan kuadrannya.
-            </p>
+            <div className="mt-2 border-t border-line/60 pt-1.5">
+              <Rinci ringkas="Apa arti garis tegaknya?">
+                Garis tegak pada kedua batang = titik tengah seluruh lokasi di enam kawasan.
+                Sisi mana batangnya berhenti terhadap garis itulah yang menentukan kuadrannya.
+              </Rinci>
+            </div>
           </div>
         )}
       </div>
@@ -537,12 +603,61 @@ export default function PanelInsight({
           "Jebakan Gengsi" versi kaki, dan orang berhak tahu sebelum menyewa. */}
       {konteks?.simpul && !konteks.garis_lurus && konteks.jarak_m !== null && (
         <div className="border-b border-line bg-surface px-4 py-2.5">
+          {/* Pemilih profil.
+
+              `profil_tersedia` datang dari backend dan menyatakan profil mana
+              yang PUNYA baris untuk heksagon ini. Tombol yang datanya belum
+              ada dinonaktifkan, bukan disembunyikan: menyembunyikannya membuat
+              "rute mobil tidak ada di produk ini" - padahal yang benar "rute
+              mobil belum ditarik untuk lokasi ini". Dua pernyataan yang sangat
+              berbeda, dan yang kedua yang jujur.
+
+              Motor tidak ada di daftar, dan tidak akan pernah: ORS tidak
+              menyediakan profilnya. */}
+          {onGantiProfil && (
+            <div className="mb-2 flex gap-1">
+              {(
+                [
+                  ['foot-walking', 'Jalan kaki', 'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8'],
+                  ['driving-car', 'Mobil', 'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1'],
+                ] as const
+              ).map(([nilai, label, glif]) => {
+                const ada = konteks.profil_tersedia?.includes(nilai) ?? false
+                const aktif = profilRute === nilai
+                return (
+                  <button
+                    key={nilai}
+                    onClick={() => onGantiProfil(nilai)}
+                    disabled={!ada && !aktif}
+                    title={ada ? label : `Rute ${label.toLowerCase()} belum ditarik untuk lokasi ini`}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-all duration-300 ease-jelly disabled:cursor-not-allowed disabled:opacity-35 ${
+                      aktif
+                        ? 'bg-ink text-surface'
+                        : 'border border-line text-ink-3 hover:border-ink-3 hover:text-ink-2'
+                    }`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden className="shrink-0">
+                      <path
+                        d={glif}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           <div className="flex items-baseline gap-2">
             <span className="papan tabular text-[19px] leading-none text-ink">
               {Math.round(konteks.menit_jalan ?? 0)}
             </span>
             <span className="text-[12px] text-ink-2">
-              menit jalan kaki ke{' '}
+              menit {profilRute === 'driving-car' ? 'berkendara' : 'jalan kaki'} ke{' '}
               <strong className="font-semibold text-ink">{konteks.simpul.nama}</strong>
             </span>
           </div>
@@ -641,7 +756,7 @@ export default function PanelInsight({
           BERBAYAR sejak 23 Agustus 2026 - keputusan pemilik repo. Peta harga
           (layer PriceLens) tetap gratis; yang berbayar kartu rinciannya:
           sewa/bulan, NJOP, dan posisi terhadap rentang wajar kawasan. */}
-      <Bagian judul="PriceLens — harga sewa">
+      <Bagian judul="PriceLens — harga sewa" nada="jebakan" ikon={<><path d="M2 5.2A1.7 1.7 0 0 1 3.7 3.5h8.6A1.7 1.7 0 0 1 14 5.2v6.1a1.7 1.7 0 0 1-1.7 1.7H3.7A1.7 1.7 0 0 1 2 11.3z"/><path d="M11 8.25h1.6"/></>}>
         {terkunci ? (
           <Terkunci
             judul="Rincian harga lokasi ini"
@@ -700,13 +815,17 @@ export default function PanelInsight({
                     </Baris>
                   ))}
                   {kosong.length > 0 && (
-                    <p className="pt-1 text-[12.5px] leading-relaxed text-ink-3">
-                      {kosong.length === baris.length ? 'Belum ada' : 'Belum ada juga'}{' '}
-                      {kosong.map(([l]) => keKalimat(l)).join(', ')} di lokasi ini.{' '}
-                      {kosong.some(([l]) => l === 'NJOP')
-                        ? 'NJOP tidak diterbitkan terbuka oleh Bapenda; sisanya menunggu survei lapangan — ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'
-                        : 'Ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'}
-                    </p>
+                    <div className="pt-1">
+                      <p className="text-[12.5px] leading-snug text-ink-3">
+                        {kosong.length === baris.length ? 'Belum ada' : 'Belum ada juga'}{' '}
+                        {kosong.map(([l]) => keKalimat(l)).join(', ')} di lokasi ini.
+                      </p>
+                      <Rinci ringkas="Kenapa belum ada?">
+                        {kosong.some(([l]) => l === 'NJOP')
+                          ? 'NJOP tidak diterbitkan terbuka oleh Bapenda; sisanya menunggu survei lapangan — ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'
+                          : 'Ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'}
+                      </Rinci>
+                    </div>
                   )}
                 </div>
               )
@@ -719,6 +838,8 @@ export default function PanelInsight({
 
       {/* --- 3. Commuter Clock ---------------------------------------------- */}
       <Bagian
+        nada="jebakan"
+        ikon={<><circle cx="8" cy="8" r="5.8"/><path d="M8 4.9V8l2.1 1.5"/></>}
         judul="Commuter Clock — kapan uang berpindah"
         aksi={
           jam?.dominasi && (
@@ -779,12 +900,12 @@ export default function PanelInsight({
              pelanggan berhak tahu bahwa yang kurang bukan koneksinya. */
           <div className="text-[13px] leading-relaxed text-ink-2">
             <p className="font-medium text-ink">Belum ada satu pun jam transaksi tercatat.</p>
-            <p className="mt-1 text-ink-3">
+            <Rinci ringkas="Kenapa belum ada?">
               Pola jam dibaca dari waktu yang tercetak di struk. Struk survei MAPID
               tidak membawa kolom waktu — jamnya ada di dalam foto struknya, dan
               pembacaan otomatis foto belum dijalankan. Sampai itu ada, tidak ada
               satu pun lokasi yang punya profil jam.
-            </p>
+            </Rinci>
           </div>
         )}
       </Bagian>
@@ -796,13 +917,13 @@ export default function PanelInsight({
           dari sesuatu yang tidak pernah diperiksa. Ia dapat satu baris tenang,
           persis seperti zona RDTR yang diizinkan. */}
       {risiko.tingkat === 'TIDAK_DIKETAHUI' && (
-        <Bagian judul="RiskRadar — pergantian usaha">
+        <Bagian judul="RiskRadar — pergantian usaha" nada="bahaya" ikon={<path d="M1.8 8h3l1.6-4 2.6 8 1.6-4h3.6"/>}>
           <Kosong teks="Data pergantian usaha belum ada — lokasi ini belum bisa dinilai risikonya" />
         </Bagian>
       )}
 
       {(risiko.tingkat === 'WASPADA' || risiko.tingkat === 'BAHAYA') && (
-        <Bagian judul="RiskRadar — pergantian usaha">
+        <Bagian judul="RiskRadar — pergantian usaha" nada="bahaya" ikon={<path d="M1.8 8h3l1.6-4 2.6 8 1.6-4h3.6"/>}>
           <div className="flex gap-2.5 rounded-sm border border-bahaya/25 bg-bahaya-soft p-2.5">
             <span
               aria-hidden
@@ -845,11 +966,13 @@ export default function PanelInsight({
 
           Sekarang: kata, bukan desimal; angka sungguhan kalau ada; dan indeks
           yang bahannya belum terukur MENGATAKANNYA. */}
-      <Bagian judul="Empat hal yang dinilai">
-        <p className="mb-3 text-[13px] leading-relaxed text-ink-2">
-          Skor lokasi ini disusun dari empat hal di bawah. Semuanya dihitung di
-          luar aplikasi, sekali, dari data yang bisa ditunjuk sumbernya — bukan
-          dikarang saat Anda membukanya.
+      <Bagian judul="Empat hal yang dinilai" nada="gem" ikon={<><rect x="2.2" y="2.2" width="5" height="5" rx="1.2"/><rect x="8.8" y="2.2" width="5" height="5" rx="1.2"/><rect x="2.2" y="8.8" width="5" height="5" rx="1.2"/><rect x="8.8" y="8.8" width="5" height="5" rx="1.2"/></>}>
+        {/* Dipendekkan 3 Sep 2026 dari empat baris jadi satu. Yang hilang cuma
+            pengulangan: "dihitung di luar aplikasi, sekali" sudah dinyatakan
+            lagi di kaki panel, dan pembacanya belum tahu apa itu "pipeline"
+            saat membaca baris pertama. */}
+        <p className="mb-3 text-[13px] leading-snug text-ink-2">
+          Empat hal ini yang menyusun skornya.
         </p>
         {(
           [
@@ -890,7 +1013,7 @@ export default function PanelInsight({
                 <>
                   <div className="h-1.5 overflow-hidden rounded-full bg-ground-2">
                     <div
-                      className={`h-full rounded-full ${baik ? 'bg-ink' : 'bg-ink-3'}`}
+                      className={`h-full rounded-full ${baik ? 'bg-gem' : 'bg-jebakan'}`}
                       style={{ width: `${Math.min(100, Math.max(3, (nilai ?? 0) * 100))}%` }}
                     />
                   </div>
@@ -900,20 +1023,24 @@ export default function PanelInsight({
                     </p>
                   )}
                   {cakupan && cakupan.terukur < cakupan.total && (
-                    <p className="mt-1 text-[12px] leading-snug text-ink-3">
-                      {cakupan.terukur} dari {cakupan.total} bahannya sudah terukur. Belum ada:{' '}
-                      {cakupan.kosong.map((k) => keKalimat(ARTI_KODE[k] ?? k)).join(', ')}.
-                    </p>
+                    <Rinci
+                      ringkas={`${cakupan.terukur} dari ${cakupan.total} bahannya sudah terukur`}
+                    >
+                      Belum ada: {cakupan.kosong.map((k) => keKalimat(ARTI_KODE[k] ?? k)).join(', ')}.
+                    </Rinci>
                   )}
                 </>
               ) : (
-                <p className="text-[12.5px] leading-snug text-ink-3">
-                  {cakupan
-                    ? `Butuh survei lapangan dulu. Belum ada: ${cakupan.kosong
-                        .map((k) => keKalimat(ARTI_KODE[k] ?? k))
-                        .join(', ')}.`
-                    : 'Datanya belum ada untuk lokasi ini.'}
-                </p>
+                <div>
+                  <p className="text-[12.5px] leading-snug text-ink-3">
+                    {cakupan ? 'Butuh survei lapangan dulu.' : 'Datanya belum ada untuk lokasi ini.'}
+                  </p>
+                  {cakupan && (
+                    <Rinci ringkas="Yang belum ada apa saja?">
+                      {cakupan.kosong.map((k) => keKalimat(ARTI_KODE[k] ?? k)).join(', ')}.
+                    </Rinci>
+                  )}
+                </div>
               )}
             </div>
           )
@@ -926,7 +1053,7 @@ export default function PanelInsight({
           di kolom berbayar; ringkasan di atas - skor, kuadran, Commuter Clock,
           RiskRadar, ZoneGuard - tetap gratis dan tidak pernah tertutup tirai. */}
       {terkunci ? (
-        <Bagian judul="Kenapa skornya segitu">
+        <Bagian judul="Kenapa skornya segitu" nada="gem" ikon={<path d="M3 13V9.4M8 13V3.4M13 13V6.6"/>}>
           <Terkunci
             judul="Pembongkaran skor"
             kalimat="Lihat angka mana yang menaikkan dan menurunkan skor lokasi ini, dan seberapa jauh posisinya dibanding lokasi lain."
@@ -945,7 +1072,7 @@ export default function PanelInsight({
         </Bagian>
       ) : (
         faktor.length > 0 && (
-        <Bagian judul="Kenapa skornya segitu">
+        <Bagian judul="Kenapa skornya segitu" nada="gem" ikon={<path d="M3 13V9.4M8 13V3.4M13 13V6.6"/>}>
           <ul className="space-y-1.5">
             {faktor.slice(0, 6).map((f) => (
               <li key={f.kode_variabel} className="flex items-baseline gap-2">
@@ -986,7 +1113,7 @@ export default function PanelInsight({
 
       {/* --- 7. Variabel lengkap -------------------------------------------- */}
       {terkunci ? (
-        <Bagian judul="Seluruh 43 angka lokasi ini">
+        <Bagian judul="Seluruh 43 angka lokasi ini" nada="netral" ikon={<><rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6"/><path d="M2.2 6.4h11.6M6.6 6.4v6.8"/></>}>
           <Terkunci
             judul="Seluruh 43 angka lokasi ini"
             kalimat="Semua angka yang dipakai menilai lokasi ini — orang di sekitarnya, kebiasaan belanjanya, pesaingnya, biayanya, risikonya, dan bentuk bangunannya."
@@ -996,7 +1123,7 @@ export default function PanelInsight({
           />
         </Bagian>
       ) : (
-      <Bagian judul="Seluruh 43 angka lokasi ini">
+      <Bagian judul="Seluruh 43 angka lokasi ini" nada="netral" ikon={<><rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6"/><path d="M2.2 6.4h11.6M6.6 6.4v6.8"/></>}>
         <details className="group">
           <summary className="cursor-pointer list-none text-[14px] text-ink-2 underline decoration-line-2 underline-offset-2 hover:text-ink">
             Tampilkan tabel lengkap
@@ -1047,7 +1174,7 @@ export default function PanelInsight({
       )}
 
       {/* --- 8. Riwayat skor (berbayar) ------------------------------------ */}
-      <Bagian judul="Riwayat perubahan skor">
+      <Bagian judul="Riwayat perubahan skor" nada="netral" ikon={<><path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9"/><path d="M2.3 2.8v3.4h3.4"/></>}>
         <BagianRiwayat h3={h3} />
       </Bagian>
 

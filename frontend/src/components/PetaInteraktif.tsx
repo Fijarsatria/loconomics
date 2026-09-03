@@ -68,7 +68,7 @@ import {
   type NamaLayer,
 } from '../config'
 import { api } from '../lib/api'
-import type { KonteksSimpul, PropertiHeksagon, RuteJalan, SimpulTransit } from '../types'
+import type { KonteksSimpul, PropertiHeksagon, RuteJalan, SimpulTransit, ProfilRute } from '../types'
 
 const SUMBER = 'heksagon'
 const L_ISI = 'hex-isi'
@@ -115,6 +115,13 @@ const L_RUTE_TEKS = 'rute-teks'
 /** Titik awal (pusat heksagon) dan tujuan (simpul). */
 const L_UJUNG_CINCIN = 'rute-ujung-cincin'
 const L_UJUNG = 'rute-ujung'
+
+/**
+ * Berapa kali peta mencoba memuat ulang basemap sendiri saat ubin MAPID
+ * menolak, berjarak semenit. Pemadaman terukur pulih dalam belasan menit
+ * (sekali 11 menit), jadi sepuluh percobaan menutupi rentang itu.
+ */
+const PERCOBAAN_UBIN = 10
 
 /** Lama animasi rute menggambar dirinya, milidetik. */
 const GAMBAR_MS = 950
@@ -575,6 +582,28 @@ interface Props {
    */
   dibandingkan: string[]
   onPilihHeksagon: (h3: string | null) => void
+  /**
+   * Klik dua kali sebuah heksagon = simpan lokasi itu.
+   *
+   * Jalan pintas, bukan jalan satu-satunya: tombol "Simpan lokasi" di panel
+   * detail tetap ada dan tetap jadi tempat orang belajar bahwa fitur ini ada.
+   * Yang ditambahkan cuma cara yang lebih cepat untuk orang yang sudah tahu -
+   * dan klik-dua-kali memang gerakan yang sudah dipakai orang untuk "tandai
+   * ini" di hampir setiap peta.
+   *
+   * Penjagaannya TIDAK ada di sini. Pemanggil yang memutuskan boleh atau
+   * tidak, memakai penjaga yang sama persis dengan tombol di panel - kalau
+   * dipisah, "sudah berlangganan" akan berarti hal yang berbeda di dua tempat.
+   */
+  onSimpanCepat?: (h3: string) => void
+  /**
+   * Profil rute yang digambar: jalan kaki atau mobil.
+   *
+   * Milik App, bukan state di sini, karena pemilihnya duduk di panel detail
+   * dan petanya yang menggambar. Dua tempat, satu nilai - dan nilai yang
+   * disalin ke dua tempat adalah nilai yang suatu saat berselisih.
+   */
+  profilRute?: ProfilRute
   onMuat: (n: number) => void
   /**
    * Layar pembuka sudah menyingkir?
@@ -605,6 +634,8 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     saringKuadran,
     dibandingkan,
     onPilihHeksagon,
+    onSimpanCepat,
+    profilRute = 'foot-walking',
     onMuat,
     tampil,
     onArah,
@@ -691,6 +722,11 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
    */
   const onPilihRef = useRef(onPilihHeksagon)
   onPilihRef.current = onPilihHeksagon
+  // Alasan yang sama persis dengan `onPilihRef` di atas: pendengar peta
+  // dipasang SEKALI di efek tanpa dependensi, jadi ia tidak boleh menangkap
+  // prop yang identitasnya berganti tiap render.
+  const onSimpanRef = useRef(onSimpanCepat)
+  onSimpanRef.current = onSimpanCepat
   const onMuatRef = useRef(onMuat)
   onMuatRef.current = onMuat
   /**
@@ -745,6 +781,31 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   /** Sampai kapan galat ubin boleh memasang ulang peringatannya, dalam
    *  `performance.now()`. Dibuka tiap kali ubin diminta ulang. */
   const jendelaUbin = useRef(0)
+  /**
+   * Sisa jatah percobaan otomatis. Masuk ke STATE, bukan cuma variabel di
+   * dalam efeknya, karena peringatannya menyebutkan angka ini.
+   *
+   * Tanpa itu yang terlihat cuma sebuah tombol, dan tombol yang berdiri
+   * sendiri menyatakan "tidak ada yang sedang berjalan" - padahal petanya
+   * sudah mencoba sendiri tiap menit. Orang lalu menekannya berkali-kali,
+   * atau menyimpulkan aplikasinya menyerah.
+   */
+  const sisaUbin = useRef(PERCOBAAN_UBIN)
+  const [percobaanUbin, setPercobaanUbin] = useState(PERCOBAAN_UBIN)
+  /**
+   * Seberapa banyak peringatan ubin itu memakan layar.
+   *
+   * Pemadaman MAPID berlangsung belasan menit, dan selama itu panel selebar
+   * 28rem duduk di tengah bawah peta - tepat di atas pil layer dan baki
+   * komparasi. Yang dinyatakannya penting SEKALI, lalu berubah jadi halangan:
+   * pembacanya sudah tahu, sudah tidak bisa berbuat apa-apa, dan masih harus
+   * melihatnya tiap kali menggeser peta.
+   *
+   * Karena itu ia mengecil sendiri jadi chip sesudah dibaca, bukan hilang:
+   * peta abu-abu tanpa satu pun keterangan adalah keadaan yang lebih buruk,
+   * dan itu sudah pernah terjadi di repo ini.
+   */
+  const [tiraiUbin, setTiraiUbin] = useState<'penuh' | 'ringkas'>('penuh')
 
   const [sorot, setSorot] = useState<PropertiHeksagon | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
@@ -875,7 +936,24 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       // pun keterangan, yaitu keadaan yang lebih buruk daripada sebelum ada
       // percobaan ulang sama sekali.
       const sedangMencoba = keUbin && performance.now() < jendelaUbin.current
-      if (!m.isStyleLoaded() || sedangMencoba) setGalatPeta({ pesan, ubin: keUbin })
+      if (!m.isStyleLoaded() || sedangMencoba) {
+        // Teknisnya ke KONSOL, bukan ke layar. Yang dulu tercetak di panel
+        // adalah `AJAXError: Failed to fetch (0): <url>.pbf` apa adanya -
+        // pesan untuk pengembang, dibaca orang yang cuma ingin melihat peta.
+        // Kesalahan yang sama sudah pernah diperbaiki di Commuter Clock dan
+        // di Konsultan AI; ini tempat ketiganya.
+        //
+        // `(0)`-nya sendiri menyesatkan, dan itu yang paling layak dicatat:
+        // MAPID menjawab 401, tetapi balasan penolakannya TIDAK membawa satu
+        // pun header CORS - jadi peramban menolak menyerahkannya ke
+        // JavaScript, dan yang sampai ke MapLibre cuma "gagal" tanpa status.
+        // Diverifikasi dengan curl dari dua jaringan yang berbeda: 401 di
+        // keduanya, sementara `fonts/*` 200 tanpa kunci dan `styles/*` 200
+        // dengan kunci yang sama. Jadi status 0 di sini BUKAN jaringan
+        // pengguna dan bukan CORS di sisi kita.
+        console.warn('[basemap] permintaan ubin ditolak:', pesan, url || '(url tidak disebutkan)')
+        setGalatPeta({ pesan, ubin: keUbin })
+      }
     })
 
     // `rotate` dan `pitch` menyala tiap bingkai selama diseret; itu tidak apa-apa
@@ -905,26 +983,36 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
    */
   useEffect(() => {
     if (!galatPeta?.ubin) return
-    let sisa = 10
+    sisaUbin.current = PERCOBAAN_UBIN
+    setPercobaanUbin(PERCOBAAN_UBIN)
+    // Sembilan detik: cukup untuk membaca tiga kalimatnya sekali, tidak cukup
+    // lama untuk terasa menghalangi. Sesudah itu ia mengecil sendiri.
+    setTiraiUbin('penuh')
+    const kecil = setTimeout(() => setTiraiUbin((t) => (t === 'penuh' ? 'ringkas' : t)), 9_000)
     const jam = setInterval(() => {
-      if (sisa-- <= 0) {
+      if (sisaUbin.current <= 0) {
         clearInterval(jam)
         return
       }
+      sisaUbin.current -= 1
+      setPercobaanUbin(sisaUbin.current)
       // `setStyle`, dan itu memang satu-satunya yang bekerja.
       //
       // Percobaan pertama memakai `source.setTiles([...tiles])` supaya lebih
       // murah - tanpa membangun ulang layer dan tanpa meminta heksagon lagi.
       // Terukur: ia menghasilkan NOL permintaan ubin. Daftar tile yang sama
       // persis tidak dianggap perubahan, jadi cache ubin gagalnya tetap utuh.
-      // Yang lebih buruk, ia erhasil\ secara diam-diam: peringatannya hilang
+      // Yang lebih buruk, ia `berhasil` secara diam-diam: peringatannya hilang
       // karena tidak ada galat baru, bukan karena ubinnya kembali.
       //
       // Jendela di bawah memastikan kegagalan yang berulang tetap terlihat.
       jendelaUbin.current = performance.now() + 12_000
       setMuatUlang((n) => n + 1)
     }, 60_000)
-    return () => clearInterval(jam)
+    return () => {
+      clearInterval(jam)
+      clearTimeout(kecil)
+    }
   }, [galatPeta?.ubin])
 
   // --- Ganti gaya basemap ---
@@ -1346,7 +1434,33 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             // Sedikit lebih tebal, dan MELEBAR saat di-zoom masuk. Lebar tetap
             // membuat rute terlihat seperti benang di zoom rendah dan seperti
             // pita di zoom tinggi; yang melebar terbaca sama di keduanya.
-            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3.6, 15, 5.4, 18, 7],
+            //
+            // MOBIL digambar lebih tebal lagi. Bukan hierarki - keduanya
+            // sama pentingnya - melainkan supaya bedanya terbaca bersama pola
+            // garisnya di bawah: yang padat-dan-tebal jelas bukan yang
+            // putus-putus, bahkan sekilas dan bahkan buta warna.
+            'line-width': [
+              'case',
+              ['==', ['get', 'profil'], 'driving-car'],
+              ['interpolate', ['linear'], ['zoom'], 11, 5, 15, 7.4, 18, 9.5],
+              ['interpolate', ['linear'], ['zoom'], 11, 3.6, 15, 5.4, 18, 7],
+            ],
+            // Jalan kaki PUTUS-PUTUS, mobil SOLID.
+            //
+            // Bukan sekadar penanda: pola itu sudah jadi kosakata peta di mana
+            // pun - garis terputus berarti sesuatu yang ditempuh dengan kaki,
+            // garis padat berarti jalur kendaraan. Memakainya terbalik akan
+            // melawan sesuatu yang sudah dibaca orang tanpa berpikir.
+            //
+            // `[1, 0]` untuk yang solid, bukan menghapus propertinya: MapLibre
+            // tidak bisa menganimasikan properti yang KADANG ada dan kadang
+            // tidak, dan ekspresi `case` menuntut kedua cabangnya bertipe sama.
+            'line-dasharray': [
+              'case',
+              ['==', ['get', 'profil'], 'driving-car'],
+              ['literal', [1, 0]],
+              ['literal', [2.4, 1.1]],
+            ],
           },
         })
 
@@ -1469,6 +1583,16 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         m.on('click', L_ISI, (e) => {
           const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
           onPilihRef.current(p?.h3_index ?? null)
+        })
+        // `preventDefault()` WAJIB, dan bukan formalitas: tanpa itu MapLibre
+        // ikut menjalankan zoom bawaannya, jadi menyimpan sebuah lokasi
+        // sekaligus melompatkan peta satu tingkat zoom. Yang tersimpan benar,
+        // yang terlihat pindah tempat.
+        m.on('dblclick', L_ISI, (e) => {
+          const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
+          if (!p?.h3_index || !onSimpanRef.current) return
+          e.preventDefault()
+          onSimpanRef.current(p.h3_index)
         })
         m.on('mousemove', L_ISI, (e) => {
           const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
@@ -1611,20 +1735,28 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   }, [terpilih, kunciBanding]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const belum = perluRute.filter((h) => !dimintaRef.current.has(h))
+    // Kunci ingatan "sudah diminta" memuat PROFILNYA.
+    //
+    // Tanpa itu, berganti ke mobil untuk heksagon yang rute jalan kakinya
+    // sudah pernah diambil menghasilkan NOL permintaan baru: heksagonnya sudah
+    // ada di daftar. Yang terlihat di layar rute jalan kaki yang tidak
+    // berubah, dan tidak ada satu pun galat. Keluarga yang sama persis dengan
+    // kunci cache backend yang dulu membuat dua heksagon berbagi satu jawaban.
+    const kunci = (h: string) => `${profilRute}|${h}`
+    const belum = perluRute.filter((h) => !dimintaRef.current.has(kunci(h)))
     if (!belum.length) return
-    belum.forEach((h) => dimintaRef.current.add(h))
+    belum.forEach((h) => dimintaRef.current.add(kunci(h)))
     let batal = false
     Promise.all(
       belum.map((h) =>
         api
-          .simpulTerdekat(h)
+          .simpulTerdekat(h, profilRute)
           .then((k) => [h, k] as const)
           .catch(() => {
             // Gagal sekali tidak boleh jadi gagal selamanya: heksagonnya
             // dilepas dari daftar "sudah diminta" supaya percobaan berikutnya
             // benar-benar mencoba lagi.
-            dimintaRef.current.delete(h)
+            dimintaRef.current.delete(kunci(h))
             return null
           }),
       ),
@@ -1636,7 +1768,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     return () => {
       batal = true
     }
-  }, [perluRute])
+  }, [perluRute, profilRute])
 
   // --- MODE FOKUS ---
   //
@@ -1794,6 +1926,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       warna: string
       label: string
       utama: boolean
+      profil: string
     }[] = []
     const ujung: unknown[] = []
 
@@ -1811,6 +1944,11 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           kum: panjangKumulatif(k),
           warna,
           utama: r.utama,
+          // Dibaca dari RUTENYA, bukan dari profil yang diminta. Bedanya baru
+          // terasa kalau suatu saat satu respons memuat dua profil sekaligus -
+          // dan pada saat itu gaya garis yang disimpulkan dari parameter
+          // permintaan akan menggambar keduanya sama.
+          profil: r.profil ?? 'foot-walking',
           label: r.utama
             ? `${jarakSingkat(r.jarak_m)} · ${Math.round(r.menit)} mnt`
             : `lewat sini · ${Math.round(r.menit)} mnt`,
@@ -1847,7 +1985,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           geometry: { type: 'LineString', coordinates: potong(j, i) },
           // Label ditahan sampai garisnya sampai. Label yang ikut bergeser
           // bersama ujung yang sedang tumbuh terbaca sebagai teks yang lari.
-          properties: { warna: j.warna, utama: j.utama, label: berlabel ? j.label : '' },
+          properties: {
+            warna: j.warna,
+            utama: j.utama,
+            profil: j.profil,
+            label: berlabel ? j.label : '',
+          },
         })),
         ...ujung,
       ],
@@ -2018,7 +2161,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               di panel detail, tempat orang memang sedang menelusuri satu
               lokasi tertentu. */}
           <p className="text-[12.5px] leading-tight text-ink-3">
-            skor peluang
+            Opportunity Score
             <span className="block text-[11.5px] font-medium text-ink-2">{sorot.kawasan}</span>
           </p>
           <p className="flex items-center gap-1.5 border-l border-line pl-3.5 text-[13.5px] text-ink-2">
@@ -2037,7 +2180,28 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         </div>
       )}
 
-      {galatPeta && (
+      {/* Chip ringkas. Yang terlihat sepanjang sisa pemadaman.
+
+          Ia menggantikan panel penuh sesudah sembilan detik, dan itu satu-
+          satunya bentuk yang memenuhi dua hal yang saling bertentangan:
+          peringatan ini WAJIB tetap ada (peta abu-abu tanpa keterangan pernah
+          terjadi dan lebih buruk), tetapi ia TIDAK boleh menghalangi peta
+          selama belasan menit. Sisa percobaan otomatis ikut di sini supaya
+          orang tahu sesuatu masih berjalan tanpa harus membukanya lagi. */}
+      {galatPeta?.ubin && tiraiUbin === 'ringkas' && (
+        <button
+          onClick={() => setTiraiUbin('penuh')}
+          className="kaca pop absolute bottom-24 left-1/2 z-10 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-ink-2 transition-transform duration-200 ease-jelly hover:scale-[1.04] lg:left-[calc(50%-13rem)]"
+        >
+          <span className="denyut h-1.5 w-1.5 shrink-0 rounded-full bg-bahaya" aria-hidden />
+          Ubin MAPID menolak
+          <span className="text-ink-3">
+            {percobaanUbin > 0 ? `· mencoba lagi ${percobaanUbin}x` : '· percobaan habis'}
+          </span>
+        </button>
+      )}
+
+      {galatPeta && (tiraiUbin === 'penuh' || !galatPeta.ubin) && (
         <div
           role="alert"
           // bottom-24, bukan bottom-4: kaki peta sudah ditempati pil pertanyaan
@@ -2045,6 +2209,17 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           // tinggi daripada versi satu-barisnya. Ditaruh di atas keduanya.
           className="kaca pop absolute bottom-24 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-md px-4 py-3 lg:left-[calc(50%-13rem)]"
         >
+          {galatPeta.ubin && (
+            <button
+              onClick={() => setTiraiUbin('ringkas')}
+              aria-label="Kecilkan peringatan"
+              className="absolute right-2 top-2 grid h-6 w-6 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-ground-2 hover:text-ink"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
           {/* Dua kegagalan, dua kalimat.
 
               Versi sebelumnya selalu menulis "Basemap gagal dimuat" lalu
@@ -2058,7 +2233,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               (dengan kunci pun 401), sementara `styles/*` menjawab 200 dengan
               kunci yang sama dan `fonts/*` 200 tanpa kunci. Jadi kuncinya sah
               dan yang padam sisi MAPID. */}
-          <p className="text-[13.5px] font-semibold text-bahaya">
+          <p className="pr-7 text-[13.5px] font-semibold text-bahaya">
             {galatPeta.ubin ? 'Server ubin MAPID sedang menolak' : 'Basemap gagal dimuat'}
           </p>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
@@ -2085,8 +2260,16 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               >
                 Coba muat ulang basemap
               </button>
-              <p className="mt-1.5 font-mono text-[11px] leading-relaxed break-all text-ink-3/80">
-                {galatPeta.pesan}
+              {/* Menyebutkan bahwa petanya SEDANG mencoba sendiri.
+                  Sebelumnya di sini tercetak galat MapLibre mentah, dan
+                  akibatnya dua-duanya buruk sekaligus: yang terbaca cuma
+                  jargon, sementara satu-satunya hal yang benar-benar perlu
+                  diketahui pembacanya - bahwa ia tidak harus menunggui
+                  tombolnya - tidak disebutkan sama sekali. */}
+              <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
+                {percobaanUbin > 0
+                  ? `Peta juga mencoba sendiri tiap menit, ${percobaanUbin} kali lagi. Pemadaman seperti ini biasanya pulih dalam belasan menit.`
+                  : 'Percobaan otomatis sudah habis. Tekan tombol di atas kalau ingin mencoba lagi.'}
               </p>
             </>
           )}

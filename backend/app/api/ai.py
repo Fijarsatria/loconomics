@@ -436,7 +436,7 @@ ALAT_FRONTEND: list[dict[str, Any]] = [
         "filter",
         "Saring heksagon yang tampil di peta.",
         {
-            "min_score": _p("number", "Ambang skor peluang 0-100", opsional=True),
+            "min_score": _p("number", "Ambang Opportunity Score 0-100", opsional=True),
             "kuadran": _p(
                 "string", "HIDDEN_GEM|JEBAKAN_GENGSI|PEMENANG_JELAS|HINDARI", opsional=True
             ),

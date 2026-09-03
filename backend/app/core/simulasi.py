@@ -79,11 +79,43 @@ HARI_PER_BULAN = 26  # enam hari kerja per minggu
 
 #: Jenis usaha hanya mengubah BAWAAN, bukan rumusnya. Nilainya tetap bisa
 #: ditimpa pengguna - ini titik awal yang masuk akal, bukan kebenaran.
+#:
+#: Diperluas 3 September 2026 dari empat jadi enam belas, permintaan pemilik
+#: repo: empat jenis memaksa pemilik bengkel, apotek, atau bimbel memilih
+#: "Jasa" dan mewarisi margin barbershop. Bawaan yang salah lebih buruk
+#: daripada tidak ada bawaan - ia terbaca sebagai perkiraan untuk usahanya,
+#: padahal perkiraan untuk usaha orang lain.
+#:
+#: Ketiga angkanya tetap ASUMSI dan tetap bulat, karena alasan yang sama seperti
+#: sejak awal: bulat mengumumkan dirinya sebagai titik awal yang harus diganti.
+#: Yang membedakan jenis satu dengan yang lain cuma titik awalnya; rumusnya
+#: satu untuk semua, dan `sumber` tetap menandai mana yang diisi orang.
+#:
+#: `kelompok` HANYA untuk menyusun tampilan pilihannya. Ia tidak menyentuh satu
+#: pun perhitungan.
+#:
+#: Kembarannya di frontend: `Simulasi.tsx::JENIS` dan `BAWAAN`. Dijaga sama oleh
+#: tests/test_aturan.py - kalau salah satunya bergeser, ujinya merah.
 JENIS_USAHA: dict[str, dict[str, float | int | str]] = {
-    "kuliner_ringan": {"label": "Kuliner ringan (kopi, jajanan)", "margin": 35.0, "luas": 12, "jam": 12},
-    "warung_makan": {"label": "Warung makan", "margin": 28.0, "luas": 24, "jam": 11},
-    "retail_kecil": {"label": "Retail kecil (kelontong, ATK)", "margin": 20.0, "luas": 18, "jam": 12},
-    "jasa": {"label": "Jasa (barbershop, laundry)", "margin": 45.0, "luas": 16, "jam": 10},
+    # --- Makanan & minuman -------------------------------------------------
+    "kuliner_ringan": {"kelompok": "Makanan & minuman", "label": "Kuliner ringan (kopi, jajanan)", "margin": 35.0, "luas": 12, "jam": 12},
+    "warung_makan": {"kelompok": "Makanan & minuman", "label": "Warung makan", "margin": 28.0, "luas": 24, "jam": 11},
+    "restoran": {"kelompok": "Makanan & minuman", "label": "Restoran & kafe duduk", "margin": 30.0, "luas": 60, "jam": 12},
+    "bakery": {"kelompok": "Makanan & minuman", "label": "Roti & kue", "margin": 38.0, "luas": 20, "jam": 12},
+    # --- Ritel -------------------------------------------------------------
+    "retail_kecil": {"kelompok": "Ritel", "label": "Kelontong & ATK", "margin": 20.0, "luas": 18, "jam": 12},
+    "minimarket": {"kelompok": "Ritel", "label": "Minimarket", "margin": 18.0, "luas": 80, "jam": 16},
+    "fesyen": {"kelompok": "Ritel", "label": "Fesyen & aksesoris", "margin": 45.0, "luas": 30, "jam": 10},
+    "elektronik": {"kelompok": "Ritel", "label": "Gawai & elektronik", "margin": 15.0, "luas": 20, "jam": 10},
+    "bangunan": {"kelompok": "Ritel", "label": "Bahan bangunan & perkakas", "margin": 22.0, "luas": 60, "jam": 9},
+    # --- Jasa --------------------------------------------------------------
+    "jasa": {"kelompok": "Jasa", "label": "Jasa harian (barbershop, laundry)", "margin": 45.0, "luas": 16, "jam": 10},
+    "kecantikan": {"kelompok": "Jasa", "label": "Salon & perawatan", "margin": 55.0, "luas": 30, "jam": 10},
+    "kesehatan": {"kelompok": "Jasa", "label": "Apotek & klinik", "margin": 25.0, "luas": 35, "jam": 12},
+    "pendidikan": {"kelompok": "Jasa", "label": "Bimbel & kursus", "margin": 50.0, "luas": 45, "jam": 8},
+    "otomotif": {"kelompok": "Jasa", "label": "Bengkel & cuci kendaraan", "margin": 40.0, "luas": 50, "jam": 10},
+    "hiburan": {"kelompok": "Jasa", "label": "Gim, gym & hiburan", "margin": 50.0, "luas": 70, "jam": 12},
+    "logistik": {"kelompok": "Jasa", "label": "Agen paket & ekspedisi", "margin": 30.0, "luas": 12, "jam": 10},
 }
 
 

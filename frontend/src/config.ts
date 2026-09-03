@@ -155,7 +155,11 @@ export const KUADRAN: Record<string, Kuadran> = {
   },
   PEMENANG_JELAS: {
     kunci: 'PEMENANG_JELAS',
-    nama: 'Aman tapi Mahal',
+    // Dipendekkan jadi "Aman" (3 Sep 2026). "Aman tapi Mahal" memuat DUA
+    // pernyataan dalam satu nama, dan yang kedua sudah dikatakan `ringkas` dan
+    // `arti` di bawah - jadi harganya cuma nama yang panjang dan sulit dibaca
+    // di lencana peta. Kuncinya tetap PEMENANG_JELAS.
+    nama: 'Aman',
     ringkas: 'bagus, dan Anda membayar gengsinya',
     warna: 'var(--q-menang)',
     warnaPeta: '#15803D',
@@ -358,7 +362,7 @@ export interface Layer {
 }
 
 export const LAYER: Record<string, Layer> = {
-  opportunity: { nama: 'Skor Peluang', pertanyaan: 'Di mana yang paling menjanjikan?' },
+  opportunity: { nama: 'Opportunity Score', pertanyaan: 'Di mana yang paling menjanjikan?' },
   pricelens: { nama: 'PriceLens', pertanyaan: 'Berapa harga sewa yang wajar di sini?' },
   hidden_gem: { nama: 'GemFinder', pertanyaan: 'Mana yang bagus tapi belum dilirik?' },
   risk_radar: { nama: 'RiskRadar', pertanyaan: 'Mana yang berisiko menjebak?' },
@@ -606,6 +610,75 @@ export function keKalimat(teks: string): string {
   const kata = teks.split(' ')[0] ?? ''
   if (kata.length > 1 && kata === kata.toUpperCase()) return teks
   return teks.charAt(0).toLowerCase() + teks.slice(1)
+}
+
+/** "a", "a dan b", "a, b, dan c". Daftar yang disambung koma saja terbaca putus. */
+function rangkai(bagian: string[]): string {
+  if (bagian.length <= 1) return bagian[0] ?? ''
+  return `${bagian.slice(0, -1).join(', ')} dan ${bagian[bagian.length - 1]}`
+}
+
+/**
+ * Sumbu datar kuadran berdiri di atas bahan apa — satu sampai dua kalimat.
+ *
+ * ADA KARENA `pipeline/s6_score.py::hitung_prestise_visual()` merata-ratakan
+ * lima bahan dengan `skipna=True`: bahan yang kosong dilewati begitu saja, dan
+ * sumbunya tetap menghasilkan angka untuk setiap heksagon. Terukur 2 Sep 2026,
+ * DUA bahan kosong di seluruh wilayah studi — dan keduanya justru satu-satunya
+ * yang menilai tampilan secara LANGSUNG (M03 dinilai dari foto, P02 dari nilai
+ * tanah). Yang menggerakkan sumbunya tinggal porsi waralaba dan bentuk
+ * bangunan: proksi yang masuk akal, tetapi proksi. Angkanya benar; nama sumbunya
+ * yang menjanjikan lebih banyak daripada yang diukur.
+ *
+ * Ambang berbasis JUMLAH sengaja tidak dipakai — tiga dari lima itu 60%, jadi
+ * ambang apa pun lolos dengan mulus justru pada keadaan yang jadi masalahnya.
+ * Yang menentukan bahan yang MANA, jadi yang disebutkan daftarnya.
+ *
+ * Kalimatnya DITURUNKAN dari daftar itu, tidak ditulis tetap: begitu satu bahan
+ * terisi ia berubah sendiri, dan begitu kelimanya terisi ia hilang sendiri.
+ * Aturan yang sama dengan pita status dan bagian temuan di gerbang — kalau
+ * sebuah pemicu perlu dihitung dari data supaya tidak berbohong, kalimat yang
+ * menyertainya perlu dihitung juga.
+ *
+ * SATU fungsi untuk kedua tempat yang memakainya. Kalau dipecah, "sumbu ini
+ * berdiri di atas apa" akan berarti dua hal berbeda di dua layar yang
+ * memperlihatkan sumbu yang sama.
+ */
+export function frasaPrestise(
+  cakupan: { terisi: string[]; kosong: string[]; diukur_langsung: boolean } | null | undefined,
+  lingkup: 'lokasi' | 'wilayah',
+): string[] {
+  if (!cakupan) return []
+  const { terisi, kosong, diukur_langsung } = cakupan
+  // Kelimanya terukur: tidak ada yang perlu dinyatakan, dan baris keterangan
+  // yang isinya "semuanya lengkap" cuma menambah teks tanpa menambah kejujuran.
+  if (kosong.length === 0) return []
+
+  const di = lingkup === 'lokasi' ? 'di lokasi ini' : 'di satu pun lokasi'
+  const nama = (kode: string) => keKalimat(ARTI_KODE[kode] ?? kode)
+
+  if (terisi.length === 0) {
+    return [`Belum ada satu pun bahan sumbu ini yang terukur ${di}.`]
+  }
+
+  const kalimat = [
+    `Diperkirakan dari ${terisi.length} dari ${terisi.length + kosong.length} bahan: ` +
+      `${rangkai(terisi.map(nama))}.`,
+  ]
+  if (!diukur_langsung) {
+    // DUA pernyataan, dipisah titik koma, dan pemisahan itu bukan gaya bahasa.
+    // Yang kedua mendaftar SELURUH yang kosong, termasuk proksi seperti porsi
+    // waralaba - kalau ia digabung jadi satu klausa dengan yang pertama, daftar
+    // itu terbaca seolah seluruh isinya penilai tampilan langsung, dan itu
+    // tidak benar. Memisahkannya juga yang membuat frontend tidak perlu
+    // menyalin BAHAN_PRESTISE_LANGSUNG dari backend: daftar yang dipelihara di
+    // dua tempat akan berpisah, dan `diukur_langsung` sudah menjawabnya.
+    kalimat.push(
+      `Belum ada satu pun bahan yang menilai tampilannya secara langsung; ` +
+        `yang belum terukur ${di}: ${rangkai(kosong.map(nama))}.`,
+    )
+  }
+  return kalimat
 }
 
 export function kataIndeks(kode: string, nilai: number | null): string | null {

@@ -372,6 +372,242 @@ def test_gaya_basemap_tidak_pernah_membawa_kunci():
             "sources" in r.json() and "layers" in r.json())
 
 
+# ---------------------------------------------------------------------------
+# Berkas deployment
+# ---------------------------------------------------------------------------
+#
+# Kenapa berkas deployment diuji di sini, bersama galat dan cache: ia sekeluarga
+# dengan keduanya. Salah di sini tidak memunculkan pesan apa pun di mesin
+# siapa pun - ia baru muncul di layanan yang belum pernah jalan, di hari yang
+# tidak bisa dipilih.
+#
+# Ketiga uji di bawah menutup tiga kerusakan yang benar-benar ada di render.yaml
+# sebelum ini, dan ketiganya lolos dari 497 asersi yang sudah ada karena
+# semuanya berjalan dengan `.env` lokal - satu-satunya lingkungan yang bentuknya
+# kebetulan benar.
+
+AKAR = Path(__file__).resolve().parents[2]
+
+
+def _render_yaml() -> str:
+    """String kosong kalau berkasnya tidak ada.
+
+    Render bukan lagi target utama - tim ini pindah ke Azure karena Render
+    menuntut kartu. `render.yaml` dipertahankan sebagai jalan cadangan yang
+    sudah benar dan teruji, tetapi ia BOLEH dibuang suatu saat, dan kalau itu
+    terjadi berkas uji ini harus melaporkannya sebagai uji yang dilewati -
+    bukan meledak dengan `FileNotFoundError` yang menyeret seluruh 51 asersi
+    lain ikut mati.
+    """
+    berkas = AKAR / "render.yaml"
+    return berkas.read_text(encoding="utf-8") if berkas.exists() else ""
+
+
+def _nilai_render(kunci: str) -> str | None:
+    """Nilai `value:` sebuah envVar di render.yaml. None kalau bukan literal."""
+    import re
+
+    m = re.search(rf'key: {kunci}\s*\n\s*value: "?([^"\n]+)"?', _render_yaml())
+    return m.group(1).strip() if m else None
+
+
+def test_cors_menerima_daftar_dipisah_koma():
+    """Bentuk yang DIDOKUMENTASIKAN di config.py, dan yang dipakai render.yaml.
+
+    Sebelum diperbaiki, `list[str]` diurai sebagai JSON oleh pydantic-settings,
+    jadi nilai berkoma melempar SettingsError saat IMPOR - server tidak pernah
+    naik. Gejalanya bukan CORS yang salah melainkan layanan yang mati total.
+    """
+    import os
+
+    from app.core.config import Settings
+
+    lama = os.environ.get("CORS_ORIGINS")
+    try:
+        os.environ["CORS_ORIGINS"] = "https://a.contoh,http://localhost:5173"
+        s = Settings()
+        cek("koma -> dua asal", s.cors_origins == ["https://a.contoh", "http://localhost:5173"],
+            f"- dapat {s.cors_origins!r}")
+
+        # Bentuk yang dipakai .env lokal. Kalau ini pecah, seluruh mesin
+        # pengembang ikut pecah - dan itu cara paling cepat membuat perbaikan
+        # hari ini dibatalkan besok.
+        os.environ["CORS_ORIGINS"] = '["https://b.contoh"]'
+        cek("larik JSON tetap diterima", Settings().cors_origins == ["https://b.contoh"])
+    finally:
+        if lama is None:
+            os.environ.pop("CORS_ORIGINS", None)
+        else:
+            os.environ["CORS_ORIGINS"] = lama
+
+
+def test_render_yaml_corsnya_benar_benar_terurai():
+    """Nilai yang BENAR-BENAR tertulis di render.yaml, bukan contoh karangan."""
+    import os
+
+    from app.core.config import Settings
+
+    nilai = _nilai_render("CORS_ORIGINS")
+    cek("render.yaml menyetel CORS_ORIGINS", bool(nilai))
+    if not nilai:
+        return
+
+    lama = os.environ.get("CORS_ORIGINS")
+    try:
+        os.environ["CORS_ORIGINS"] = nilai
+        asal = Settings().cors_origins
+        cek("nilainya terurai jadi daftar", len(asal) > 0, f"- dapat {asal!r}")
+        # Asal TIDAK memuat jalur. `https://x.github.io/loconomics/` adalah
+        # kesalahan yang tampak benar: itu URL situsnya, bukan asalnya, dan
+        # peramban tidak akan pernah mencocokkannya.
+        cek("tidak ada yang membawa jalur",
+            all(a.count("/") == 2 for a in asal),
+            f"- {[a for a in asal if a.count('/') != 2]}")
+    finally:
+        if lama is None:
+            os.environ.pop("CORS_ORIGINS", None)
+        else:
+            os.environ["CORS_ORIGINS"] = lama
+
+
+def test_render_yaml_menyebut_asal_yang_benar_benar_diterbitkan():
+    """Diturunkan dari `git remote`, bukan diketik ulang.
+
+    Uji kesamaan menjaga dua berkas tetap sama; uji ini menjaga render.yaml
+    tetap COCOK dengan tempat frontend sungguhan terbit. Sebelum diperbaiki ia
+    menunjuk `loconomics.pages.dev` - domain Cloudflare yang tidak pernah jadi
+    dipakai, sementara terbitannya GitHub Pages. Keduanya "terlihat benar", dan
+    yang membantah cuma kenyataan di luar repo.
+    """
+    import re
+    import subprocess
+
+    try:
+        url = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=AKAR, capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+    except Exception:
+        url = ""
+
+    m = re.search(r"github\.com[:/]([^/]+)/", url)
+    if not m:
+        cek("asal terbitan cocok (dilewati - remote github tidak terbaca)", True)
+        return
+
+    # GitHub Pages menyajikan di <pemilik>.github.io, seluruhnya huruf kecil.
+    harapan = f"https://{m.group(1).lower()}.github.io"
+    nilai = _nilai_render("CORS_ORIGINS") or ""
+    cek(f"render.yaml memuat {harapan}", harapan in nilai, f"- isinya {nilai!r}")
+
+
+def test_tiket_bentuk_rusak_bukan_500():
+    """`Authorization: Bearer a.b.c` harus DITOLAK, bukan meledak.
+
+    `_nyah_b64` melempar `binascii.Error` untuk base64 yang panjangnya tidak
+    sah, dan sebelumnya itu tidak ditangkap - jadi satu header sembarang
+    menjawab 500 walaupun docstring `baca_tiket` menjanjikan None untuk
+    "bentuk rusak". Akibatnya bukan cuma kode status yang keliru: tiap 500
+    tercatat sebagai galat TAK TERDUGA berikut `request_id` di log server,
+    jadi tiket usang di localStorage seseorang menyamar jadi kerusakan backend
+    di tempat yang justru dibaca saat ada kerusakan sungguhan.
+
+    Ditemukan bukan lewat uji melainkan saat menyiapkan pemeriksaan pasca-deploy
+    - probe yang seharusnya membedakan AUTH_SECRET ada/tidak menjawab 500 di
+    KEDUA keadaan, dan itu yang membongkarnya.
+    """
+    from app.core import akun
+
+    for rusak in ("a.b.c", "x.y.z", "..", "a.b.!!!!"):
+        try:
+            hasil = akun.baca_tiket(rusak)
+            cek(f"tiket rusak {rusak!r} -> None", hasil is None, f"- dapat {hasil!r}")
+        except Exception as e:
+            cek(f"tiket rusak {rusak!r} -> None", False, f"- justru melempar {type(e).__name__}")
+
+
+def test_render_yaml_membawa_auth_secret():
+    """Tanpa ini, daftar/masuk menjawab 500 di produksi - dan HANYA itu.
+
+    `_kunci()` dipanggil saat MELAYANI, bukan saat impor, jadi server naik,
+    health check hijau, dan peta tergambar. Yang mati cuma pintu masuknya.
+    """
+    teks = _render_yaml()
+    cek("AUTH_SECRET ada di render.yaml", "key: AUTH_SECRET" in teks)
+    cek("nilainya dibangkitkan Render, bukan isian manual yang bisa terlupa",
+        bool(__import__("re").search(r"key: AUTH_SECRET\s*\n\s*generateValue: true", teks)))
+
+
+def test_produksi_menolak_menandatangani_tanpa_auth_secret():
+    """Penjaganya sendiri, dipaku supaya tidak ada yang 'menyederhanakannya'."""
+    from app.core import akun
+    from app.core.config import Settings
+
+    asli = akun.settings
+    try:
+        akun.settings = Settings(lingkungan="produksi", auth_secret="")
+        try:
+            akun.buat_tiket(1)
+            cek("produksi tanpa AUTH_SECRET ditolak", False, "- justru berhasil")
+        except RuntimeError:
+            cek("produksi tanpa AUTH_SECRET ditolak", True)
+    finally:
+        akun.settings = asli
+
+
+def _alur_azure() -> str:
+    """Sama dengan `_render_yaml`: kosong kalau berkasnya tidak ada."""
+    berkas = AKAR / ".github" / "workflows" / "backend-azure.yml"
+    return berkas.read_text(encoding="utf-8") if berkas.exists() else ""
+
+
+def test_setiap_setting_disebut_di_petunjuk_deploy():
+    """Petunjuk deploy yang ditulis tangan selalu ketinggalan satu.
+
+    Terjadi: daftar Application settings di kepala `backend-azure.yml` disalin
+    dari `render.yaml` secara manual dan `ORS_API_KEY` tertinggal. Kebetulan
+    tidak berakibat apa-apa - kunci itu memang cuma dipakai pipeline - tetapi
+    yang tertinggal berikutnya belum tentu seberuntung itu, dan tidak ada satu
+    pun uji yang bisa membedakan keduanya.
+
+    Jadi yang dipaku bukan "kunci ini wajib disetel" melainkan "kunci ini wajib
+    DISEBUT". Menyebutnya sebagai pengecualian berikut alasannya sama sahnya
+    dengan mendaftarkannya - yang tidak boleh cuma satu: diam.
+    """
+    alur = _alur_azure()
+    if not alur:
+        cek("petunjuk deploy Azure ada", False, "- backend-azure.yml hilang")
+        return
+
+    from app.core.config import Settings
+
+    kepala = alur.split("\nname:", 1)[0]
+    hilang = [k.upper() for k in Settings.model_fields if k.upper() not in kepala]
+    cek(
+        "setiap field Settings disebut di petunjuk deploy",
+        not hilang,
+        f"- tidak disebut: {', '.join(hilang)}",
+    )
+
+
+def test_petunjuk_deploy_tidak_menyuruh_menyetel_ors():
+    """Kunci ORS di satu tempat lagi = risiko tambahan tanpa kemampuan tambahan.
+
+    Kuota gratisnya 2.000 permintaan per HARI untuk seluruh akun, dan backend
+    tidak pernah memanggil openrouteservice saat melayani - `pipeline/rute_ors.py`
+    yang memakainya, dijalankan manual dari mesin pengembang. Uji ini menjaga
+    supaya ia tidak diam-diam masuk lagi saat ada yang 'melengkapi' daftarnya.
+    """
+    kepala = _alur_azure().split("\nname:", 1)[0]
+    if not kepala:
+        return
+    cek(
+        "ORS_API_KEY disebut sebagai pengecualian, bukan sebagai isian",
+        "JANGAN disetel di Azure" in kepala,
+        "- kalau ia sudah jadi isian biasa, hapus uji ini dengan sadar",
+    )
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

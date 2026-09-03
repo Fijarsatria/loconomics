@@ -35,12 +35,14 @@ from app.core.aturan import (
     CHURN_PERSENTIL_WASPADA,
     LABEL_KUADRAN,
     PENJELASAN_KUADRAN,
+    cakupan_prestise,
 )
 from app.core.database import get_db
 from app.core.galat import KesalahanAPI
 from app.models import HexFeature, LocationScore
 from app.schemas import (
     AlasanGem,
+    CakupanPrestise,
     BarisKomparasi,
     DinamikaKawasan,
     DiagramKuadran,
@@ -301,7 +303,7 @@ def alasan_gem(
             AlasanGem(
                 metode="kuadran",
                 bukti=(
-                    "Skor peluang di atas median kawasan, tetapi prestise visualnya di "
+                    "Opportunity Score di atas median kawasan, tetapi prestise visualnya di "
                     "bawah median - persis pola lokasi yang datanya bagus tetapi "
                     "penampilannya membuat orang melewatkannya."
                 ),
@@ -577,6 +579,10 @@ def diagram_kuadran(
         batas_x=batas[0],
         batas_y=batas[1],
         keterangan={k: f"{LABEL_KUADRAN[k]} - {v}" for k, v in PENJELASAN_KUADRAN.items()},
+        # Dihitung dari baris yang SUDAH dimuat, bukan dari kueri baru: keterangan
+        # sumbu harus menerangkan titik yang benar-benar digambar, dan kalau ia
+        # bertanya sendiri ke basis data ia bisa menerangkan himpunan lain.
+        cakupan_prestise=CakupanPrestise(**cakupan_prestise([hx for hx, _ in baris])),  # type: ignore[arg-type]
     )
 
 
@@ -1139,7 +1145,7 @@ def rekomendasi(
         ringkas = (
             cocok[0].teks
             if cocok
-            else "Skor peluangnya termasuk tertinggi di antara yang memenuhi kriteria Anda."
+            else "Opportunity Score-nya termasuk tertinggi di antara yang memenuhi kriteria Anda."
         )
         hasil.append(
             Rekomendasi(

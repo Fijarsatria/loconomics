@@ -1,4 +1,14 @@
 # Cloudflare Pages - header respons.
+#
+# TIDAK BERLAKU DI TERBITAN SEKARANG. Frontend ini naik ke GitHub Pages, dan
+# GitHub Pages mengabaikan berkas ini sepenuhnya - diukur 2 Sep 2026, respons
+# fijarsatria.github.io/loconomics/ tidak memuat satu pun dari keempat header
+# di bawah. Berkasnya ikut ter-salin ke dist/, dan itulah yang membuatnya
+# mudah dikira bekerja.
+#
+# Dipertahankan karena render.yaml pun dipertahankan sebagai cadangan, dan
+# karena isinya tetap benar untuk platform yang membacanya. Lihat
+# docs/arsitektur.md bagian "_headers dan _redirects TIDAK berlaku".
 
 /*
   X-Content-Type-Options: nosniff

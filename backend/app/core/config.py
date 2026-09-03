@@ -1,8 +1,11 @@
 """Konfigurasi aplikasi. Seluruh rahasia dibaca dari .env, tidak pernah dari kode."""
 
+import json
 from pathlib import Path
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Jangkar ke LOKASI BERKAS, bukan ke direktori kerja. `env_file=".env"` polos
 # cuma bekerja kalau prosesnya kebetulan dijalankan dari backend/ - dan
@@ -48,16 +51,45 @@ class Settings(BaseSettings):
     ors_api_key: str = ""
 
     # Diisi dari .env sebagai daftar dipisah koma saat deploy, mis.
-    # CORS_ORIGINS=https://loconomics.mapid.io,https://loconomics.pages.dev
+    # CORS_ORIGINS=https://fijarsatria.github.io,http://localhost:5173
     # 4173 = `vite preview`, yaitu build PRODUKSI yang dijalankan lokal. Ia ada
     # di sini karena menguji build produksi sebelum deploy itu alur yang sah -
     # dan tanpa port ini setiap permintaan dari sana gagal CORS, yang terbaca
     # sebagai "build produksinya rusak" padahal cuma daftarnya yang kurang.
-    cors_origins: list[str] = [
+    #
+    # `NoDecode` mematikan penguraian JSON bawaan pydantic-settings, dan itu
+    # perbaikan sebuah bug yang sudah menunggu di deployment yang belum pernah
+    # jalan. Sebuah field `list[str]` diperlakukan sebagai tipe kompleks, jadi
+    # nilainya dari environment diurai sebagai JSON - dan daftar dipisah koma
+    # yang dijanjikan komentar DUA BARIS DI ATAS bukan JSON yang sah. Akibatnya
+    # bukan CORS yang salah melainkan `SettingsError` saat IMPOR: server tidak
+    # pernah naik sama sekali.
+    #
+    # Kenapa tidak pernah ketahuan: `.env` lokal kebetulan ditulis sebagai larik
+    # JSON, jadi seluruh uji, seluruh `npm run dev`, dan seluruh smoke test
+    # berjalan di atas satu-satunya bentuk yang diterima. Bentuk yang
+    # DIDOKUMENTASIKAN tidak pernah sekali pun dieksekusi.
+    #
+    # Sekarang keduanya diterima, dan itu bukan kelonggaran: yang mengisi kolom
+    # ini berikutnya adalah orang yang mengetik di dasbor Render sambil membaca
+    # komentar di atas, bukan orang yang ingat bahwa tanda kutip di dalamnya
+    # bermakna.
+    cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:4173",
     ]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _urai_asal(cls, v: object) -> object:
+        """Terima larik JSON ATAU daftar dipisah koma. Bawaan di kode tetap list."""
+        if not isinstance(v, str):
+            return v
+        teks = v.strip()
+        if teks.startswith("["):
+            return json.loads(teks)
+        return [bagian.strip() for bagian in teks.split(",") if bagian.strip()]
 
     # Kunci penandatangan tiket sesi. Backend-only tanpa kecuali - siapa pun
     # yang memilikinya bisa menempa tiket untuk akun mana pun, termasuk akun

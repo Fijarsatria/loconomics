@@ -42,7 +42,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import { RODA_WARNA, urlGaya } from '../config'
-import { api } from '../lib/api'
+import { api, GalatAPI } from '../lib/api'
 
 const NAMA = 'LOCONOMICS'
 
@@ -56,6 +56,95 @@ const LANGKAH = [
 
 /** Kota tidak boleh lewat begitu saja. Di bawah ini pembuka terasa tersentak. */
 const TAHAN_MINIMAL_MS = 2400
+
+// --- Menunggu mesin data bangun -------------------------------------------
+//
+// Backend duduk di Render free tier: ia TIDUR sesudah 15 menit menganggur dan
+// bangunnya memakan puluhan detik. Sebelum ini, layar pembuka memanggil
+// /health SEKALI - jadi backend yang sedang bangun tidak bisa dibedakan dari
+// backend yang mati, dan yang tertulis di layar pertama yang dilihat juri
+// adalah "Mesin data belum bisa dihubungi" untuk mesin data yang beberapa
+// detik lagi menjawab. Pernyataan yang keliru, dan keliru ke arah yang paling
+// merugikan.
+//
+// Tiga angka, dan yang penting bukan besarnya melainkan pembagian tugasnya:
+// KETUKAN memutus satu percobaan yang menggantung supaya bilahnya bergerak;
+// ANGGARAN yang benar-benar memutuskan kapan menyerah.
+
+/** Satu percobaan. Pendek supaya kegagalan terlihat sebagai gerak, bukan beku. */
+const KETUKAN_MS = 6_000
+/** Jeda antar-percobaan. Cold start tidak akan selesai lebih cepat dari ini. */
+const JEDA_KETUKAN_MS = 1_500
+/**
+ * Total kesabaran. Cold start Render terukur di kisaran 50 detik, dan angka ini
+ * sengaja di bawahnya: yang menutup selisihnya `bangunkan()` di `main.tsx`,
+ * yang sudah mengetuk backend sejak halaman DIBUKA - biasanya puluhan detik
+ * sebelum layar ini muncul, karena gerbang di antaranya memang dibuat untuk
+ * dibaca. Anggaran ini hanya menanggung sisa jalannya, dan satu-satunya kasus
+ * yang benar-benar memakainya adalah orang yang menyegarkan halaman langsung
+ * ke peta saat backend baru saja tertidur.
+ */
+const ANGGARAN_BANGUN_MS = 40_000
+
+/**
+ * Layak dicoba lagi, atau sudah pasti percuma?
+ *
+ * Menunggu 40 detik itu benar untuk backend yang sedang bangun dan salah besar
+ * untuk backend yang memang tidak ada - orang yang menjalankan frontend tanpa
+ * `uvicorn` akan menatap bilah yang bergerak tanpa arti sebelum akhirnya
+ * diberi tahu apa yang sudah jelas sejak detik pertama.
+ *
+ * Keduanya bisa dibedakan, dan bedanya bukan tebakan:
+ *
+ * - **Habis waktu** - sambungannya DITERIMA lalu digantung. Itu persis bentuk
+ *   cold start Render: routernya menjawab sambungan sambil menyalakan
+ *   layanannya di belakang. Layak ditunggu.
+ * - **502/503/504** - router menjawab, layanan di belakangnya belum siap.
+ *   Bentuk kedua dari cold start yang sama. Layak ditunggu.
+ * - **Sisanya** - `TypeError: Failed to fetch` (tidak ada yang mendengarkan,
+ *   nama host tidak terpecahkan) atau galat HTTP lain. Menunggu tidak
+ *   mengubah apa pun.
+ */
+function layakDicobaLagi(e: unknown): boolean {
+  // `AbortSignal.timeout` melempar DOMException bernama TimeoutError - bukan
+  // AbortError, yang dipakai pembatalan manual.
+  if (e instanceof DOMException && e.name === 'TimeoutError') return true
+  return e instanceof GalatAPI && [502, 503, 504].includes(e.status)
+}
+
+/**
+ * Ketuk /health sampai menjawab, atau sampai anggarannya habis.
+ *
+ * `dibatalkan` dibaca ULANG di tiap putaran, bukan ditangkap sekali: komponen
+ * ini bisa dilepas di tengah penantian, dan penantian yang tidak pernah
+ * memeriksanya akan tetap memanggil `setGalat` pada komponen yang sudah tidak
+ * ada.
+ */
+async function tungguMesinData(
+  dibatalkan: () => boolean,
+  onMenunggu: () => void,
+): Promise<boolean> {
+  const tenggat = performance.now() + ANGGARAN_BANGUN_MS
+  let pertama = true
+  for (;;) {
+    if (dibatalkan()) return false
+    try {
+      await api.sehat({ signal: AbortSignal.timeout(KETUKAN_MS) })
+      return true
+    } catch (e) {
+      if (dibatalkan() || !layakDicobaLagi(e)) return false
+      if (performance.now() >= tenggat) return false
+      // Baru DIUMUMKAN sesudah percobaan pertama gagal. Backend yang hangat
+      // menjawab dalam ratusan milidetik, dan mengumumkan "sedang bangun"
+      // untuk sesuatu yang sudah bangun cuma menambah kalimat yang berkedip.
+      if (pertama) {
+        pertama = false
+        onMenunggu()
+      }
+      await new Promise((r) => setTimeout(r, JEDA_KETUKAN_MS))
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Kota heksagon
@@ -328,6 +417,8 @@ function KotaHeksagon() {
 export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
   const [selesai, setSelesai] = useState(0)
   const [galat, setGalat] = useState<string | null>(null)
+  /** Percobaan pertama ke /health gagal - backend ada, tetapi masih bangun. */
+  const [membangunkan, setMembangunkan] = useState(false)
   const [pergi, setPergi] = useState(false)
   const [kepala, setKepala] = useState(0)
 
@@ -358,12 +449,15 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
       // saja dilompati. Gagal yang lebih halus daripada sebelumnya, dan sama
       // saja memblokir aplikasinya.
       if (import.meta.env.VITE_API_BASE_URL) {
-        try {
-          await api.sehat()
-        } catch {
+        const hidup = await tungguMesinData(
+          () => batal,
+          () => !batal && setMembangunkan(true),
+        )
+        if (!hidup) {
           if (!batal) setGalat('Mesin data belum bisa dihubungi.')
           return
         }
+        if (!batal) setMembangunkan(false)
       }
       naik()
 
@@ -393,11 +487,17 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
   }, [onSelesai])
 
   const persen = Math.round((selesai / LANGKAH.length) * 100)
+  // Menyebut SEBAB, dalam bahasa orang yang membuka tautan - bukan "cold start",
+  // bukan nama penyedianya. Yang dijawabnya satu pertanyaan yang muncul sendiri
+  // di kepala orang saat sebuah bilah berhenti bergerak: ini macet, atau memang
+  // sedang mengerjakan sesuatu?
   const keterangan = galat
     ? 'Gagal memuat'
-    : selesai >= LANGKAH.length
-      ? 'Siap'
-      : LANGKAH[selesai]
+    : membangunkan
+      ? 'Membangunkan mesin data — sebentar'
+      : selesai >= LANGKAH.length
+        ? 'Siap'
+        : LANGKAH[selesai]
 
   return (
     <div

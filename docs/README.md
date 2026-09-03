@@ -1,7 +1,8 @@
 # Dokumentasi Loconomics
 
-Tujuh berkas. Dibaca berurutan, ketujuhnya menjawab: **apa yang dibangun, kenapa
-begitu, dan apa yang belum diputuskan.**
+Tujuh berkas berurutan yang menjawab **apa yang dibangun, kenapa begitu, dan apa
+yang belum diputuskan** — ditambah dua katalog rujukan yang tidak dibaca
+berurutan.
 
 ## Urutan baca
 
@@ -18,6 +19,16 @@ begitu, dan apa yang belum diputuskan.**
 Kalau waktu Anda hanya lima menit: baca **alur-sistem.md bagian 1** dan
 **aturan-lomba.md**. Yang pertama memberi gambaran, yang kedua mencegah
 diskualifikasi.
+
+## Dua katalog — dibuka saat dibutuhkan, bukan dibaca berurutan
+
+Keduanya dipisah dari `CLAUDE.md` supaya tidak dibayar setiap sesi AI. Isinya
+tidak diubah sedikit pun.
+
+| Berkas | Menjawab | Buka kalau |
+|---|---|---|
+| [jebakan.md](jebakan.md) | 184 kesalahan yang benar-benar terjadi di repo ini, sebabnya, dan perbaikannya | **Sebelum menyentuh sebuah bagian** — `grep` nama berkasnya di sana. Sebagian besar jebakannya gagal DIAM |
+| [status.md](status.md) | Apa yang sudah jadi berikut buktinya, dan apa yang menghalangi pekerjaan berikutnya | Anda perlu tahu di mana proyek ini berdiri, atau mau memilih pekerjaan berikutnya |
 
 ## Peta dokumen ke kode
 

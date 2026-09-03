@@ -40,3 +40,8 @@ desktop.ini
 
 # Dokumen panitia MAPID - milik penyelenggara, tidak perlu ikut diredistribusi
 Technical Meeting*.pdf
+
+# Tangkapan layar keluaran frontend/scripts/audit-prd.mjs. Dibangkitkan ulang
+# tiap kali audit dijalankan, dan bisa memuat isi layar akun yang dipakai
+# mengujinya - jadi ia tidak pernah pantas ikut ter-commit.
+frontend/audit/

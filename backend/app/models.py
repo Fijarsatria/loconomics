@@ -113,15 +113,31 @@ class HexRoute(Base):
     #: Lama jalan kaki menurut ORS, menit. Profil foot-walking.
     menit: Mapped[float] = mapped_column(Float, nullable=False)
     geom: Mapped[str] = mapped_column(Geometry("LINESTRING", srid=4326), nullable=False)
-    #: Profil ORS yang dipakai. Disimpan supaya rute lama tetap bisa dikenali
-    #: kalau suatu saat profilnya diganti (mis. wheelchair).
+    #: Profil ORS yang dipakai: "foot-walking" atau "driving-car".
+    #:
+    #: Ia bagian dari KUNCI UNIK, bukan sekadar penanda. Satu heksagon punya
+    #: rute jalan kaki DAN rute mobil ke simpul yang sama, dan keduanya
+    #: sama-sama urutan 0. Tanpa profil di dalam kuncinya, penarikan mobil akan
+    #: menimpa rute jalan kaki lewat ON CONFLICT alih-alih menambahkannya -
+    #: gagal diam, dan yang hilang data yang butuh berjam-jam dibuat.
+    #:
+    #: Motor TIDAK ADA di sini dan tidak akan pernah ada dari ORS: profil
+    #: sepeda motor bukan bagian dari layanan yang dipakai. Menyodorkan mobil
+    #: sebagai "kira-kira motor" akan salah ke arah yang paling merugikan -
+    #: motor melewati jalan yang mobil tidak bisa.
     profil: Mapped[str] = mapped_column(String(24), default="foot-walking", nullable=False)
     dihitung_pada: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
-        UniqueConstraint("h3_index", "transport_node_id", "urutan", name="uq_rute_hex_simpul_urutan"),
+        UniqueConstraint(
+            "h3_index",
+            "transport_node_id",
+            "profil",
+            "urutan",
+            name="uq_rute_hex_simpul_profil_urutan",
+        ),
     )
 
 

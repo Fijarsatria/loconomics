@@ -37,6 +37,27 @@ export interface CakupanIndeks {
   layak_tampil: boolean
 }
 
+/**
+ * Bahan sumbu DATAR kuadran mana yang benar-benar terukur.
+ *
+ * Sekeluarga dengan `CakupanIndeks`, tanpa `layak_tampil` — sumbu prestise tidak
+ * pernah disembunyikan. Ia yang menentukan kuadran, dan kuadrannya sudah
+ * tergambar di peta; menyembunyikan penjelasannya cuma membuat penempatan yang
+ * sama jadi tidak bisa ditanyakan.
+ *
+ * Yang dilaporkan DAFTAR bahannya, bukan pecahannya, karena yang menentukan arti
+ * sumbu ini bukan berapa bahan yang terisi melainkan bahan yang mana. Terukur 2
+ * Sep 2026: tiga dari lima terisi — 60%, lolos ambang apa pun — dan yang dua
+ * hilang justru satu-satunya yang menilai TAMPILAN secara langsung.
+ */
+export interface CakupanPrestise {
+  /** Kode variabel yang punya nilai, urut seperti pipeline. */
+  terisi: string[]
+  kosong: string[]
+  /** false = tidak ada satu pun bahan yang menilai tampilan secara langsung. */
+  diukur_langsung: boolean
+}
+
 export interface IndeksKomposit {
   ipt: number | null // Potensi Transit — tinggi = baik
   iae: number | null // Aktivitas Ekonomi — tinggi = baik
@@ -170,6 +191,8 @@ export interface DetailHeksagon {
   zoneguard: StatusZoneGuard
   risiko: PeringatanRisiko
   kuadran_penjelasan: string | null
+  /** Sumbu datar kuadran berdiri di atas bahan apa UNTUK HEKSAGON INI. */
+  cakupan_prestise: CakupanPrestise | null
 }
 
 // --- ZoneGuard (fitur 4) ---------------------------------------------------
@@ -267,6 +290,8 @@ export interface DiagramKuadran {
   batas_x: number | null
   batas_y: number | null
   keterangan: Record<string, string>
+  /** Dihitung dari titik yang DIKEMBALIKAN, jadi ia ikut tersaring kawasan. */
+  cakupan_prestise: CakupanPrestise | null
 }
 
 // --- GemFinder (fitur 6) ---------------------------------------------------
@@ -308,11 +333,15 @@ export interface SimpulTransit {
  * `koordinat` sudah [lon, lat], urutan GeoJSON - bisa langsung dipakai sebagai
  * geometri LineString tanpa dibalik.
  */
+/** Profil rute yang ada. Motor TIDAK ada, dan tidak akan ada dari ORS. */
+export type ProfilRute = 'foot-walking' | 'driving-car'
+
 export interface RuteJalan {
   urutan: number
   jarak_m: number
   menit: number
   utama: boolean
+  profil: ProfilRute
   koordinat: [number, number][]
 }
 
@@ -327,6 +356,10 @@ export interface KonteksSimpul {
   /** jarak rute / jarak lurus. 1,7 = memutar 70% lebih jauh dari kelihatannya. */
   faktor_memutar: number | null
   rute: RuteJalan[]
+  /** Profil yang dipakai menyusun `rute` di respons ini. */
+  profil: ProfilRute
+  /** Profil yang PUNYA baris untuk heksagon ini. Kosong = belum dirutekan. */
+  profil_tersedia: ProfilRute[]
   /** true = heksagon ini belum dirutekan, jaraknya jatuh ke garis lurus. */
   garis_lurus: boolean
   catatan: string
