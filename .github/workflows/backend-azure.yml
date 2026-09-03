@@ -35,9 +35,27 @@
 #      MAPID_DATA_API_KEY      data misi; tidak pernah ke peramban
 #      LLM_API_KEY             Konsultan AI. Boleh kosong dulu - /ai/tanya
 #                              menjawab 501 dengan pesan yang jujur
-#      LLM_PROVIDER            anthropic
-#      LLM_MODEL               claude-opus-5
+#      LLM_PROVIDER            anthropic ATAU gemini
+#      LLM_MODEL               claude-opus-5 (anthropic) atau
+#                              gemini-3-flash-preview (gemini)
 #      LLM_PLAFON_HARIAN_USD   2.0
+#
+#    UNTUK PAMERAN 3-4 SEPTEMBER 2026: dipakai `gemini`, bukan `anthropic`,
+#    lewat adapter `backend/app/core/llm_gemini.py`. `api/ai.py` sendiri
+#    tidak tahu bedanya - keduanya bicara dalam bentuk yang sama, dan
+#    `LLM_PROVIDER` yang memilih di `app/core/llm.py::klien()`.
+#
+#    Model bawaan `gemini-flash-latest` TERUKUR sering 503 (kelebihan beban
+#    di sisi Google, bukan kunci atau kuota kita) - adapter sudah mencoba
+#    tiga model cadangan sendiri (lihat MODEL_CADANGAN di llm_gemini.py), tapi
+#    kalau AI Consultant terasa lambat/mati saat pameran, ganti LLM_MODEL di
+#    Azure App Settings ke salah satu yang terbukti responsif saat diuji:
+#    `gemini-3-flash-preview` atau `gemini-flash-lite-latest`. Tidak perlu
+#    deploy ulang - App Settings dibaca ulang saat proses Python berikutnya
+#    start, restart App Service saja dari portal sudah cukup.
+#
+#    JANGAN commit kunci API Gemini ke repo mana pun. Ia cuma boleh hidup di
+#    Azure App Settings dan di backend/.env lokal (yang di-gitignore).
 #      SCM_DO_BUILD_DURING_DEPLOYMENT   true
 #                              Tanpa ini Oryx tidak memasang requirements.txt
 #                              dan aplikasinya naik tanpa satu pun dependensi

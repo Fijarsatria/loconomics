@@ -634,13 +634,25 @@ def tanya(
     balasan = None
 
     for putaran in range(MAKS_PUTARAN):
-        balasan = c.messages.create(
-            model=model_aktif(),
-            max_tokens=MAKS_TOKEN,
-            system=PROMPT_SISTEM,
-            tools=SEMUA_ALAT,
-            messages=pesan,
-        )
+        try:
+            balasan = c.messages.create(
+                model=model_aktif(),
+                max_tokens=MAKS_TOKEN,
+                system=PROMPT_SISTEM,
+                tools=SEMUA_ALAT,
+                messages=pesan,
+            )
+        except RuntimeError as e:
+            # Penyedia model gagal - sibuk, tidak terjangkau, atau menolak.
+            # Itu BUKAN kesalahan server kita, dan menampilkannya sebagai
+            # "Terjadi kesalahan di server, sebutkan kode ..." menyuruh orang
+            # melaporkan sesuatu yang tidak bisa kita perbaiki sekaligus
+            # menyembunyikan satu-satunya tindakan yang berguna baginya.
+            #
+            # Kalimatnya sudah disiapkan adapter dan sudah bebas dari nama
+            # proyek maupun potongan permintaan (aturan 8).
+            log.warning("Panggilan model gagal: %s", e)
+            raise LayananBelumSiap(str(e)) from e
         total_biaya += biaya_usd(balasan.usage) or 0.0
 
         # Klasifikator keamanan menolak permintaan: HTTP 200 tapi tanpa isi yang

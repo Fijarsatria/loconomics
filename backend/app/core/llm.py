@@ -20,6 +20,9 @@ log = logging.getLogger(__name__)
 # Model default. Bisa ditimpa lewat LLM_MODEL di .env tanpa menyentuh kode.
 MODEL_DEFAULT = "claude-opus-5"
 
+# Bawaan saat LLM_PROVIDER=gemini. Bisa ditimpa LLM_MODEL, sama seperti di atas.
+MODEL_GEMINI = "gemini-flash-latest"
+
 # Batas keras putaran percakapan dengan alat. Delapan sudah lebih dari cukup untuk
 # pertanyaan paling rumit sekalipun (cari -> jelaskan -> bandingkan -> gerakkan peta);
 # batas ini ada supaya model yang tersesat tidak memanggil alat tanpa henti dan
@@ -41,7 +44,9 @@ class LLMBelumSiap(RuntimeError):
 
 
 def model_aktif() -> str:
-    return settings.llm_model or MODEL_DEFAULT
+    if settings.llm_model:
+        return settings.llm_model
+    return MODEL_GEMINI if settings.llm_provider.lower() == "gemini" else MODEL_DEFAULT
 
 
 def tersedia() -> bool:
@@ -76,6 +81,16 @@ def klien():
         log.warning("LLM_API_KEY belum diisi di backend/.env - Konsultan AI dimatikan")
         raise LLMBelumSiap("Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh.")
 
+    # Penyedia dipilih dari LLM_PROVIDER. Keduanya mengembalikan objek dengan
+    # bentuk yang SAMA - `.messages.create()` yang menjawab blok bergaya
+    # Anthropic - jadi `api/ai.py` tidak pernah tahu mana yang sedang dipakai.
+    if settings.llm_provider.lower() == "gemini":
+        from app.core.llm_gemini import KlienGemini
+
+        _klien = KlienGemini(settings.llm_api_key)
+        log.info("Klien LLM siap (Gemini), model %s", model_aktif())
+        return _klien
+
     try:
         import anthropic
     except ModuleNotFoundError as e:  # pragma: no cover - hanya saat dependensi kurang
@@ -99,4 +114,13 @@ def biaya_usd(usage) -> float | None:
         return None
     masuk = getattr(usage, "input_tokens", 0) or 0
     keluar = getattr(usage, "output_tokens", 0) or 0
+    # Tarifnya IKUT penyedia. Memakai tarif Opus untuk panggilan Gemini akan
+    # melebihkan biayanya ~17x, dan plafon harian dihitung dari kolom ini -
+    # akibatnya Konsultan AI mati jauh sebelum uangnya benar-benar terpakai.
+    if settings.llm_provider.lower() == "gemini":
+        from app.core.llm_gemini import TARIF_KELUAR, TARIF_MASUK
+
+        return round(
+            masuk / 1_000_000 * TARIF_MASUK + keluar / 1_000_000 * TARIF_KELUAR, 6
+        )
     return round(masuk / 1_000_000 * 5.0 + keluar / 1_000_000 * 25.0, 6)

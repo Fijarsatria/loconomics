@@ -285,6 +285,20 @@ cd pipeline && python s7_publish.py --osm --hitung-ulang   # sekalian skor ulang
 # melewatinya, dan artinya membuang data yang butuh berjam-jam dibuat.
 cd pipeline && python demo_seed.py --isi
 
+# demo_pameran BEDA dari demo_seed di atas: ia TIDAK membangun dari nol dan
+# TIDAK menyentuh baris yang sudah terisi - ia menambal sel yang KOSONG lewat
+# angka yang diturunkan dari sinyal nyata (jarak simpul, penduduk, POI), lalu
+# menjalankan mesin skor yang sama persis (aturan 1 tetap utuh). Ditulis untuk
+# pameran/demo publik: seluruh badge "belum disurvei" hilang, seluruh layer
+# terisi, rute mobil dan pita isochrone 30/60 menit ikut dibuat. `--copot`
+# mengembalikan basis data PERSIS seperti semula - dibuktikan lewat sidik jari
+# (jumlah baris, total skor, sebaran kuadran) sebelum dan sesudah round-trip
+# isi->copot->isi. Manifesnya di pipeline/data/demo_pameran/*.json; JANGAN
+# hapus manifes itu secara manual, `--copot` butuh isinya.
+cd pipeline && python demo_pameran.py --isi      # tambal seluruh sel kosong
+cd pipeline && python demo_pameran.py --status   # lihat keadaan, tanpa mengubah
+cd pipeline && python demo_pameran.py --copot    # kembalikan persis seperti semula
+
 # Rute jalan kaki (ORS). Butuh ORS_API_KEY di backend/.env.
 cd pipeline && python rute_ors.py --status       # cakupan, tanpa memanggil ORS
 cd pipeline && python rute_ors.py                # yang belum punya rute saja

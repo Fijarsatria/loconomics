@@ -305,8 +305,27 @@ async function main() {
   )
 
   const frasa = detail.match(/Diperkirakan dari (\d+) dari (\d+) bahan/)
-  cek('panel menyatakan sumbu prestise diperkirakan dari berapa bahan', Boolean(frasa),
-    '- kalimatnya tidak ada di layar')
+  // Kalimat ini SENGAJA menghilang begitu seluruh lima bahan sumbu prestise
+  // terukur (frasaPrestise() di config.ts: "kosong.length === 0 -> return []").
+  // Itu bukan cacat - baris keterangan yang berbunyi "semuanya lengkap" cuma
+  // menambah teks tanpa menambah kejujuran. Data demo pameran (3 Sep 2026)
+  // mengisi kelima bahan untuk SELURUH 708 heksagon, jadi kalimatnya memang
+  // tidak akan pernah tampil selama data itu terpasang - dan itu justru salah
+  // satu tujuan data demo: menghapus setiap "belum diukur" dari layar.
+  //
+  // Asersi karena itu memeriksa INVARIAN yang benar - kalimatnya hadir KALAU
+  // DAN HANYA KALAU ada bahan yang kosong - bukan "kalimatnya harus selalu
+  // ada", yang cuma kebetulan benar selama data produksi memang tidak lengkap.
+  if (cakupanX && cakupanX.kosong.length > 0) {
+    cek('panel menyatakan sumbu prestise diperkirakan dari berapa bahan', Boolean(frasa),
+      '- kalimatnya tidak ada di layar padahal ada bahan yang kosong')
+  } else if (cakupanX) {
+    cek(
+      'sumbu prestise diam saat seluruh bahan terukur',
+      !frasa,
+      '- kalimat ketidakpastian masih tampil padahal cakupan_prestise.kosong kosong',
+    )
+  }
   if (frasa && cakupanX) {
     cek(
       'angka di kalimat sama dengan yang dikirim backend',
@@ -354,17 +373,37 @@ async function main() {
     () => document.querySelector('[aria-label="Diagram kuadran"]')?.innerText ?? '',
   )
   cek('diagram kuadran penuh terbuka', dialogKuadran.length > 0)
-  cek(
-    'penjelasan sumbu ikut menyebut ia berdiri di atas apa',
-    // Case-insensitive, dan itu bukan kelonggaran. `.eyebrow` memakai
-    // `text-transform: uppercase`, dan `innerText` mengembalikan teks SESUDAH
-    // transformasi CSS - jadi judul yang di sumbernya "Sumbu datar berdiri di
-    // atas apa" sampai ke sini sebagai "SUMBU DATAR BERDIRI DI ATAS APA".
-    // Versi pertama asersi ini peka huruf dan MENUDUH kode yang benar.
-    /sumbu datar berdiri di atas apa/i.test(dialogKuadran) &&
-      /Diperkirakan dari \d+ dari \d+ bahan/.test(dialogKuadran),
-    '- keterangan yang sama tidak sampai ke diagram penuh',
-  )
+  // Judul "Sumbu datar berdiri di atas apa" dan kalimat perkiraan di
+  // bawahnya ADALAH SATU BLOK kondisional (App.tsx: `{frasaSumbuX.length > 0
+  // && (...)}`), bukan judul tetap dengan isi opsional. Itu disengaja dan
+  // konsisten dengan filosofi yang sama di panel per-heksagon: menampilkan
+  // judul tanpa satu pun keterangan di bawahnya mengajukan pertanyaan tanpa
+  // jawaban, dan itu lebih buruk daripada tidak menampilkan apa pun.
+  //
+  // `frasaSumbuX` kosong = seluruh heksagon YANG SEDANG DITAMPILKAN diagram
+  // (tersaring kawasan) lengkap kelima bahan sumbu prestisenya. Data demo
+  // pameran (3 Sep 2026) membuatnya begitu untuk semua kawasan, jadi baik
+  // judul maupun kalimatnya memang tidak akan tampil selama data itu
+  // terpasang - dan itu benar, bukan cacat.
+  const frasaDiagram = /Diperkirakan dari \d+ dari \d+ bahan/.test(dialogKuadran)
+  // Case-insensitive, dan itu bukan kelonggaran. `.eyebrow` memakai
+  // `text-transform: uppercase`, dan `innerText` mengembalikan teks SESUDAH
+  // transformasi CSS - jadi judul yang di sumbernya "Sumbu datar berdiri di
+  // atas apa" sampai ke sini sebagai "SUMBU DATAR BERDIRI DI ATAS APA".
+  const judulDiagram = /sumbu datar berdiri di atas apa/i.test(dialogKuadran)
+  if (cakupanX && cakupanX.kosong.length > 0) {
+    cek(
+      'penjelasan sumbu ikut menyebut ia berdiri di atas apa',
+      judulDiagram && frasaDiagram,
+      '- keterangan yang sama tidak sampai ke diagram penuh',
+    )
+  } else if (cakupanX) {
+    cek(
+      'diagram penuh diam SELURUHNYA saat seluruh bahan terukur',
+      !judulDiagram && !frasaDiagram,
+      '- judul atau kalimat ketidakpastian masih tampil padahal datanya lengkap',
+    )
+  }
   await page.screenshot({ path: `${KELUAR}/02b-kuadran-penuh.png` })
   await page.evaluate(() => {
     const t = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Tutup')

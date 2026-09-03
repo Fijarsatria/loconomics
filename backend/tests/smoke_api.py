@@ -738,27 +738,41 @@ def jalankan(db) -> None:
         # Tiap simpul punya ketiga pitanya, atau tidak sama sekali. Simpul yang
         # cuma punya sebagian akan menggambar jangkauan yang bolong tanpa ada
         # yang mengatakannya.
+        # Jumlah pitanya DITURUNKAN dari `ISOCHRONE_MENIT`, tidak ditulis 3.
+        #
+        # Ketiga asersi di bawah dulu mengunci angka tiga, dan ketiganya langsung
+        # merah begitu daftarnya diperluas jadi lima (3 Sep 2026) - padahal yang
+        # berubah cuma konfigurasi yang memang boleh berubah. Uji yang harus
+        # ikut disunting setiap kali sebuah daftar bertambah adalah uji yang
+        # cepat atau lambat disunting jadi "== 5" tanpa ada yang memikirkannya.
+        n_pita = len(transit.ISOCHRONE_MENIT)
         sebagian = db.execute(
             text(
                 """
                 SELECT count(*) FROM (
                     SELECT transport_node_id FROM catchment_areas
-                    GROUP BY transport_node_id HAVING count(DISTINCT menit) <> 3
+                    GROUP BY transport_node_id HAVING count(DISTINCT menit) <> :n
                 ) x
                 """
-            )
+            ),
+            {"n": n_pita},
         ).scalar_one()
-        cek("tiap simpul punya ketiga pitanya", sebagian == 0, f"- {sebagian} tidak lengkap")
+        cek("tiap simpul punya seluruh pitanya", sebagian == 0, f"- {sebagian} tidak lengkap")
 
         node = db.execute(
             text("SELECT transport_node_id FROM catchment_areas ORDER BY transport_node_id LIMIT 1")
         ).scalar_one()
         gj = transit.layer_catchment(db, node_id=node)
         cek("endpoint catchment mengembalikan GeoJSON", gj["type"] == "FeatureCollection")
-        cek("tiga pita untuk satu simpul", len(gj["features"]) == 3, f"- {len(gj['features'])}")
+        cek(
+            f"{n_pita} pita untuk satu simpul",
+            len(gj["features"]) == n_pita,
+            f"- {len(gj['features'])}",
+        )
         cek(
             "tiap fitur membawa menitnya",
-            sorted(f["properties"]["menit"] for f in gj["features"]) == [5, 10, 15],
+            sorted(f["properties"]["menit"] for f in gj["features"])
+            == sorted(transit.ISOCHRONE_MENIT),
         )
 
 

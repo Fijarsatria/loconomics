@@ -78,7 +78,13 @@ export const SELUBUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
  * pernah bisa kosong tidak perlu dijaga terhadap kekosongan.
  */
 export const BIDANG_LAYER: Partial<Record<NamaLayer, { kunci: string; benda: string }>> = {
-  hidden_gem: { kunci: 'hidden_gem_score', benda: 'skor Hidden Gem' },
+  // `hidden_gem` SENGAJA tidak ada di sini, dan itu bukan kelalaian.
+  //
+  // Kekosongan di keempat layer lain berarti "belum diukur". Kekosongan di
+  // Hidden Gem berarti "diukur, dan heksagon ini tidak memenuhi syarat" -
+  // GemFinder adalah SARINGAN, bukan pengukuran. Memberitahu "101 dari 708
+  // punya skor Hidden Gem" akan membacakannya sebagai kekurangan data, padahal
+  // 101 itu justru JAWABANNYA. Legendanya sudah menerangkan yang abu.
   risk_radar: { kunci: 'indeks_churn', benda: 'data pergantian usaha' },
   pricelens: { kunci: 'harga_sewa_per_m2', benda: 'data harga sewa' },
   zoneguard: { kunci: 'zona_izin_komersial', benda: 'zonasi RDTR digital' },
