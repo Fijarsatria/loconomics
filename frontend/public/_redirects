@@ -1,13 +1,18 @@
 # Cloudflare Pages - SPA.
 #
-# TIDAK BERLAKU DI TERBITAN SEKARANG - GitHub Pages mengabaikannya; jalur
-# dalam yang tidak ada dijawab 404. Tidak ada yang hilang: aplikasi ini tidak
-# memakai router sama sekali, jadi tidak ada jalur dalam yang perlu
-# dikembalikan ke index.html. Lihat docs/arsitektur.md.
+# BERLAKU di loconomics.pages.dev sejak 4 Sep 2026; GitHub Pages tetap
+# mengabaikannya (jalur dalam yang tidak ada dijawab 404 di sana).
 #
-# Tanpa baris ini, memuat ulang di URL apa pun selain "/" menghasilkan 404
+# Tanpa baris terakhir, memuat ulang di URL apa pun selain "/" menghasilkan 404
 # Cloudflare, bukan aplikasinya. Yang di atasnya lebih spesifik dan harus lebih
 # dulu: berkas nyata tidak boleh ikut ditelan ke index.html.
+#
+# Berkas nyata MEMANG menang atas aturan redirect di Cloudflare, jadi kedua
+# baris pertama itu sabuk pengaman, bukan syarat. Tetapi kalau suatu saat ada
+# folder aset BARU di public/, ujilah ISI responsnya - tangkapan-semua yang
+# menelan berkas nyata menjawab 200 dengan HTML, dan kode statusnya tidak akan
+# pernah memberi tahu siapa pun. Diuji 4 Sep 2026: ketujuh GeoJSON heksagon
+# keluar sebagai application/geo+json, bukan text/html.
 /basemap/*   /basemap/:splat   200
 /kartu/*     /kartu/:splat     200
 /*           /index.html       200

@@ -1,14 +1,19 @@
 # Cloudflare Pages - header respons.
 #
-# TIDAK BERLAKU DI TERBITAN SEKARANG. Frontend ini naik ke GitHub Pages, dan
-# GitHub Pages mengabaikan berkas ini sepenuhnya - diukur 2 Sep 2026, respons
-# fijarsatria.github.io/loconomics/ tidak memuat satu pun dari keempat header
-# di bawah. Berkasnya ikut ter-salin ke dist/, dan itulah yang membuatnya
-# mudah dikira bekerja.
+# BERLAKU, tetapi hanya di SATU dari dua terbitan. Frontend ini naik ke dua
+# tempat: loconomics.pages.dev (Cloudflare Pages) dan fijarsatria.github.io
+# (GitHub Pages).
 #
-# Dipertahankan karena render.yaml pun dipertahankan sebagai cadangan, dan
-# karena isinya tetap benar untuk platform yang membacanya. Lihat
-# docs/arsitektur.md bagian "_headers dan _redirects TIDAK berlaku".
+#   Cloudflare  membaca berkas ini. Diukur 4 Sep 2026 di terbitan hidup:
+#               keempat header di bawah benar-benar ada di respons, dan
+#               ketiga aturan cache terpasang per folder.
+#   GitHub Pages mengabaikannya sepenuhnya. Diukur 2 Sep 2026: nol dari
+#               keempat header itu muncul. Berkasnya tetap ikut ter-salin ke
+#               dist/, dan itulah yang dulu membuatnya mudah dikira bekerja.
+#
+# Jadi jangan simpulkan apa pun dari keberadaan berkas ini - simpulkan dari
+# `curl -I` ke terbitan yang sedang hidup, dan sebutkan terbitan yang MANA.
+# Lihat docs/arsitektur.md bagian "_headers dan _redirects".
 
 /*
   X-Content-Type-Options: nosniff

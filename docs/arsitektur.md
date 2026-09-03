@@ -320,25 +320,41 @@ itu yang jadi dipakai.
 Satu lagi yang tetap manual apa pun platformnya: **jangan kosongkan cache AI**
 menjelang demo — lihat `pipeline/README.md`.
 
-### `_headers` dan `_redirects` TIDAK berlaku di GitHub Pages
+### `_headers` dan `_redirects`: berlaku di Cloudflare, diabaikan GitHub Pages
 
-Keduanya format **Cloudflare Pages**, dan Cloudflare tidak pernah jadi dipakai.
-GitHub Pages mengabaikan kedua berkas itu sepenuhnya. Diukur di terbitan yang
-sedang hidup, 2 Sep 2026:
+Keduanya format **Cloudflare Pages**. Sejak 4 Sep 2026 frontend ini terbit ke
+DUA tempat sekaligus, dan kedua berkas itu jadi pembeda yang paling terukur di
+antara keduanya.
 
-- respons `fijarsatria.github.io/loconomics/` **tidak memuat satu pun** dari
-  empat header yang dijanjikan `_headers` — `X-Content-Type-Options`,
-  `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`
-- jalur dalam yang tidak ada dijawab **404**, jadi aturan SPA di `_redirects`
-  juga tidak pernah dibaca
+**GitHub Pages** (`fijarsatria.github.io/loconomics/`) mengabaikan keduanya
+sepenuhnya. Diukur 2 Sep 2026: responsnya **tidak memuat satu pun** dari empat
+header yang dijanjikan `_headers`, dan jalur dalam yang tidak ada dijawab
+**404** — jadi aturan SPA di `_redirects` pun tidak pernah dibaca.
 
-Yang hilang cuma keempat header itu. Aturan SPA-nya memang tidak dibutuhkan:
-aplikasi ini tidak memakai router sama sekali (nol `react-router`, nol
-`pushState`), jadi tidak ada jalur dalam yang perlu dikembalikan ke
-`index.html`. Kalau keempat header itu diinginkan, GitHub Pages tidak bisa
-memasangnya — jalurnya `<meta http-equiv>` untuk sebagian, atau CDN di
-depannya. Belum diputuskan; yang penting berkasnya berhenti terbaca seolah
-sudah bekerja.
+**Cloudflare Pages** (`loconomics.pages.dev`) membacanya. Diukur 4 Sep 2026 di
+terbitan yang sedang hidup, dan angkanya bukan salinan dari berkasnya melainkan
+dari respons sungguhan:
+
+- keempat header keamanan terpasang di `/*` — `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options:
+  SAMEORIGIN`, `Permissions-Policy: geolocation=(), microphone=(), camera=()`
+- ketiga aturan cache terpasang per folder — `/basemap/*` 86.400 detik,
+  `/kartu/*` 604.800, `/assets/*` 31.536.000 `immutable`
+- `_headers` dan `_redirects` sendiri **tidak bisa diminta lewat URL**: Cloudflare
+  mengonsumsinya sebagai konfigurasi, jadi permintaannya jatuh ke tangkapan-semua
+  SPA. Itu justru buktinya terbaca
+
+Yang perlu diperiksa setiap kali menambah folder aset di `public/`: aturan
+terakhir `_redirects` adalah `/*  ->  /index.html`, dan sebuah tangkapan-semua
+yang menelan berkas nyata gagal **diam** — ia menjawab 200 dengan HTML, dan
+status codenya tidak akan pernah memberi tahu siapa pun. Berkas nyata memang
+menang atas aturan redirect di Cloudflare, dan itu sudah diuji: ketujuh GeoJSON
+heksagon keluar sebagai `application/geo+json`, bukan `text/html`. Ujilah
+**isinya**, bukan kodenya.
+
+Aturan SPA-nya sendiri tetap tidak dibutuhkan: aplikasi ini tidak memakai router
+sama sekali (nol `react-router`, nol `pushState`), jadi tidak ada jalur dalam
+yang perlu dikembalikan ke `index.html`.
 
 ### Proksi gaya basemap
 
