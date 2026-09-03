@@ -451,11 +451,16 @@ async function main() {
   // ----------------------------------------------------------- AI Consultant
   console.log('\n[2] AI Consultant')
   try {
-    await page.getByRole('button', { name: /Konsultan AI/i }).first().click()
+    // "Konsultan AI" diganti "Loconomics AI" (4 Sep 2026, rebranding).
+    // Asersi lama menuduh kode yang benar begitu label lamanya lenyap - persis
+    // jebakan yang sudah dicatat berkali-kali: kalimat yang berubah di satu
+    // tempat harus di-grep ke seluruh src/, dan itu berlaku sama untuk skrip
+    // audit yang MEMBACA sumber itu.
+    await page.getByRole('button', { name: /Loconomics AI/i }).first().click()
     await tidur(3000)
     await page.screenshot({ path: `${KELUAR}/03-ai.png` })
     const ai = await page.evaluate(() => document.body.innerText)
-    cek('panel AI terbuka', /(Konsultan|tanya|Tanya|prompt|LLM|kunci)/i.test(ai))
+    cek('panel AI terbuka', /(Loconomics AI|tanya|Tanya|prompt|LLM|kunci)/i.test(ai))
     cek('status AI dinyatakan apa adanya',
       /(belum|LLM_API_KEY|tidak aktif|siap)/i.test(ai),
       '- panel harus mengaku kalau kuncinya belum ada')
