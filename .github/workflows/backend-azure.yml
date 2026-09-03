@@ -17,8 +17,16 @@
 # Yang harus disiapkan SEKALI di Azure Portal, sebelum alur ini bisa jalan
 # ---------------------------------------------------------------------------
 #
-# 1. App Service baru: Linux, Python 3.11, region **Southeast Asia** (Singapura;
-#    paling dekat ke Jabodetabek dan ke Supabase).
+# 1. App Service baru: Linux, Python 3.11, region **Indonesia Central** (Jakarta).
+#
+#    Semula tertulis Southeast Asia (Singapura) di sini, dan itu KELIRU untuk
+#    langganan ini: Azure for Students membawa kebijakan `sys.regionrestriction`
+#    yang cuma mengizinkan lima region - indiasouthcentral, indonesiacentral,
+#    centralindia, malaysiawest, koreacentral. Southeast Asia ditolak
+#    `RequestDisallowedByAzure` walaupun `az appservice list-locations --sku F1`
+#    tetap menyebutkannya, karena perintah itu menjawab pertanyaan yang berbeda.
+#    Indonesia Central kebetulan lebih dekat ke Jabodetabek daripada Singapura.
+#    Periksa kebijakannya dengan `az policy assignment list` sebelum memilih.
 #
 # 2. Configuration -> Application settings, isi persis nama-nama ini:
 #
@@ -82,6 +90,20 @@
 #
 # 4. Deployment Center -> Manage publish profile -> Download, lalu tempel
 #    isinya sebagai secret repositori bernama AZURE_WEBAPP_PUBLISH_PROFILE.
+#
+#    SEBELUM itu, nyalakan basic auth SCM - Azure membuat App Service baru
+#    dengan setelan itu MATI, dan `azure/webapps-deploy` bersandar persis
+#    padanya. Publish profile-nya tetap terunduh dan tetap berisi `userPWD`
+#    yang tampak sah, jadi tidak ada satu pun tanda dari sisi GitHub bahwa
+#    yang salah ada di sisi Azure:
+#
+#      az resource update --resource-group loconomics-rg --name scm \
+#        --namespace Microsoft.Web \
+#        --resource-type basicPublishingCredentialsPolicies \
+#        --parent sites/loconomics-api --api-version 2022-09-01 \
+#        --set properties.allow=true
+#
+#    Hanya `scm`. Biarkan `ftp` tetap mati - ia tidak dipakai alur ini.
 #
 # 5. Settings -> Variables -> AZURE_WEBAPP_NAME = nama app service-nya.
 #
