@@ -101,8 +101,19 @@ MAKS_METER = 8000
 URL_ISO = "https://api.openrouteservice.org/v2/isochrones/{profil}"
 
 #: Pita isochrone, menit. Harus sama dengan `pipeline/config.py::ISOCHRONE_MENIT`
-#: dan `app/api/transit.py::ISOCHRONE_MENIT` - ketiganya menyebut hal yang sama.
-ISOCHRONE_MENIT = (5, 10, 15)
+#: dan `app/api/transit.py::ISOCHRONE_MENIT` - ketiganya menyebut hal yang sama,
+#: dan sejak 3 Sep 2026 ketiganya DIJAGA UJI (`backend/tests/test_aturan.py`).
+#:
+#: Diperluas dari (5, 10, 15) atas permintaan pemilik repo. Satu permintaan ORS
+#: mengembalikan seluruh pita sekaligus - `range` menerima daftar - jadi menambah
+#: dua pita TIDAK menambah satu pun permintaan. Yang bertambah cuma ukuran
+#: responsnya.
+#:
+#: 60 menit BERJALAN KAKI kira-kira 5 km, dan itu memang jauh. Ia tetap
+#: diterbitkan karena pertanyaannya sah untuk kawasan yang angkutan pengumpannya
+#: buruk - tetapi pita sebesar itu akan banyak bertindihan antar-simpul, dan
+#: itulah sebabnya tiap pita sekarang dibedakan WARNA, bukan cuma opasitas.
+ISOCHRONE_MENIT = (5, 10, 15, 30, 60)
 
 #: Kuota isochrone ORS jauh lebih ketat daripada directions: 500 per hari dan
 #: 20 per menit. Enam simpul cuma butuh enam permintaan, jadi jedanya longgar.

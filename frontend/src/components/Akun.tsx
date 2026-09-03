@@ -66,6 +66,21 @@ interface IsiSesi {
    */
   sinyalSimpan: number
   catatSimpan: () => void
+  /**
+   * Heksagon yang SEDANG tersimpan, menurut server.
+   *
+   * Naik ke sini 3 September 2026 untuk memperbaiki bug yang nyata: panel
+   * detail menyimpan keadaan "sudah dipantau" sebagai state LOKAL yang hanya
+   * pernah disetel oleh tombolnya sendiri. Akibatnya dua-duanya salah -
+   * menyimpan lewat klik dua kali di peta tidak menyalakan tombolnya (jadi
+   * orang menekannya lagi dan menyimpan dua kali), dan heksagon yang tersimpan
+   * di sesi sebelumnya selalu tampil sebagai "Simpan lokasi".
+   *
+   * Satu himpunan di provider, dibaca peta DAN panel. Keadaan yang disalin ke
+   * dua tempat adalah keadaan yang suatu saat berselisih - dan di sini ia sudah
+   * berselisih.
+   */
+  tersimpan: Set<string>
   /** Buka dialog masuk. `alasan` tampil sebagai kalimat pengantar. */
   mintaMasuk: (alasan?: AlasanKunci) => void
   /** Buka dialog langganan. Kalau belum masuk, dialog masuk yang dibuka dulu. */
@@ -182,6 +197,32 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
   const [sinyalSimpan, setSinyalSimpan] = useState(0)
   const catatSimpan = useCallback(() => setSinyalSimpan((n) => n + 1), [])
 
+  /**
+   * Daftar lokasi tersimpan, disegarkan tiap kali `sinyalSimpan` naik.
+   *
+   * Pemantauan fitur berbayar, jadi untuk tamu dan akun gratis ia SELALU
+   * himpunan kosong - dan itu benar, bukan penyembunyian: mereka memang tidak
+   * punya lokasi tersimpan. Backend tetap penjaganya.
+   */
+  const [tersimpan, setTersimpan] = useState<Set<string>>(new Set())
+  const premiumKini = akun?.tingkat === 'premium'
+  useEffect(() => {
+    if (!premiumKini) {
+      setTersimpan(new Set())
+      return
+    }
+    let batal = false
+    api
+      .pantauan()
+      .then((b) => {
+        if (!batal) setTersimpan(new Set(b.map((x) => x.h3_index)))
+      })
+      .catch(() => {})
+    return () => {
+      batal = true
+    }
+  }, [premiumKini, sinyalSimpan])
+
   const mintaMasuk = useCallback((alasan: AlasanKunci = null) => {
     setDialogAkun({ alasan })
   }, [])
@@ -213,11 +254,12 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
       tandaiTerbuka,
       sinyalSimpan,
       catatSimpan,
+      tersimpan,
       mintaMasuk,
       mintaLangganan,
       mintaPreferensi,
     }),
-    [akun, memuat, terbuka, masuk, daftar, keluar, segarkan, tandaiTerbuka, sinyalSimpan, catatSimpan, mintaMasuk, mintaLangganan, mintaPreferensi],
+    [akun, memuat, terbuka, masuk, daftar, keluar, segarkan, tandaiTerbuka, sinyalSimpan, catatSimpan, tersimpan, mintaMasuk, mintaLangganan, mintaPreferensi],
   )
 
   return (

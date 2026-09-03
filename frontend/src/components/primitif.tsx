@@ -92,8 +92,11 @@ export function Badge({ badge, ringkas }: { badge: BadgeKeyakinan; ringkas?: boo
           />
         ))}
       </span>
-      <span className="text-[12px] font-semibold tracking-wide text-ink-2">
-        {badge.tingkat}
+      {/* Kata yang MENYEBUT bendanya, bukan cuma tingkatnya. "RENDAH" di
+          sebelah skor 47 terbaca sebagai "lokasinya jelek"; "Data tipis"
+          tidak bisa disalahartikan begitu. */}
+      <span className="whitespace-nowrap text-[12px] font-semibold text-ink-2">
+        {k.label}
       </span>
       {!ringkas && (
         <span className="tabular text-[12px] text-ink-3">{badge.n_titik_misi} titik</span>

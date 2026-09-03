@@ -475,6 +475,43 @@ def test_pusat_kawasan_python_dan_frontend_sama():
         )
 
 
+def test_isochrone_menit_sama_di_tiga_tempat():
+    """`ISOCHRONE_MENIT` ditulis tiga kali dan sampai kini cuma dijaga komentar.
+
+    Ketiganya menyebut hal yang sama: pipeline yang MEMINTA pitanya ke ORS,
+    pipeline config yang jadi acuan, dan backend yang MENYAJIKANNYA. Kalau
+    salah satu bergeser, kegagalannya diam ke dua arah yang berbeda.
+
+    Pipeline menarik pita yang tidak pernah disajikan -> kuota ORS terpakai
+    untuk data yang tidak pernah sampai ke layar, dan tidak ada yang tahu.
+
+    Backend menyajikan pita yang tidak pernah ditarik -> tiap pita itu selamanya
+    `tersedia: False`, dan layarnya menjanjikan sesuatu yang tidak akan pernah
+    datang.
+
+    Ditulis 3 Sep 2026 saat daftarnya diperluas dari tiga jadi lima pita.
+    """
+    import re
+
+    from app.api.transit import ISOCHRONE_MENIT as BACKEND
+
+    def baca(rel: str) -> tuple[int, ...]:
+        teks = (AKAR / rel).read_text(encoding="utf-8")
+        m = re.search(r"^ISOCHRONE_MENIT\s*=\s*[\[(]([^\])]*)[\])]", teks, re.M)
+        assert m, f"ISOCHRONE_MENIT tidak ketemu di {rel}"
+        return tuple(int(x) for x in re.findall(r"\d+", m.group(1)))
+
+    konfig = baca("pipeline/config.py")
+    ors = baca("pipeline/rute_ors.py")
+
+    assert konfig == ors, f"pipeline/config.py {konfig} vs rute_ors.py {ors}"
+    assert tuple(BACKEND) == konfig, f"backend {tuple(BACKEND)} vs pipeline {konfig}"
+    # Menaik dan tanpa duplikat. Pita yang tidak berurut membuat ekspresi
+    # `interpolate` di peta menghasilkan warna yang melompat-lompat, dan itu
+    # tidak akan pernah memunculkan galat.
+    assert list(konfig) == sorted(set(konfig)), f"pita tidak menaik/unik: {konfig}"
+
+
 def test_jenis_usaha_python_dan_frontend_sama():
     """`JENIS_USAHA` di backend wajib sama persis dengan `BAWAAN` di frontend.
 

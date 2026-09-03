@@ -22,8 +22,12 @@ from app.schemas import SimpulTransit
 router = APIRouter(prefix="/transit", tags=["transit"])
 
 # Harus sama dengan ISOCHRONE_MENIT di pipeline/config.py - pipeline yang
-# menghitung poligonnya, backend yang menyajikan.
-ISOCHRONE_MENIT = (5, 10, 15)
+# menghitung poligonnya, backend yang menyajikan. Dijaga tests/test_aturan.py.
+#
+# Pita yang BELUM ada di basis data tetap disebut, dengan `tersedia: False`.
+# Itu disengaja: "belum ditarik" dan "tidak ada dalam produk" dua hal berbeda,
+# dan yang pertama harus bisa dibedakan dari yang kedua di layar.
+ISOCHRONE_MENIT = (5, 10, 15, 30, 60)
 
 
 @router.get("/nodes", response_model=list[SimpulTransit], summary="Daftar simpul transportasi")

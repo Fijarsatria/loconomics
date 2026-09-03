@@ -65,7 +65,7 @@ assert set(PUSAT) == set(KAWASAN_PILOT), "PUSAT dan KAWASAN_PILOT harus sama"
 
 CRS = "EPSG:4326"
 H3_RESOLUSI = 9  # ±0,10 km², lebar ±350 m
-ISOCHRONE_MENIT = [5, 10, 15]
+ISOCHRONE_MENIT = [5, 10, 15, 30, 60]
 
 # Moda yang dicakup. Pelabuhan dan bandara sengaja dikecualikan karena pola
 # belanja penumpangnya berbeda fundamental dari komuter harian.

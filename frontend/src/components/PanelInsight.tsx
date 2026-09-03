@@ -178,11 +178,25 @@ export default function PanelInsight({
   profilRute?: ProfilRute
   onGantiProfil?: (p: ProfilRute) => void
 }) {
-  const { premium, mintaLangganan, mintaMasuk, akun, segarkan, tandaiTerbuka, terbuka, catatSimpan } =
-    useSesi()
+  const {
+    premium,
+    mintaLangganan,
+    mintaMasuk,
+    akun,
+    segarkan,
+    tandaiTerbuka,
+    terbuka,
+    catatSimpan,
+    tersimpan,
+  } = useSesi()
   const [aksiSibuk, setAksiSibuk] = useState<string | null>(null)
   const [aksiPesan, setAksiPesan] = useState<string | null>(null)
-  const [dipantau, setDipantau] = useState(false)
+  // DITURUNKAN dari himpunan milik provider, bukan disimpan sendiri.
+  //
+  // Versi lama menyimpan boolean lokal yang hanya pernah disetel oleh tombol
+  // ini. Menyimpan lewat klik dua kali di peta tidak pernah menyalakannya, jadi
+  // tombolnya tetap berbunyi "Simpan lokasi" untuk lokasi yang SUDAH tersimpan
+  // - dan menekannya menyimpan untuk kedua kalinya.
   const [detail, setDetail] = useState<DetailHeksagon | null>(null)
   const [harga, setHarga] = useState<PriceLensHeksagon | null>(null)
   const [jam, setJam] = useState<CommuterClock | null>(null)
@@ -212,7 +226,6 @@ export default function PanelInsight({
     // Pesan dan penanda milik heksagon SEBELUMNYA. Dibiarkan hidup, "Sudah
     // dipantau" akan menempel di lokasi yang baru diklik dan belum dipantau.
     setAksiPesan(null)
-    setDipantau(false)
 
     // Ketiganya diminta bersamaan, bukan berurutan. Menunggu satu selesai
     // sebelum meminta berikutnya akan melipattigakan waktu tunggu di jaringan
@@ -282,6 +295,7 @@ export default function PanelInsight({
   // tahu itu dan mengirim isi penuhnya dengan `terkunci: []`; `premium` di
   // frontend tetap false. Kalau tirainya digambar dari `premium`, orang yang
   // sudah membayar tetap melihat tirai di atas data yang sudah ia beli.
+  const dipantau = tersimpan.has(skor.h3_index)
   const terkunci = detail.terkunci.length > 0
 
   const ajakanBuka = () =>
@@ -478,7 +492,6 @@ export default function PanelInsight({
             setAksiSibuk('pantau')
             try {
               await api.pantau(h3)
-              setDipantau(true)
               catatSimpan()
               setAksiPesan(
                 'Lokasi tersimpan dan skornya dibekukan — perubahan berikutnya dilaporkan di menu Tersimpan.',
@@ -603,55 +616,6 @@ export default function PanelInsight({
           "Jebakan Gengsi" versi kaki, dan orang berhak tahu sebelum menyewa. */}
       {konteks?.simpul && !konteks.garis_lurus && konteks.jarak_m !== null && (
         <div className="border-b border-line bg-surface px-4 py-2.5">
-          {/* Pemilih profil.
-
-              `profil_tersedia` datang dari backend dan menyatakan profil mana
-              yang PUNYA baris untuk heksagon ini. Tombol yang datanya belum
-              ada dinonaktifkan, bukan disembunyikan: menyembunyikannya membuat
-              "rute mobil tidak ada di produk ini" - padahal yang benar "rute
-              mobil belum ditarik untuk lokasi ini". Dua pernyataan yang sangat
-              berbeda, dan yang kedua yang jujur.
-
-              Motor tidak ada di daftar, dan tidak akan pernah: ORS tidak
-              menyediakan profilnya. */}
-          {onGantiProfil && (
-            <div className="mb-2 flex gap-1">
-              {(
-                [
-                  ['foot-walking', 'Jalan kaki', 'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8'],
-                  ['driving-car', 'Mobil', 'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1'],
-                ] as const
-              ).map(([nilai, label, glif]) => {
-                const ada = konteks.profil_tersedia?.includes(nilai) ?? false
-                const aktif = profilRute === nilai
-                return (
-                  <button
-                    key={nilai}
-                    onClick={() => onGantiProfil(nilai)}
-                    disabled={!ada && !aktif}
-                    title={ada ? label : `Rute ${label.toLowerCase()} belum ditarik untuk lokasi ini`}
-                    className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-all duration-300 ease-jelly disabled:cursor-not-allowed disabled:opacity-35 ${
-                      aktif
-                        ? 'bg-ink text-surface'
-                        : 'border border-line text-ink-3 hover:border-ink-3 hover:text-ink-2'
-                    }`}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden className="shrink-0">
-                      <path
-                        d={glif}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-          )}
           <div className="flex items-baseline gap-2">
             <span className="papan tabular text-[19px] leading-none text-ink">
               {Math.round(konteks.menit_jalan ?? 0)}
@@ -739,12 +703,21 @@ export default function PanelInsight({
               >
                 {terlarang ? 'ZoneGuard — tidak boleh dipakai usaha' : 'Belum ada RDTR digital'}
               </p>
-              <p className="mt-0.5 text-[13.5px] leading-snug text-ink-2">
-                {zoneguard.penjelasan}
-              </p>
+              {terlarang ? (
+                <p className="mt-0.5 text-[13.5px] leading-snug text-ink-2">
+                  {zoneguard.penjelasan}
+                </p>
+              ) : (
+                <>
+                  <p className="mt-0.5 text-[13px] leading-snug text-ink-2">
+                    Status izinnya belum bisa dipastikan. Skor tetap dihitung.
+                  </p>
+                  <Rinci ringkas="Apa artinya buat saya?">{zoneguard.penjelasan}</Rinci>
+                </>
+              )}
               {zoneguard.kelas_zona && (
-                <p className="mt-1 font-mono text-[12.5px] text-ink-3">
-                  Kelas zona {zoneguard.kelas_zona}
+                <p className="mt-1.5 inline-block rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">
+                  {zoneguard.kelas_zona}
                 </p>
               )}
             </div>
@@ -1006,7 +979,7 @@ export default function PanelInsight({
                   <span className="shrink-0 text-[13px] text-ink-3">Belum terukur</span>
                 )}
               </div>
-              <p className="mb-1.5 text-[12.5px] leading-snug text-ink-3">
+              <p className="mb-1.5 text-[11.5px] leading-snug text-ink-3">
                 {TANYA_INDEKS[kode]}
               </p>
               {terukur ? (
@@ -1073,39 +1046,64 @@ export default function PanelInsight({
       ) : (
         faktor.length > 0 && (
         <Bagian judul="Kenapa skornya segitu" nada="gem" ikon={<path d="M3 13V9.4M8 13V3.4M13 13V6.6"/>}>
-          <ul className="space-y-1.5">
-            {faktor.slice(0, 6).map((f) => (
-              <li key={f.kode_variabel} className="flex items-baseline gap-2">
-                <span
-                  className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{
-                    background:
-                      f.indeks === 'IKP' || f.indeks === 'IBR'
-                        ? 'var(--color-ink-3)'
-                        : 'var(--color-ink)',
-                  }}
-                  aria-hidden
-                />
-                <span className="flex-1 text-[14px] leading-snug text-ink-2">
-                  <span title={`${f.kode_variabel} · ${f.indeks}`}>
-                    {ARTI_KODE[f.kode_variabel] ?? f.kode_variabel}
-                  </span>
-                  {f.persentil !== null && (
-                    <span className="text-ink-3">
-                      {' '}
-                      — lebih tinggi daripada{' '}
-                      <span className="tabular font-medium text-ink-2">
-                        {f.persentil.toFixed(0)}
-                      </span>{' '}
-                      dari 100 lokasi lain
+          {/* Batang persentil, bukan kalimat. (3 Sep 2026.)
+
+              Bentuk lama menulis "Keragaman jenis usaha — lebih tinggi
+              daripada 17 dari 100 lokasi lain" lalu menaruh nama indeksnya di
+              kanan. Dua cacatnya nyata.
+
+              Pertama, enam kalimat sepanjang itu berturut-turut menuntut
+              DIBACA untuk bisa dibandingkan - padahal yang ditanyakan
+              pembacanya "mana yang menarik skornya naik" , dan itu pertanyaan
+              tentang panjang, bukan tentang kata.
+
+              Kedua, dan ini yang membuatnya terbaca kacau: baris yang
+              PERSENTILNYA KOSONG kehilangan seluruh kalimatnya dan tinggal dua
+              nama berdempetan - "Penumpang stasiun per hari" lalu "akses ke
+              stasiun" - tanpa satu angka pun dan tanpa penanda apa pun bahwa
+              yang hilang itu datanya. Sekarang ia mengatakannya. */}
+          <ul className="space-y-2.5">
+            {faktor.slice(0, 6).map((f) => {
+              const kurang = f.indeks === 'IKP' || f.indeks === 'IBR'
+              const p = f.persentil
+              return (
+                <li key={f.kode_variabel}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span
+                      className="min-w-0 flex-1 truncate text-[13px] text-ink-2"
+                      title={`${f.kode_variabel} · ${ARTI_INDEKS[f.indeks]}`}
+                    >
+                      {ARTI_KODE[f.kode_variabel] ?? f.kode_variabel}
                     </span>
-                  )}
-                </span>
-                <span className="tabular shrink-0 text-[13px] text-ink-3">
-                  {ARTI_INDEKS[f.indeks]}
-                </span>
-              </li>
-            ))}
+                    {p === null ? (
+                      <span className="shrink-0 text-[11.5px] italic text-ink-3">
+                        belum terukur
+                      </span>
+                    ) : (
+                      <span className="tabular shrink-0 text-[12.5px] font-semibold text-ink">
+                        {p.toFixed(0)}
+                        <span className="font-normal text-ink-3">/100</span>
+                      </span>
+                    )}
+                  </div>
+                  {/* Rel tetap digambar walau kosong: baris tanpa rel akan
+                      terlihat seperti baris yang hilang, bukan seperti angka
+                      yang belum ada. */}
+                  <div className="mt-1 h-[7px] overflow-hidden rounded-full bg-ground-2">
+                    {p !== null && (
+                      <div
+                        className={`h-full rounded-full ${kurang ? 'bg-jebakan' : 'bg-gem'}`}
+                        style={{ width: `${Math.min(100, Math.max(3, p))}%` }}
+                      />
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] leading-none text-ink-3">
+                    {ARTI_INDEKS[f.indeks]}
+                    {p !== null && (kurang ? ' · makin tinggi makin membebani' : ' · makin tinggi makin baik')}
+                  </p>
+                </li>
+              )
+            })}
           </ul>
         </Bagian>
         )
@@ -1177,6 +1175,79 @@ export default function PanelInsight({
       <Bagian judul="Riwayat perubahan skor" nada="netral" ikon={<><path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9"/><path d="M2.3 2.8v3.4h3.4"/></>}>
         <BagianRiwayat h3={h3} />
       </Bagian>
+
+      {/* --- 9. Cara menuju ke sini ----------------------------------------
+
+          Pindah ke PALING BAWAH (3 Sep 2026, permintaan pemilik repo). Di
+          tempat lamanya - terselip di atas angka "35 menit jalan kaki" - ia
+          terbaca sebagai bagian dari keterangan itu dan bukan sebagai kendali
+          yang bisa ditekan. Berdiri sendiri sebagai bagian bernama, ia
+          mengumumkan dirinya.
+
+          Tombol yang datanya belum ada DINONAKTIFKAN, bukan disembunyikan.
+          Menyembunyikannya menyatakan "rute mobil tidak ada di produk ini";
+          yang benar "rute mobil belum ditarik untuk lokasi ini". Dua pernyataan
+          yang sangat berbeda, dan yang kedua yang jujur.
+
+          Motor tidak ada dan tidak akan pernah ada: ORS tidak menyediakan
+          profilnya, dan menyodorkan mobil sebagai "kira-kira motor" salah ke
+          arah yang paling merugikan - motor melewati gang yang mobil tidak. */}
+      {onGantiProfil && konteks?.simpul && (
+        <Bagian
+          judul="Cara menuju ke sini"
+          nada="gem"
+          ikon={<><path d="M8 1.8 3 8h3v6.2h4V8h3Z"/></>}
+        >
+          <div className="flex gap-2">
+            {(
+              [
+                [
+                  'foot-walking',
+                  'Jalan kaki',
+                  'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8',
+                ],
+                [
+                  'driving-car',
+                  'Mobil',
+                  'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1',
+                ],
+              ] as const
+            ).map(([nilai, label, glif]) => {
+              const ada = konteks.profil_tersedia?.includes(nilai) ?? false
+              const aktif = profilRute === nilai
+              return (
+                <button
+                  key={nilai}
+                  onClick={() => onGantiProfil(nilai)}
+                  disabled={!ada && !aktif}
+                  className={`flex flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-lg border px-3 py-2.5 transition-all duration-300 ease-jelly disabled:cursor-not-allowed ${
+                    aktif
+                      ? 'border-gem bg-gem-soft/50 text-gem'
+                      : ada
+                        ? 'border-line text-ink-2 hover:border-ink-3 hover:text-ink'
+                        : 'border-dashed border-line text-ink-3 opacity-60'
+                  }`}
+                >
+                  <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden>
+                    <path
+                      d={glif}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="text-[12.5px] font-semibold leading-none">{label}</span>
+                  <span className="text-[10.5px] leading-none text-ink-3">
+                    {ada ? 'ada rutenya' : 'belum ditarik'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </Bagian>
+      )}
 
       <p className="px-4 pb-6 pt-1 text-[12.5px] leading-snug text-ink-3">
         Angka di kartu ini dihitung sekali oleh pipeline dan dibaca apa adanya.

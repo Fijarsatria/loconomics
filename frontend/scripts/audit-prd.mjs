@@ -261,7 +261,16 @@ async function main() {
   cek('opportunity score tampil', /(opportunity score|skor peluang)/i.test(detail))
   cek('kuadran tampil',
     /(Hidden Gem|Jebakan Gengsi|Pemenang Jelas|Hindari|Aman)/i.test(detail))
-  cek('badge keyakinan tampil (aturan 3)', /(RENDAH|SEDANG|TINGGI)/.test(detail))
+  // Kata yang tampil diganti 3 Sep 2026: "RENDAH" -> "Data tipis", karena
+  // "RENDAH" di sebelah skor 47 terbaca sebagai "lokasinya jelek" - kebalikan
+  // dari artinya. Asersi lama mencari kata lamanya dan akan GAGAL DIAM.
+  //
+  // Keduanya diterima. Yang dijaga aturan 3 bukan KATA tertentu melainkan
+  // bahwa tingkat keyakinannya sampai ke layar bersama skornya.
+  cek(
+    'badge keyakinan tampil (aturan 3)',
+    /(RENDAH|SEDANG|TINGGI|Data tipis|Data sedang|Data kuat)/.test(detail),
+  )
   cek('kode lokasi terbaca manusia, bukan h3 mentah', /[A-Za-z ]+-\d{4,5}/.test(detail))
 
   // -------------------------------------------------- kejujuran sumbu prestise

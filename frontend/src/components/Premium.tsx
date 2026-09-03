@@ -870,17 +870,42 @@ export function DialogPantauan({
                   key={b.h3_index}
                   className="flex items-center gap-3 rounded-md border border-line bg-surface px-3.5 py-3"
                 >
+                  {/* Didetailkan 3 Sep 2026: baris lama cuma menyebut nama
+                      kawasan dan dua belas karakter heksadesimal.
+
+                      "Manggarai" saja tidak cukup untuk mengingat lokasi mana
+                      yang disimpan - satu kawasan punya 122 heksagon, dan
+                      seluruh baris di daftar ini akan berbunyi "Manggarai".
+                      Yang membuatnya bisa diingat justru tiga hal yang sudah
+                      ada di responsnya dan tidak pernah ditampilkan: kode
+                      lokasi yang terbaca, NAMA kuadrannya, dan kapan ia
+                      disimpan. */}
                   <button
                     onClick={() => onPilih(b.h3_index)}
                     className="min-w-0 flex-1 cursor-pointer text-left"
                     title="Buka di peta"
                   >
-                    <span className="flex items-center gap-1.5">
-                      {b.kuadran && <Glif kuadran={b.kuadran} ukuran={10} />}
-                      <span className="papan truncate text-[14px]">{b.kawasan ?? '—'}</span>
+                    <span className="papan block truncate text-[14px]">
+                      {kodeLokasi(b.h3_index, b.kawasan ?? '')}
                     </span>
-                    <span className="block font-mono text-[10.5px] text-ink-3">
-                      {b.h3_index.slice(0, 12)}…
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      {b.kuadran && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11.5px] font-semibold"
+                          style={{ color: KUADRAN[b.kuadran as NamaKuadran]?.warna }}
+                        >
+                          <Glif kuadran={b.kuadran} ukuran={9} />
+                          {KUADRAN[b.kuadran as NamaKuadran]?.nama}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-ink-3">
+                        disimpan{' '}
+                        {new Date(b.dibuat_pada).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
                     </span>
                   </button>
 
@@ -889,6 +914,15 @@ export function DialogPantauan({
                       {angka(b.skor_sekarang, 1) ?? '—'}
                     </span>
                     <Selisih nilai={b.selisih} />
+                    {/* Skor BEKU-nya ikut disebut. Tanpa itu, "+0,4" menuntut
+                        pembacanya mengingat angka berapa yang dulu ia simpan -
+                        dan kalau ia mengingatnya, selisihnya tidak perlu
+                        dihitungkan untuknya. */}
+                    {b.skor_saat_dipantau !== null && b.selisih !== null && b.selisih !== 0 && (
+                      <span className="tabular mt-0.5 block text-[10.5px] text-ink-3">
+                        dari {angka(b.skor_saat_dipantau, 1)}
+                      </span>
+                    )}
                   </div>
 
                   <button

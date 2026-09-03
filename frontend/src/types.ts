@@ -637,6 +637,8 @@ export interface Rekomendasi {
   harga_sewa_per_m2: number | null
   belanja_per_jam: number | null
   waktu_jalan_menit: number | null
+  /** D03 — jarak mengikuti jalan ke simpul terdekat, meter. */
+  jarak_simpul_m: number | null
   n_kompetitor_langsung: number | null
   indeks_churn: number | null
   zoneguard: StatusZoneGuard

@@ -837,6 +837,14 @@ class Rekomendasi(BaseModel):
     harga_sewa_per_m2: float | None = None
     belanja_per_jam: float | None = None
     waktu_jalan_menit: float | None = None
+    #: D03 - jarak MENGIKUTI JALAN ke simpul terdekat, meter.
+    #:
+    #: Ikut dikirim sejak 3 Sep 2026. Sebelumnya rekomendasi cuma menyebut
+    #: menitnya, dan menit sendirian menyembunyikan hal yang justru jadi pokok
+    #: produk ini: 35 menit bisa berarti 2,9 km yang memutar 3,7x dari jarak
+    #: lurusnya. Orang yang membaca "35 menit" mengira lokasinya jauh; yang
+    #: membaca "35 menit - 2,9 km lewat jalan" tahu bahwa yang jauh JALANNYA.
+    jarak_simpul_m: float | None = None
     n_kompetitor_langsung: float | None = None
     indeks_churn: float | None = None
     zoneguard: StatusZoneGuard

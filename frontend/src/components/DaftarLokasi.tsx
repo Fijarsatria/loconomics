@@ -326,29 +326,39 @@ export default function DaftarLokasi({
                 satuan="skor gem"
                 badge={g.skor.keyakinan}
               >
-                {/* Rangkuman alasan — inti kriteria penerimaan GemFinder.
-                    Kalimatnya dirakit backend dari angka basis data, bukan
-                    dikarang model bahasa, jadi tiap klaimnya bisa ditelusuri. */}
-                <p className="mt-1 text-[13.5px] leading-snug text-ink-2">{g.ringkasan}</p>
-                {g.alasan.length > 0 && (
-                  <ul className="mt-1.5 space-y-0.5">
-                    {g.alasan.map((a) => (
-                      <li
-                        key={a.metode}
-                        className="flex items-baseline gap-1.5 text-[12.5px] text-ink-3"
-                      >
-                        <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-gem" aria-hidden />
-                        <span title={`Kode variabel: ${a.kode_variabel.join(', ')}`}>
-                          {a.bukti}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="mt-1.5 text-[12px] text-ink-3">
-                  Lolos {g.n_metode_lolos} dari 3 metode
-                  {g.zoneguard.status === 'TIDAK_DIKETAHUI' && ' · zona belum bisa dipastikan'}
+                {/* Satu kalimat, satu pengukur, dan buktinya DILIPAT.
+                    (3 Sep 2026, keluhan "kebanyakan teks, jelek sekali".)
+
+                    Baris lama menumpuk empat blok teks di satu kartu: ringkasan,
+                    sampai tiga butir bukti, dan satu baris "Lolos N dari 3".
+                    Dikalikan sepuluh kartu, daftar peringkat berubah jadi enam
+                    layar prosa - dan yang dicari orang di daftar berperingkat
+                    justru kebalikannya: memindai cepat, lalu berhenti di satu.
+
+                    Buktinya TIDAK dibuang. Ia yang membuat tiap klaim bisa
+                    ditelusuri, dan itu justru bagian yang paling berharga di
+                    sini - ia cuma tidak lagi terbuka semuanya sekaligus. */}
+                <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-ink-2">
+                  {g.ringkasan}
                 </p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  {/* Tiga titik = tiga metode. Lebih cepat dibaca daripada
+                      "Lolos 2 dari 3 metode", dan memakan seperlima ruangnya. */}
+                  <span className="flex shrink-0 items-center gap-1" aria-hidden>
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          i < g.n_metode_lolos ? 'bg-gem' : 'bg-line-2'
+                        }`}
+                      />
+                    ))}
+                  </span>
+                  <span className="text-[11.5px] text-ink-3">
+                    {g.n_metode_lolos}/3 metode
+                    {g.zoneguard.status === 'TIDAK_DIKETAHUI' && ' · zona belum pasti'}
+                  </span>
+                </div>
               </Kartu>
             ))}
 

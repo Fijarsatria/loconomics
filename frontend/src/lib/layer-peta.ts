@@ -68,6 +68,49 @@ export const SELUBUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
   gelap: { warna: '#000000', opasitas: 0.3 },
 }
 
+/**
+ * Bidang yang MEWARNAI tiap layer, dan nama bendanya untuk kalimat pengguna.
+ *
+ * Dipakai menghitung cakupan layer dari GeoJSON yang benar-benar termuat -
+ * bukan dari daftar tulis tangan yang akan basi begitu satu sumber masuk.
+ * `opportunity` tidak ada di sini dengan sengaja: ia diwarnai `kuadran`, dan
+ * kuadran terisi untuk seluruh heksagon yang punya skor. Layer yang tidak
+ * pernah bisa kosong tidak perlu dijaga terhadap kekosongan.
+ */
+export const BIDANG_LAYER: Partial<Record<NamaLayer, { kunci: string; benda: string }>> = {
+  hidden_gem: { kunci: 'hidden_gem_score', benda: 'skor Hidden Gem' },
+  risk_radar: { kunci: 'indeks_churn', benda: 'data pergantian usaha' },
+  pricelens: { kunci: 'harga_sewa_per_m2', benda: 'data harga sewa' },
+  zoneguard: { kunci: 'zona_izin_komersial', benda: 'zonasi RDTR digital' },
+}
+
+/**
+ * Berapa heksagon yang benar-benar punya nilai untuk layer yang sedang tampil.
+ *
+ * Ada karena tiga dari lima layer nyaris kosong di basis data - PriceLens 0/708,
+ * RiskRadar 0/708, Hidden Gem 38/708 - dan sampai 3 September 2026 tidak ada
+ * satu pun yang MENGATAKANNYA di peta. Yang terlihat cuma 708 heksagon abu
+ * pucat, dan itu terbaca sebagai aplikasi yang rusak alih-alih tabel yang belum
+ * terisi. Pemilik repo sendiri membacanya begitu, dan itu bukti yang cukup.
+ *
+ * Dihitung dari fitur yang termuat, jadi ia ikut berubah sendiri begitu
+ * sumbernya masuk - tidak ada angka yang perlu diingat siapa pun untuk
+ * diperbarui.
+ */
+export function cakupanLayer(
+  layer: NamaLayer,
+  fitur: { properties?: Record<string, unknown> | null }[] | null,
+): { terisi: number; total: number; benda: string } | null {
+  const bidang = BIDANG_LAYER[layer]
+  if (!bidang || !fitur) return null
+  let terisi = 0
+  for (const f of fitur) {
+    const v = f.properties?.[bidang.kunci]
+    if (v !== null && v !== undefined) terisi++
+  }
+  return { terisi, total: fitur.length, benda: bidang.benda }
+}
+
 /** Garis batas heksagon harus melawan basemap, bukan menyatu dengannya. */
 export const GARIS_HEX = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya) ? '#eef3f0' : '#16211c'
@@ -114,13 +157,33 @@ export const WARNA_RUTE = ['#0f766e', '#b45309', '#7c3aed', '#be123c'] as const
  *
  * Dibedakan dari WARNA_RUTE[0] dengan sengaja: kalau warnanya sama, orang yang
  * baru mengklik satu heksagon akan mengira dirinya sudah membandingkan sesuatu.
+ *
+ * UNGU, dan itu perbaikan 3 September 2026 atas keluhan "rutenya abu-abu, tidak
+ * kelihatan". Yang lama `#0d5c53` - teal sangat gelap dan nyaris tanpa chroma -
+ * memang terbaca sebagai garis hitam keabuan begitu ia melintas di atas
+ * heksagon berwarna dan jalan basemap yang juga keabuan.
+ *
+ * Ungu dipilih karena ia SATU-SATUNYA rona yang belum terpakai: keempat warna
+ * kuadran biru/hijau/jingga/merah, isochrone biru, dan basemap didominasi abu
+ * dan krem. Rute cuma muncul saat diminta dan cuma sebentar - ia memang harus
+ * berteriak, dan tidak boleh bisa disalahartikan sebagai salah satu kuadran.
  */
 export const WARNA_RUTE_TUNGGAL = (gaya: NamaGaya) =>
-  BASEMAP_GELAP.includes(gaya) ? '#5eead4' : '#0d5c53'
+  BASEMAP_GELAP.includes(gaya) ? '#e9a8ff' : '#9333ea'
 
-/** Warna jalur alternatif. Selalu lebih redup dari yang utama, di gaya mana pun. */
+/**
+ * Warna jalur alternatif. Selalu lebih redup dari yang utama, di gaya mana pun.
+ *
+ * RONA YANG SAMA dengan rute utamanya, bukan abu-abu netral. Versi sebelumnya
+ * memakai `rgba(28,52,45,0.42)` - dan abu-abu transparan di atas basemap terang
+ * yang juga keabuan menghasilkan garis yang praktis tidak ada. Ia juga tidak
+ * menyatakan apa pun: pembacanya tidak bisa tahu garis pucat itu jalur
+ * alternatif atau sekadar jalan di basemap.
+ *
+ * Serumpun tapi lebih redup menyatakan kekerabatannya sekaligus urutannya.
+ */
 export const WARNA_RUTE_ALT = (gaya: NamaGaya) =>
-  BASEMAP_GELAP.includes(gaya) ? 'rgba(226,240,236,0.62)' : 'rgba(28,52,45,0.42)'
+  BASEMAP_GELAP.includes(gaya) ? 'rgba(233,168,255,0.55)' : 'rgba(147,51,234,0.5)'
 
 /**
  * Kawasan jangkau jalan kaki. Sengaja BUKAN warna kuadran maupun warna rute.
@@ -261,10 +324,17 @@ export const WARNA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
   ],
 
   // Tiga status, tiga perlakuan. NULL TIDAK disamakan dengan FALSE.
+  // Tiga status, tiga perlakuan. NULL TIDAK disamakan dengan FALSE.
+  //
+  // Hijau dijenuhkan 3 Sep 2026: `#8fbfb2` adalah sage yang sangat pucat, dan
+  // di opasitas isian 0,28 ia praktis tidak bisa dibedakan dari abu "belum ada
+  // RDTR". Layer yang menjawab "boleh atau tidak" lalu menggambar BOLEH dan
+  // TIDAK TAHU dengan warna yang sama tidak menjawab apa pun - dan justru di
+  // layer inilah bedanya paling mahal.
   zoneguard: [
     'case',
-    ['==', ['get', 'zona_izin_komersial'], true], '#8fbfb2',
-    ['==', ['get', 'zona_izin_komersial'], false], '#b42318',
+    ['==', ['get', 'zona_izin_komersial'], true], '#1f9d5f',
+    ['==', ['get', 'zona_izin_komersial'], false], '#c81e1e',
     ABU_HINDARI,
   ],
 }
@@ -311,13 +381,23 @@ export const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification>
   // Yang TIDAK ikut turun: heksagon kosong (0,08). Jarak antara "terukur" dan
   // "belum ada data" harus tetap terbaca tanpa membuka legenda, dan menurunkan
   // keduanya bersama-sama justru memampatkan jarak itu.
-  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.18, 0.33],
-  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.08, 0.36],
-  risk_radar: ['case', ['==', ['get', 'indeks_churn'], null], 0.08, 0.34],
-  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.08, 0.36],
+  //
+  // Turun lagi ~25% pada 3 September 2026, permintaan KEEMPAT: jalan masih
+  // tertelan. Ini titik terendah yang masih aman, dan syaratnya dibayar di
+  // baris berikutnya - `TEBAL_GARIS` dinaikkan 1,4 -> 1,6 bersamaan dengan ini.
+  //
+  // Tukarannya disengaja: garis batas menutupi PINGGIR heksagon saja, isian
+  // menutupi SELURUH luasnya. Memindahkan beban dari isian ke garis membuat
+  // bentuk heksagon tetap terbaca sementara jalan di dalamnya kembali terlihat.
+  // Menurunkan isian TANPA menaikkan garis akan memberi peta petak-petak yang
+  // melebur - itu yang diperingatkan catatan lama, dan peringatannya benar.
+  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.14, 0.25],
+  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.06, 0.28],
+  risk_radar: ['case', ['==', ['get', 'indeks_churn'], null], 0.06, 0.26],
+  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.06, 0.28],
   // ZoneGuard turun paling sedikit. Ia satu-satunya layer yang menyatakan
   // LARANGAN, dan larangan yang nyaris tidak terlihat berhenti jadi larangan.
-  zoneguard: 0.34,
+  zoneguard: 0.28,
 }
 
 /**
@@ -333,7 +413,7 @@ export const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification>
  * isiannya, jadi isian boleh jauh lebih tipis tanpa membuat petak-petaknya
  * melebur.
  */
-export const TEBAL_GARIS = 1.4
+export const TEBAL_GARIS = 1.6
 export const OPASITAS_GARIS = 0.85
 
 /**

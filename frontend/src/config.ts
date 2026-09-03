@@ -699,10 +699,23 @@ export function kataIndeks(kode: string, nilai: number | null): string | null {
 // hati. Keyakinan rendah bukan kesalahan yang perlu ditandai merah; ia hanya
 // berarti datanya belum banyak.
 
-export const KEYAKINAN: Record<string, { balok: number; teks: string }> = {
-  TINGGI: { balok: 3, teks: 'Didukung survei yang rapat' },
-  SEDANG: { balok: 2, teks: 'Didukung survei secukupnya' },
-  RENDAH: { balok: 1, teks: 'Datanya masih tipis, perlu verifikasi lapangan' },
+//
+// `label` ditambahkan 3 September 2026, dan sebabnya keluhan yang tepat:
+// "ada kayak RENDAH terus ada bar gitu, maksudnya apa?".
+//
+// Lencana ini menampilkan TINGKAT tanpa pernah menyebut tingkat DARI APA. Kata
+// "RENDAH" di sebelah skor 47 nyaris pasti dibaca sebagai "lokasinya jelek" -
+// kebalikan dari artinya, karena yang rendah bukan lokasinya melainkan
+// banyaknya data yang menopang penilaiannya. Penjelasannya memang ada, tetapi
+// hidup di atribut `title` - dan tooltip tidak ada di ponsel, tidak ada saat
+// dibaca sekilas, dan tidak pernah ada bagi orang yang tidak tahu ada yang
+// perlu di-hover.
+//
+// `label` yang tampil di layar; `teks` tetap jadi kalimat panjangnya.
+export const KEYAKINAN: Record<string, { balok: number; teks: string; label: string }> = {
+  TINGGI: { balok: 3, teks: 'Didukung survei yang rapat', label: 'Data kuat' },
+  SEDANG: { balok: 2, teks: 'Didukung survei secukupnya', label: 'Data sedang' },
+  RENDAH: { balok: 1, teks: 'Datanya masih tipis, perlu verifikasi lapangan', label: 'Data tipis' },
 }
 
 // --- Commuter Clock --------------------------------------------------------

@@ -158,7 +158,19 @@ function Kartu({
               />
               <Angka
                 label="Ke stasiun"
-                nilai={r.waktu_jalan_menit === null ? null : `${r.waktu_jalan_menit.toFixed(0)} mnt`}
+                nilai={
+                  r.waktu_jalan_menit === null
+                    ? null
+                    : `${r.waktu_jalan_menit.toFixed(0)} mnt${
+                        r.jarak_simpul_m === null
+                          ? ''
+                          : r.jarak_simpul_m >= 1000
+                            ? ` · ${(r.jarak_simpul_m / 1000).toLocaleString('id-ID', {
+                                maximumFractionDigits: 1,
+                              })} km`
+                            : ` · ${Math.round(r.jarak_simpul_m)} m`
+                      }`
+                }
               />
               <Angka
                 label="Pesaing"

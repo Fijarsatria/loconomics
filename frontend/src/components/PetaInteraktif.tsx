@@ -51,6 +51,7 @@ import {
   TEKS_HEX,
   WARNA_FOKUS,
   WARNA_RUTE,
+  cakupanLayer,
   WARNA_RUTE_ALT,
   WARNA_ISO,
   WARNA_RUTE_BAYANG,
@@ -806,6 +807,15 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
    * dan itu sudah pernah terjadi di repo ini.
    */
   const [tiraiUbin, setTiraiUbin] = useState<'penuh' | 'ringkas'>('penuh')
+  /**
+   * Cakupan layer yang sedang tampil, dihitung dari fitur yang benar-benar
+   * termuat. `null` = layer ini memang tidak bisa kosong (opportunity).
+   */
+  const [cakupan, setCakupan] = useState<{
+    terisi: number
+    total: number
+    benda: string
+  } | null>(null)
 
   const [sorot, setSorot] = useState<PropertiHeksagon | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
@@ -1015,6 +1025,17 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
   }, [galatPeta?.ubin])
 
+  useEffect(() => {
+    setCakupan(
+      cakupanLayer(
+        layer,
+        dataRef.current?.features as unknown as
+          | { properties?: Record<string, unknown> | null }[]
+          | null,
+      ),
+    )
+  }, [layer])
+
   // --- Ganti gaya basemap ---
   // setStyle membuang seluruh sumber & layer, jadi `siap` direset supaya efek
   // pemuatan heksagon di bawah berjalan ulang setelah gaya baru selesai dimuat.
@@ -1124,6 +1145,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         onMuatRef.current(fitur.length)
         bubuhiUrutan(data as { features: unknown[] })
         dataRef.current = data as unknown as { features: FiturHex[] }
+        setCakupan(cakupanLayer(layerKini.current, fitur as { properties?: Record<string, unknown> | null }[]))
 
         const sumber = m.getSource(SUMBER)
         if (sumber) {
@@ -1314,12 +1336,33 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             // Yang perlu dijaga cuma alfa per pita tetap rendah, supaya
             // tumpukan paling dalam berhenti di ~0,26 dan angka di dalam
             // heksagon tetap terbaca menembusnya.
-            'fill-color': WARNA_ISO(gaya),
+            // Tiap pita punya WARNANYA sendiri sejak 3 Sep 2026, bukan
+            // satu warna dengan lima opasitas.
+            //
+            // Dengan tiga pita, opasitas saja masih bisa dibedakan. Dengan
+            // lima - dan dua di antaranya jauh lebih luas daripada tiga yang
+            // lama - tumpukannya berubah jadi satu gumpalan biru yang tidak
+            // memberi tahu apa pun. Rona yang bergeser dari kuning ke ungu
+            // membuat "sepuluh menit" dan "tiga puluh menit" terbaca sebagai
+            // dua hal, bukan sebagai satu hal yang lebih pucat.
+            //
+            // Urutan ronanya SEARAH dengan besarnya - kuning dekat, ungu jauh -
+            // jadi ia tetap terbaca sebagai satu skala, bukan lima kategori.
+            'fill-color': [
+              'interpolate', ['linear'], ['get', 'menit'],
+              5, '#f2b705',
+              10, '#f07818',
+              15, '#dc3f6a',
+              30, '#8b3bb8',
+              60, '#3b41b8',
+            ],
             'fill-opacity': [
               'interpolate', ['linear'], ['get', 'menit'],
-              5, 0.13,
-              10, 0.09,
-              15, 0.06,
+              5, 0.16,
+              10, 0.12,
+              15, 0.09,
+              30, 0.06,
+              60, 0.045,
             ],
           },
         })
@@ -1333,7 +1376,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': WARNA_RUTE_BAYANG(gaya),
-            'line-width': ['interpolate', ['linear'], ['get', 'menit'], 5, 5.5, 15, 3.6],
+            'line-width': [
+              'interpolate', ['linear'], ['get', 'menit'],
+              5, 5.5, 15, 3.6, 60, 2.8,
+            ],
             'line-opacity': 0.55,
           },
         })
@@ -1343,10 +1389,20 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           source: SUMBER_ISO,
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
-            'line-color': WARNA_ISO(gaya),
+            'line-color': [
+              'interpolate', ['linear'], ['get', 'menit'],
+              5, '#f2b705',
+              10, '#f07818',
+              15, '#dc3f6a',
+              30, '#8b3bb8',
+              60, '#3b41b8',
+            ],
             // Makin lama pitanya, makin tipis garisnya - urutan yang sama
             // dengan urutan pentingnya bagi orang yang mencari lokasi.
-            'line-width': ['interpolate', ['linear'], ['get', 'menit'], 5, 3.2, 15, 1.9],
+            'line-width': [
+              'interpolate', ['linear'], ['get', 'menit'],
+              5, 3.2, 15, 1.9, 60, 1.4,
+            ],
             'line-opacity': 1,
             // Pita TERDALAM utuh, sisanya putus-putus. Bentuknya ikut membawa
             // arti: yang utuh batas yang paling layak dipercaya sekaligus yang
@@ -2180,6 +2236,47 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         </div>
       )}
 
+      {/* ================= Tumpukan kiri atas ==========================
+
+          Peringatan ubin PINDAH ke sini dari tengah-bawah (3 Sep 2026,
+          permintaan pemilik repo). Di tengah bawah ia menutupi pil layer, baki
+          komparasi, dan ajakan simulasi sekaligus - tiga hal yang justru sedang
+          dipakai orang saat peringatannya muncul.
+
+          Kiri atas juga tempat yang benar secara arti: keduanya - layer yang
+          kosong dan ubin yang menolak - menjawab pertanyaan yang sama, "kenapa
+          yang saya lihat begini". Menaruhnya bersebelahan membuat keduanya
+          terbaca sebagai satu keluarga, bukan dua kejadian yang tidak
+          berhubungan. */}
+      <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-col items-start gap-2 sm:max-w-[24rem]">
+        {/* --- Layer ini punya berapa data ---------------------------------
+
+            Muncul HANYA kalau cakupannya di bawah separuh. Pemberitahuan yang
+            selalu ada berhenti dibaca, dan Opportunity - satu-satunya layer yang
+            708/708 - tidak pernah perlu menjelaskan dirinya.
+
+            Angkanya dihitung dari fitur yang termuat, jadi ia menghilang sendiri
+            begitu sumbernya masuk. Tidak ada yang perlu ingat memperbaruinya. */}
+        {cakupan && cakupan.total > 0 && cakupan.terisi < cakupan.total / 2 && (
+          <div
+            role="status"
+            className={`kaca pop pointer-events-auto rounded-md px-3.5 py-2.5 ${
+              cakupan.terisi === 0 ? 'border-l-[3px] border-l-bahaya' : ''
+            }`}
+          >
+            <p className="text-[12.5px] font-semibold text-ink">
+              {cakupan.terisi === 0
+                ? `Layer ini belum punya ${cakupan.benda}`
+                : `${cakupan.terisi} dari ${cakupan.total} heksagon punya ${cakupan.benda}`}
+            </p>
+            <p className="mt-0.5 text-[11.5px] leading-snug text-ink-2">
+              {cakupan.terisi === 0
+                ? `Nol dari ${cakupan.total} heksagon. Heksagon yang tergambar abu semuanya karena memang belum ada yang diukur — bukan karena nilainya rendah.`
+                : 'Sisanya digambar abu: belum terukur, bukan bernilai rendah.'}
+            </p>
+          </div>
+        )}
+
       {/* Chip ringkas. Yang terlihat sepanjang sisa pemadaman.
 
           Ia menggantikan panel penuh sesudah sembilan detik, dan itu satu-
@@ -2191,7 +2288,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       {galatPeta?.ubin && tiraiUbin === 'ringkas' && (
         <button
           onClick={() => setTiraiUbin('penuh')}
-          className="kaca pop absolute bottom-24 left-1/2 z-10 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-ink-2 transition-transform duration-200 ease-jelly hover:scale-[1.04] lg:left-[calc(50%-13rem)]"
+          className="kaca pop pointer-events-auto flex w-fit cursor-pointer items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-ink-2 transition-transform duration-200 ease-jelly hover:scale-[1.04]"
         >
           <span className="denyut h-1.5 w-1.5 shrink-0 rounded-full bg-bahaya" aria-hidden />
           Ubin MAPID menolak
@@ -2207,7 +2304,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           // bottom-24, bukan bottom-4: kaki peta sudah ditempati pil pertanyaan
           // layer / ajakan simulasi / baki komparasi, dan pesan ini lebih
           // tinggi daripada versi satu-barisnya. Ditaruh di atas keduanya.
-          className="kaca pop absolute bottom-24 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-md px-4 py-3 lg:left-[calc(50%-13rem)]"
+          className="kaca pop pointer-events-auto relative max-w-[22rem] rounded-md px-4 py-3"
         >
           {galatPeta.ubin && (
             <button
@@ -2275,6 +2372,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           )}
         </div>
       )}
+      </div>
 
       {galat && (
         <div

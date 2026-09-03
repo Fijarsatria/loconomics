@@ -1165,6 +1165,7 @@ def rekomendasi(
                 harga_sewa_per_m2=hx.harga_sewa_per_m2,
                 belanja_per_jam=hx.belanja_per_jam,
                 waktu_jalan_menit=hx.waktu_jalan_menit,
+                jarak_simpul_m=hx.jarak_simpul_m,
                 n_kompetitor_langsung=hx.n_kompetitor_langsung,
                 indeks_churn=hx.indeks_churn,
                 zoneguard=zoneguard(hx),
