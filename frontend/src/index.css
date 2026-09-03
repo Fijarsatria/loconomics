@@ -1496,7 +1496,7 @@ input:focus-visible {
 }
 
 /* ==========================================================================
-   Konsultan AI — kaca cair
+   Loconomics AI — kaca cair
 
    Bahannya SENGAJA berlawanan dengan chrome di sekitarnya: gelap saat aplikasi
    terang, terang saat aplikasi gelap. Alasannya bukan gaya. Kotak tanya ini
@@ -1547,7 +1547,12 @@ input:focus-visible {
   color: rgb(22 33 28 / 0.4);
 }
 
-/* Cincin warna yang berputar di balik kacanya, hanya SELAMA menjawab.
+/* Cincin warna yang berputar di balik TOMBOL KIRIM, hanya SELAMA menjawab.
+
+   PINDAH dari mengelilingi seluruh pil (input + tombol) ke mengelilingi
+   TOMBOLNYA SAJA (4 Sep 2026, permintaan pemilik repo). Yang sedang
+   "berpikir" adalah jawabannya, bukan kotak tempat orang mengetik - cincin di
+   sekitar kotak ketik menyatakan hal yang salah.
 
    Dibuat dari elemen yang benar-benar diputar, bukan dari `@property` +
    conic-gradient bersudut animasi: yang kedua lebih ringkas dan tidak dijamin
@@ -1558,22 +1563,22 @@ input:focus-visible {
    berwarna - dan itu bedanya dengan cincin gradien biasa. */
 .ai-cincin {
   position: absolute;
-  inset: -1px;
-  border-radius: inherit;
+  inset: -5px;
+  border-radius: 999px;
   overflow: hidden;
   z-index: -1;
   opacity: 0;
-  transition: opacity 520ms var(--ease-liquid);
+  transition: opacity 420ms var(--ease-liquid);
 }
 
-.ai-kaca[data-berpikir='true'] .ai-cincin {
+.ai-tombol[data-berpikir='true'] .ai-cincin {
   opacity: 1;
 }
 
 .ai-cincin::before {
   content: '';
   position: absolute;
-  inset: -60%;
+  inset: -70%;
   background: conic-gradient(
     from 0deg,
     #4c93f7,
@@ -1582,7 +1587,7 @@ input:focus-visible {
     #f0a94a,
     #4c93f7
   );
-  filter: blur(14px);
+  filter: blur(9px);
   animation: ai-putar 3.6s linear infinite;
 }
 
@@ -1590,6 +1595,14 @@ input:focus-visible {
   to {
     transform: rotate(1turn);
   }
+}
+
+/* Spinner DI DALAM tombol - busur yang berputar menggantikan panah selama
+   mengirim. Sama keyframe (`ai-putar`) dengan cincin di belakangnya, tiga
+   kali lebih cepat, supaya keduanya terbaca sebagai satu gerakan yang sama
+   alih-alih dua animasi yang kebetulan berbarengan. */
+.ai-spin {
+  animation: ai-putar 0.85s linear infinite;
 }
 
 /* Tombol kirim ikut dibalik bersama kacanya. Ditulis di CSS, BUKAN sebagai
@@ -1627,6 +1640,7 @@ input:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .ai-cincin::before,
+  .ai-spin,
   .ai-ombak span {
     animation: none;
   }
@@ -1841,7 +1855,7 @@ input:focus-visible {
 }
 
 /* --- Kolom samping yang menggeser ----------------------------------------
-   Panel kanan dan panel Konsultan AI dulu MUNCUL dan HILANG: elemennya dipasang
+   Panel kanan dan panel Loconomics AI dulu MUNCUL dan HILANG: elemennya dipasang
    dan dicabut, jadi tidak ada satu pun keadaan antara yang bisa dianimasikan.
    Yang terlihat pengguna: separuh layar berkedip berganti isi.
 

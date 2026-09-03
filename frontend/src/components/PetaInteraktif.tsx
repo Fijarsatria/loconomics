@@ -1495,11 +1495,19 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             // sama pentingnya - melainkan supaya bedanya terbaca bersama pola
             // garisnya di bawah: yang padat-dan-tebal jelas bukan yang
             // putus-putus, bahkan sekilas dan bahkan buta warna.
+            // BUG NYATA yang diperbaiki 4 Sep 2026, ditemukan MapLibre sendiri saat
+            // render: "Only one zoom-based step or interpolate subexpression
+            // may be used in an expression." Bentuk lama membungkus DUA
+            // `interpolate(..., ['zoom'], ...)` di dalam satu `case` - dan itu
+            // dilarang keras di style spec, berapa pun masuk akalnya secara
+            // logika. Yang diizinkan: SATU `interpolate` di zoom sebagai
+            // bungkus terluar, dengan nilai TIAP STOP-nya data-driven lewat
+            // `case`. Bentuknya dibalik, hasilnya sama persis secara angka.
             'line-width': [
-              'case',
-              ['==', ['get', 'profil'], 'driving-car'],
-              ['interpolate', ['linear'], ['zoom'], 11, 5, 15, 7.4, 18, 9.5],
-              ['interpolate', ['linear'], ['zoom'], 11, 3.6, 15, 5.4, 18, 7],
+              'interpolate', ['linear'], ['zoom'],
+              11, ['case', ['==', ['get', 'profil'], 'driving-car'], 5, 3.6],
+              15, ['case', ['==', ['get', 'profil'], 'driving-car'], 7.4, 5.4],
+              18, ['case', ['==', ['get', 'profil'], 'driving-car'], 9.5, 7],
             ],
             // Jalan kaki PUTUS-PUTUS, mobil SOLID.
             //
@@ -2247,8 +2255,16 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           kosong dan ubin yang menolak - menjawab pertanyaan yang sama, "kenapa
           yang saya lihat begini". Menaruhnya bersebelahan membuat keduanya
           terbaca sebagai satu keluarga, bukan dua kejadian yang tidak
-          berhubungan. */}
-      <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-col items-start gap-2 sm:max-w-[24rem]">
+          berhubungan.
+
+          `top-4` semula - dan itu bug NYATA, bukan cuma kurang rapi: bilah
+          logo + pencarian di App.tsx duduk di atas peta yang sama pada posisi
+          hampir identik, jadi tumpukan ini lahir TERTIMBUN sejak bingkai
+          pertama. `top-[5.75rem]` bukan angka tebakan - itu offset yang SUDAH
+          dipakai pil info layer beberapa baris di bawah untuk masalah yang
+          persis sama, jadi keduanya sekarang sejajar dan sama-sama di bawah
+          bilah atas. */}
+      <div className="pointer-events-none absolute left-4 top-[5.75rem] z-10 flex max-w-[calc(100%-2rem)] flex-col items-start gap-2 sm:max-w-[24rem]">
         {/* --- Layer ini punya berapa data ---------------------------------
 
             Muncul HANYA kalau cakupannya di bawah separuh. Pemberitahuan yang

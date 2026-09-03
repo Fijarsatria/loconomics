@@ -36,7 +36,7 @@ interface Pesan {
 function pesanGalat(e: unknown): string {
   const teks = e instanceof Error ? e.message : String(e)
   if (teks.includes('501'))
-    return 'Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta — skor, kuadran, ZoneGuard, dan rekomendasi — tidak terpengaruh.'
+    return 'Loconomics AI belum tersambung ke penyedia modelnya. Bagian lain di peta — skor, kuadran, ZoneGuard, dan rekomendasi — tidak terpengaruh.'
   if (teks.includes('ANGGARAN_AI_HABIS'))
     return 'Plafon biaya AI untuk hari ini sudah tercapai. Asisten aktif lagi besok.'
   if (teks.includes('TERLALU_BANYAK'))
@@ -71,26 +71,72 @@ const NAMA_ALAT: Record<string, string> = {
  * pertanyaannya SAMPAI dan sedang dikerjakan - dan tidak ada yang menyatakan
  * itu sebaik nama yang mengerjakannya.
  *
+ * "Loconomics AI", bukan cuma "Loconomics" (4 Sep 2026) - panel ini sendiri
+ * berganti nama, dan wordmark yang menyebut namanya harus ikut, kalau tidak
+ * dua tempat di panel yang sama menyebut identitas yang berbeda.
+ *
  * Hurufnya dipecah supaya tiap huruf bisa berangkat pada waktunya sendiri;
  * itu yang membuat geraknya terbaca sebagai gelombang yang MENJALAR, bukan
- * sebagai kata yang naik-turun serempak.
+ * sebagai kata yang naik-turun serempak. Spasi di antara "Loconomics" dan
+ * "AI" ditulis sebagai escape `\u00A0` (spasi tanpa jeda), BUKAN karakter
+ * mentah yang ditempel langsung ke sumber - percobaan pertama menempelkan
+ * bytenya langsung, dan hasilnya persis jebakan yang sudah dicatat di
+ * jebakan.md: terlihat seperti spasi biasa di editor mana pun, sampai
+ * `od -c` membuktikan itu dua byte UTF-8 yang tidak terlihat. Escape yang
+ * ditulis penuh tidak menyembunyikan apa pun.
  *
  * `aria-label` memakai kalimat biasa, dan hurufnya disembunyikan dari pembaca
- * layar: "L-o-c-o-n-o-m-i-c-s" dieja satu per satu bukan kabar yang berguna.
+ * layar: dieja satu per satu bukan kabar yang berguna.
  */
 function OmbakBerpikir() {
   return (
     <p
       className="ai-ombak flex items-center text-[15px] font-semibold tracking-tight text-ink"
       role="status"
-      aria-label="Konsultan sedang menganalisis"
+      aria-label="Loconomics AI sedang menganalisis"
     >
-      {'Loconomics'.split('').map((h, i) => (
+      {'Loconomics AI'.split('').map((h, i) => (
         <span key={i} aria-hidden style={{ animationDelay: `${i * 85}ms` }}>
-          {h}
+          {h === ' ' ? '\u00A0' : h}
         </span>
       ))}
     </p>
+  )
+}
+
+/**
+ * Lencana kesiapan, dirombak 4 Sep 2026 dari teks polos ("siap" abu-abu kecil
+ * di sebelah judul, nyaris tidak terlihat sebagai elemen).
+ *
+ * Sekarang pil berwarna, konsisten dengan `NADA` di primitif.tsx (`bg-gem-soft
+ * text-gem` untuk yang baik, netral untuk yang lain) - jadi ia terbaca sebagai
+ * status yang SENGAJA ditonjolkan, bukan keterangan kecil yang kebetulan ada.
+ * Titik "memeriksa" berdenyut lewat `.denyut`, kelas yang sama dipakai chip
+ * peringatan ubin - dua tempat berbeda, satu bahasa visual untuk "sedang
+ * mengecek sesuatu".
+ */
+function LencanaStatus({ status }: { status: StatusAI | null }) {
+  const siap = status?.siap ?? false
+  const memeriksa = status === null
+  return (
+    <span
+      className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors duration-300 ${
+        memeriksa ? 'bg-ground-2 text-ink-3' : siap ? 'bg-gem-soft text-gem' : 'bg-ground-2 text-ink-3'
+      }`}
+      title={
+        status?.siap
+          ? `${status.model} · ${status.n_alat_backend} alat data, ${status.n_alat_peta} aksi peta`
+          : (status?.pesan ?? 'memeriksa kesiapan…')
+      }
+    >
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+          memeriksa ? 'denyut bg-ink-3' : siap ? 'bg-gem' : 'bg-ink-3'
+        }`}
+      />
+      {memeriksa ? 'Memeriksa' : siap ? 'Siap' : 'Belum aktif'}
+    </span>
   )
 }
 
@@ -209,34 +255,39 @@ export default function PanelAI({
         aria-expanded={terbuka}
         className="flex w-full shrink-0 cursor-pointer items-center justify-between gap-2 border-b border-line/70 px-4 py-3 text-left transition-colors hover:bg-surface-2/60"
       >
-        <span className="flex items-center gap-1.5">
+        <span className="flex min-w-0 items-center gap-2">
           <svg
             width="9"
             height="9"
             viewBox="0 0 10 10"
             aria-hidden
-            className={`text-ink-3 transition-transform ${terbuka ? '' : 'rotate-180'}`}
+            className={`shrink-0 text-ink-3 transition-transform ${terbuka ? '' : 'rotate-180'}`}
           >
             <path d="M1 6.5 5 2.5 9 6.5" stroke="currentColor" strokeWidth="1.6" fill="none" />
           </svg>
-          <span className="eyebrow">Konsultan AI</span>
+          {/* Percikan empat-arah, bukan robot atau gelembung obrolan generik -
+              itu dua glif yang sudah dipakai puluhan produk lain dan tidak
+              menyatakan apa pun yang khas. Percikan sudah jadi kosakata yang
+              dikenal untuk "AI generatif" tanpa perlu dijelaskan, dan
+              bentuknya bisa berdenyut pelan tanpa terasa berlebihan -
+              `g-denyut-halus` yang sama dipakai heksagon berdenyut di gerbang. */}
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden className="shrink-0 text-ink-2">
+            <path
+              d="M8 1.5c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4Z"
+              fill="currentColor"
+              className="g-denyut-halus"
+            />
+            <path
+              d="M13 9.5c.25 1.5.8 2.05 2.3 2.3-1.5.25-2.05.8-2.3 2.3-.25-1.5-.8-2.05-2.3-2.3 1.5-.25 2.05-.8 2.3-2.3Z"
+              fill="currentColor"
+              opacity="0.65"
+              className="g-denyut-halus"
+              style={{ animationDelay: '350ms' }}
+            />
+          </svg>
+          <span className="eyebrow truncate">Loconomics AI</span>
         </span>
-        <span
-          className="flex items-center gap-1.5 text-[12px] text-ink-3"
-          title={
-            status?.siap
-              ? `${status.model} · ${status.n_alat_backend} alat data, ${status.n_alat_peta} aksi peta`
-              : (status?.pesan ?? 'memeriksa kesiapan…')
-          }
-        >
-          <span
-            aria-hidden
-            className={`h-1.5 w-1.5 rounded-full ${
-              status === null ? 'bg-line-2' : status.siap ? 'bg-gem' : 'bg-line-2'
-            }`}
-          />
-          {status === null ? 'memeriksa' : status.siap ? 'siap' : 'belum aktif'}
-        </span>
+        <LencanaStatus status={status} />
       </button>
 
       {!terbuka && null}
@@ -351,13 +402,14 @@ export default function PanelAI({
         }}
         className="shrink-0 border-t border-line p-2.5"
       >
-        {/* Kaca cair. `data-berpikir` yang menyalakan cincin warnanya - satu
-            atribut, dan seluruh animasinya hidup di CSS. Tidak ada satu pun
-            nilai animasi yang ditulis dari JavaScript per bingkai. */}
-        <div className="ai-kaca flex items-center gap-1.5 rounded-full p-1.5" data-berpikir={memuat}>
-          <span className="ai-cincin" aria-hidden />
+        {/* Kaca cair. Cincin warnanya PINDAH ke tombol kirim (4 Sep 2026,
+            permintaan pemilik repo) - sebelumnya ia melingkari seluruh pil
+            termasuk kotak ketiknya, dan itu salah alamat: yang sedang
+            "berpikir" adalah jawabannya, bukan tulisan yang sedang diketik
+            orang. Tombolnya sendiri jadi satu-satunya yang menyala. */}
+        <div className="ai-kaca flex items-center gap-1.5 rounded-full p-1.5">
           <label className="sr-only" htmlFor="tanya-ai">
-            Pertanyaan untuk konsultan AI
+            Pertanyaan untuk Loconomics AI
           </label>
           <input
             id="tanya-ai"
@@ -378,24 +430,57 @@ export default function PanelAI({
               setinggi 34px.
 
               `aria-label` menggantikan katanya untuk pembaca layar - ikon
-              tanpa nama adalah tombol tanpa nama. */}
-          <button
-            type="submit"
-            disabled={memuat || mati || !input.trim()}
-            aria-label="Kirim pertanyaan"
-            className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full bg-white text-[#101a16] transition-all duration-300 ease-jelly hover:scale-[1.07] disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:scale-100 ai-kirim"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-              <path
-                d="M8 13V3.4M3.8 7.6 8 3.4l4.2 4.2"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
+              tanpa nama adalah tombol tanpa nama, dan berubah jadi "Mengirim…"
+              selama menjawab supaya pembaca layar tahu keadaannya berubah.
+
+              `data-berpikir` sekarang di WADAH TOMBOL ini, bukan di `.ai-kaca` -
+              cincinnya cuma perlu tahu keadaan tombol yang membungkusnya. */}
+          <span className="ai-tombol relative shrink-0" data-berpikir={memuat}>
+            <span className="ai-cincin" aria-hidden />
+            <button
+              type="submit"
+              disabled={memuat || mati || !input.trim()}
+              aria-label={memuat ? 'Mengirim…' : 'Kirim pertanyaan'}
+              className={`relative grid h-9 w-9 place-items-center rounded-full bg-white text-[#101a16] transition-all duration-300 ease-jelly ai-kirim ${
+                memuat
+                  ? 'cursor-wait'
+                  : mati || !input.trim()
+                    ? 'cursor-not-allowed opacity-25'
+                    : 'cursor-pointer hover:scale-[1.07]'
+              }`}
+            >
+              {memuat ? (
+                // Busur tiga-perempat yang berputar - spinner, bukan panah
+                // yang dibekukan. Sama animasinya (`ai-putar`) dengan cincin
+                // di belakangnya, cuma jauh lebih cepat, jadi keduanya terbaca
+                // sebagai SATU gerakan, bukan dua animasi yang kebetulan
+                // tumpang tindih.
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden className="ai-spin">
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r="6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeDasharray="21 17"
+                  />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+                  <path
+                    d="M8 13V3.4M3.8 7.6 8 3.4l4.2 4.2"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
+          </span>
         </div>
       </form>
       )}

@@ -789,7 +789,7 @@ function DialogLangganan({
                         'Seluruh grid heksagon di enam kawasan',
                         'Opportunity Score, Hidden Gem, dan keempat kuadrannya',
                         'Status zonasi ZoneGuard dan peringatan RiskRadar',
-                        'Daftar lokasi, pencarian, dan Konsultan AI',
+                        'Daftar lokasi, pencarian, dan Loconomics AI',
                       ].map((r) => (
                         <li key={r} className="flex gap-2 text-[12.5px] leading-snug text-ink-2">
                           <Centang kecil />

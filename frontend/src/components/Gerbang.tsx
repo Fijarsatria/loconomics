@@ -900,7 +900,7 @@ const GAMBAR_FITUR: Record<string, ReactNode> = {
       <line x1="36" y1="27" x2="47" y2="31" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.6" />
     </>
   ),
-  'Konsultan AI': (
+  'Loconomics AI': (
     <>
       <rect x="8" y="10" width="42" height="27" rx="9" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
       <path d="M18 37v7l9-7" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.4" strokeLinejoin="round" />
@@ -2597,7 +2597,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </div>
 
         <p className="g-tirai mx-auto mt-12 max-w-[42rem] rounded-[20px] border border-[color:var(--g-ink)]/12 bg-white/45 p-6 text-center text-[13.5px] leading-relaxed text-[color:var(--g-ink-2)]">
-          Skornya dihitung di satu tempat saja, di pipeline. Konsultan AI membaca hasilnya dan
+          Skornya dihitung di satu tempat saja, di pipeline. Loconomics AI membaca hasilnya dan
           menjelaskannya — ia tidak pernah menghitung sendiri, dan tidak pernah bisa mengubah satu
           angka pun.
         </p>

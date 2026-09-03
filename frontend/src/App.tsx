@@ -1566,7 +1566,7 @@ export default function App() {
                       // dicari dulu bukan inti.
                       ['rekomendasi', 'Untuk Anda'],
                       ['daftar', 'Daftar lokasi'],
-                      ['ai', 'Konsultan AI'],
+                      ['ai', 'Loconomics AI'],
                     ] as const
                   ).map(([k, label]) => (
                     <button
@@ -1601,7 +1601,7 @@ export default function App() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-hidden border-t border-line/70">
-                  {tab === 'rekomendasi' ? (
+                  {tab === 'rekomendasi' && (
                     <Suspense fallback={null}>
                       <Rekomendasi
                         onPilih={(h3) => {
@@ -1612,15 +1612,9 @@ export default function App() {
                         onBukaAkun={mintaPreferensi}
                       />
                     </Suspense>
-                  ) : tab === 'ai' ? (
-                    <PanelAI
-                      kendali={kendali}
-                      hexTerpilih={hexTerpilih}
-                      layerAktif={layer}
-                      terbuka
-                      onLipat={() => setTab('daftar')}
-                    />
-                  ) : (
+                  )}
+
+                  {tab !== 'ai' && tab !== 'rekomendasi' && (
                     // Detail adalah LAPISAN DI ATAS daftar, bukan penggantinya.
                     //
                     // Percobaan pertama mengganti isinya, dan daftar jadi
@@ -1689,6 +1683,31 @@ export default function App() {
                       )}
                     </div>
                   )}
+
+                  {/* PanelAI SELALU dimuat, sekalipun tab yang aktif bukan
+                      'ai' - dibuktikan bug sebelum diperbaiki 4 Sep 2026: panel
+                      ini hidup di dalam TERNARY tiga cabang, jadi berpindah ke
+                      "Untuk Anda" atau "Daftar lokasi" MELEPAS komponennya dari
+                      DOM. React membuang seluruh state lokalnya seketika itu -
+                      riwayat percakapan, teks yang sedang diketik, semuanya -
+                      dan begitu orang kembali ke tab AI, `PanelAI` dipasang
+                      ULANG dari nol, kosong.
+
+                      Diperbaiki dengan pola yang SAMA dengan detail-di-atas-
+                      daftar tepat di bawah ini: tetap terpasang, disembunyikan
+                      lewat CSS (`hidden`, bukan pelepasan komponen) saat bukan
+                      gilirannya. `terbuka` tetap `true` - itu keadaan "terbuka"
+                      MILIK PANELNYA SENDIRI, terpisah dari tab mana yang
+                      sedang dilihat orang. */}
+                  <div className={tab === 'ai' ? 'h-full min-h-0' : 'hidden'}>
+                    <PanelAI
+                      kendali={kendali}
+                      hexTerpilih={hexTerpilih}
+                      layerAktif={layer}
+                      terbuka
+                      onLipat={() => setTab('daftar')}
+                    />
+                  </div>
                 </div>
               </div>
             </aside>

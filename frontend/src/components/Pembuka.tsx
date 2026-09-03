@@ -608,7 +608,7 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
                   di tombol kedua. */}
               <p className="mt-2 text-[13.5px] leading-relaxed text-[#2b6a61]">
                 Peta, skor, dan kuadran tetap bisa dilihat. Yang belum bisa dibuka
-                hanya bagian yang menuntut mesin data: Konsultan AI, akun, dan
+                hanya bagian yang menuntut mesin data: Loconomics AI, akun, dan
                 rincian per lokasi.
               </p>
               <div className="mt-3.5 flex gap-2">

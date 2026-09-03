@@ -282,7 +282,7 @@ export const PENDIRI: Pendiri[] = [
     nama: 'Ukas',
     peran: 'AI Engineer',
     inisial: 'UK',
-    kerja: 'Konsultan AI: dua belas alat mode strict di dalam satu loop agentik. Modelnya menjawab, tidak pernah menghitung.',
+    kerja: 'Loconomics AI: dua belas alat mode strict di dalam satu loop agentik. Modelnya menjawab, tidak pernah menghitung.',
   },
   {
     nama: 'Wily',
@@ -346,7 +346,7 @@ export const FITUR: FiturProduk[] = [
     isi: 'Profil per jam dari 05.00 sampai 22.00 — kapan orang benar-benar lewat, bukan kapan menurut perasaan.',
   },
   {
-    nama: 'Konsultan AI',
+    nama: 'Loconomics AI',
     ringkas: 'tanya biasa saja',
     isi: 'Bertanya dengan bahasa sehari-hari. Modelnya memanggil alat, membaca angka pipeline, lalu menjelaskan — tanpa mengarang satu pun.',
   },
