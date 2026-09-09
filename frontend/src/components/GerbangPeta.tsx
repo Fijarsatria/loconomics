@@ -247,7 +247,12 @@ function Potret({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
   return (
     <>
       <img
-        src={`/kartu/${d.berkas}.webp`}
+        // `BASE_URL`, BUKAN garis miring di depan. Terbitan GitHub Pages
+        // disajikan di /loconomics/, jadi jalur berakar seperti `/kartu/...`
+        // menunjuk ke akar domain dan pulang 404 - keenam potret hilang tanpa
+        // satu pun galat JavaScript. Terukur di terbitan hidup 9 Sep 2026.
+        // Gaya basemap dan GeoJSON statis sudah memakai pola ini sejak awal.
+        src={`${import.meta.env.BASE_URL}kartu/${d.berkas}.webp`}
         alt={label.peta(LAYER[d.layer].nama, d.kawasan)}
         /* Ukuran intrinsik ditulis supaya peramban menyediakan ruangnya sebelum
            berkasnya sampai — tanpa ini tata letak melompat saat tiap gambar

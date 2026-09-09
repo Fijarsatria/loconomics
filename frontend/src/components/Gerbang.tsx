@@ -1602,7 +1602,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                   <figure className={`g-eko-media relative ${kiri ? 'lg:order-1' : 'lg:order-2'}`}>
                     <div className="g-eko-bingkai relative overflow-hidden rounded-[20px]">
                       <img
-                        src={`/kartu/${kartu.berkas}.webp`}
+                        src={`${import.meta.env.BASE_URL}kartu/${kartu.berkas}.webp`}
                         alt=""
                         aria-hidden
                         width={kartu.lebar}
