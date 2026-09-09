@@ -35,12 +35,14 @@ import {
   kodeLokasi,
 } from '../config'
 import { api, GalatAPI } from '../lib/api'
-import { angka, rupiah } from '../lib/format'
+import { angka, jarakSingkat, rupiah } from '../lib/format'
+import { profilUntukModa } from '../types'
 import type {
   CommuterClock,
   DetailHeksagon,
   KonteksSimpul,
   PriceLensHeksagon,
+  ModaTampil,
   ProfilRute,
 } from '../types'
 import BarHarga from './BarHarga'
@@ -161,6 +163,8 @@ export default function PanelInsight({
   sedangDibandingkan,
   profilRute = 'foot-walking',
   onGantiProfil,
+  rutaTampil = false,
+  onUbahRutaTampil,
 }: {
   h3: string | null
   onBukaKuadran: () => void
@@ -175,8 +179,11 @@ export default function PanelInsight({
   /** Sudah ada di baki komparasi. */
   sedangDibandingkan?: boolean
   /** Profil rute yang sedang digambar. Dimiliki App, dipakai bersama peta. */
-  profilRute?: ProfilRute
-  onGantiProfil?: (p: ProfilRute) => void
+  profilRute?: ModaTampil
+  onGantiProfil?: (p: ModaTampil) => void
+  /** Apakah rute & kawasan jangkau sedang digambar di peta. */
+  rutaTampil?: boolean
+  onUbahRutaTampil?: (v: boolean) => void
 }) {
   const {
     premium,
@@ -201,6 +208,15 @@ export default function PanelInsight({
   const [harga, setHarga] = useState<PriceLensHeksagon | null>(null)
   const [jam, setJam] = useState<CommuterClock | null>(null)
   const [konteks, setKonteks] = useState<KonteksSimpul | null>(null)
+  /**
+   * Konteks simpul untuk KEDUA profil tersimpan, bukan cuma yang aktif.
+   *
+   * Tombol moda menuliskan jarak dan waktu tempuhnya masing-masing, dan itu
+   * angka per profil - respons hanya membawa satu. Dua permintaan, bukan
+   * satu; backend men-cache keduanya 15 menit, jadi yang kedua hampir selalu
+   * dijawab dari cache.
+   */
+  const [perProfil, setPerProfil] = useState<Partial<Record<ProfilRute, KonteksSimpul>>>({})
   const [memuat, setMemuat] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
 
@@ -243,15 +259,21 @@ export default function PanelInsight({
       // GRATIS, jadi tidak ikut penjaga di atas. Peta sudah memintanya untuk
       // menggambar garisnya, dan backend men-cache-nya 15 menit - jadi yang ini
       // hampir selalu dijawab dari cache, bukan dari basis data.
-      api.simpulTerdekat(h3, profilRute),
+      api.simpulTerdekat(h3, 'foot-walking'),
+      api.simpulTerdekat(h3, 'driving-car'),
     ])
-      .then(([d, p, c, s]) => {
+      .then(([d, p, c, sk, sm]) => {
         if (batal) return
         if (d.status === 'fulfilled') setDetail(d.value)
         else setGalat(d.reason instanceof Error ? d.reason.message : 'gagal memuat')
         setHarga(p.status === 'fulfilled' ? p.value : null)
         setJam(c.status === 'fulfilled' ? c.value : null)
-        setKonteks(s.status === 'fulfilled' ? s.value : null)
+        const kaki = sk.status === 'fulfilled' ? sk.value : undefined
+        const mobil = sm.status === 'fulfilled' ? sm.value : undefined
+        setPerProfil({ 'foot-walking': kaki, 'driving-car': mobil })
+        setKonteks(
+          (profilUntukModa(profilRute) === 'driving-car' ? mobil : kaki) ?? kaki ?? mobil ?? null,
+        )
       })
       .finally(() => !batal && setMemuat(false))
 
@@ -384,54 +406,141 @@ export default function PanelInsight({
             Dua batang di bawah menampilkan keduanya sekaligus dengan mediannya
             sebagai garis tegak. Begitu garisnya terlihat, penempatannya berhenti
             terasa sewenang-wenang. */}
-        {posisi?.x != null && posisi.y != null && batas?.x != null && batas.y != null && (
-          <div className="mt-3 rounded-sm border border-line/70 bg-surface-2/60 px-3 py-2.5">
-            <p className="eyebrow mb-2.5">Kenapa masuk kuadran ini</p>
-            <SumbuKuadran
-              label="Seberapa bagus datanya"
-              kalimat={
-                posisi.y >= batas.y
-                  ? 'Lebih bagus daripada separuh lokasi lain.'
-                  : 'Lebih rendah daripada separuh lokasi lain.'
-              }
-              nilai={posisi.y}
-              batas={batas.y}
-              maks={100}
-              tampilNilai={`${posisi.y.toFixed(0)} dari 100`}
-              tinggiBaik
-            />
-            {/* "Diperkirakan tampak", bukan "terlihat".
-                Kalimat lamanya berbunyi "Bangunan dan tokonya TERLIHAT lebih
-                mahal" - dan itu mengaku ada yang melihat. Tidak ada: dari lima
-                bahan sumbu ini, dua yang menilai tampilan secara langsung (M03
-                dari foto, P02 dari nilai tanah) kosong di seluruh 708 heksagon,
-                jadi posisinya disimpulkan dari bentuk bangunan dan porsi
-                waralaba. Kesimpulan yang masuk akal - tetapi kesimpulan, dan
-                bedanya harus terbaca. `catatan` menyebut bahan yang tersisa itu
-                apa saja; ia dibangkitkan, jadi ia ikut berubah begitu M03 masuk
-                dan hilang sendiri begitu kelimanya terisi. */}
-            <div className="mt-2.5">
-              <SumbuKuadran
-                label="Seberapa mahal kelihatannya"
-                kalimat={
-                  posisi.x >= batas.x
-                    ? 'Diperkirakan tampak lebih mahal daripada separuh lokasi lain — sewanya biasanya ikut naik.'
-                    : 'Diperkirakan tampak lebih biasa daripada separuh lokasi lain — dan justru di situ sewanya masih murah.'
-                }
-                catatan={frasaPrestise(detail.cakupan_prestise, 'lokasi')}
-                nilai={posisi.x}
-                batas={batas.x}
-                maks={1}
-                tampilNilai={posisi.x >= batas.x ? 'Di atas rata-rata' : 'Di bawah rata-rata'}
-              />
+        {/* --- Cara menuju ke sini -------------------------------------------
+            DI PALING ATAS, sebelum satu pun angka.
+
+            Ia dulu duduk di kaki panel, sesudah 43 variabel. Yang pertama
+            ingin diketahui orang yang baru menekan sebuah heksagon bukan
+            kenapa ia masuk kuadran tertentu - melainkan di mana ia, dan
+            berapa jauh dari stasiunnya. Tombol yang menjawab itu tidak boleh
+            menuntut orang menggulir dulu untuk menemukannya. */}
+        {onGantiProfil && konteks?.simpul && (
+          <Bagian
+            judul="Cara menuju ke sini"
+            nada="gem"
+            ikon={<><path d="M8 1.8 3 8h3v6.2h4V8h3Z"/></>}
+          >
+            {/* TOMBOL DULU, moda menyusul.
+                Mengklik satu heksagon seharusnya membuka keterangannya - bukan
+                langsung menimpa peta dengan rute dan pita jangkauan yang belum
+                tentu sedang dicari orangnya. Yang tergambar di peta sekarang
+                menunggu diminta, dan tombol ini yang memintanya.
+
+                Pilihannya berlaku untuk SATU heksagon: berpindah lokasi
+                mengembalikannya ke mati. */}
+            {onUbahRutaTampil && (
+              <button
+                onClick={() => onUbahRutaTampil(!rutaTampil)}
+                className={`mb-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold transition-all duration-300 ease-jelly ${
+                  rutaTampil
+                    ? 'border border-line bg-surface-2 text-ink-2 hover:text-ink'
+                    : 'bg-ink text-surface hover:scale-[1.015]'
+                }`}
+              >
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden>
+                  <path
+                    d={
+                      rutaTampil
+                        ? 'M2.5 8s2.2-4 5.5-4 5.5 4 5.5 4-2.2 4-5.5 4-5.5-4-5.5-4Zm1-5 9 10'
+                        : 'M2.5 8s2.2-4 5.5-4 5.5 4 5.5 4-2.2 4-5.5 4-5.5-4-5.5-4Z'
+                    }
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {!rutaTampil && <circle cx="8" cy="8" r="1.6" fill="currentColor" />}
+                </svg>
+                {rutaTampil ? 'Sembunyikan rute & jangkauan' : 'Tampilkan rute & jangkauan'}
+              </button>
+            )}
+
+            <div className="flex gap-2">
+              {(
+                [
+                  [
+                    'foot-walking',
+                    'Jalan kaki',
+                    'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8',
+                  ],
+                  [
+                    'driving-car',
+                    'Mobil',
+                    'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1',
+                  ],
+                  [
+                    'motorcycle',
+                    'Motor',
+                    'M3.6 11.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm8.8 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM5.6 9.6h4.8L9 6.4H6.8M10.4 9.6 12 6.4h1.6',
+                  ],
+                ] as const
+              ).map(([nilai, label, glif]) => {
+                // Motor menumpang jaringan MOBIL, jadi ketersediaannya mengikuti
+                // rute mobil - bukan profil bernama 'motorcycle', yang memang
+                // tidak pernah ada di basis data.
+                const profilNilai = profilUntukModa(nilai)
+                const ada = konteks.profil_tersedia?.includes(profilNilai) ?? false
+                const aktif = profilRute === nilai
+                return (
+                  <button
+                    key={nilai}
+                    onClick={() => onGantiProfil(nilai)}
+                    disabled={!ada && !aktif}
+                    className={`flex flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-lg border px-3 py-2.5 transition-all duration-300 ease-jelly disabled:cursor-not-allowed ${
+                      aktif
+                        ? 'border-gem bg-gem-soft/50 text-gem'
+                        : ada
+                          ? 'border-line text-ink-2 hover:border-ink-3 hover:text-ink'
+                          : 'border-dashed border-line text-ink-3 opacity-60'
+                    }`}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden>
+                      <path
+                        d={glif}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="text-[12.5px] font-semibold leading-none">{label}</span>
+                    {/* Motor menyatakan asal jaringannya APA ADANYA. Ia satu-satunya
+                        moda di sini yang jalurnya bukan miliknya sendiri, dan
+                        menyembunyikan itu berarti mencetak jalur mobil sebagai
+                        jalur motor tanpa ada yang tahu. Waktu tempuhnya sengaja
+                        TIDAK ditampilkan di mana pun: tidak ada yang pernah
+                        mengukurnya, dan angka karangan akan tampil dengan
+                        kepercayaan diri yang sama dengan angka yang diukur. */}
+                    {/* JARAK dan WAKTU, bukan "ada rutenya".
+                        Yang ingin diketahui orang di tombol moda bukan apakah
+                        datanya ada - itu urusan kami - melainkan berapa jauh
+                        dan berapa lama. Angkanya dari profil masing-masing,
+                        jadi "25 mnt jalan kaki" dan "8 mnt mobil" sama-sama
+                        diukur, bukan satu dibagi sebuah faktor.
+
+                        Motor menampilkan JARAK saja: jaringannya pinjaman dari
+                        mobil, dan waktu tempuhnya tidak pernah diukur. */}
+                    <span className="text-center text-[10.5px] leading-tight text-ink-3">
+                      {!ada ? (
+                        'belum ditarik'
+                      ) : (
+                        <>
+                          {perProfil[profilNilai]?.jarak_m != null
+                            ? jarakSingkat(perProfil[profilNilai]!.jarak_m!)
+                            : '—'}
+                          {nilai !== 'motorcycle' &&
+                            perProfil[profilNilai]?.menit_jalan != null &&
+                            ` · ${Math.round(perProfil[profilNilai]!.menit_jalan!)} mnt`}
+                        </>
+                      )}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-            <div className="mt-2 border-t border-line/60 pt-1.5">
-              <Rinci ringkas="Apa arti garis tegaknya?">
-                Garis tegak pada kedua batang = titik tengah seluruh lokasi di enam kawasan.
-                Sisi mana batangnya berhenti terhadap garis itulah yang menentukan kuadrannya.
-              </Rinci>
-            </div>
-          </div>
+          </Bagian>
         )}
       </div>
 
@@ -1192,61 +1301,60 @@ export default function PanelInsight({
           Motor tidak ada dan tidak akan pernah ada: ORS tidak menyediakan
           profilnya, dan menyodorkan mobil sebagai "kira-kira motor" salah ke
           arah yang paling merugikan - motor melewati gang yang mobil tidak. */}
-      {onGantiProfil && konteks?.simpul && (
-        <Bagian
-          judul="Cara menuju ke sini"
-          nada="gem"
-          ikon={<><path d="M8 1.8 3 8h3v6.2h4V8h3Z"/></>}
-        >
-          <div className="flex gap-2">
-            {(
-              [
-                [
-                  'foot-walking',
-                  'Jalan kaki',
-                  'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8',
-                ],
-                [
-                  'driving-car',
-                  'Mobil',
-                  'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1',
-                ],
-              ] as const
-            ).map(([nilai, label, glif]) => {
-              const ada = konteks.profil_tersedia?.includes(nilai) ?? false
-              const aktif = profilRute === nilai
-              return (
-                <button
-                  key={nilai}
-                  onClick={() => onGantiProfil(nilai)}
-                  disabled={!ada && !aktif}
-                  className={`flex flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-lg border px-3 py-2.5 transition-all duration-300 ease-jelly disabled:cursor-not-allowed ${
-                    aktif
-                      ? 'border-gem bg-gem-soft/50 text-gem'
-                      : ada
-                        ? 'border-line text-ink-2 hover:border-ink-3 hover:text-ink'
-                        : 'border-dashed border-line text-ink-3 opacity-60'
-                  }`}
-                >
-                  <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden>
-                    <path
-                      d={glif}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="text-[12.5px] font-semibold leading-none">{label}</span>
-                  <span className="text-[10.5px] leading-none text-ink-3">
-                    {ada ? 'ada rutenya' : 'belum ditarik'}
-                  </span>
-                </button>
-              )
-            })}
+      {/* --- Kenapa masuk kuadran ini ----------------------------------------
+          Turun ke SINI, sesudah simulasi.
+
+          Ia penjelasan, bukan pembuka: ia menjawab "kenapa angkanya begitu",
+          dan pertanyaan itu baru muncul sesudah orang tahu angkanya berapa
+          dan bisa apa dengan lokasi ini. */}
+      {posisi?.x != null && posisi.y != null && batas?.x != null && batas.y != null && (
+        <div className="mt-3 rounded-sm border border-line/70 bg-surface-2/60 px-3 py-2.5">
+          <p className="eyebrow mb-2.5">Kenapa masuk kuadran ini</p>
+          <SumbuKuadran
+            label="Seberapa bagus datanya"
+            kalimat={
+              posisi.y >= batas.y
+                ? 'Lebih bagus daripada separuh lokasi lain.'
+                : 'Lebih rendah daripada separuh lokasi lain.'
+            }
+            nilai={posisi.y}
+            batas={batas.y}
+            maks={100}
+            tampilNilai={`${posisi.y.toFixed(0)} dari 100`}
+            tinggiBaik
+          />
+          {/* "Diperkirakan tampak", bukan "terlihat".
+              Kalimat lamanya berbunyi "Bangunan dan tokonya TERLIHAT lebih
+              mahal" - dan itu mengaku ada yang melihat. Tidak ada: dari lima
+              bahan sumbu ini, dua yang menilai tampilan secara langsung (M03
+              dari foto, P02 dari nilai tanah) kosong di seluruh 708 heksagon,
+              jadi posisinya disimpulkan dari bentuk bangunan dan porsi
+              waralaba. Kesimpulan yang masuk akal - tetapi kesimpulan, dan
+              bedanya harus terbaca. `catatan` menyebut bahan yang tersisa itu
+              apa saja; ia dibangkitkan, jadi ia ikut berubah begitu M03 masuk
+              dan hilang sendiri begitu kelimanya terisi. */}
+          <div className="mt-2.5">
+            <SumbuKuadran
+              label="Seberapa mahal kelihatannya"
+              kalimat={
+                posisi.x >= batas.x
+                  ? 'Diperkirakan tampak lebih mahal daripada separuh lokasi lain — sewanya biasanya ikut naik.'
+                  : 'Diperkirakan tampak lebih biasa daripada separuh lokasi lain — dan justru di situ sewanya masih murah.'
+              }
+              catatan={frasaPrestise(detail.cakupan_prestise, 'lokasi')}
+              nilai={posisi.x}
+              batas={batas.x}
+              maks={1}
+              tampilNilai={posisi.x >= batas.x ? 'Di atas rata-rata' : 'Di bawah rata-rata'}
+            />
           </div>
-        </Bagian>
+          <div className="mt-2 border-t border-line/60 pt-1.5">
+            <Rinci ringkas="Apa arti garis tegaknya?">
+              Garis tegak pada kedua batang = titik tengah seluruh lokasi di enam kawasan.
+              Sisi mana batangnya berhenti terhadap garis itulah yang menentukan kuadrannya.
+            </Rinci>
+          </div>
+        </div>
       )}
 
       <p className="px-4 pb-6 pt-1 text-[12.5px] leading-snug text-ink-3">

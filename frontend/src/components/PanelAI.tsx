@@ -24,7 +24,7 @@ import { LAYER, type NamaLayer } from '../config'
 import { api } from '../lib/api'
 import type { AksiPeta, JawabanAI, PesanRiwayat, StatusAI } from '../types'
 import type { KendaliPeta, Kriteria } from './PetaInteraktif'
-import { Badge, Markdown } from './primitif'
+import { Badge, Markdown, PapanNama } from './primitif'
 
 interface Pesan {
   peran: 'pengguna' | 'asisten'
@@ -294,35 +294,107 @@ export default function PanelAI({
 
       {terbuka && (
       <div className="scroll-tipis flex-1 space-y-3 overflow-y-auto px-4 py-3">
-        {pesan.length === 0 && (
-          <div>
-            <p className="mb-2.5 text-[14.5px] leading-snug text-ink-2">
-              Tanyakan apa saja tentang lokasi. Jawabannya sekaligus menggerakkan peta.
-            </p>
-            {/* Pesannya dipakai APA ADANYA, tidak lagi disisipkan ke tengah
-                kalimat yang dirakit di sini. Kalimat rakitan itulah yang dulu
-                membuat teks backend terbaca sebagai instruksi untuk
-                pembacanya, dan ia akan mengulanginya untuk setiap sebab
-                berikutnya. */}
-            {mati && (
-              <p className="mb-2.5 rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-[13.5px] leading-snug text-ink-2">
-                {status?.pesan}
+        {/* --- Pembuka -------------------------------------------------------
+            TIDAK dilepas dari DOM begitu ada pesan pertama; ia DITUTUP.
+            Melepasnya membuat percakapan melompat ke atas sejauh tinggi
+            pembuka ini pada bingkai yang sama dengan gelembung pertama muncul,
+            dan lompatan itu terbaca sebagai kedipan. Dengan `grid-template-rows`
+            1fr -> 0fr, tingginya menyusut sendiri sementara isinya memudar dan
+            naik sedikit — satu gerakan, bukan dua kejadian.
+
+            Semua yang dianimasikan di sini `opacity` dan `transform`, kecuali
+            baris grid-nya sendiri yang memang tidak punya padanan compositor. */}
+        <div className={`g-ai-pembuka ${pesan.length ? 'g-ai-pembuka-tutup' : ''}`} aria-hidden={pesan.length > 0}>
+          <div className="min-h-0 overflow-hidden">
+            <div className="flex flex-col items-center px-1 pb-1 pt-6 text-center">
+              {/* Tanda yang BERGETAR. Kegunaannya bukan hiasan: panel ini
+                  kosong sampai ada yang mengetik, dan ruang kosong yang benar-
+                  benar diam terbaca sebagai fitur yang belum siap. Getarnya
+                  sangat kecil — di bawah satu piksel — supaya terbaca sebagai
+                  "hidup", bukan sebagai "rusak". */}
+              {/* Papan nama yang SAMA dengan yang di pojok kiri atas, bukan
+                  tiruannya. Komponennya sendiri sudah membawa perilaku per-huruf
+                  - melenting saat disentuh, lalu mengambil warna yang luntur
+                  beberapa detik kemudian - dan menyalinnya untuk mengubah satu
+                  kelas akan membuat kedua salinan berpisah tempo pada perubahan
+                  berikutnya.
+
+                  Yang ditambahkan di sini cuma getar HALUS yang berjalan
+                  sendiri, dari pembungkusnya. Papan nama aslinya menunggu
+                  disentuh; panel yang kosong tidak punya siapa pun yang
+                  menyentuhnya, dan diam total di ruang kosong terbaca sebagai
+                  fitur yang belum siap. */}
+              <span className="g-ai-tanda relative mb-3 inline-flex items-center gap-2.5">
+                {/* Lingkaran berukuran TETAP, bukan `inset` pada kotak tandanya.
+                    Kotak itu lebar dan pendek (percikan + satu kata), dan
+                    `radial-gradient(closest-side)` di atasnya memakai sisi
+                    terpendek — hasilnya pita mendatar yang terbaca sebagai noda,
+                    bukan halo. Terlihat begitu di potret. */}
+                <span
+                  className="g-ai-nyala pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[168px] w-[168px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                  aria-hidden
+                />
+                <svg width="22" height="22" viewBox="0 0 16 16" aria-hidden className="shrink-0 text-ink-2">
+                  <path
+                    d="M8 1.5c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4Z"
+                    fill="currentColor"
+                  />
+                  <path
+                    d="M13 9.5c.25 1.5.8 2.05 2.3 2.3-1.5.25-2.05.8-2.3 2.3-.25-1.5-.8-2.05-2.3-2.3 1.5-.25 2.05-.8 2.3-2.3Z"
+                    fill="currentColor"
+                    opacity="0.6"
+                  />
+                </svg>
+                <PapanNama
+                  teks="Loconomics"
+                  sebagai="div"
+                  kelas="text-[22px] leading-none text-ink"
+                />
+              </span>
+              <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-3">
+                Konsultan lokasi
               </p>
-            )}
-            <div className="space-y-1.5">
-              {CONTOH.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => kirim(c)}
-                  disabled={mati}
-                  className="block w-full cursor-pointer rounded-sm border border-line px-2.5 py-2 text-left text-[13.5px] leading-snug text-ink-2 transition-colors hover:border-line-2 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {c}
-                </button>
-              ))}
+
+              <p className="max-w-[24rem] text-[14px] leading-relaxed text-ink-2">
+                Tanyakan apa saja tentang lokasi. Jawabannya sekaligus menggerakkan peta.
+              </p>
+
+              {/* Pesannya dipakai APA ADANYA, tidak lagi disisipkan ke tengah
+                  kalimat yang dirakit di sini. Kalimat rakitan itulah yang dulu
+                  membuat teks backend terbaca sebagai instruksi untuk
+                  pembacanya, dan ia akan mengulanginya untuk setiap sebab
+                  berikutnya. */}
+              {mati && (
+                <p className="mt-3 w-full rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-left text-[13.5px] leading-snug text-ink-2">
+                  {status?.pesan}
+                </p>
+              )}
+
+              <div className="mt-5 w-full space-y-1.5">
+                {CONTOH.map((c, i) => (
+                  <button
+                    key={c}
+                    onClick={() => kirim(c)}
+                    disabled={mati}
+                    /* Berundak: tiap saran datang 70ms sesudah yang di atasnya.
+                       Tiga benda yang muncul bersamaan terbaca sebagai satu
+                       blok; berundak, ketiganya terbaca sebagai tiga pilihan. */
+                    style={{ animationDelay: `${140 + i * 70}ms` }}
+                    className="g-ai-saran group flex w-full cursor-pointer items-center gap-2 rounded-sm border border-line px-2.5 py-2 text-left text-[13.5px] leading-snug text-ink-2 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <span className="min-w-0 flex-1">{c}</span>
+                    <span
+                      className="shrink-0 text-ink-3 transition-transform duration-300 ease-jelly group-hover:translate-x-0.5"
+                      aria-hidden
+                    >
+                      →
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
         {pesan.map((m, i) => (
           <div key={i} className={m.peran === 'pengguna' ? 'flex justify-end' : ''}>

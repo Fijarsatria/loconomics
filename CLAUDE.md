@@ -56,8 +56,14 @@ frontend/    React + Vite + MapLibre GL. Sengaja ramping; berkas baru butuh alas
              components/Akun.tsx    — SesiProvider yang MEMILIKI kedua dialognya,
                                       supaya `mintaLangganan()` bisa dipanggil dari mana saja
              components/Premium.tsx — filter multi-kawasan, komparasi, pemantauan, riwayat
-             components/GerbangTemuan.tsx — bagian `#temuan`. NOL angka di dalamnya;
-                                      semuanya dari ringkasan-data.ts
+             components/Gerbang.tsx — halaman pertama, enam bagian, tiap bagian punya
+                                      transisi masuknya sendiri (lihat kepala berkasnya)
+             lib/bahasa.tsx        — dua bahasa (id/en). Tiap komponen memegang kamusnya
+                                      SENDIRI lewat `useTeks(K)`; kalimat tanpa pasangan
+                                      Inggrisnya gagal di tsc, bukan tampil sebagai kunci
+             components/GerbangPeta.tsx — enam kartu Solusi. Animasinya SATU: gelombang
+                                      heksagon yang mekar lalu surut, kutipan dari
+                                      `jalankanGelombang` di peta — bukan efek karangan
              lib/layer-peta.ts     — aturan pewarnaan layer, dipakai peta DAN gerbang
              lib/potret-kartu.ts   — HANYA dipakai skrip; tidak masuk bundel
              lib/kartu-gerbang.ts  — DIBUAT OTOMATIS skrip; jangan disunting
@@ -344,7 +350,7 @@ cd frontend && node scripts/potret-kartu.mjs # kartu gerbang; butuh keduanya hid
 | Model / skema | `alembic upgrade head` berhasil di basis data nyata |
 | Frontend | `npx tsc -p tsconfig.app.json --noEmit` dan `npx oxlint` (**bukan** `npx tsc --noEmit`) |
 | Palet kuadran, ekspresi pewarnaan, ambang skor | `node scripts/potret-kartu.mjs` — kartu gerbang adalah gambar yang di-commit; tanpa ini ia diam-diam memperlihatkan keadaan lama |
-| Bagian `#temuan` | `s7_publish.py --ekspor`, lalu `test_aturan.py` (bentuk terbitan) DAN `audit-prd.mjs` (tiap angka yang terlihat wajib punya pasangan nilai di modulnya) |
+| Kalimat di gerbang, dialog, atau pembuka | Kedua cabang kamusnya (`id` DAN `en`) — `tsc` menjaga bentuknya, potret Playwright menjaga isinya. Nama produk (PriceLens, ZoneGuard, …) tidak diterjemahkan dengan sengaja |
 | Sumbu prestise, `BAHAN_PRESTISE`, `hitung_prestise_visual()` | `test_aturan.py` DAN `audit-prd.mjs` — yang dijaga bukan "apakah sumbunya tergambar", melainkan apakah layar masih MENYEBUTKAN sumbu itu berdiri di atas bahan apa |
 
 **Memuat ulang basis data** menuntut tiga hal sekaligus, dan ketiganya gagal diam:

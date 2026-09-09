@@ -41,6 +41,7 @@ import {
 import {
   BINGKAI_SEMUA,
   GAYA_BASEMAP,
+  KERAPATAN_NAMA,
   KAWASAN_PILOT,
   KUADRAN,
   SEMUA_KAWASAN,
@@ -56,7 +57,7 @@ import { api } from './lib/api'
 import type {
   DiagramKuadran,
   Kuadran as NamaKuadran,
-  ProfilRute,
+  ModaTampil,
   SimpulTransit,
 } from './types'
 import DaftarLokasi from './components/DaftarLokasi'
@@ -71,6 +72,7 @@ import PanelInsight from './components/PanelInsight'
 // bundel awal; peta mendapat utas utamanya lebih cepat.
 const Gerbang = lazy(() => import('./components/Gerbang'))
 import { TombolAkun, useSesi } from './components/Akun'
+import { useTeks, type Bahasa } from './lib/bahasa'
 import { MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
 // Kedua dialog ini besar dan jarang dibuka. MenuKawasan tetap statis - ia
@@ -113,7 +115,19 @@ import { Glif, Menu, MenuPengaturan, PapanNama, PilihBasemap } from './component
  */
 const LAYER_KUADRAN: NamaLayer[] = ['opportunity', 'hidden_gem']
 
-/** Basemap yang membuat kaca terang tidak terbaca. Memicu tema kaca gelap. */
+/**
+ * Gaya basemap yang GELAP. Chrome aplikasi mengikutinya.
+ *
+ * Dikembalikan 9 Sep 2026 sesudah sempat dicabut. Pencabutannya membuat seluruh
+ * aplikasi gelap tanpa syarat - dan itu SALAH untuk produk yang benda terbesar
+ * di layarnya adalah peta: kaca gelap di atas basemap terang membuat chrome dan
+ * petanya terbaca sebagai dua produk yang ditempel. Terangnya peta ditentukan
+ * gaya basemap yang dipilih orang, jadi terangnya chrome harus mengikuti hal
+ * yang sama.
+ *
+ * Keempat gaya MAPID: `terang`, `dasar`, `jalan` semuanya terang; hanya `gelap`
+ * yang gelap.
+ */
 const GAYA_GELAP: NamaGaya[] = ['gelap']
 
 /** Indeks H3 resolusi 9: 15 digit heksadesimal. Dipakai pencarian. */
@@ -163,6 +177,9 @@ interface TampilanTersimpan {
   masuk?: boolean
   kawasan?: string
   layer?: NamaLayer
+  /** Apakah layer tematik menyala. Bawaannya mati — lihat state-nya di App. */
+  layerNyala?: boolean
+  namaTempat?: string
   gaya?: NamaGaya
 }
 
@@ -222,6 +239,14 @@ function bacaTampilan(): TampilanTersimpan {
       masuk: bacaSesiMasuk(),
       kawasan: bersihkanKawasan(t.kawasan),
       layer: t.layer && t.layer in LAYER ? t.layer : undefined,
+      // DITULIS sejak layer tematik bisa dimatikan, tetapi baru DIBACA 9 Sep
+      // 2026. Sebelumnya `layerNyala` ikut disimpan tiap perubahan dan tidak
+      // pernah dipulihkan: layer yang dinyalakan orang mati lagi sesudah
+      // refresh, tanpa satu pun galat - dan audit menangkapnya sebagai
+      // "PriceLens tidak dipanggil untuk pelanggan", gejala yang menunjuk ke
+      // tempat yang salah sama sekali.
+      layerNyala: typeof t.layerNyala === 'boolean' ? t.layerNyala : undefined,
+      namaTempat: t.namaTempat && t.namaTempat in KERAPATAN_NAMA ? t.namaTempat : undefined,
       gaya: t.gaya && t.gaya in GAYA_BASEMAP ? t.gaya : undefined,
     }
   } catch {
@@ -252,6 +277,73 @@ type Hasil =
  * "cari alamat apa pun" lalu tidak menemukan apa-apa lebih buruk daripada kotak
  * yang jujur mencari tiga hal dan menemukan ketiganya.
  */
+/**
+ * Kalimat chrome aplikasi, dua bahasa. Kalimat yang datang dari backend -
+ * catatan per heksagon, temuan, galat - TIDAK ada di sini; yang diterjemahkan
+ * cuma bingkainya.
+ */
+const K_APP: Record<
+  Bahasa,
+  {
+    cari: string
+    kembaliGerbang: string
+    tanpaLayer: string
+    tabRekomendasi: string
+    tabDaftar: string
+    tabAI: string
+    lipat: string
+    bukaPanel: string
+    bukaPanelDaftar: string
+    kembaliDaftar: string
+    klikLain: string
+    kosongkanBaki: string
+    kosongkanBakiPanjang: string
+    bandingkan: (n: number) => string
+    tersimpan: string
+    tersimpanPanjang: string
+    basemap: Record<string, string>
+  }
+> = {
+  id: {
+    cari: 'Cari stasiun, kawasan, atau indeks H3…',
+    kembaliGerbang: 'Kembali ke halaman perkenalan',
+    tanpaLayer: 'Tanpa layer',
+    tabRekomendasi: 'Untuk Anda',
+    tabDaftar: 'Daftar lokasi',
+    tabAI: 'Loconomics AI',
+    lipat: 'Lipat panel',
+    bukaPanel: 'Buka panel',
+    bukaPanelDaftar: 'Buka panel daftar lokasi',
+    kembaliDaftar: 'Kembali ke daftar lokasi',
+    klikLain: 'Klik heksagon lain di peta untuk membandingkan',
+    kosongkanBaki: 'Kosongkan baki',
+    kosongkanBakiPanjang: 'Kosongkan baki komparasi',
+    bandingkan: (n) => `Bandingkan ${n}`,
+    tersimpan: 'Lokasi tersimpan',
+    tersimpanPanjang: 'Lokasi tersimpan dan dinamika kawasan',
+    basemap: { terang: 'Terang', dasar: 'Dasar', jalan: 'Jalan', gelap: 'Gelap' },
+  },
+  en: {
+    cari: 'Search a station, area, or H3 index…',
+    kembaliGerbang: 'Back to the intro page',
+    tanpaLayer: 'No layer',
+    tabRekomendasi: 'For you',
+    tabDaftar: 'Locations',
+    tabAI: 'Loconomics AI',
+    lipat: 'Collapse panel',
+    bukaPanel: 'Open panel',
+    bukaPanelDaftar: 'Open the locations panel',
+    kembaliDaftar: 'Back to the list',
+    klikLain: 'Click another hexagon on the map to compare',
+    kosongkanBaki: 'Clear tray',
+    kosongkanBakiPanjang: 'Clear the comparison tray',
+    bandingkan: (n) => `Compare ${n}`,
+    tersimpan: 'Saved locations',
+    tersimpanPanjang: 'Saved locations and area dynamics',
+    basemap: { terang: 'Light', dasar: 'Basic', jalan: 'Street', gelap: 'Dark' },
+  },
+}
+
 function Cari({
   simpul,
   onPilihKawasan,
@@ -263,6 +355,7 @@ function Cari({
   onPilihSimpul: (s: SimpulTransit) => void
   onPilihHeksagon: (h3: string) => void
 }) {
+  const t = useTeks(K_APP)
   const [q, setQ] = useState('')
   const [buka, setBuka] = useState(false)
   const [sorot, setSorot] = useState(0)
@@ -327,8 +420,8 @@ function Cari({
               jalankan(hasil[sorot])
             }
           }}
-          placeholder="Cari stasiun, kawasan, atau indeks H3…"
-          aria-label="Cari stasiun, kawasan, atau indeks H3"
+          placeholder={t.cari}
+          aria-label={t.cari}
           className="min-w-0 flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-ink-3 focus-visible:outline-none"
         />
         {q && (
@@ -419,6 +512,7 @@ function BarKomparasi({
   onBuka: () => void
   onSorot: (h3: string) => void
 }) {
+  const t = useTeks(K_APP)
   const siap = baki.length >= 2
   return (
     <div className="kaca-tebal pointer-events-auto flex w-full max-w-[54rem] items-stretch gap-1 rounded-xl p-1.5 shadow-lg">
@@ -470,7 +564,7 @@ function BarKomparasi({
             mengatakan masih ada tempat. */}
         {baki.length < 2 && (
           <div className="flex min-w-0 flex-1 items-center justify-center rounded-lg border border-dashed border-line-2 px-3 py-1.5 text-center text-[11.5px] leading-snug text-ink-3">
-            Klik heksagon lain di peta untuk membandingkan
+            {t.klikLain}
           </div>
         )}
       </div>
@@ -478,8 +572,8 @@ function BarKomparasi({
       <div className="flex shrink-0 items-center gap-1 border-l border-line/70 pl-1.5">
         <button
           onClick={onKosongkan}
-          title="Kosongkan baki"
-          aria-label="Kosongkan baki komparasi"
+          title={t.kosongkanBaki}
+          aria-label={t.kosongkanBakiPanjang}
           className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden>
@@ -494,7 +588,7 @@ function BarKomparasi({
           <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden className="shrink-0">
             <path d="M4 15V8M10 15V4M16 15v-5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
           </svg>
-          Bandingkan {baki.length}
+          {t.bandingkan(baki.length)}
         </button>
       </div>
     </div>
@@ -502,6 +596,7 @@ function BarKomparasi({
 }
 
 export default function App() {
+  const t = useTeks(K_APP)
   /**
    * Kawasan yang sedang disaring. SEMUA_KAWASAN ('') = tidak disaring.
    *
@@ -512,8 +607,64 @@ export default function App() {
    */
   const [kawasan, setKawasan] = useState<string>(AWAL.kawasan ?? SEMUA_KAWASAN)
   const [layer, setLayer] = useState<NamaLayer>(AWAL.layer ?? 'opportunity')
-  const [gaya, setGaya] = useState<NamaGaya>(AWAL.gaya ?? 'terang')
+  /**
+   * Apakah layer tematik menyala. Bawaannya MATI.
+   *
+   * Peta yang langsung penuh 708 heksagon berwarna memaksa orang membaca
+   * kesimpulan sebelum ia sempat mengenali di mana ia sedang melihat -
+   * dan bagi yang baru pertama membuka, itu bukan peta melainkan grafik.
+   *
+   * Terpisah dari `layer` dan bukan `NamaLayer | null` dengan sengaja:
+   * mematikan layer tidak boleh MELUPAKAN layer mana yang tadi dilihat.
+   */
+  const [layerNyala, setLayerNyala] = useState(AWAL.layerNyala ?? false)
+  /**
+   * Serapat apa nama tempat basemap ditampilkan.
+   *
+   * Bawaannya `normal` - yaitu persis seperti sebelum setelan ini ada, jadi
+   * yang tidak pernah membukanya tidak melihat satu pun perubahan.
+   */
+  const [namaTempat, setNamaTempat] = useState<string>(AWAL.namaTempat ?? 'normal')
+  /**
+   * Apakah rute & kawasan jangkau digambar untuk heksagon yang dipilih.
+   *
+   * Bawaannya MATI, dan ia SENGAJA tidak disimpan ke localStorage: ini pilihan
+   * per-lokasi, bukan latar kerja. Menyimpannya berarti membuka aplikasi besok
+   * dengan rute yang tergambar untuk heksagon yang tidak sedang ditanyakan
+   * siapa pun.
+   */
+  const [rutaTampil, setRutaTampil] = useState(false)
+  // Bawaannya GELAP sejak tampilan terang dicabut. Yang tersimpan di
+  // localStorage tetap menang: yang berubah cuma pilihan pertama bagi orang
+  // yang belum pernah memilih. Chrome aplikasinya gelap seluruhnya, dan
+  // basemap terang di dalam bingkai gelap membuat petanya - benda paling
+  // besar di layar - jadi satu-satunya yang tidak ikut temanya.
+  const [gaya, setGaya] = useState<NamaGaya>(AWAL.gaya ?? 'gelap')
   const [hexTerpilih, setHexTerpilih] = useState<string | null>(null)
+
+  // Pilihan menampilkan rute berlaku untuk SATU heksagon. Berpindah heksagon
+  // mengembalikannya ke mati - kalau tidak, heksagon berikutnya langsung
+  // menggambar rutenya, dan gerbangnya jadi tidak ada gunanya.
+  useEffect(() => {
+    setRutaTampil(false)
+  }, [hexTerpilih])
+
+  /**
+   * Kelas tema dipasang di <body>, bukan cuma di wadah aplikasi.
+   *
+   * Ketiga dialog dirender lewat `createPortal` ke <body> - secara DOM mereka
+   * di LUAR wadah aplikasi. Tanpa kelas di akar, dialognya tidak pernah ikut
+   * gelap, dan yang terlihat panel putih mengambang di atas aplikasi gelap.
+   *
+   * Dipasang lewat efek dan bukan ditulis mati di CSS, karena terangnya
+   * mengikuti gaya basemap yang dipilih orang - dan itu berubah saat aplikasi
+   * berjalan.
+   */
+  useEffect(() => {
+    const gelap = GAYA_GELAP.includes(gaya)
+    document.body.classList.toggle('peta-gelap', gelap)
+    return () => document.body.classList.remove('peta-gelap')
+  }, [gaya])
   const [saringKuadran, setSaringKuadran] = useState<NamaKuadran | null>(null)
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
   const [kuadranPenuh, setKuadranPenuh] = useState(false)
@@ -609,7 +760,9 @@ export default function App() {
    * dari nilai yang sama adalah dua salinan yang suatu saat berselisih - dan
    * yang terlihat waktu itu garis mobil dengan keterangan jalan kaki.
    */
-  const [profilRute, setProfilRute] = useState<ProfilRute>('foot-walking')
+  // Moda TAMPIL, bukan profil tersimpan. Motor memakai jaringan mobil, dan
+  // pemetaannya ada di `profilUntukModa` - satu tempat, bukan di tiap pemanggil.
+  const [profilRute, setProfilRute] = useState<ModaTampil>('foot-walking')
 
   const {
     premium,
@@ -735,6 +888,7 @@ export default function App() {
     if (pilihan) {
       setKawasan(pilihan.kawasan)
       setLayer(pilihan.layer)
+      setLayerNyala(true)
       setHexTerpilih(null)
       setNHeksagon(null)
     }
@@ -752,11 +906,14 @@ export default function App() {
       // `masuk` sengaja TIDAK ikut ke sini. Kalau ia tertulis di localStorage,
       // orang yang membuka web besok akan melewati gerbang - dan itu persis
       // yang diminta untuk tidak terjadi.
-      localStorage.setItem(KUNCI_TAMPILAN, JSON.stringify({ kawasan, layer, gaya }))
+      localStorage.setItem(
+        KUNCI_TAMPILAN,
+        JSON.stringify({ kawasan, layer, layerNyala, gaya, namaTempat }),
+      )
     } catch {
       // Mode privat. Sesi tetap jalan, cuma tidak selamat dari refresh.
     }
-  }, [gerbang, kawasan, layer, gaya])
+  }, [gerbang, kawasan, layer, layerNyala, gaya, namaTempat])
 
   /**
    * Pin lokasi tersimpan di peta - hanya untuk pelanggan.
@@ -1152,6 +1309,9 @@ export default function App() {
             ref={peta}
             kawasan={kawasan}
             layer={layer}
+            layerNyala={layerNyala}
+            namaTempat={namaTempat}
+            rutaTampil={rutaTampil}
             gaya={gaya}
             terpilih={hexTerpilih}
             saringKuadran={saringKuadran}
@@ -1192,8 +1352,8 @@ export default function App() {
                 bukan pintu. */}
             <button
               onClick={keLanding}
-              title="Kembali ke halaman perkenalan"
-              aria-label="Kembali ke halaman perkenalan"
+              title={t.kembaliGerbang}
+              aria-label={t.kembaliGerbang}
               className="group grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full border border-line text-ink-2 transition-all duration-300 ease-jelly hover:-translate-x-0.5 hover:border-line-2 hover:text-ink"
             >
               <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden>
@@ -1230,16 +1390,29 @@ export default function App() {
               <MenuKawasan nilai={kawasan} onUbah={gantiKawasan} />
               <Menu
                 label="Layer"
-                nilai={layer}
-                opsi={Object.entries(LAYER).map(([k, l]) => ({
-                  nilai: k as NamaLayer,
-                  label: l.nama,
-                }))}
-                onUbah={setLayer}
+                nilai={layerNyala ? layer : 'mati'}
+                /* "Tanpa layer" DI ATAS, bukan di bawah: ia keadaan bawaan, dan
+                   keadaan bawaan yang harus dicari dulu di ujung daftar bukan
+                   keadaan bawaan yang berguna. */
+                opsi={[
+                  { nilai: 'mati' as NamaLayer, label: t.tanpaLayer },
+                  ...Object.entries(LAYER).map(([k, l]) => ({
+                    nilai: k as NamaLayer,
+                    label: l.nama,
+                  })),
+                ]}
+                onUbah={(v) => {
+                  if ((v as string) === 'mati') {
+                    setLayerNyala(false)
+                    return
+                  }
+                  setLayer(v)
+                  setLayerNyala(true)
+                }}
               />
               {/* Tombol "Lokasi tersimpan" pindah ke tumpukan kiri di atas
                   peta, sesumbu dengan pemilih basemap. Lihat alasannya di sana. */}
-              <MenuPengaturan />
+              <MenuPengaturan namaTempat={namaTempat} onNamaTempat={setNamaTempat} />
               {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
                   visual keduanya terbaca sebagai satu kelompok tombol. */}
               <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-line sm:block" aria-hidden />
@@ -1482,8 +1655,8 @@ export default function App() {
                       setPanelKiri('tidak')
                       setPantauanTerbuka(true)
                     }}
-                    title="Lokasi tersimpan dan dinamika kawasan"
-                    aria-label="Lokasi tersimpan"
+                    title={t.tersimpanPanjang}
+                    aria-label={t.tersimpan}
                     className="grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.06]"
                   >
                     <svg width="19" height="19" viewBox="0 0 20 20" aria-hidden>
@@ -1496,7 +1669,7 @@ export default function App() {
                     nilai={gaya}
                     opsi={Object.entries(GAYA_BASEMAP).map(([k, g]) => ({
                       nilai: k as NamaGaya,
-                      label: g.label,
+                      label: t.basemap[k] ?? g.label,
                     }))}
                     onUbah={setGaya}
                     buka={panelKiri === 'basemap'}
@@ -1564,9 +1737,9 @@ export default function App() {
                       // "Untuk Anda" duluan, dan ia yang terbuka pertama:
                       // rekomendasi adalah inti produk ini, dan tab yang harus
                       // dicari dulu bukan inti.
-                      ['rekomendasi', 'Untuk Anda'],
-                      ['daftar', 'Daftar lokasi'],
-                      ['ai', 'Loconomics AI'],
+                      ['rekomendasi', t.tabRekomendasi],
+                      ['daftar', t.tabDaftar],
+                      ['ai', t.tabAI],
                     ] as const
                   ).map(([k, label]) => (
                     <button
@@ -1584,8 +1757,8 @@ export default function App() {
                   ))}
                   <button
                     onClick={() => setPanelTerbuka(false)}
-                    aria-label="Lipat panel"
-                    title="Lipat panel"
+                    aria-label={t.lipat}
+                    title={t.lipat}
                     className="ml-1 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
                   >
                     <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden>
@@ -1661,13 +1834,15 @@ export default function App() {
                                 strokeLinejoin="round"
                               />
                             </svg>
-                            Kembali ke daftar lokasi
+                            {t.kembaliDaftar}
                           </button>
                           <div className="min-h-0 flex-1 overflow-hidden">
                             <PanelInsight
                               h3={hexTerpilih}
                               profilRute={profilRute}
                               onGantiProfil={setProfilRute}
+                              rutaTampil={rutaTampil}
+                              onUbahRutaTampil={setRutaTampil}
                               posisi={posisi}
                               batas={
                                 diagram ? { x: diagram.batas_x, y: diagram.batas_y } : undefined
@@ -1716,8 +1891,8 @@ export default function App() {
               <button
                 onClick={() => setPanelTerbuka(true)}
                 className="kaca pop pointer-events-auto absolute bottom-0 right-0 flex cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold transition-transform duration-200 ease-jelly hover:scale-105 lg:static lg:h-full lg:flex-col lg:justify-center lg:rounded-lg lg:px-2.5 lg:py-4 lg:hover:scale-100"
-                aria-label="Buka panel daftar lokasi"
-                title="Buka panel"
+                aria-label={t.bukaPanelDaftar}
+                title={t.bukaPanel}
               >
                 <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden className="shrink-0">
                   <path

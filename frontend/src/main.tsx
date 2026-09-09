@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { SesiProvider } from './components/Akun.tsx'
 import { bangunkan } from './lib/api.ts'
+import { BahasaProvider } from './lib/bahasa.tsx'
 
 // Dipanggil SEBELUM render, bukan di dalam sebuah useEffect.
 //
@@ -22,8 +23,12 @@ bangunkan()
 // dan keduanya harus membaca sesi yang sama. Kalau providernya duduk di dalam
 // App di bawah gerbang, tombol di gerbang tidak punya konteks apa pun untuk
 // dibaca, dan masuk dari halaman perkenalan tidak akan terbawa ke peta.
+// BahasaProvider di LUAR SesiProvider: pilihan bahasa tidak bergantung pada
+// siapa yang masuk, dan dialog masuk itu sendiri butuh membaca bahasanya.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <SesiProvider anak={<App />} />
+    <BahasaProvider>
+      <SesiProvider anak={<App />} />
+    </BahasaProvider>
   </StrictMode>,
 )

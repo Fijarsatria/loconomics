@@ -1,207 +1,298 @@
 /**
  * Gerbang — halaman pertama. Perkenalan sekaligus pintu masuk ke peta.
  *
- * KENAPA BUKAN FORMULIR LOGIN. Diminta "halaman login", dan yang dibuat di sini
- * halaman gerbang. Bedanya disengaja: proyek ini belum punya autentikasi sama
- * sekali — tidak ada Supabase Auth, tidak ada sesi, tidak ada pengguna. Formulir
- * yang meminta surel dan kata sandi lalu menerima apa pun bukan sekadar belum
- * selesai; ia BERBOHONG tentang apa yang terjadi pada yang diketik ke dalamnya,
- * dan halaman ini akan dibaca juri.
+ * ENAM BAGIAN, dan urutannya adalah ceritanya:
  *
- * URUTAN LAYAR: gerbang → pembuka → peta. Lihat catatan di Pembuka.tsx.
+ *   1. HERO       nama, satu kalimat, satu tombol.
+ *   2. MASALAH    latar belakang DAN alasan produk ini ada, dijadikan SATU.
+ *                 Sebelumnya dua blok berjudul besar yang berdiri sendiri-
+ *                 sendiri ("Keramaian bisa dilihat…" lalu "Dua dunia yang belum
+ *                 pernah dipertemukan…") - dua tesis untuk satu gagasan, dan
+ *                 pembacanya harus menyambung sendiri. Sekarang satu judul,
+ *                 satu paragraf, tiga sebab, satu gambar.
+ *   3. SOLUSI     enam keputusan, enam potret peta sungguhan.
+ *   4. EKOSISTEM  enam bagian produk, ZIG-ZAG satu per satu.
+ *   5. PENUTUP    ajakan terakhir dan kaki halaman.
+ *   6. TIM        jurang hitam, lima orang.
  *
- * SATU BAGIAN, SATU LAYAR. Tiap bagian dibuat setinggi layar dan diberi ruang
- * napas sendiri. Bukan demi kelegaan: gulir yang membawa dua bagian sekaligus
- * ke dalam pandangan membuat animasi masuk keduanya bertabrakan, dan yang
- * terbaca bukan dua gagasan melainkan satu kebisingan.
+ * TIAP BAGIAN MASUK DENGAN CARANYA SENDIRI - kecuali MASALAH, yang sengaja
+ * TIDAK punya animasi masuk sama sekali (permintaan pemilik repo, 10 Sep 2026).
+ * Ia bagian pertama sesudah hero, dan hero sudah bergerak menutup di belakangnya;
+ * satu gerakan lagi di depannya cuma menahan orang membaca. Animasi yang dulu
+ * ada di sini pindah ke EKOSISTEM.
  *
- * EMPAT CARA MENGGULIR, dan tiap bagian memilih yang cocok dengan isinya:
+ *   MENUTUP   hero DIPATOK (sticky) dan bagian berikutnya menggulir NAIK
+ *             MENUTUPINYA seperti lembaran. Yang di bawah menyusut dan meredup.
+ *   MENYAPU   judul Solusi terungkap dari kiri ke kanan lewat clip-path, lalu
+ *             kartunya mekar dari tengah susunan ke tepinya.
+ *   MERANGKAI Ekosistem: tulang punggung tumbuh mengikuti gulir, tiap simpul
+ *             menyala saat dilewati, dan tiap barisnya masuk DARI SISINYA
+ *             sendiri - kiri, kanan, kiri - jadi zig-zagnya ikut terasa waktu
+ *             masuknya, bukan cuma terlihat di tata letaknya.
+ *   TENGGELAM huruf raksasa penutup bergerak lebih lambat daripada halamannya.
+ *   JURANG    bagian tim: turun ke bawah berarti turun ke dalam, sampai hitam.
  *
- *   TEGAK    bagian biasa — hero, dek kawasan, fitur, angka, penutup.
- *   LINTANG  empat kuadran. Gulir turun menggeser panelnya ke SAMPING, dan
- *            panelnya saling MENIMPA: yang sedang dibaca maju ke depan,
- *            tetangganya menyelinap ke belakang. Empat kuadran adalah satu
- *            sumbu perbandingan; menyusunnya ke bawah membuat orang
- *            membandingkannya dengan ingatan.
- *   CAIRAN   pipeline. Satu gumpalan turun menyusuri rel dan MELEBUR dengan
- *            tiap simpul yang dilewatinya. Penggabungan itu tidak bisa dibuat
- *            transisi CSS mana pun — ia butuh blur lalu ambang alfa.
- *   JURANG   bagian tim. Turun ke bawah berarti turun ke dalam, sampai hitam.
+ * Semua gerak HANYA `transform`, `opacity`, dan `clip-path`. Tidak ada blur,
+ * tidak ada bayangan yang dianimasikan - pelajaran yang sudah mahal dibayar
+ * halaman ini (jebakan #116, #124).
  *
- * TENTANG PUSTAKANYA. Referensi yang diberikan pemilik repo memasang shadcn/ui,
- * lucide-react, radix-slot, dan class-variance-authority. Tidak satu pun dipakai
- * di sini: repo ini sudah punya sistem visualnya sendiri, dan empat dependensi
- * baru akan menambah sistem kedua yang harus dijaga sinkron dengan yang pertama.
- *
- * Satu batas yang tetap dipegang: prefers-reduced-motion. Kalau pengguna
- * memintanya, seluruh timeline dilewati — termasuk gulir lintang, yang berubah
- * jadi tumpukan tegak biasa.
+ * DUA BAHASA. Seluruh kalimat di berkas ini hidup di `K` di bawah, dalam dua
+ * cabang yang bertipe sama. Kalimat yang tidak punya pasangan Inggrisnya
+ * gagal di `tsc` - lihat `lib/bahasa.tsx`.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { SplitText } from 'gsap/SplitText'
 
-import { FITUR, IDENTITAS, KUADRAN, PENDIRI, URUTAN_KUADRAN } from '../config'
-import { Glif, PapanNama } from './primitif'
+import { IDENTITAS, KUADRAN, PENDIRI, URUTAN_KUADRAN } from '../config'
+import { PapanNama } from './primitif'
 import { TombolAkun } from './Akun'
-import DekKawasan, { type PilihanKawasan } from './GerbangPeta'
-import BagianTemuan from './GerbangTemuan'
-import { DIPOTRET, KARTU_GERBANG } from '../lib/kartu-gerbang'
-import { BATASAN, DIUKUR, RINGKASAN, SUMBER } from '../lib/ringkasan-data'
+import BentoKeputusan, { type PilihanKawasan } from './GerbangPeta'
+import { KARTU_GERBANG } from '../lib/kartu-gerbang'
+import { SUMBER } from '../lib/ringkasan-data'
+import { SakelarBahasa, useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 
-gsap.registerPlugin(ScrollTrigger)
+gsap.registerPlugin(ScrollTrigger, SplitText)
 
 const NAMA = 'LOCONOMICS'
-const AJAKAN = 'Masuk ke peta'
-
-/**
- * Nama tampilan untuk `opportunity_score` di halaman ini.
- *
- * HANYA di halaman ini. Di dalam aplikasi ia bernama "Opportunity Score" — nama
- * dipakai di layer, panel, daftar, dokumen lomba, dan di kontrak alat yang
- * dikirim ke penyedia LLM.
- */
-const LABEL_SKOR = 'Peluang Strategis'
 
 // ---------------------------------------------------------------------------
-// Isi halaman
+// Kamus
 // ---------------------------------------------------------------------------
 
-const TESIS =
-  'Lokasi terbaik bukan yang paling ramai dilihat, melainkan yang paling jarang dihitung.'
-
-/**
- * Tiga kalimat yang menjelaskan apa yang dikerjakan produk ini.
- *
- * Sengaja tanpa kata "visi" dan "misi" — keduanya memaksa pembaca memilah dulu
- * mana yang cita-cita dan mana yang rencana, padahal yang ingin ia tahu cuma
- * satu: ini alat untuk apa.
- */
-const PENDIRIAN: { kepala: string; isi: string }[] = [
-  {
-    kepala: 'Dibaca, bukan ditafsirkan',
-    isi: 'Hasil survei lapangan jadi peta yang bisa dibaca siapa saja — bukan laporan yang harus diterjemahkan lebih dulu.',
+const K = {
+  id: {
+    masuk: 'Masuk ke peta',
+    lihatSolusi: 'Lihat solusinya',
+    gulir: 'gulir',
+    hero: {
+      isi: 'Memilih lokasi usaha di sekitar simpul transportasi Jabodetabek — dari data survei, bukan firasat.',
+    },
+    masalah: {
+      eyebrow: 'Latar belakang',
+      judul: 'Ramai belum tentu laku.',
+      isi: 'Pemilik usaha memilih tempat dari yang terlihat: mana yang ramai, mana yang kelihatan mahal. Padahal yang menentukan laku atau tidak — siapa yang lewat, berapa yang mereka belanjakan, dan berapa sewa yang wajar — tidak pernah sampai ke tangan mereka.',
+      poin: [
+        {
+          kepala: 'Data orang yang lewat tidak pernah sampai',
+          isi: 'Ratusan ribu orang melewati stasiun tiap hari. Angkanya ada, tapi tidak pernah sampai ke orang yang mau buka warung di sebelahnya.',
+        },
+        {
+          kepala: 'Sewa ikut gengsi, bukan penjualan',
+          isi: 'Tempat yang kelihatan mahal dipasang harga mahal — walaupun yang ramai cuma orang lewat, bukan pembeli.',
+        },
+        {
+          kepala: 'Yang menguntungkan sering tidak kelihatan',
+          isi: 'Lokasi yang datanya bagus tapi tampilannya biasa saja terlewat begitu saja, justru karena belum ada yang menghitungnya.',
+        },
+      ],
+      penutup:
+        'Loconomics menghitungnya. Data orang yang lewat dan data transaksi di sekitarnya dipertemukan di satu peta, lalu tiap lokasi diberi satu dari empat zona — supaya keputusannya berdiri di atas angka, bukan firasat.',
+    },
+    kontras: {
+      judul: 'Satu kawasan, dua cara melihat',
+      kiri: 'Kasat mata',
+      kanan: 'Menurut data',
+      simpul: 'stasiun',
+      mata: 'Dari luar, yang menonjol cuma yang ramai dan kelihatan mahal.',
+      data: (n: number) =>
+        `Menurut data, ${n} lokasi di sini bagus tanpa terlihat mahal — dan sewanya belum ikut naik.`,
+    },
+    solusi: {
+      eyebrow: 'Solusi',
+      judul: 'Enam keputusan yang bisa diambil dengan angka',
+      isi: 'Semuanya heksagon sungguhan dari basis data. Klik untuk membukanya di peta.',
+      catatan:
+        'Potret diam yang dibuat dari basis data lewat pipeline yang sama dengan aplikasinya — bukan tangkapan layar. Peta yang bisa digeser dan ditanyai ada di balik tombolnya.',
+    },
+    ekosistem: {
+      eyebrow: 'Ekosistem Loconomics',
+      judul: 'Enam bagian, satu peta yang berpikir',
+      isi: 'Tiap bagian menjawab satu pertanyaan, dan semuanya membaca data yang sama.',
+      item: [
+        {
+          nama: 'Loconomics AI',
+          isi: 'Tanya dengan bahasa sehari-hari. Ia memanggil alatnya sendiri, membaca angkanya, lalu menggerakkan peta — dan tidak pernah menghitung sendiri.',
+          tanda: 'Tanya, bukan cari',
+        },
+        {
+          nama: 'Heksagon Layer',
+          isi: 'Satu grid heksagon untuk seluruh kawasan transit. Skor, harga sewa, zonasi, dan risiko dibaca di petak yang sama persis.',
+          tanda: 'Satu grid, lima layer',
+        },
+        {
+          nama: 'Loconomics Insight',
+          isi: 'Panel per lokasi: skor, zona, tingkat keyakinan, dan setiap angka yang membentuknya — sampai ke rumusnya.',
+          tanda: 'Sampai ke rumusnya',
+        },
+        {
+          nama: 'Loconomics Maps',
+          isi: 'Basemap MAPID dengan layer tematik yang bisa dinyalakan, dimatikan, dan berganti — mekar dari pusat kawasan.',
+          tanda: 'Empat basemap',
+        },
+        {
+          nama: 'Loconomics Route',
+          isi: 'Rute jalan kaki dan mobil sungguhan ke simpul terdekat, lengkap dengan kawasan jangkau 5 sampai 60 menit.',
+          tanda: 'Jalan kaki · mobil · motor',
+        },
+        {
+          nama: 'Loconomics Feature',
+          isi: 'Membandingkan lokasi berdampingan, menyimulasikan usaha, memantau lokasi incaran, dan menerbitkan laporan PDF.',
+          tanda: 'Untuk pengajuan modal',
+        },
+      ],
+      panel: {
+        tanya: 'Di mana yang paling menjanjikan?',
+        jawab: 'Tiga teratas di Manggarai',
+        layer: ['Opportunity Score', 'PriceLens', 'Hidden Gem', 'RiskRadar'],
+        skor: 'Opportunity Score',
+        zona: 'Zona',
+        keyakinan: 'Keyakinan',
+        sedang: 'Sedang',
+        basemap: ['Terang', 'Dasar', 'Jalan', 'Gelap'],
+        moda: ['Jalan kaki', 'Mobil', 'Motor'],
+        banding: 'Bandingkan',
+        barisBanding: ['Skor', 'Sewa', 'Pesaing'],
+        lokasiA: 'Lokasi A',
+        lokasiB: 'Lokasi B',
+      },
+    },
+    penutup: {
+      judul: 'Siap melihat petanya?',
+      isi: 'Enam kawasan transit Jabodetabek, dan setiap angkanya bisa ditelusuri sampai ke sumbernya.',
+      data: 'Data',
+      keAtas: 'Kembali ke atas',
+    },
+    tim: {
+      terakhir: 'Terakhir',
+      turun: 'Turun lebih dalam',
+      eyebrow: 'Lima orang',
+      judul: 'Tim di baliknya',
+      ketua: 'Ketua tim',
+      permukaan: 'Kembali ke permukaan',
+    },
   },
-  {
-    kepala: 'Dua arah, sama kerasnya',
-    isi: 'Menunjukkan yang bagus tapi belum terlihat, dan memperingatkan yang sebaliknya dengan suara yang sama kerasnya.',
+  en: {
+    masuk: 'Open the map',
+    lihatSolusi: 'See the solutions',
+    gulir: 'scroll',
+    hero: {
+      isi: 'Choosing a business location around Jabodetabek’s transit hubs — from survey data, not gut feeling.',
+    },
+    masalah: {
+      eyebrow: 'Background',
+      judul: 'Busy doesn’t mean profitable.',
+      isi: 'Shop owners pick a spot by what they can see: what looks busy, what looks expensive. The things that actually decide whether it sells — who walks past, how much they spend, and what rent is fair — never reach them.',
+      poin: [
+        {
+          kepala: 'Footfall data never reaches the owner',
+          isi: 'Hundreds of thousands of people pass through a station every day. The numbers exist, but never reach the person about to open a shop next door.',
+        },
+        {
+          kepala: 'Rent follows prestige, not sales',
+          isi: 'A place that looks expensive is priced expensive — even when the crowd is only passing through, not buying.',
+        },
+        {
+          kepala: 'The profitable ones often go unseen',
+          isi: 'Places with strong data but an ordinary face slip past everyone, precisely because nobody has counted them yet.',
+        },
+      ],
+      penutup:
+        'Loconomics counts them. Footfall data and the transactions around it meet on one map, and every location is placed in one of four zones — so the decision rests on numbers, not instinct.',
+    },
+    kontras: {
+      judul: 'One area, two ways of seeing',
+      kiri: 'By eye',
+      kanan: 'By data',
+      simpul: 'station',
+      mata: 'From the outside, only the busy and the expensive-looking stand out.',
+      data: (n: number) =>
+        `In the data, ${n} of these are strong without looking expensive — and the rent hasn’t caught up yet.`,
+    },
+    solusi: {
+      eyebrow: 'Solutions',
+      judul: 'Six decisions you can make with numbers',
+      isi: 'All of them are real hexagons from the database. Click one to open it on the map.',
+      catatan:
+        'Still images rendered from the database by the same pipeline as the app — not screenshots. The map you can pan and ask questions of is behind the button.',
+    },
+    ekosistem: {
+      eyebrow: 'The Loconomics ecosystem',
+      judul: 'Six parts, one map that thinks',
+      isi: 'Each part answers one question, and all of them read the same data.',
+      item: [
+        {
+          nama: 'Loconomics AI',
+          isi: 'Ask in plain language. It calls its own tools, reads the numbers, then moves the map — and never does the math itself.',
+          tanda: 'Ask, don’t search',
+        },
+        {
+          nama: 'Heksagon Layer',
+          isi: 'One hexagon grid for every transit area. Score, rent, zoning, and risk are all read on exactly the same cell.',
+          tanda: 'One grid, five layers',
+        },
+        {
+          nama: 'Loconomics Insight',
+          isi: 'A panel per location: score, zone, confidence, and every number that shaped it — right down to the formula.',
+          tanda: 'Down to the formula',
+        },
+        {
+          nama: 'Loconomics Maps',
+          isi: 'MAPID basemap with thematic layers you can switch on, off, and between — blooming from the centre of the area.',
+          tanda: 'Four basemaps',
+        },
+        {
+          nama: 'Loconomics Route',
+          isi: 'Real walking and driving routes to the nearest hub, with 5-to-60-minute reach areas.',
+          tanda: 'Walk · drive · ride',
+        },
+        {
+          nama: 'Loconomics Feature',
+          isi: 'Compare locations side by side, simulate a business, watch the ones you want, and export a PDF report.',
+          tanda: 'For funding applications',
+        },
+      ],
+      panel: {
+        tanya: 'Where is the most promising?',
+        jawab: 'Top three in Manggarai',
+        layer: ['Opportunity Score', 'PriceLens', 'Hidden Gem', 'RiskRadar'],
+        skor: 'Opportunity Score',
+        zona: 'Zone',
+        keyakinan: 'Confidence',
+        sedang: 'Medium',
+        basemap: ['Light', 'Basic', 'Street', 'Dark'],
+        moda: ['Walking', 'Driving', 'Riding'],
+        banding: 'Compare',
+        barisBanding: ['Score', 'Rent', 'Rivals'],
+        lokasiA: 'Location A',
+        lokasiB: 'Location B',
+      },
+    },
+    penutup: {
+      judul: 'Ready to see the map?',
+      isi: 'Six transit areas across Jabodetabek, and every number traceable to its source.',
+      data: 'Data',
+      keAtas: 'Back to top',
+    },
+    tim: {
+      terakhir: 'Lastly',
+      turun: 'Go deeper',
+      eyebrow: 'Five people',
+      judul: 'The team behind it',
+      ketua: 'Team lead',
+      permukaan: 'Back to the surface',
+    },
   },
-  {
-    kepala: 'Sampai ke rumusnya',
-    isi: 'Setiap angka bisa ditelusuri sampai ke rumus yang membuatnya, supaya keputusannya tetap milik Anda.',
-  },
-]
-
-const LANGKAH_TESIS: { kunci: string; kepala: string; isi: string }[] = [
-  {
-    kunci: 'HIDDEN_GEM',
-    kepala: 'Yang dicari orang',
-    isi: 'Datanya bagus, tampilannya biasa saja. Orang lewat tanpa menoleh, sewanya belum ikut naik, dan angkanya sudah mendukung sejak sekarang. Inilah alasan produk ini dibuat.',
-  },
-  {
-    kunci: 'JEBAKAN_GENGSI',
-    kepala: 'Yang menjebak',
-    isi: 'Tampak mahal, terasa ramai, dan ekonominya tidak mendukung. Kuadran ini yang paling sering dibayar mahal — karena satu-satunya yang memperingatkannya adalah angka, dan angkanya jarang dilihat sebelum kontrak sewa ditandatangani.',
-  },
-  {
-    kunci: 'PEMENANG_JELAS',
-    kepala: 'Yang aman, dan mahal',
-    isi: 'Datanya bagus dan tampilannya sudah mahal. Tidak ada yang salah di sini — Anda hanya ikut membayar gengsi yang sudah dihargai orang lain lebih dulu.',
-  },
-  {
-    kunci: 'HINDARI',
-    kepala: 'Yang sepi',
-    isi: 'Potensi ekonomi dan daya tarik visualnya sama-sama rendah. Digambar paling redup di peta, karena memang tidak ada apa-apa untuk ditunjukkan di sana.',
-  },
-]
-
-const PIPA: { nomor: string; kepala: string; isi: string; tanda: string }[] = [
-  {
-    nomor: '01',
-    kepala: 'Lima sumber terbuka, satu kamus data',
-    // Sebelumnya baris ini menjanjikan "43 variabel per titik" dan menyebut OCR
-    // sebagai bagian dari alur yang berjalan. Keduanya belum benar: yang terisi
-    // 25, dan pembacaan foto struk belum pernah dijalankan. Angkanya sekarang
-    // datang dari basis data lewat `lib/ringkasan-data.ts`, jadi ia tidak bisa
-    // lagi kedaluwarsa tanpa ada yang memberi tahu.
-    isi: 'Survei misi MAPID, POI OpenStreetMap, rute openrouteservice, penduduk WorldPop, dan zonasi RDTR ATR/BPN. Kamus datanya 43 variabel berkode; yang belum punya sumber dibiarkan kosong, tidak pernah diisi nol.',
-    tanda: `${RINGKASAN.variabelTerisi} dari ${RINGKASAN.variabelTotal} terisi`,
-  },
-  {
-    nomor: '02',
-    kepala: 'Diagregasi ke heksagon H3',
-    isi: 'Seluruh titik dijatuhkan ke grid heksagon H3 resolusi 9, sekitar 0,1 km² per sel. Sejak titik ini tidak ada lagi baris survei perorangan yang bisa direkonstruksi — hanya agregat per heksagon.',
-    tanda: '0,1 km² per sel',
-  },
-  {
-    nomor: '03',
-    kepala: 'Empat indeks komposit',
-    isi: 'Potensi transit, aktivitas ekonomi, kompetisi, dan risiko dihitung terpisah lalu dinormalisasi. Variabel yang harus dinetralkan bernilai 0,5 — tengah skala — bukan nol.',
-    tanda: 'IPT · IAE · IKP · IBR',
-  },
-  {
-    nomor: '04',
-    kepala: 'Regresi residual',
-    isi: 'Di sinilah "terlihat mahal" dipisahkan dari "datanya bagus". Yang tersisa setelah prestise visual dijelaskan oleh harga adalah selisih yang dicari: lokasi yang datanya melampaui tampilannya.',
-    tanda: 'residual, bukan mentah',
-  },
-  {
-    nomor: '05',
-    kepala: 'Kuadran dan badge keyakinan',
-    isi: 'Dua sumbu, empat kuadran, dibelah di median — bukan di tengah kotak. Setiap skor keluar bersama badge keyakinan, jadi lokasi yang datanya masih tipis mengaku sejak baris pertama.',
-    tanda: 'Q01 · Q02 · Q03',
-  },
-]
-
-/**
- * Empat angka yang boleh dipamerkan, SELURUHNYA dibaca dari basis data.
- *
- * Versi sebelumnya ditulis tangan dan dua dari empatnya sudah tidak benar:
- * "43 variabel per heksagon" saat 25 yang terisi, dan "18 jam profil harian"
- * saat `hex_hourly_profiles` nol baris. Keduanya gagal diam-diam - tidak ada
- * uji yang bisa menangkap kalimat yang basi.
- *
- * Yang menggantikannya sengaja dipilih dari angka yang cakupannya PENUH, jadi
- * ia tetap bisa dipamerkan tanpa satu pun catatan kaki yang meralatnya.
- */
-const ANGKA: { nilai: number; satuan: string; catatan: string }[] = [
-  {
-    nilai: RINGKASAN.heksagon,
-    satuan: 'heksagon terukur',
-    catatan: 'H3 resolusi 9, sekitar 0,1 km² per sel',
-  },
-  {
-    nilai: RINGKASAN.kawasan,
-    satuan: 'kawasan pilot',
-    catatan: 'KRL, MRT, dan LRT Jabodetabek',
-  },
-  {
-    nilai: RINGKASAN.poiOsm,
-    satuan: 'POI usaha OpenStreetMap',
-    catatan: 'menggerakkan seluruh dimensi kompetisi',
-  },
-  {
-    nilai: RINGKASAN.ruteOrs,
-    satuan: 'rute jalan kaki terhitung',
-    catatan: 'jarak lewat jalan sebenarnya, bukan garis lurus',
-  },
-]
+}
 
 // ---------------------------------------------------------------------------
 // Gambar-gambar kecil
 //
-// Semuanya SVG yang digambar di tempat, bukan berkas. Alasannya sama dengan
-// alasan kartu peta memotret dirinya sendiri: aset yang disimpan akan basi
-// diam-diam pada perubahan palet berikutnya, dan tidak ada uji yang bisa
-// menangkapnya. Yang di bawah ini mengambil warnanya dari `currentColor` atau
-// dari token kuadran, jadi ia selalu ikut.
+// Semuanya SVG yang digambar di tempat, bukan berkas. Aset yang disimpan akan
+// basi diam-diam pada perubahan palet berikutnya, dan tidak ada uji yang bisa
+// menangkapnya. Yang di bawah ini mengambil warnanya dari token halaman.
 // ---------------------------------------------------------------------------
 
 /** Heksagon bertopi runcing, dipusatkan di (0,0). */
@@ -218,29 +309,16 @@ function jalurHeks(r: number) {
  * Bentuknya bukan hiasan: heksagon ADALAH bentuk data proyek ini (H3), jadi
  * latar yang bergerak di sini sekaligus memperkenalkan grid yang akan dipakai
  * di seluruh aplikasi.
- *
- * Dua salinan sarang yang sama ditumpuk — yang bawah samar dan diam, yang atas
- * penuh warna tetapi ditutup masker lingkaran yang bergerak pelan. Lihat
- * `.g-sapu` di index.css untuk alasan kenapa yang bergerak maskernya, bukan
- * ketiga ratus heksagonnya.
  */
 const R_SARANG = 44
-/** Ubin sarang: selebar satu heksagon bertopi runcing, setinggi dua baris. */
 const UBIN_W = R_SARANG * Math.sqrt(3)
 const UBIN_H = R_SARANG * 3
 
 /**
  * Sarang digambar sebagai SATU `<pattern>`, bukan sebagai ratusan poligon.
- *
- * Versi pertama menaruh 24 x 13 heksagon sebagai elemen `<polygon>` sungguhan —
- * 312 simpul DOM per salinan, 700 untuk dua salinan. Perender harus melukis
- * setiap satu setiap kali lapisannya perlu digambar ulang. `<pattern>` membuat
- * perender melukis ubinnya SEKALI lalu mengulanginya sebagai tekstur.
- *
- * Lima heksagon per ubin, bukan dua: yang di keempat sudut harus digambar utuh
- * supaya potongannya menyambung dengan ubin sebelahnya. Pattern menggunting di
- * tepi ubin, jadi heksagon yang berpusat di sudut hanya tampil seperempat — dan
- * seperempat itulah yang melengkapi tetangganya.
+ * Perender melukis ubinnya SEKALI lalu mengulanginya sebagai tekstur. Lima
+ * heksagon per ubin: yang di keempat sudut harus digambar utuh supaya
+ * potongannya menyambung dengan ubin sebelahnya.
  */
 function Sarang({ id, warna, tebal }: { id: string; warna: string; tebal: number }) {
   const titik = jalurHeks(R_SARANG - 2.5)
@@ -272,328 +350,11 @@ function Sarang({ id, warna, tebal }: { id: string; warna: string; tebal: number
   )
 }
 
-/** Kunci localStorage tampilan gerbang. Terpisah dari `loconomics.tampilan.v1`
- *  milik aplikasi: yang ini soal halaman perkenalan, bukan soal peta. */
-const KUNCI_TEMA = 'loconomics.tema-gerbang'
-
-/** Lebar perjalanan gumpalan sakelar tema, piksel. */
-const LUNCUR_SAKELAR = 38
-/** Lama gumpalan melar sebelum kembali bulat. Sama dengan durasi geseranya. */
-const LUNCUR_SAKELAR_MS = 520
-
-/**
- * Sakelar terang/gelap halaman gerbang.
- *
- * MENGGANTIKAN kalimat "belum ada autentikasi di proyek ini" yang dulu berdiri
- * di sini. Kalimat itu sudah tidak benar sejak akun dan langganan masuk, dan
- * ruang di bawah tombol utama terlalu berharga untuk diisi keterangan yang
- * salah.
- *
- * KENAPA GUMPALAN, BUKAN KNOP. Yang membuatnya terbaca sebagai cairan bukan
- * warnanya melainkan MELAR-nya: selama berpindah ia memanjang mendatar dan
- * memipih, seperti tetesan yang ditarik, lalu bulat lagi begitu sampai. Ditambah
- * filter penggabung, ujung-ujung relnya ikut "meleleh" menyambut gumpalan itu
- * alih-alih menunggu di tempat.
- *
- * Polanya sama persis dengan lensa di PilihBasemap - satu benda yang BERPINDAH,
- * bukan dua keadaan yang bergantian menyala. Bedanya cuma di sini benda itu
- * lewat filter yang membuat batasnya bisa menyatu.
- */
-function SakelarTema({ gelap, onUbah }: { gelap: boolean; onUbah: (v: boolean) => void }) {
-  const [luncur, setLuncur] = useState(false)
-  const jam = useRef<number | undefined>(undefined)
-  useEffect(() => () => clearTimeout(jam.current), [])
-
-  const tekan = () => {
-    setLuncur(true)
-    clearTimeout(jam.current)
-    jam.current = window.setTimeout(() => setLuncur(false), LUNCUR_SAKELAR_MS)
-    onUbah(!gelap)
-  }
-
-  return (
-    <div className="g-masuk-awal mt-6 flex items-center justify-center gap-3">
-      <span className="text-[11.5px] font-medium text-[color:var(--g-ink-3)]">Terang</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={gelap}
-        aria-label="Tampilan gelap"
-        onClick={tekan}
-        className="g-sakelar relative grid h-[38px] w-[78px] shrink-0 cursor-pointer place-items-center rounded-full"
-      >
-        {/* Lapisan bergumpal. Filter penggabungnya duduk DI SINI, bukan di
-            tombolnya: ikon matahari dan bulan adalah garis tipis, dan garis
-            tipis di dalam lapisan ber-filter dimakan ambang alfanya - jebakan
-            yang sudah pernah kena di rel pipeline. Yang masuk ke dalam filter
-            cuma bentuk-bentuk tebal. */}
-        <span className="g-sakelar-cair pointer-events-none absolute inset-0" aria-hidden>
-          <span className="g-sakelar-ujung absolute left-[3px] top-1/2 h-[26px] w-[26px] -translate-y-1/2 rounded-full" />
-          <span className="g-sakelar-ujung absolute right-[3px] top-1/2 h-[26px] w-[26px] -translate-y-1/2 rounded-full" />
-          <span
-            className="g-sakelar-gumpal absolute left-[3px] top-1/2 h-[32px] w-[32px] rounded-full"
-            style={{
-              transform: `translate(${gelap ? LUNCUR_SAKELAR : 0}px, -50%) scale(${
-                luncur ? 1.34 : 1
-              }, ${luncur ? 0.82 : 1})`,
-            }}
-          />
-        </span>
-
-        {/* Ikon DI ATAS gumpalan, dan tidak ikut difilter. Yang aktif memakai
-            warna latar sakelarnya sendiri supaya ia terbaca sebagai lubang di
-            gumpalan, bukan sebagai stiker yang menempel di atasnya. */}
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-between px-[10px]">
-          <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden className="transition-colors duration-500" style={{ color: gelap ? 'var(--g-ink-4)' : 'var(--g-utama-teks)' }}>
-            <circle cx="10" cy="10" r="3.7" fill="currentColor" />
-            {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
-              <line
-                key={a}
-                x1="10"
-                y1="2.6"
-                x2="10"
-                y2="4.6"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                transform={`rotate(${a} 10 10)`}
-              />
-            ))}
-          </svg>
-          <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden className="transition-colors duration-500" style={{ color: gelap ? 'var(--g-utama-teks)' : 'var(--g-ink-4)' }}>
-            <path
-              d="M16 12.4A6.6 6.6 0 0 1 7.6 4a6.9 6.9 0 1 0 8.4 8.4Z"
-              fill="currentColor"
-            />
-          </svg>
-        </span>
-      </button>
-      <span className="text-[11.5px] font-medium text-[color:var(--g-ink-3)]">Gelap</span>
-    </div>
-  )
-}
-
-/**
- * Pembatas antar-bagian: garis rambut yang memudar di kedua ujung, dengan satu
- * heksagon kecil di tengahnya.
- *
- * Ada karena bagian-bagian halaman ini berbatasan langsung tanpa apa pun di
- * antaranya - yang bagus selama latarnya seragam, tetapi begitu tiap bagian
- * punya motif sendiri, batasnya jadi tempat dua motif bertabrakan tanpa
- * penengah. Garis ini penengahnya.
- *
- * Ia MENGGAMBAR DIRINYA saat masuk layar: lebarnya tumbuh dari nol. Itu
- * `transform: scaleX`, bukan `width` - lebar memaksa tata letak dihitung ulang
- * tiap bingkai, skala tidak menyentuhnya sama sekali.
- */
-function Pembatas() {
-  return (
-    <div className="g-pembatas relative mx-auto flex h-16 w-full max-w-[62rem] items-center justify-center px-6" aria-hidden>
-      <span className="g-pembatas-garis h-px flex-1 origin-right" />
-      <svg width="16" height="18" viewBox="0 0 16 18" className="g-pembatas-heks mx-3 shrink-0">
-        <polygon
-          points="8,0.8 15.2,4.9 15.2,13.1 8,17.2 0.8,13.1 0.8,4.9"
-          fill="none"
-          stroke="var(--g-garis-halus)"
-          strokeWidth="1.4"
-        />
-      </svg>
-      <span className="g-pembatas-garis h-px flex-1 origin-left" />
-    </div>
-  )
-}
-
-/**
- * Sudut ketujuh sumber di motif latar bagian "sumber". Dihitung sekali di sini,
- * bukan dua kali di dalam komposisinya: heksagon dan garis alirnya harus duduk
- * pada sudut yang SAMA, dan dua daftar yang harus cocok adalah dua daftar yang
- * suatu saat tidak cocok.
- */
-const SUDUT_SUMBER = Array.from({ length: 7 }, (_, i) => (360 / 7) * i)
-
-/** Satu heksagon berjari-jari r, dipindah ke (x, y). */
-function heks(r: number, x = 0, y = 0, kunci?: string | number) {
-  return (
-    <polygon
-      key={kunci ?? `${r}-${x}-${y}`}
-      points={jalurHeks(r)}
-      transform={`translate(${x} ${y})`}
-      fill="none"
-    />
-  )
-}
-
-/**
- * Komposisi latar per bagian. Semuanya heksagon bergaris - satu bahasa bentuk,
- * sama dengan terowongan di dasar jurang yang sudah ada sejak awal - tetapi
- * SUSUNANNYA berbeda, dan susunan itu mengacu pada isi bagiannya.
- *
- * Itu bedanya dengan percobaan sebelumnya. Yang pertama memberi tiap bagian
- * diagram yang sama sekali berbeda (grid, sumbu, rel, batang) dan halamannya
- * terasa seperti tujuh halaman. Yang kedua memberi semuanya terowongan yang
- * sama dan tiap bagian kehilangan wajahnya. Yang ini menahan bentuk dasarnya
- * dan memvariasikan susunannya.
- *
- * Digambar pada kanvas -100..100; ukuran layarnya diatur wadahnya.
- */
-const KOMPOSISI: Record<string, ReactNode> = {
-  // Terowongan konsentris - gema langsung dari dasar jurang.
-  pendirian: <>{[92, 70, 50, 33, 19].map((r) => heks(r))}</>,
-
-  // Sarang: satu di tengah, enam mengelilinginya. Enam kawasan pilot.
-  kawasan: (
-    <>
-      {heks(30)}
-      {[0, 60, 120, 180, 240, 300].map((a) => {
-        const rad = (Math.PI / 180) * a
-        return heks(30, Math.cos(rad) * 54, Math.sin(rad) * 54, a)
-      })}
-      {heks(96)}
-    </>
-  ),
-
-  // Empat kuadran: dua sumbu membelah satu heksagon besar, satu heksagon kecil
-  // di tiap petaknya. Persis yang digambar Kompas di depannya.
-  kuadran: (
-    <>
-      {heks(94)}
-      <path d="M-94 0 H94" />
-      <path d="M0 -82 V82" />
-      {[
-        [-44, -40],
-        [44, -40],
-        [-44, 40],
-        [44, 40],
-      ].map(([x, y]) => heks(24, x, y, `${x}:${y}`))}
-    </>
-  ),
-
-  // Rantai menurun: lima heksagon bersambung, bentuk pipeline s1..s7.
-  'cara-kerja': (
-    <>
-      {[-76, -38, 0, 38, 76].map((y, i) => heks(26 - i * 2, i % 2 ? 22 : -22, y, y))}
-      <path d="M-22 -76 L22 -38 L-22 0 L22 38 L-22 76" />
-    </>
-  ),
-
-  // Enam alat mengelilingi satu peta - susunan yang sama dengan kartunya.
-  fitur: (
-    <>
-      {heks(34)}
-      {[0, 60, 120, 180, 240, 300].map((a) => {
-        const rad = (Math.PI / 180) * (a + 30)
-        return heks(20, Math.cos(rad) * 72, Math.sin(rad) * 72, a)
-      })}
-    </>
-  ),
-
-  // Empat heksagon yang meninggi - empat angka yang bisa diperiksa.
-  angka: (
-    <>
-      {[
-        [-72, 14],
-        [-24, 22],
-        [24, 30],
-        [72, 40],
-      ].map(([x, r]) => heks(r, x, 60 - r, x))}
-      <path d="M-96 76 H96" />
-    </>
-  ),
-
-  // Satu heksagon yang sama, digambar DUA KALI dan tidak berimpit - dugaan dan
-  // hasil ukurnya. Yang jadi isi bagian ini bukan salah satunya melainkan
-  // JARAK di antara keduanya, jadi jarak itu yang diberi garis.
-  temuan: (
-    <>
-      {heks(86)}
-      {heks(86, 30, 17)}
-      {heks(26)}
-      {heks(26, 30, 17)}
-      <path d="M0 0 L30 17" />
-    </>
-  ),
-
-  // Tujuh sumber mengalir ke satu heksagon di tengah. Susunannya mengacu pada
-  // isi bagiannya, seperti keenam motif lain: banyak asal, satu peta.
-  sumber: (
-    <>
-      {heks(28)}
-      {SUDUT_SUMBER.map((a) => {
-        const rad = (Math.PI / 180) * a
-        return heks(12, Math.cos(rad) * 84, Math.sin(rad) * 84, a)
-      })}
-      {SUDUT_SUMBER.map((a) => {
-        const rad = (Math.PI / 180) * a
-        const p = (jarak: number) =>
-          `${(Math.cos(rad) * jarak).toFixed(1)} ${(Math.sin(rad) * jarak).toFixed(1)}`
-        return <path key={`alir-${a}`} d={`M${p(68)} L${p(36)}`} />
-      })}
-      {heks(98)}
-    </>
-  ),
-
-  // Terowongan lagi, lebih dalam - jembatan menuju jurang di bawahnya.
-  penutup: <>{[96, 74, 55, 39, 26, 15, 7].map((r) => heks(r))}</>,
-}
-
-/** Seberapa jauh cincinnya berputar sepanjang perjalanan bagiannya, per bagian. */
-const PUTAR: Record<string, number> = {
-  pendirian: 12,
-  kawasan: -9,
-  // Bagian kuadran dapat jatah putaran JAUH lebih besar daripada yang lain, dan
-  // sebabnya bukan selera: di sana gulirnya di tempat (sticky, empat panel
-  // digeser mendatar), jadi motif ini satu-satunya yang menandakan bahwa gulir
-  // Anda benar-benar berjalan. Dengan 15 derajat seperti bagian lain, yang
-  // terlihat cuma heksagon yang diam.
-  //
-  // 60 dipilih karena heksagon bersimetri enam: satu putaran penuh 60 derajat
-  // mendaratkan motifnya kembali sefase, jadi ujung bagian ini tidak pernah
-  // memperlihatkan potongan yang miring separuh.
-  kuadran: 60,
-  'cara-kerja': -13,
-  fitur: 10,
-  angka: -11,
-  temuan: 9,
-  sumber: 8,
-  penutup: 14,
-}
-
-function LatarBagian({ motif }: { motif: keyof typeof KOMPOSISI }) {
-  return (
-    // Dipusatkan lewat MARGIN, bukan `-translate-x/y-1/2`: geseran, skala, dan
-    // putaran di bawah ditulis GSAP ke properti transform yang sama, dan apa pun
-    // yang dititipkan di transform akan tertimpa pada penulisan pertama.
-    //
-    // `top-0`, BUKAN `top-1/2`. Posisi tegaknya diatur penggeraknya supaya motif
-    // selalu duduk di tengah LAYAR selama bagiannya terlihat - bukan di tengah
-    // BAGIANNYA. Bedanya baru terasa di bagian kuadran, yang setinggi 3.250 px
-    // karena ia spacer gulir lintang: dipusatkan ke bagian, motifnya mendarat
-    // 1.625 px di bawah dan yang terlihat cuma potongan bawahnya.
-    <div
-      className="g-motif pointer-events-none absolute left-1/2 top-0 -ml-[42vmin] hidden h-[84vmin] w-[84vmin] lg:block"
-      data-motif={motif}
-      data-putar={PUTAR[motif]}
-      aria-hidden
-    >
-      <svg viewBox="-100 -100 200 200" className="h-full w-full" stroke="var(--g-motif-garis)" strokeWidth="0.55" fill="none">
-        {KOMPOSISI[motif]}
-      </svg>
-    </div>
-  )
-}
-
-/** Jari-jari lensa kursor, piksel./** Jari-jari lensa kursor, piksel./** Jari-jari lensa kursor, piksel. Dipakai juga untuk menghitung lawan-geser. */
+/** Jari-jari lensa kursor, piksel. */
 const R_LENSA = 170
 
-/**
- * Bungkus geseran ke dalam (-periode, 0].
- *
- * Sarangnya `<pattern>` yang berulang, jadi menggesernya sejauh TEPAT satu ubin
- * tidak mengubah apa pun yang terlihat. Itu dipakai untuk menahan elemen isinya
- * tetap kecil: tanpa ini ia harus selebar seluruh hero supaya jendelanya tetap
- * tertutup di posisi kursor mana pun. Dengan pembungkusan, cukup seukuran
- * jendelanya plus satu ubin di tiap sisi.
- */
+/** Bungkus geseran ke dalam (-periode, 0]. Sarangnya `<pattern>` yang berulang,
+ *  jadi menggesernya sejauh TEPAT satu ubin tidak mengubah apa pun yang terlihat. */
 function bungkus(nilai: number, periode: number): number {
   return nilai - Math.ceil(nilai / periode) * periode
 }
@@ -601,32 +362,11 @@ function bungkus(nilai: number, periode: number): number {
 /**
  * Latar hero: kisi heksagon yang garis tepinya MENYALA di sekitar kursor.
  *
- * TINGGAL DI DALAM HERO, bukan lapisan `fixed` seukuran layar. Versi sebelumnya
- * melayang di atas seluruh viewport dan disembunyikan lewat IntersectionObserver
- * saat hero lewat - tetapi selama hero masih terhitung terlihat, lapisan itu
- * tetap menutupi SELURUH layar, termasuk bagian berikutnya yang sudah masuk.
- * Akibatnya bagian "Yang kami percaya" ikut berlatar kisi hero. Ambang pengamat
- * tidak bisa memperbaikinya; yang salah tempatnya, bukan angkanya. Sebagai anak
- * `absolute` di dalam hero yang sudah `overflow-hidden`, ia tidak akan pernah
- * bisa keluar dari sana.
- *
- * TIDAK ADA GERAK SENDIRI. Tidak bernafas, tidak berdenyut, tidak beriak. Kisi
- * dasarnya diam; yang menyala cuma yang sedang disentuh kursor.
- *
- * CARANYA, dan kenapa begini. Yang diinginkan: garis tepi heksagon di sekitar
- * kursor menyala. Cara paling lurus - menganimasikan `mask-position` pada
- * selapis sarang terang - adalah properti tahap PAINT: tiap gerakan kursor
- * memaksa selapis penuh dilukis ulang.
- *
- * Yang dipakai dua transform yang saling meniadakan:
- *
- *   LENSA  jendela bundar yang digeser ke posisi kursor.
- *   ISI    sarang terang di dalamnya, digeser BERLAWANAN sejauh yang sama.
- *
- * Karena keduanya persis berlawanan, sarang terang itu DIAM terhadap halaman -
- * tepat menimpa sarang redup di bawahnya, heksagon demi heksagon. Yang bergerak
- * cuma jendelanya. Keduanya `transform`, satu-satunya properti gerak yang
- * benar-benar ditangani compositor: nol piksel dilukis ulang.
+ * Dua transform yang saling meniadakan: LENSA (jendela bundar digeser ke
+ * kursor) dan ISI (sarang terang di dalamnya, digeser berlawanan sejauh yang
+ * sama). Sarang terang itu DIAM terhadap halaman - tepat menimpa sarang redup
+ * di bawahnya. Yang bergerak cuma jendelanya, dan keduanya `transform`: nol
+ * piksel dilukis ulang.
  */
 function LatarHero() {
   const akar = useRef<HTMLDivElement>(null)
@@ -639,18 +379,10 @@ function LatarHero() {
     const isiEl = isi.current
     if (!wadah || !lensaEl || !isiEl) return
 
-    // Layar sentuh tidak punya kursor untuk diikuti, dan gerak yang tidak
-    // diminta tetap tidak diminta. Keduanya membiarkan lensanya diam di tengah,
-    // yang terbaca sebagai kisi yang sedikit lebih terang di tengah - bukan
-    // sebagai sesuatu yang rusak.
     const diam =
       window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
       !window.matchMedia('(hover: hover)').matches
 
-    // Kotak wadahnya dibaca SEKALI, lalu hanya kalau ada yang mengubahnya.
-    // Memanggil getBoundingClientRect() di dalam pointermove berarti satu layout
-    // paksa per kejadian, dan tetikus 500Hz mengirim delapan kejadian per
-    // bingkai - jebakan yang sama dengan yang sudah kena di gulir lintang.
     let kotak = wadah.getBoundingClientRect()
     let basi = false
     const usang = () => {
@@ -662,11 +394,6 @@ function LatarHero() {
     let x = tx
     let y = ty
 
-    // `quickSetter` menulis transform tanpa membuat tween sama sekali. Kedua
-    // elemen ditulis dari x/y yang SAMA di bingkai yang sama - dulu keduanya
-    // digerakkan tween terpisah, dan tween yang terpisah bisa berselisih.
-    // Selisih sepiksel pun terlihat sebagai bayangan ganda, sebab sarang terang
-    // harus menimpa sarang redup persis heksagon demi heksagon.
     const setLensa = gsap.quickSetter(lensaEl, 'css')
     const setIsi = gsap.quickSetter(isiEl, 'css')
     const tulis = () => {
@@ -679,10 +406,6 @@ function LatarHero() {
     tulis()
     if (diam) return
 
-    // Peluk eksponensial: tiap bingkai lensanya menutup sebagian tetap dari sisa
-    // jaraknya. Sebagian itu dihitung dari dt lewat `1 - exp(-dt/TAU)`, bukan
-    // konstanta lerp polos - konstanta polos diam-diam berjalan dua kali lebih
-    // cepat begitu layarnya 120Hz alih-alih 60Hz.
     const TAU_IKUT = 0.055
     const TAU_PULANG = 0.3
     let tau = TAU_IKUT
@@ -691,21 +414,16 @@ function LatarHero() {
     let sebelum = 0
     const bingkai = (t: number) => {
       id = requestAnimationFrame(bingkai)
-      // Pengukuran ulang duduk DI SINI, sebelum satu pun tulisan: baca dulu,
-      // tulis kemudian, tidak pernah berselang-seling.
       if (basi) {
         kotak = wadah.getBoundingClientRect()
         basi = false
       }
-      // Dibatasi supaya kembali dari tab yang lama ditinggal tidak meloncat.
       const dt = sebelum ? Math.min((t - sebelum) / 1000, 0.1) : 1 / 60
       sebelum = t
       const k = 1 - Math.exp(-dt / tau)
       x += (tx - x) * k
       y += (ty - y) * k
       tulis()
-      // Berhenti begitu sampai. Bingkai yang tidak menggambar apa pun tetap
-      // bingkai yang harus dihitung, dan hero ini hidup selama orang membaca.
       if (Math.abs(tx - x) < 0.05 && Math.abs(ty - y) < 0.05) {
         x = tx
         y = ty
@@ -721,9 +439,6 @@ function LatarHero() {
       }
     }
 
-    // Penangannya tidak menghitung apa pun - ia cuma menaruh koordinat. Delapan
-    // kejadian dalam satu bingkai jadi tujuh timpaan yang hampir gratis alih-
-    // alih tujuh kali kerja penuh.
     const gerak = (e: PointerEvent) => {
       tau = TAU_IKUT
       tx = e.clientX - kotak.left
@@ -737,15 +452,10 @@ function LatarHero() {
       jalan()
     }
 
-    // Dipasang pada bagian heronya, bukan pada window: begitu kursor pindah ke
-    // bagian lain halaman, tidak ada lagi satu pun kejadian yang perlu diurus.
     const induk = wadah.parentElement ?? wadah
     induk.addEventListener('pointermove', gerak, { passive: true })
     induk.addEventListener('pointerleave', pulang)
     window.addEventListener('resize', usang)
-    // Hero ikut bergeser saat halaman digulir, jadi kotaknya ikut usang.
-    // Gerbang menggulir di wadahnya sendiri, dan `scroll` tidak menggelembung -
-    // fase tangkap yang membuatnya tetap terdengar.
     window.addEventListener('scroll', usang, { capture: true, passive: true })
     return () => {
       induk.removeEventListener('pointermove', gerak)
@@ -756,45 +466,25 @@ function LatarHero() {
     }
   }, [])
 
-  // Isinya cuma perlu menutupi jendelanya: dua kali jari-jari lensa, plus satu
-  // ubin di tiap sisi sebagai bantalan bagi geseran yang dibungkus.
   const sisi = R_LENSA * 2 + 2 * Math.max(UBIN_W, UBIN_H)
 
   return (
     <div
       ref={akar}
       className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-      // Memudar ke bawah. Tanpa ini kisinya berhenti MENDADAK di batas hero -
-      // `overflow-hidden` memotongnya sebagai garis lurus melintang, dan garis
-      // itu terbaca sebagai jahitan yang lupa dirapikan. Maskernya statis:
-      // dihitung sekali, tidak pernah lagi.
       style={{
         maskImage: 'linear-gradient(to bottom, #000 52%, transparent 96%)',
         WebkitMaskImage: 'linear-gradient(to bottom, #000 52%, transparent 96%)',
       }}
       aria-hidden
     >
-      {/* Kisi dasar. Diam, dan tidak pernah disentuh apa pun. */}
       <Sarang id="sarang-dasar" warna="var(--g-sarang)" tebal={1.15} />
-
-      {/* Lensa. `marginLeft/Top` -R membuat transform x/y bisa dipakai sebagai
-          koordinat kursor apa adanya, tanpa perlu menambah pergeseran tengah di
-          setiap perhitungan. */}
       <div
         ref={lensa}
         className="g-lensa absolute left-0 top-0 overflow-hidden"
-        style={{
-          width: R_LENSA * 2,
-          height: R_LENSA * 2,
-          marginLeft: -R_LENSA,
-          marginTop: -R_LENSA,
-        }}
+        style={{ width: R_LENSA * 2, height: R_LENSA * 2, marginLeft: -R_LENSA, marginTop: -R_LENSA }}
       >
-        <div
-          ref={isi}
-          className="g-lensa-isi absolute left-0 top-0"
-          style={{ width: sisi, height: sisi }}
-        >
+        <div ref={isi} className="g-lensa-isi absolute left-0 top-0" style={{ width: sisi, height: sisi }}>
           <Sarang id="sarang-nyala" warna="var(--g-sarang-nyala)" tebal={1.7} />
         </div>
       </div>
@@ -802,295 +492,475 @@ function LatarHero() {
   )
 }
 
+/* ==========================================================================
+   Satu kawasan, dua cara melihat
+   ==========================================================================
+
+   Pusat bagian latar belakang, dan satu-satunya gambar yang bergerak sendiri
+   di halaman ini. Ia menggambar TEPAT kalimat dari dokumen konsep tim: "tempat
+   yang kalau dilihat kasat mata nggak worth it, tapi dari data yang kita
+   kumpulkan ternyata worth it".
+
+   TANPA GESERAN, sejak 10 Sep 2026. Versi sebelumnya menyerahkan pergantiannya
+   ke `input[type=range]` yang harus digeser sendiri - dan gambar yang harus
+   dioperasikan dulu sebelum berbicara adalah gambar yang sebagian besar
+   pembacanya lewati. Sekarang ia berganti sendiri, bolak-balik, dengan
+   pergantian warna yang sama halusnya.
+
+   YANG DITAMPILKAN SISI KANANNYA: KEEMPAT ZONA SUNGGUHAN - Hidden Gem, Aman,
+   Jebakan Gengsi, Hindari - dengan warna yang sama persis dengan yang nanti
+   dilihat orang di peta. Sebelumnya sisi ini cuma gradien teal "kuat/lemah",
+   yang tidak mengajarkan apa pun. Kosakata yang dipakai produk ini sebaiknya
+   diperkenalkan di tempat pertama ia bisa diperkenalkan.
+
+   Warnanya diambil dari `KUADRAN` di config - satu sumber dengan peta, legenda,
+   dan kartu - lalu dicerahkan ke arah putih. Palet itu dirancang untuk basemap
+   TERANG; di atas hitam, hijau #15803D dan merah #B01B1B jatuh terlalu dekat ke
+   latarnya. Yang digeser terangnya saja, ronanya tidak.
+
+   Yang bergerak cuma DUA `opacity` - satu per kelompok - dan keduanya
+   diserahkan ke transisi CSS. React cuma mengganti satu bilangan tiap ~3,6
+   detik; tidak ada satu pun bingkai yang dihitung JavaScript.
+   ========================================================================== */
+
+const R_KONTRAS = 21
+type KunciKuadran = (typeof URUTAN_KUADRAN)[number]
+
 /**
- * Ladang heksagon yang berdenyut — pendamping kalimat tesis.
+ * q, r (koordinat aksial), seberapa MENONJOL ia terlihat (0..1), lalu zona
+ * yang keluar dari datanya.
  *
- * Isinya persis apa yang dikatakan kalimat di sebelahnya: hampir semuanya
- * redup, dan yang menyala justru yang tidak menonjol. Kalau kalimatnya benar,
- * gambarnya harus bisa dibaca tanpa keterangan.
+ * Angkanya dirancang, bukan diukur - ini gambar tentang sebuah gagasan, dan
+ * angka sungguhan ada di enam kartu bagian berikutnya. Yang dijaga cuma
+ * hubungannya: tiap sel yang ber-zona Hidden Gem TIDAK boleh terlihat menonjol,
+ * dan tiap Jebakan Gengsi HARUS terlihat menonjol - kalau tidak, gambarnya
+ * membantah kalimat yang menyertainya.
  */
-function LadangDenyut() {
-  const R = 15
-  const W = R * Math.sqrt(3)
-  const H = R * 1.5
-  const sel: { x: number; y: number; nyala: number }[] = []
-  for (let baris = 0; baris < 7; baris++) {
-    for (let kolom = 0; kolom < 7; kolom++) {
-      const n = Math.sin(kolom * 127.1 + baris * 311.7) * 43758.5453
-      sel.push({
-        x: 30 + kolom * W + (baris % 2 ? W / 2 : 0),
-        y: 26 + baris * H,
-        nyala: n - Math.floor(n),
-      })
+const SEL_KONTRAS: [number, number, number, KunciKuadran][] = [
+  [0, 0, 0.95, 'PEMENANG_JELAS'],
+  [1, 0, 0.85, 'JEBAKAN_GENGSI'],
+  [1, -1, 0.7, 'PEMENANG_JELAS'],
+  [0, -1, 0.55, 'HINDARI'],
+  [-1, 0, 0.8, 'JEBAKAN_GENGSI'],
+  [-1, 1, 0.35, 'HIDDEN_GEM'],
+  [0, 1, 0.62, 'PEMENANG_JELAS'],
+  [2, 0, 0.3, 'HINDARI'],
+  [2, -1, 0.32, 'HIDDEN_GEM'],
+  [2, -2, 0.25, 'HINDARI'],
+  [1, -2, 0.5, 'HINDARI'],
+  [0, -2, 0.72, 'JEBAKAN_GENGSI'],
+  [-1, -1, 0.3, 'HINDARI'],
+  [-2, 0, 0.22, 'HIDDEN_GEM'],
+  [-2, 1, 0.35, 'HINDARI'],
+  [-2, 2, 0.25, 'HINDARI'],
+  [-1, 2, 0.45, 'HIDDEN_GEM'],
+  [0, 2, 0.28, 'HIDDEN_GEM'],
+  [1, 1, 0.66, 'PEMENANG_JELAS'],
+]
+
+/** Dicerahkan ke arah putih supaya terbaca di atas hitam. Ronanya tidak digeser. */
+const warnaZona = (k: KunciKuadran) => `color-mix(in srgb, ${KUADRAN[k].warna} 76%, #ffffff)`
+
+/** Ambang "terlihat menonjol". Dipakai menghitung kalimat di bawah gambar. */
+const AMBANG_MENONJOL = 0.6
+
+function KontrasKawasan() {
+  const k = useTeks(K).kontras
+  const namaZona = useNamaZona()
+  const akar = useRef<HTMLDivElement>(null)
+  const [fase, setFase] = useState(0)
+
+  /**
+   * Pergantiannya BERHENTI saat gambarnya di luar layar.
+   *
+   * Bukan demi hemat - satu interval 3,6 detik nyaris gratis - melainkan demi
+   * yang membaca: kalau ia terus berdetak sementara tidak terlihat, orang yang
+   * baru menggulir ke sini mendarat di tengah pergantian, dan setengah
+   * pergantian tidak menyatakan apa pun. Dengan ini ia selalu mulai dari
+   * "kasat mata", yaitu dari cara orang melihat sebelum ada datanya.
+   */
+  useEffect(() => {
+    const el = akar.current
+    if (!el) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setFase(1)
+      return
     }
-  }
-  return (
-    <svg viewBox="0 0 260 220" className="h-auto w-full" aria-hidden>
-      {sel.map((s, i) => {
-        // Empat sel saja yang menyala, dan letaknya tidak di tengah.
-        const pilih = s.nyala > 0.93
-        return (
-          <g key={i} transform={`translate(${s.x} ${s.y})`}>
-            <polygon
-              points={jalurHeks(R - 1.2)}
-              fill={pilih ? 'var(--q-gem)' : 'var(--g-garis-halus-2)'}
-              stroke={pilih ? 'var(--q-gem)' : 'var(--g-garis-halus-2)'}
-              strokeWidth="1"
-              className={pilih ? 'g-nyala' : undefined}
-              style={pilih ? { animationDelay: `${(i % 5) * 420}ms` } : undefined}
-            />
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
+    let jam = 0
+    const mulai = () => {
+      if (jam) return
+      jam = window.setInterval(() => setFase((f) => (f ? 0 : 1)), 3600)
+    }
+    const henti = () => {
+      window.clearInterval(jam)
+      jam = 0
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      mulai()
+      return () => henti()
+    }
+    const pengamat = new IntersectionObserver(
+      ([m]) => {
+        if (m.isIntersecting) mulai()
+        else {
+          henti()
+          setFase(0)
+        }
+      },
+      { threshold: 0.25 },
+    )
+    pengamat.observe(el)
+    return () => {
+      pengamat.disconnect()
+      henti()
+    }
+  }, [])
 
-/** Enam gambar fitur. Satu bentuk per alat, semuanya dari satu kosakata garis. */
-const GAMBAR_FITUR: Record<string, ReactNode> = {
-  PriceLens: (
-    <>
-      {[0, 1, 2, 3].map((i) => (
-        <rect
-          key={i}
-          x={10 + i * 15}
-          y={44 - [10, 22, 32, 18][i]}
-          width="9"
-          height={[10, 22, 32, 18][i]}
-          rx="2.5"
-          fill="currentColor"
-          opacity={0.28 + i * 0.18}
-          className="g-tumbuh"
-          style={{ animationDelay: `${i * 90}ms` }}
-        />
-      ))}
-      <path d="M6 48h60" stroke="currentColor" strokeWidth="1.4" opacity="0.35" />
-    </>
-  ),
-  GemFinder: (
-    <>
-      <polygon points={jalurHeks(19)} transform="translate(36 27)" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.3" />
-      <polygon points={jalurHeks(11)} transform="translate(36 27)" fill="currentColor" opacity="0.85" className="g-denyut-halus" />
-      <circle cx="36" cy="27" r="24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.2" className="g-riak" />
-    </>
-  ),
-  RiskRadar: (
-    <>
-      {[9, 16, 23].map((r, i) => (
-        <circle key={r} cx="36" cy="27" r={r} fill="none" stroke="currentColor" strokeWidth="1.2" opacity={0.34 - i * 0.08} className="g-riak" style={{ animationDelay: `${i * 620}ms` }} />
-      ))}
-      <path d="M36 27 58 14" stroke="currentColor" strokeWidth="1.6" opacity="0.7" />
-      <circle cx="36" cy="27" r="3" fill="currentColor" />
-    </>
-  ),
-  ZoneGuard: (
-    <>
-      <path d="M36 7 57 15v14c0 11-9 18-21 22-12-4-21-11-21-22V15Z" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.45" />
-      <path d="M27 27l6.5 7L46 21" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="g-gambar-garis" />
-    </>
-  ),
-  'Commuter Clock': (
-    <>
-      <circle cx="36" cy="27" r="20" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.35" />
-      {Array.from({ length: 12 }, (_, i) => {
-        const a = (Math.PI / 6) * i
-        return <line key={i} x1={36 + Math.cos(a) * 16} y1={27 + Math.sin(a) * 16} x2={36 + Math.cos(a) * 19} y2={27 + Math.sin(a) * 19} stroke="currentColor" strokeWidth="1.2" opacity="0.3" />
-      })}
-      <line x1="36" y1="27" x2="36" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="g-jarum" />
-      <line x1="36" y1="27" x2="47" y2="31" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.6" />
-    </>
-  ),
-  'Loconomics AI': (
-    <>
-      <rect x="8" y="10" width="42" height="27" rx="9" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
-      <path d="M18 37v7l9-7" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.4" strokeLinejoin="round" />
-      {[0, 1, 2].map((i) => (
-        <circle key={i} cx={20 + i * 9} cy="23" r="2.6" fill="currentColor" opacity="0.75" className="g-denyut-halus" style={{ animationDelay: `${i * 220}ms` }} />
-      ))}
-      <polygon points={jalurHeks(9)} transform="translate(56 40)" fill="currentColor" opacity="0.25" />
-    </>
-  ),
-}
+  const cx = 160
+  const cy = 146
+  const titikHeks = jalurHeks(R_KONTRAS - 1.6)
+  const posisi = (q: number, r: number) => ({
+    x: cx + R_KONTRAS * Math.sqrt(3) * (q + r / 2),
+    y: cy + R_KONTRAS * 1.5 * r,
+  })
+  /** Yang datanya bagus TANPA terlihat mahal - inti seluruh produk ini. */
+  const permata = SEL_KONTRAS.filter(([, , m, z]) => z === 'HIDDEN_GEM' && m < AMBANG_MENONJOL).length
+  const lentur = 'opacity 1500ms cubic-bezier(0.33, 0.9, 0.28, 1)'
 
-/**
- * Petak 2x2 mini: di mana kuadran INI duduk pada kedua sumbunya.
- *
- * Kompas besar berdiri diam di kiri dan hanya terlihat di layar lebar. Petak
- * kecil ini ikut bersama kartunya ke mana pun kartunya pergi, jadi pembaca di
- * layar sempit tetap tahu sudut mana yang sedang dibicarakan - tanpa harus
- * mengingat gambar yang tadi ada di sebelah kiri.
- */
-function PetakKuadran({ kunci }: { kunci: string }) {
   return (
-    <div className="relative h-[68px] w-[68px] shrink-0 overflow-hidden rounded-[12px] border border-[color:var(--g-ink)]/12 bg-white/40">
-      {URUTAN_KUADRAN.map((k) => {
-        const [kolom, baris] = KUADRAN[k].sel
-        const ini = k === kunci
-        return (
+    <div ref={akar} className="g-kontras relative rounded-[22px] p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="papan text-[15px] leading-snug text-[color:var(--g-ink)]">{k.judul}</p>
+        {/* Penunjuk fase, bukan tombol: gambarnya berganti sendiri. Yang aktif
+            memakai warna sisinya sendiri - ungu untuk yang dilihat mata, teal
+            untuk yang dibaca dari data. */}
+        <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em]" aria-hidden>
           <span
-            key={k}
-            className="absolute transition-colors duration-500"
-            style={{
-              left: kolom === 0 ? 0 : '50%',
-              right: kolom === 0 ? '50%' : 0,
-              top: baris === 0 ? 0 : '50%',
-              bottom: baris === 0 ? '50%' : 0,
-              background: ini ? KUADRAN[k].warna : 'transparent',
-              borderRight: kolom === 0 ? '1px solid var(--g-garis-halus-2)' : undefined,
-              borderBottom: baris === 0 ? '1px solid var(--g-garis-halus-2)' : undefined,
-            }}
-          />
-        )
-      })}
-    </div>
-  )
-}
-
-/**
- * Sebaran keempat kuadran atas SELURUH heksagon, dijumlah dari manifes kartu.
- *
- * Keenam kartu dek adalah keenam kawasan pilot, tidak kurang tidak lebih, jadi
- * menjumlahkannya memberi angka global yang benar — 708. Angkanya ikut
- * disegarkan tiap kali `scripts/potret-kartu.mjs` dijalankan, jadi ia tidak bisa
- * berpisah dari peta yang ditampilkan di sebelahnya.
- */
-const SEBARAN_KUADRAN = (() => {
-  const per: Record<string, number> = {}
-  let total = 0
-  for (const k of KARTU_GERBANG) {
-    total += k.n
-    for (const [q, j] of Object.entries(k.kuadran)) per[q] = (per[q] ?? 0) + j
-  }
-  return { total, per }
-})()
-
-/**
- * Satu panel kuadran. Dipakai dua kali dengan tata letak yang berbeda: berderet
- * menyamping saat gerak menyala, bertumpuk tegak saat gerak dimatikan.
- *
- * Isinya sengaja lebih dari sekadar nama dan penjelasan. Kuadran adalah tesis
- * produk ini, dan tesis yang tidak membawa angka cuma pendapat: tiap panel
- * menyatakan berapa banyak dari 708 heksagon benar-benar jatuh di sana.
- */
-function PanelKuadran({
-  l,
-  i,
-  lintang,
-}: {
-  l: (typeof LANGKAH_TESIS)[number]
-  i: number
-  lintang?: boolean
-}) {
-  const q = KUADRAN[l.kunci]
-  const jumlah = SEBARAN_KUADRAN.per[l.kunci] ?? 0
-  const persen = SEBARAN_KUADRAN.total
-    ? Math.round((jumlah / SEBARAN_KUADRAN.total) * 100)
-    : 0
-
-  return (
-    <article
-      className={`g-kaca-tebal rounded-[30px] p-9 sm:p-11 ${
-        lintang ? `w-[min(40rem,86vw)] shrink-0 ${i > 0 ? '-ml-16 lg:-ml-24' : ''}` : ''
-      }`}
-      style={lintang ? { transformStyle: 'preserve-3d' } : undefined}
-    >
-      <div className="flex items-start gap-5">
-        <PetakKuadran kunci={l.kunci} />
-        <div className="min-w-0 flex-1">
-          <p className="eyebrow mb-2.5 text-[color:var(--g-ink-3)]">
-            {String(i + 1).padStart(2, '0')} · {l.kepala}
-          </p>
-          <h3 className="papan flex items-center gap-3 text-[clamp(1.6rem,3.6vw,2.4rem)] leading-tight">
-            <Glif kuadran={l.kunci} ukuran={26} />
-            <span style={{ color: q.warna }}>{q.nama}</span>
-          </h3>
-        </div>
-      </div>
-
-      <p className="mt-7 text-[15.5px] leading-relaxed text-[color:var(--g-ink-2)]">{l.isi}</p>
-
-      {/* Angka, dan seberapa besar bagiannya. Batang di bawahnya memakai warna
-          kuadran itu sendiri, jadi tidak ada legenda kedua yang harus dibaca. */}
-      <div className="mt-8 border-t border-[color:var(--g-ink)]/12 pt-6">
-        <div className="flex items-baseline gap-3">
-          <span className="papan tabular text-[30px] leading-none" style={{ color: q.warna }}>
-            {jumlah}
+            className="transition-colors duration-700"
+            style={{ color: fase ? 'var(--g-ink-4)' : 'var(--g-ungu-terang)' }}
+          >
+            {k.kiri}
           </span>
-          <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[color:var(--g-ink-3)]">
-            dari {SEBARAN_KUADRAN.total} heksagon jatuh di sini
-          </span>
-          <span className="tabular shrink-0 text-[12.5px] font-semibold text-[color:var(--g-ink-2)]">
-            {persen}%
-          </span>
-        </div>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--g-ink)]/8">
+          <span className="text-[color:var(--g-ink-4)]">/</span>
           <span
-            className="block h-full rounded-full"
-            style={{ width: `${persen}%`, background: q.warna }}
-          />
-        </div>
-        <p className="mt-4 text-[13px] font-medium" style={{ color: q.warna }}>
-          {q.ringkas}
+            className="transition-colors duration-700"
+            style={{ color: fase ? 'var(--g-teal)' : 'var(--g-ink-4)' }}
+          >
+            {k.kanan}
+          </span>
         </p>
       </div>
-    </article>
-  )
-}
 
-/** Heksagon bergaris yang tergambar sendiri — bingkai tiap angka besar. */
-/**
- * Heksagon pemegang angka di bagian "Yang sudah berdiri".
- *
- * Ukurannya dinaikkan dari 92x104 ke 148x168, dan itu perbaikan cacat, bukan
- * selera. Heksagon runcing-atas hanya selebar `1,73 x r` di pinggangnya, jadi
- * ruang teks yang benar-benar tersedia di 92 px cuma sekitar 70 px. "3.444" dan
- * "1.549" di ukuran huruf papan sudah melewatinya - angka terpanjanglah yang
- * menentukan, dan dua dari empat angka di sini memang lima karakter.
- *
- * Dua lingkar: satu tipis sebagai dasar, satu digores masuk sebagai aksen.
- * Angkanya duduk di PINGGANG heksagon (tengah tegak), satu-satunya tempat
- * lebarnya maksimum.
- */
-function HeksagonAngka({ anak }: { anak: ReactNode }) {
-  return (
-    <div className="relative grid h-[168px] w-[148px] shrink-0 place-items-center">
-      <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full" aria-hidden>
-        <polygon points={jalurHeks(46)} fill="var(--g-kartu-pekat)" stroke="var(--g-garis-halus-2)" strokeWidth="1.2" />
-        {/* Heksagon dalam - memberi kedalaman tanpa menambah satu elemen pun
-            yang harus dianimasikan terpisah. */}
-        <polygon points={jalurHeks(38)} fill="none" stroke="var(--g-garis-halus)" strokeWidth="0.8" />
-        <polygon
-          points={jalurHeks(46)}
-          fill="none"
-          stroke="var(--q-gem)"
-          strokeWidth="2.2"
-          strokeLinejoin="round"
-          pathLength={100}
-          strokeDasharray="100"
-          className="g-gores"
-        />
+      {/* viewBox dipangkas ke kotak yang benar-benar dipakai gugusannya.
+          Dengan 0 0 320 296 gugusan 19 selnya cuma mengisi bagian tengah dan
+          panelnya jadi dua pertiga ruang kosong - terlihat begitu di potret. */}
+      <svg viewBox="64 58 192 178" className="mx-auto mt-2 block h-auto w-full max-w-[330px]" aria-hidden>
+        {/* Garis tepi tiap sel, selalu ada. Ia yang membuat petaknya tetap
+            terbaca sebagai grid saat kedua kelompok isian sedang berpapasan. */}
+        {SEL_KONTRAS.map(([q, r], i) => {
+          const { x, y } = posisi(q, r)
+          return (
+            <polygon
+              key={`t${i}`}
+              points={titikHeks}
+              transform={`translate(${x.toFixed(2)} ${y.toFixed(2)})`}
+              fill="none"
+              stroke="var(--g-kontras-garis)"
+              strokeWidth="1"
+            />
+          )
+        })}
+
+        {/* KASAT MATA: satu rona, terangnya mengikuti seberapa menonjol. */}
+        <g style={{ opacity: fase ? 0 : 1, transition: lentur }}>
+          {SEL_KONTRAS.map(([q, r, m], i) => {
+            const { x, y } = posisi(q, r)
+            return (
+              <polygon
+                key={`m${i}`}
+                points={titikHeks}
+                transform={`translate(${x.toFixed(2)} ${y.toFixed(2)})`}
+                fill="var(--g-ungu)"
+                fillOpacity={0.1 + 0.75 * m}
+              />
+            )
+          })}
+        </g>
+
+        {/* MENURUT DATA: empat zona, warna yang sama dengan di peta. */}
+        <g style={{ opacity: fase ? 1 : 0, transition: lentur }}>
+          {SEL_KONTRAS.map(([q, r, m, z], i) => {
+            const { x, y } = posisi(q, r)
+            const disorot = z === 'HIDDEN_GEM' && m < AMBANG_MENONJOL
+            return (
+              <g key={`d${i}`} transform={`translate(${x.toFixed(2)} ${y.toFixed(2)})`}>
+                <polygon points={titikHeks} fill={warnaZona(z)} fillOpacity={0.82} />
+                {/* Yang jadi alasan produk ini ada diberi cincin, bukan warna
+                    kelima: warna kelima akan jadi zona kelima yang tidak ada. */}
+                {disorot && (
+                  <polygon
+                    points={jalurHeks(R_KONTRAS + 1.4)}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeOpacity="0.85"
+                    strokeWidth="1.5"
+                  />
+                )}
+              </g>
+            )
+          })}
+        </g>
+
+        {/* Stasiun di pusatnya. Cincin bertitik, bukan pin: pin menandai tujuan,
+            dan di gambar ini stasiunnya justru pusat yang dikelilingi. */}
+        <g transform={`translate(${cx} ${cy})`}>
+          <circle r="5.5" fill="var(--g-latar-pekat)" stroke="var(--g-ink)" strokeWidth="1.6" />
+          <circle r="1.8" fill="var(--g-ink)" />
+        </g>
+        {/* Halo lewat `paint-order: stroke`. Tanpa itu labelnya jatuh di atas
+            isian heksagon pusat - ungu pekat di satu fase, hijau di fase lain -
+            dan hilang sama sekali di keduanya. */}
+        <text
+          x={cx}
+          y={cy + 16}
+          textAnchor="middle"
+          fontSize="8"
+          fill="var(--g-ink-2)"
+          stroke="var(--g-latar-pekat)"
+          strokeWidth="2.6"
+          paintOrder="stroke"
+          style={{ fontFamily: 'inherit', letterSpacing: '0.09em' }}
+        >
+          {k.simpul.toUpperCase()}
+        </text>
       </svg>
-      <span className="relative px-2 text-center">{anak}</span>
+
+      {/* Satu kalimat pada satu waktu, dan kalimatnya menyebut apa yang sedang
+          terlihat. Dua kalimat sekaligus akan membuat orang membaca yang tidak
+          sedang digambar. */}
+      <p
+        key={fase}
+        className="g-kontras-teks mt-2 min-h-[3.2em] text-[13px] leading-relaxed text-[color:var(--g-ink-2)]"
+      >
+        {fase ? k.data(permata) : k.mata}
+      </p>
+
+      {/* Legenda keempat zona. Meredup saat sisi kiri sedang tampil - ia belum
+          berlaku di sana, dan legenda yang berlaku untuk gambar yang tidak
+          sedang terlihat adalah legenda yang menyesatkan. */}
+      <ul
+        className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] transition-opacity duration-700"
+        style={{ opacity: fase ? 1 : 0.3 }}
+      >
+        {URUTAN_KUADRAN.map((z) => (
+          <li key={z} className="flex items-center gap-1.5 text-[color:var(--g-ink-3)]">
+            <span
+              className="inline-block h-2 w-2 rounded-[2px]"
+              style={{ background: warnaZona(z) }}
+              aria-hidden
+            />
+            {namaZona(z)}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Bagian-bagian kecil
-// ---------------------------------------------------------------------------
+/* ==========================================================================
+   Panel kecil untuk tiap baris ekosistem
+   ==========================================================================
 
-const LAPIS_3D = 8
+   Susunan yang ditiru bagian ini memakai TANGKAPAN LAYAR produk: peta besar
+   dengan satu panel antarmuka melayang di atasnya. Yang di bawah bukan
+   tangkapan layar - ia panel yang digambar ulang dari komponen halaman ini,
+   di atas potret peta yang memang dirender dari basis data kita sendiri.
+
+   Bedanya penting dan disengaja. Tangkapan layar palsu berisi angka yang tidak
+   pernah dihitung siapa pun; yang di bawah ini cuma memuat LABEL yang benar-
+   benar ada di aplikasinya - nama layer, nama zona, nama moda, nama basemap.
+   Batang dan garisnya jelas skematis, dan tidak satu pun di antaranya membawa
+   angka yang mengaku terukur.
+   ========================================================================== */
+
+type PanelTeks = (typeof K)['id']['ekosistem']['panel']
+
+function PanelEko({ i, teks }: { i: number; teks: PanelTeks }) {
+  const namaZona = useNamaZona()
+  const kotak = 'g-eko-panel rounded-[13px] p-3.5'
+  switch (i) {
+    // --- Loconomics AI: pertanyaan, lalu jawabannya menggerakkan peta -------
+    case 0:
+      return (
+        <div className={`${kotak} w-[15.5rem]`}>
+          <p className="ml-auto w-fit max-w-full rounded-[10px] rounded-br-[4px] bg-[color:var(--g-teal)]/16 px-2.5 py-1.5 text-[11px] leading-snug text-[color:var(--g-ink)]">
+            {teks.tanya}
+          </p>
+          <p className="mt-2.5 flex items-center gap-1.5 text-[10.5px] font-semibold text-[color:var(--g-teal)]">
+            <svg width="10" height="11" viewBox="-50 -55 100 110" aria-hidden>
+              <polygon points={jalurHeks(46)} fill="currentColor" />
+            </svg>
+            {teks.jawab}
+          </p>
+          <div className="mt-2 space-y-1.5">
+            {[1, 0.72, 0.46].map((w, n) => (
+              <span
+                key={n}
+                className="block h-[5px] rounded-full bg-[color:var(--g-ink)]/14"
+                style={{ width: `${w * 100}%` }}
+              />
+            ))}
+          </div>
+        </div>
+      )
+    // --- Heksagon Layer: satu grid, layer yang bisa ditukar -----------------
+    case 1:
+      return (
+        <div className={`${kotak} w-[13.5rem]`}>
+          {teks.layer.map((l, n) => (
+            <p
+              key={l}
+              className={`flex items-center gap-2 py-[5px] text-[11px] ${
+                n === 0 ? 'font-semibold text-[color:var(--g-ink)]' : 'text-[color:var(--g-ink-3)]'
+              }`}
+            >
+              <span
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                style={{
+                  background: n === 0 ? 'var(--g-teal)' : 'var(--g-ink-4)',
+                  opacity: n === 0 ? 1 : 0.5,
+                }}
+                aria-hidden
+              />
+              {l}
+            </p>
+          ))}
+        </div>
+      )
+    // --- Insight: skor, zona, keyakinan ------------------------------------
+    case 2:
+      return (
+        <div className={`${kotak} w-[14.5rem]`}>
+          <p className="eyebrow text-[9.5px] text-[color:var(--g-ink-4)]">{teks.skor}</p>
+          <span
+            className="mt-2 block h-[6px] w-full overflow-hidden rounded-full bg-[color:var(--g-ink)]/12"
+            aria-hidden
+          >
+            <span className="block h-full w-[78%] rounded-full bg-[color:var(--g-teal)]" />
+          </span>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span
+              className="rounded-full px-2 py-[3px] text-[10px] font-semibold"
+              style={{
+                background: `color-mix(in srgb, ${warnaZona('HIDDEN_GEM')} 22%, transparent)`,
+                color: warnaZona('HIDDEN_GEM'),
+              }}
+            >
+              {teks.zona}: {namaZona('HIDDEN_GEM')}
+            </span>
+            <span className="rounded-full bg-[color:var(--g-ink)]/10 px-2 py-[3px] text-[10px] text-[color:var(--g-ink-2)]">
+              {teks.keyakinan}: {teks.sedang}
+            </span>
+          </div>
+        </div>
+      )
+    // --- Maps: empat basemap, satu aktif -----------------------------------
+    case 3:
+      return (
+        <div className={`${kotak} w-[14rem]`}>
+          <div className="grid grid-cols-2 gap-1.5">
+            {teks.basemap.map((b, n) => (
+              <span
+                key={b}
+                className={`rounded-[8px] px-2 py-1.5 text-center text-[10.5px] font-medium ${
+                  n === 3 ? 'bg-[color:var(--g-ink)]/14 text-[color:var(--g-ink)]' : 'text-[color:var(--g-ink-3)]'
+                }`}
+              >
+                {b}
+              </span>
+            ))}
+          </div>
+        </div>
+      )
+    // --- Route: tiga moda, dan jalurnya ------------------------------------
+    case 4:
+      return (
+        <div className={`${kotak} w-[15rem]`}>
+          <svg viewBox="0 0 200 52" className="block h-auto w-full" aria-hidden>
+            {/* Titik bulat berderet - resep yang sama dengan rute jalan kaki di
+                peta: dash sepanjang NOL yang diberi tutup bulat. */}
+            <path
+              d="M18 42 C 60 42, 62 14, 100 14 S 150 30, 182 12"
+              fill="none"
+              stroke="var(--g-teal)"
+              strokeWidth="3.4"
+              strokeLinecap="round"
+              strokeDasharray="0 7.5"
+            />
+            <circle cx="18" cy="42" r="4.6" fill="#3B82F6" stroke="#fff" strokeWidth="1.6" />
+            <circle cx="182" cy="12" r="4.6" fill="#E5484D" stroke="#fff" strokeWidth="1.6" />
+          </svg>
+          <div className="mt-2 flex gap-1.5">
+            {teks.moda.map((m, n) => (
+              <span
+                key={m}
+                className={`flex-1 rounded-[8px] px-1.5 py-1 text-center text-[9.5px] font-medium ${
+                  n === 0 ? 'bg-[color:var(--g-teal)]/16 text-[color:var(--g-teal)]' : 'text-[color:var(--g-ink-3)]'
+                }`}
+              >
+                {m}
+              </span>
+            ))}
+          </div>
+        </div>
+      )
+    // --- Feature: dua lokasi berdampingan ----------------------------------
+    default:
+      return (
+        <div className={`${kotak} w-[15.5rem]`}>
+          <p className="eyebrow mb-2 text-[9.5px] text-[color:var(--g-ink-4)]">{teks.banding}</p>
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-2">
+            <span />
+            <span className="text-[9.5px] font-semibold text-[color:var(--g-teal)]">{teks.lokasiA}</span>
+            <span className="text-[9.5px] font-semibold text-[color:var(--g-ungu-terang)]">{teks.lokasiB}</span>
+            {teks.barisBanding.map((b, n) => (
+              <BarisBanding key={b} label={b} a={[0.82, 0.44, 0.62][n]} b={[0.55, 0.78, 0.35][n]} />
+            ))}
+          </div>
+        </div>
+      )
+  }
+}
+
+/** Satu baris tabel banding: label, lalu dua batang yang panjangnya berbeda. */
+function BarisBanding({ label, a, b }: { label: string; a: number; b: number }) {
+  return (
+    <>
+      <span className="text-[10.5px] text-[color:var(--g-ink-3)]">{label}</span>
+      {[
+        [a, 'var(--g-teal)'],
+        [b, 'var(--g-ungu-terang)'],
+      ].map(([w, c], n) => (
+        <span
+          key={n}
+          className="block h-[5px] w-9 overflow-hidden rounded-full bg-[color:var(--g-ink)]/12"
+          aria-hidden
+        >
+          <span
+            className="block h-full rounded-full"
+            style={{ width: `${(w as number) * 100}%`, background: c as string }}
+          />
+        </span>
+      ))}
+    </>
+  )
+}
 
 /**
- * Teks yang benar-benar punya ketebalan.
- *
- * Delapan salinan huruf yang sama ditumpuk mundur di sumbu Z, jadi ketika induk
- * 3D-nya berputar, sisi tebalnya IKUT berputar. Bayangan tidak bisa melakukan
- * itu — ia selalu menghadap ke arah yang sama.
- *
- * Syaratnya satu: tidak boleh ada `overflow` selain `visible` antara sini dan
- * pemegang `perspective`. Overflow apa pun memaksa keturunannya kembali datar.
+ * Teks yang benar-benar setebal benda: delapan salinan huruf ditumpuk mundur
+ * di sumbu Z. `perspective` dipasang di pembungkusnya.
  */
+const LAPIS_3D = 8
 function Teks3D({ teks, kelas }: { teks: string; kelas?: string }) {
   return (
     <span className={`relative inline-block ${kelas ?? ''}`} style={{ transformStyle: 'preserve-3d' }} aria-label={teks}>
@@ -1113,19 +983,8 @@ function Teks3D({ teks, kelas }: { teks: string; kelas?: string }) {
 }
 
 /**
- * Tombol yang tertarik ke kursor.
- *
- * Dua penjaga, keduanya bukan formalitas. `hover:hover` menolak layar sentuh —
- * di sana `pointermove` cuma menyala saat jari sudah menempel, jadi tombolnya
- * meloncat menjauh persis pada saat ditekan. `prefers-reduced-motion` menolak
- * gerak yang tidak diminta siapa pun.
- *
- * Titik jangkarnya diukur saat kursor MASUK, bukan tiap kali kursor bergerak.
- * Dua sebab, dan yang kedua bukan soal kecepatan: getBoundingClientRect() pada
- * tombol yang sedang ditarik ikut membawa geserannya, jadi acuannya bergerak
- * bersama yang diukur - tombolnya mengejar sasaran yang mundur tiap kali ia
- * mendekat, dan yang terasa adalah gerak yang lembek. `offsetWidth` dan
- * pengurangan geseran yang kita tulis sendiri kebal terhadap itu.
+ * Tombol yang tertarik ke kursor. Titik jangkarnya diukur saat kursor MASUK,
+ * bukan tiap kali kursor bergerak; pulangnya pantulan elastis milik GSAP.
  */
 function Magnet({
   anak,
@@ -1149,14 +1008,10 @@ function Magnet({
     if (!window.matchMedia('(hover: hover)').matches) return
 
     const set = gsap.quickSetter(n, 'css')
-    // Geseran yang SEDANG terpasang, disimpan sendiri. Ia dipakai dua kali:
-    // untuk membersihkan kotak ukur dari geserannya sendiri, dan untuk
-    // menyerahkan keadaan ke GSAP saat kursor keluar.
     let x = 0
     let y = 0
     let tx = 0
     let ty = 0
-    // Pusat tombol dalam keadaan diam, koordinat viewport.
     let px = 0
     let py = 0
 
@@ -1168,8 +1023,6 @@ function Magnet({
 
     let id = 0
     let sebelum = 0
-    // 70 ms. Bentuk `1 - exp(-dt/TAU)`, bukan konstanta lerp polos: konstanta
-    // polos diam-diam berjalan dua kali lebih cepat di layar 120Hz.
     const TAU = 0.07
     const bingkai = (t: number) => {
       id = requestAnimationFrame(bingkai)
@@ -1195,8 +1048,6 @@ function Magnet({
     }
 
     const masuk = () => {
-      // Pulangnya dianimasikan GSAP; ambil alih dulu, lalu baca posisinya
-      // kembali supaya tidak ada loncatan di titik serah terima.
       gsap.killTweensOf(n)
       x = (gsap.getProperty(n, 'x') as number) || 0
       y = (gsap.getProperty(n, 'y') as number) || 0
@@ -1207,9 +1058,6 @@ function Magnet({
       ty = (e.clientY - py) * kekuatan
       jalan()
     }
-    // Pulangnya tetap milik GSAP: pantulan elastis adalah wataknya tombol ini,
-    // dan ia cuma sekali per lepas-hover. Loop di atas dihentikan lebih dulu
-    // supaya tidak pernah ada dua yang menulis transform yang sama.
     const pulang = () => {
       if (id) {
         cancelAnimationFrame(id)
@@ -1249,107 +1097,20 @@ function Magnet({
   )
 }
 
-/** Kompas ringkas yang berdiri diam di gulir lintang. */
-function KompasCerita({ aktif }: { aktif: string | null }) {
+function PanahKanan() {
   return (
-    // `bg-white/[0.9]` menimpa isian .g-kaca-tebal, dan itu disengaja: panel
-    // kuadran lewat DI BELAKANG kartu ini. Sejak backdrop-filter dicabut demi
-    // kecepatan, tidak ada lagi blur yang mengaburkan apa pun di belakangnya —
-    // jadi yang harus menutup isiannya sendiri.
-    <div className="g-kaca-tebal rounded-[22px] bg-[color:var(--g-kartu-pekat)] p-5">
-      <p className="eyebrow mb-3.5 text-[color:var(--g-ink-3)]">Kompas Kuadran</p>
-      <div className="flex items-stretch gap-2.5">
-        <span className="eyebrow shrink-0 self-center rotate-180 whitespace-nowrap text-[color:var(--g-ink-3)] [writing-mode:vertical-rl]">
-          {LABEL_SKOR}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="relative aspect-square w-full">
-            {URUTAN_KUADRAN.map((kunci) => {
-              const q = KUADRAN[kunci]
-              const [kolom, baris] = q.sel
-              const nyala = aktif === kunci
-              return (
-                <div
-                  key={kunci}
-                  data-q={kunci}
-                  className="absolute flex flex-col p-3 transition-all duration-500 ease-liquid"
-                  style={{
-                    left: kolom === 0 ? 0 : '50%',
-                    right: kolom === 0 ? '50%' : 0,
-                    top: baris === 0 ? 0 : '50%',
-                    bottom: baris === 0 ? '50%' : 0,
-                    background: nyala ? q.lembut : 'transparent',
-                    opacity: aktif === null ? 0.9 : nyala ? 1 : 0.3,
-                    borderRight: kolom === 0 ? '1px solid var(--g-garis-halus)' : undefined,
-                    borderBottom: baris === 0 ? '1px solid var(--g-garis-halus)' : undefined,
-                    alignItems: kolom === 1 ? 'flex-end' : 'flex-start',
-                    justifyContent: baris === 1 ? 'flex-end' : 'flex-start',
-                    textAlign: kolom === 1 ? 'right' : 'left',
-                  }}
-                >
-                  <Glif kuadran={kunci} ukuran={16} />
-                  <span className="mt-1.5 text-[12.5px] font-semibold leading-[1.15]" style={{ color: q.warna }}>
-                    {q.nama}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-baseline gap-1.5 text-[color:var(--g-ink-3)]">
-            <span className="text-[10.5px]">biasa</span>
-            <span className="eyebrow whitespace-nowrap text-center text-[10px] text-[color:var(--g-ink-3)]">Prestise visual</span>
-            <span className="text-[10.5px]">mahal</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PitaBerjalan() {
-  return (
-    // Dua lapis: yang dalam dimiringkan lalu dibesarkan 6% supaya ujungnya tetap
-    // menutup layar setelah diputar; tanpa pembungkus yang menggunting,
-    // kelebihan 6% itu menambah 44px ke scrollWidth halaman.
-    // `py-7` pada pembungkus luar BUKAN jarak hiasan.
-    //
-    // Pita di dalamnya dimiringkan 1,6 derajat, dan kemiringan tidak mengubah
-    // tinggi tata letak - pembungkusnya tetap setinggi pita yang belum diputar.
-    // Akibatnya sudut kanan-atas dan kiri-bawah pita menonjol keluar kotak lalu
-    // digunting `overflow-hidden`, dan yang terlihat pita yang terpotong miring
-    // di kedua ujungnya. Setengah lebar pita 763px x sin(1,6 derajat) = 21px,
-    // jadi 28px sudah cukup dengan sisa.
-    <div className="relative overflow-hidden py-7" aria-hidden>
-      {/* Tanpa backdrop-blur: pita ini selebar layar, dan yang di belakangnya
-          gradien halaman - yang di-blur maupun tidak, hasilnya sama. */}
-      <div
-        className="-rotate-[1.6deg] scale-[1.06] overflow-hidden py-3.5"
-        style={{
-          // Ikut palet, bukan putih mati. Pita putih di atas halaman gelap
-          // terbaca sebagai potongan yang lupa diwarnai - dan tulisannya
-          // ikut jatuh di bawah ambang baca.
-          background: 'var(--g-kaca-isi)',
-          borderTop: '1px solid var(--g-kaca-tepi)',
-          borderBottom: '1px solid var(--g-kaca-tepi)',
-        }}
-      >
-        <div className="g-jalan flex w-max">
-          {[0, 1].map((salinan) => (
-            <div
-              key={salinan}
-              className="flex shrink-0 items-center gap-9 pr-9 text-[11px] font-semibold uppercase tracking-[0.28em] text-[color:var(--g-ink-2)]"
-            >
-              {FITUR.map((f) => (
-                <span key={f.nama} className="flex shrink-0 items-center gap-9 whitespace-nowrap">
-                  {f.nama}
-                  <span className="text-[color:var(--g-teal-2)]">✦</span>
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <span className="grid h-7 w-7 place-items-center rounded-full bg-[color:var(--g-ink)]/10 transition-transform duration-300 ease-jelly group-hover:translate-x-1">
+      <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden>
+        <path
+          d="M2 6h8M6.5 2.5 10 6l-3.5 3.5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
   )
 }
 
@@ -1359,60 +1120,22 @@ function PitaBerjalan() {
 
 export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasan) => void }) {
   const akar = useRef<HTMLDivElement>(null)
-  const hero = useRef<HTMLElement>(null)
-  /** Wadah setinggi beberapa layar; ia yang memberi jarak gulir. */
-  const lintasan = useRef<HTMLDivElement>(null)
-  /** Deret panel yang digeser ke samping di dalamnya. */
-  const rel = useRef<HTMLDivElement>(null)
+  const teks = useTeks(K)
+  const { bahasa } = useBahasa()
 
   const [gerakMati] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  /**
-   * Kuadran yang disorot pada render PERTAMA saja.
-   *
-   * Sesudah itu sorotan tidak lagi lewat React — lintasan gulir menulisnya
-   * langsung ke DOM (lihat `sorot()` di efek di bawah), karena satu render
-   * ulang seluruh halaman tiap kali panel berganti jatuh persis di bingkai yang
-   * paling terlihat. Nilainya tetap dipakai untuk keadaan awal dan untuk mode
-   * gerak-dimatikan, yang memang tidak punya lintasan gulir.
-   */
-  const [langkah] = useState<number | null>(() => (gerakMati ? 0 : null))
-  /** Simpul pipeline yang sedang disentuh gumpalan cairan. */
-  const [simpul, setSimpul] = useState(-1)
   /** Bilah atas berganti bahan begitu halaman masuk jurang. */
   const [navGelap, setNavGelap] = useState(false)
-
-  /**
-   * Tampilan gelap halaman gerbang.
-   *
-   * Dibaca lewat INISIALISATOR useState, bukan lewat efek. Nilai yang dipulihkan
-   * dari localStorage lalu dipakai di efek yang cuma jalan sekali adalah pola
-   * yang sudah dua kali salah di repo ini - basemap gelap yang tidak pernah
-   * terpasang, dan kamera yang tidak pernah terbang ke kawasan tersimpan.
-   * Inisialisator tidak punya celah itu: nilainya sudah benar di render pertama.
-   */
-  const [gelap, setGelapMentah] = useState(() => {
-    try {
-      return localStorage.getItem(KUNCI_TEMA) === 'gelap'
-    } catch {
-      // Mode penyamaran memblokir localStorage sama sekali. Halamannya tetap
-      // harus tampil, cuma tanpa mengingat pilihannya.
-      return false
-    }
-  })
-  const setGelap = useCallback((v: boolean) => {
-    setGelapMentah(v)
-    try {
-      localStorage.setItem(KUNCI_TEMA, v ? 'gelap' : 'terang')
-    } catch {
-      /* sama alasannya dengan di atas */
-    }
-  }, [])
 
   const keBagian = useCallback((id: string) => {
     const wadah = akar.current
     const sasaran = wadah?.querySelector<HTMLElement>(`#${id}`)
     if (!wadah || !sasaran) return
-    wadah.scrollTo({ top: sasaran.offsetTop - 72, behavior: 'smooth' })
+    // Diukur lewat rect, bukan `offsetTop`: bagian-bagiannya duduk di dalam
+    // pembungkus `relative`, jadi offsetTop-nya relatif terhadap pembungkus itu,
+    // bukan terhadap wadah yang menggulir.
+    const atas = sasaran.getBoundingClientRect().top - wadah.getBoundingClientRect().top + wadah.scrollTop
+    wadah.scrollTo({ top: atas - 64, behavior: 'smooth' })
   }, [])
 
   const keAtas = useCallback(() => akar.current?.scrollTo({ top: 0, behavior: 'smooth' }), [])
@@ -1420,27 +1143,14 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
   useEffect(() => {
     if (gerakMati) return
 
-    // Yang menggulir adalah AKAR halaman ini, bukan window. `.gerbang` dipasang
-    // `fixed inset-0 overflow-y-auto` supaya ia menutupi aplikasi di belakangnya
-    // tanpa mengubah tinggi dokumen — akibatnya ScrollTrigger, yang secara
-    // bawaan memantau window, tidak pernah melihat satu piksel pun bergulir.
-    // `scroller` WAJIB ada di SETIAP ScrollTrigger di berkas ini.
+    // Yang menggulir adalah AKAR halaman ini, bukan window. `scroller` WAJIB
+    // ada di SETIAP ScrollTrigger di berkas ini.
     const scroller = akar.current
     if (!scroller) return
-    /** Pembersih yang tidak diurus gsap.context — pendengar global miliknya. */
     const pembersih: (() => void)[] = []
 
-    // Lingkupnya ELEMEN, bukan objek ref.
-    //
-    // `gsap.context(fn, akar)` menerima ref dan membacanya lewat
-    // `value.current` setiap kali sebuah selektor dipakai. Itu baik-baik saja
-    // selama komponennya hidup - tetapi `ctx.revert()` di pembersihan berjalan
-    // SESUDAH React melepas ref-nya, jadi `akar.current` sudah null dan GSAP
-    // memperingatkan "Invalid scope" untuk tiap selektor yang ia bereskan.
-    // Terukur: enam belas peringatan, semuanya tepat saat gerbang ditutup.
-    //
-    // Elemennya sendiri tidak pernah jadi null. Diambil sekali di sini, ia
-    // tetap sah sampai pembersihan selesai.
+    // Lingkupnya ELEMEN, bukan objek ref: `ctx.revert()` berjalan SESUDAH React
+    // melepas ref-nya, dan GSAP akan memperingatkan "Invalid scope".
     const ctx = gsap.context(() => {
       // --- Masuk pertama ----------------------------------------------------
       gsap.from('.g-judul > span', {
@@ -1461,466 +1171,129 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         delay: 0.55,
       })
 
-      // Kartu dek melayang: SEKARANG ANIMASI CSS, bukan tween GSAP.
+      // --- MENUTUP: hero dipatok, bagian berikutnya menggulir menutupinya ---
       //
-      // Tween tak berujung menulis transform dari JavaScript setiap bingkai,
-      // selamanya - termasuk saat kartunya jauh di luar layar. Enam kartu di
-      // sini plus tiga bola kaca di hero berarti sembilan penulisan transform
-      // per bingkai yang tidak pernah berhenti. Terukur saat halaman DIAM:
-      // 0,49 dtk skrip dalam delapan detik, 10,4% utas utama terbakar untuk
-      // halaman yang tidak sedang diapa-apakan siapa pun.
+      // Hero-nya `sticky`, jadi pembungkus di bawahnya naik MENIMPANYA. Yang
+      // dianimasikan cuma isi hero: menyusut dan meredup seiring tertutup,
+      // supaya yang terbaca adalah lembaran yang menutup benda di bawahnya -
+      // bukan dua bagian yang kebetulan bertumpuk.
       //
-      // `@keyframes` pada `transform` berjalan di compositor: nol pekerjaan
-      // utas utama. Kemiringan statisnya ikut pindah ke CSS lewat variabel
-      // `--condong`, jadi tidak ada lagi dua penulis untuk satu properti.
-      gsap.utils.toArray<HTMLElement>('.g-apung').forEach((el, i) => {
-        // Cuma jeda dan durasinya yang berbeda per kartu. Keduanya properti
-        // animasi, bukan isi keyframe, jadi keduanya tidak menghalangi
-        // pengompositan - beda dengan nilai transform yang memakai var().
-        el.style.animationDelay = `${(i * 0.28).toFixed(2)}s`
-        el.style.animationDuration = `${(3.1 + i * 0.37).toFixed(2)}s`
+      // Bagian MASALAH sendiri tidak punya animasi masuk sama sekali; gerakan
+      // di sini seluruhnya milik hero yang ditutupinya.
+      gsap.to('.g-hero-isi', {
+        scale: 0.93,
+        y: -36,
+        opacity: 0.18,
+        ease: 'none',
+        scrollTrigger: { scroller, trigger: '.g-tutup', start: 'top bottom', end: 'top 12%', scrub: 0.5 },
       })
 
-      // --- ADEGAN: tiap bagian masuk dan keluar layar sebagai satu benda -----
-      //
-      // Satu timeline yang dipetakan ke SELURUH perjalanan bagian itu melewati
-      // layar: seperempat pertama untuk masuk, separuh tengah diam, seperempat
-      // terakhir untuk mundur. Karena `scrub`, seluruhnya terikat jari - bukan
-      // klip yang berjalan sendiri lalu selesai sebelum sempat dilihat.
-      //
-      // Yang mundur TIDAK sampai hilang (0,25, bukan 0). Bagian yang benar-benar
-      // menghilang membuat orang yang menggulir balik merasa halamannya kosong.
-      gsap.utils.toArray<HTMLElement>('.g-adegan').forEach((el) => {
-        gsap
-          .timeline({
-            scrollTrigger: {
-              scroller,
-              trigger: el,
-              start: 'top bottom',
-              end: 'bottom top',
-              scrub: 0.7,
-              /**
-               * `will-change` dipasang dan DICABUT, bukan ditulis permanen di
-               * CSS.
-               *
-               * Ia memindahkan bagian ini ke lapisan komposit sendiri, jadi
-               * perubahan opacity dan transform-nya diurus compositor alih-alih
-               * memaksa seluruh isinya dilukis ulang. Tapi lapisan setinggi
-               * layar juga memakan memori GPU, dan menuliskannya di CSS berarti
-               * KEENAM bagian memegang lapisannya masing-masing selamanya -
-               * termasuk lima yang sedang jauh di luar layar.
-               *
-               * Dipasang lewat onToggle, yang hidup cuma dua sampai tiga
-               * sekaligus: yang sedang lewat, dan tetangganya.
-               */
-              onToggle: (self) => {
-                el.style.willChange = self.isActive ? 'transform, opacity' : 'auto'
-              },
-            },
-          })
-          .fromTo(
-            el,
-            { y: 84, opacity: 0, scale: 0.975 },
-            { y: 0, opacity: 1, scale: 1, ease: 'power2.out', duration: 0.28 },
-          )
-          .to(el, { duration: 0.44 })
-          .to(el, { y: -64, opacity: 0.25, scale: 0.985, ease: 'power2.in', duration: 0.28 })
+      // --- MENYAPU: judul Solusi terungkap kiri ke kanan, kartu mekar dari tengah
+      gsap.utils.toArray<HTMLElement>('.g-sapu').forEach((el) => {
+        gsap.from(el, {
+          clipPath: 'inset(0% 100% 0% 0%)',
+          duration: 1.1,
+          ease: 'power4.inOut',
+          scrollTrigger: { scroller, trigger: el, start: 'top 85%' },
+        })
+      })
+      gsap.from('.g-bento', {
+        scale: 0.86,
+        opacity: 0,
+        duration: 0.9,
+        ease: 'power3.out',
+        stagger: { each: 0.07, from: 'center', grid: 'auto' },
+        scrollTrigger: { scroller, trigger: '.g-bento-grid', start: 'top 82%' },
       })
 
-      /**
-       * Netralkan adegan SEBELUM ScrollTrigger mengukur apa pun.
-       *
-       * Ini bukan kehati-hatian berlebihan. Bagian yang sedang di-scrub membawa
-       * `y` sampai +84px, dan seluruh pemicu DI DALAMNYA - kartu, rel cairan,
-       * angka - diukur dengan `getBoundingClientRect`. Kalau pengukuran terjadi
-       * saat bagiannya sedang tergeser, tiap pemicu di dalamnya ikut tergeser
-       * 84px dan menyala di tempat yang salah. Penyegaran memang terjadi
-       * berkali-kali: setelah kartu dek selesai memotret, dan pada tiap
-       * perubahan ukuran jendela.
-       *
-       * `refreshInit` menyala sebelum pengukuran, `refresh` sesudahnya - jadi
-       * jendela netralnya persis selebar yang dibutuhkan.
-       */
-      const netralkan = () => gsap.set('.g-adegan', { y: 0, opacity: 1, scale: 1 })
-      ScrollTrigger.addEventListener('refreshInit', netralkan)
-      pembersih.push(() => ScrollTrigger.removeEventListener('refreshInit', netralkan))
-
-      // --- Kartu dek: masuk dan keluar mengikuti gulir ----------------------
+      // --- MERANGKAI: ekosistem ---------------------------------------------
       //
-      // Lapisan sendiri, bukan menumpang pada pembungkus yang melayang maupun
-      // pada tombol yang condong mengikuti kursor — ketiganya menulis transform,
-      // dan GSAP menulis seluruh transform sekaligus.
-      gsap.utils.toArray<HTMLElement>('.g-kartu-masuk').forEach((el) => {
-        gsap
-          .timeline({
-            scrollTrigger: { scroller, trigger: el, start: 'top bottom', end: 'bottom top', scrub: 0.6 },
-          })
-          .fromTo(
-            el,
-            { y: 96, opacity: 0, scale: 0.9 },
-            { y: 0, opacity: 1, scale: 1, ease: 'power2.out', duration: 0.3 },
-          )
-          .to(el, { duration: 0.42 })
-          .to(el, { y: -76, opacity: 0, scale: 0.93, ease: 'power2.in', duration: 0.28 })
-      })
-
-      // --- Kemunculan bagian: tiga cara, dipilih menurut isinya --------------
-      //
-      // Satu animasi masuk untuk segalanya membuat halaman terasa seperti satu
-      // template. Yang di bawah ini tiga gerakan yang berbeda sifatnya, dan
-      // tiap bagian memakai yang cocok.
-
-      // (a) TIRAI — judul terungkap dari bawah ke atas lewat clip-path.
+      // Judulnya memakai kedua gerakan yang dulu membuka bagian MASALAH -
+      // tirai clip-path dan baris yang naik dari balik topeng. Dipindahkan ke
+      // sini atas permintaan pemilik repo: bagian pertama sesudah hero tidak
+      // butuh gerakan tambahan, bagian keempat butuh sesuatu yang menandai
+      // bahwa ceritanya berganti babak.
       gsap.utils.toArray<HTMLElement>('.g-tirai').forEach((el) => {
         gsap.from(el, {
           clipPath: 'inset(100% 0% 0% 0%)',
-          y: 34,
-          duration: 1.05,
+          y: 28,
+          duration: 1,
           ease: 'power4.out',
           scrollTrigger: { scroller, trigger: el, start: 'top 88%' },
         })
       })
-
-      // (b) DALAM — kartu datang dari kedalaman.
-      //
-      // Dulu ia juga menganimasikan `filter: blur(14px)`. Blur bukan properti
-      // compositor: tiap bingkai animasinya, seluruh kartu harus dilukis ulang
-      // lalu di-blur ulang — dan empat belas kartu memakainya. Yang tersisa
-      // sekarang y + opacity + scale, ketiganya ditangani compositor, dan
-      // bedanya di mata nyaris tidak ada.
-      gsap.utils.toArray<HTMLElement>('.g-buram').forEach((el, i) => {
-        gsap.from(el, {
-          y: 58,
-          opacity: 0,
-          scale: 0.94,
-          duration: 0.95,
-          delay: (i % 3) * 0.09,
-          ease: 'power3.out',
-          scrollTrigger: { scroller, trigger: el, start: 'top 90%' },
+      gsap.utils.toArray<HTMLElement>('.g-baris').forEach((el) => {
+        const pecah = SplitText.create(el, {
+          type: 'lines',
+          mask: 'lines',
+          autoSplit: true,
+          onSplit: (diri) =>
+            gsap.from(diri.lines, {
+              yPercent: 118,
+              opacity: 0,
+              duration: 1,
+              stagger: 0.085,
+              ease: 'power4.out',
+              scrollTrigger: { scroller, trigger: el, start: 'top 86%' },
+            }),
         })
+        pembersih.push(() => pecah.revert())
       })
 
-      // (c) BALIK — kartu berputar masuk pada sumbu tegaknya.
-      gsap.utils.toArray<HTMLElement>('.g-balik').forEach((el, i) => {
-        gsap.from(el, {
-          rotateY: -46,
-          z: -160,
-          opacity: 0,
-          duration: 1,
-          delay: (i % 3) * 0.1,
-          ease: 'power3.out',
-          scrollTrigger: { scroller, trigger: el, start: 'top 90%' },
-        })
-      })
-
-      // --- Tesis: kata demi kata, terikat gulir ------------------------------
-      //
-      // Mulai dari 0,14 dan bukan 0. Kata yang benar-benar tak terlihat membuat
-      // paragrafnya berubah panjang di mata pembaca saat terisi; jejak samar
-      // menjaga bentuknya utuh, dan yang berubah cuma kontrasnya.
+      // Tulang punggung TUMBUH mengikuti gulir. `scaleY` dengan titik asal di
+      // atas - bukan `height`, yang memaksa tata letak dihitung ulang tiap
+      // bingkai untuk garis selebar satu piksel.
       gsap.fromTo(
-        '.g-kata',
-        { opacity: 0.14 },
-        {
-          opacity: 1,
-          ease: 'none',
-          stagger: 0.5,
-          scrollTrigger: { scroller, trigger: '.g-tesis', start: 'top 80%', end: 'bottom 66%', scrub: 0.6 },
-        },
-      )
-
-      // --- LINTANG: gulir turun, panel bergeser ke samping DAN saling menimpa -
-      //
-      // TANPA `pin`. Yang menahan bagiannya di layar `position: sticky` di
-      // markupnya, dan itu diurus peramban di compositor. Yang dikerjakan di
-      // sini tinggal satu: menggeser lintasannya ke kiri sejauh gulir.
-      //
-      // Rentangnya diikat pada WADAH lintasan, bukan pada elemen yang menempel:
-      // `top top` menyala saat wadahnya mulai menempel, `bottom bottom` selesai
-      // saat wadahnya berhenti menempel. Jadi geseran menyamping persis sepanjang
-      // umur menempelnya, tidak sedetik lebih.
-      const relEl = rel.current
-      const wadahEl = lintasan.current
-      if (relEl && wadahEl && scroller) {
-        const jarak = () => Math.max(0, relEl.scrollWidth - scroller.clientWidth)
-
-        /**
-         * Tinggi wadah = jarak geser + satu layar.
-         *
-         * Itu satu-satunya tinggi yang membuat geseran menyamping berhenti
-         * TEPAT saat elemen yang menempel dilepas. Ditulis sebagai angka vh, ia
-         * hanya benar untuk satu lebar layar: pada layar lebar panelnya sudah
-         * habis lama sebelum lintasannya, dan yang terlihat satu layar penuh
-         * yang menempel tanpa satu pun yang bergerak.
-         *
-         * Dipasang di `refreshInit`, yang menyala SEBELUM ScrollTrigger mengukur
-         * apa pun — jadi tinggi barunya sudah berlaku ketika seluruh pemicu di
-         * halaman ini menghitung posisinya.
-         */
-        const aturTinggi = () => {
-          wadahEl.style.height = `${jarak() + scroller.clientHeight}px`
-        }
-        aturTinggi()
-        ScrollTrigger.addEventListener('refreshInit', aturTinggi)
-        pembersih.push(() => ScrollTrigger.removeEventListener('refreshInit', aturTinggi))
-
-        /**
-         * Geometri panel dibaca SEKALI per penyegaran, bukan tiap bingkai.
-         *
-         * `getBoundingClientRect()` di dalam `onUpdate` memaksa peramban
-         * menghitung ulang tata letak sebelum menjawab — empat kali per bingkai,
-         * di tengah animasi yang juga sedang menulis transform. `offsetLeft` dan
-         * `clientWidth` tidak ikut bergeser bersama transform, jadi keduanya
-         * cukup dibaca saat penyegaran.
-         */
-        let geo: { tengah: number; lebar: number }[] = []
-        let baca = 0
-
-        const ukurUlang = () => {
-          const awal = relEl.children[0] as HTMLElement | undefined
-          if (!awal) return
-          // Semua dalam koordinat lintasan itu sendiri, jadi tidak ada satu pun
-          // pembacaan yang bergantung posisi gulir saat diukur.
-          baca = awal.offsetLeft + awal.clientWidth / 2
-          geo = Array.from(relEl.children).map((c) => {
-            const el = c as HTMLElement
-            return { tengah: el.offsetLeft + el.clientWidth / 2, lebar: el.clientWidth }
-          })
-        }
-
-        /**
-         * Satu lintasan, dua pekerjaan: menentukan panel yang sedang dibaca DAN
-         * menyusun kedalaman seluruh panel.
-         *
-         * Panel tidak sekadar bergeser — ia menimpa. Yang sedang dibaca maju ke
-         * depan dan tegak; makin jauh dari titik baca, makin ia berputar
-         * menjauh, mundur di sumbu Z, dan mengecil. Karena panelnya sengaja
-         * dibuat bertumpang (margin negatif), susunan itulah yang menentukan
-         * mana yang menutupi mana.
-         */
-        /**
-         * Sorotan kompas dan titik kemajuan ditulis LANGSUNG ke DOM, tidak lewat
-         * state React.
-         *
-         * Versi sebelumnya memanggil `setLangkah()` dari dalam lintasan gulir.
-         * React memang berhenti kalau nilainya sama, tetapi begitu panel
-         * berganti — empat kali sepanjang bagian ini — ia me-render ulang
-         * SELURUH komponen gerbang: 767 elemen direkonsiliasi, tepat pada
-         * bingkai yang sedang juga menggeser empat kartu. Itu tersendat, dan
-         * tersendatnya jatuh persis di saat yang paling terlihat.
-         *
-         * Yang diubah di sini cuma dua properti pada delapan elemen, dan
-         * keduanya sudah punya `transition` di CSS-nya masing-masing — jadi
-         * pergantiannya tetap halus tanpa satu pun render React.
-         */
-        //
-        // TANPA penjaga "kalau indeksnya sama, lewati". React masih boleh
-        // me-render ulang komponen ini karena sebab lain (bilah atas berubah
-        // gelap, simpul pipeline bergeser), dan render itu MENGEMBALIKAN gaya
-        // sebaris ke keadaan awalnya. Dengan penjaga, sorotannya hilang dan
-        // tidak pernah kembali karena indeksnya memang tidak berubah. Menulis
-        // ulang delapan properti gaya per detak tidak memaksa perhitungan tata
-        // letak apa pun; harganya nol dibanding kelas kesalahan yang dihapusnya.
-        const sorot = (i: number) => {
-          const kunci = LANGKAH_TESIS[i]?.kunci
-          if (!kunci) return
-          for (const el of Array.from(document.querySelectorAll<HTMLElement>('[data-q]'))) {
-            const ini = el.dataset.q === kunci
-            el.style.background = ini ? KUADRAN[el.dataset.q ?? ''].lembut : 'transparent'
-            el.style.opacity = ini ? '1' : '0.3'
-          }
-          for (const el of Array.from(document.querySelectorAll<HTMLElement>('[data-titik]'))) {
-            const ini = Number(el.dataset.titik) === i
-            el.style.width = ini ? '34px' : '10px'
-            el.style.background = ini
-              ? KUADRAN[LANGKAH_TESIS[Number(el.dataset.titik)].kunci].warna
-              : 'var(--g-garis-halus)'
-          }
-        }
-
-        const susun = () => {
-          if (!geo.length) return
-          // Dibaca dari cache transform milik GSAP, bukan dari tata letak.
-          const geser = (gsap.getProperty(relEl, 'x') as number) || 0
-          let pilih = 0
-          let dekat = Infinity
-          for (let i = 0; i < geo.length; i++) {
-            const d = (geo[i].tengah + geser - baca) / geo[i].lebar
-            const jauh = Math.min(Math.abs(d), 1.6)
-            // TANPA `z`. Menggeser di sumbu Z memaksa perender menggambar
-            // ulang kartunya pada kedalaman baru tiap bingkai — dan yang
-            // dibelinya cuma perbedaan skala yang sudah dikerjakan `scale`
-            // langsung, jauh lebih murah. Kesan menimpanya datang dari
-            // rotateY + zIndex, dan keduanya tetap.
-            gsap.set(relEl.children[i], {
-              rotateY: Math.max(-28, Math.min(28, -d * 24)),
-              scale: 1 - jauh * 0.11,
-              opacity: 1 - jauh * 0.6,
-              zIndex: Math.round(100 - jauh * 40),
-            })
-            if (Math.abs(d) < dekat) {
-              dekat = Math.abs(d)
-              pilih = i
-            }
-          }
-          sorot(pilih)
-        }
-        ukurUlang()
-
-        gsap.to(relEl, {
-          x: () => -jarak(),
-          ease: 'none',
-          onUpdate: susun,
-          scrollTrigger: {
-            scroller,
-            trigger: wadahEl,
-            start: 'top top',
-            end: 'bottom bottom',
-            scrub: 0.5,
-            invalidateOnRefresh: true,
-            // Keempat panel dipromosikan ke lapisannya sendiri HANYA selama
-            // bagian ini dilewati. Tanpa itu, tiap bingkai memaksa keempat
-            // kartu kaca berbayang lebar dilukis ulang pada sudut dan skala
-            // yang baru; dengan itu, teksturnya dilukis sekali lalu diputar di
-            // GPU. Dicabut lagi begitu bagiannya lewat — empat lapisan sebesar
-            // kartu ini tidak perlu memegang memori GPU sepanjang halaman.
-            onToggle: (self) => {
-              const nilai = self.isActive ? 'transform, opacity' : 'auto'
-              for (const c of Array.from(relEl.children)) {
-                ;(c as HTMLElement).style.willChange = nilai
-              }
-            },
-            onRefresh: () => {
-              ukurUlang()
-              susun()
-            },
-          },
-        })
-      }
-
-      // --- CAIRAN: gumpalan menuruni rel pipeline ---------------------------
-      //
-      // Yang membuatnya terbaca sebagai cairan bukan bentuknya, melainkan
-      // PENGGABUNGANNYA: gumpalan yang turun dan simpul yang diam melebur jadi
-      // satu badan saat berdekatan, lalu terlepas lagi. Efek itu datang dari
-      // filter #g-lengket — blur lalu ambang alfa — dan tidak bisa ditiru satu
-      // transisi CSS pun.
-      /**
-       * Simpul diletakkan di TENGAH kartunya masing-masing, bukan dibagi rata
-       * sepanjang rel.
-       *
-       * Kartunya tidak sama tinggi — satu paragraf lebih panjang dari yang lain
-       * — jadi pembagian rata membuat gumpalan melebur di simpul yang sedang
-       * tidak sejajar dengan kartu mana pun. Seluruh gunanya efek ini justru
-       * pertemuan itu.
-       */
-      const taruhSimpul = () => {
-        const relPipa = document.querySelector<HTMLElement>('.g-rel-cairan')
-        if (!relPipa) return
-        const dasar = relPipa.getBoundingClientRect().top
-        const kartu = Array.from(document.querySelectorAll<HTMLElement>('.g-pipa article'))
-        document.querySelectorAll<HTMLElement>('.g-simpul').forEach((simpulEl, i) => {
-          const k = kartu[i]
-          if (!k) return
-          const r = k.getBoundingClientRect()
-          simpulEl.style.top = `${Math.round(r.top + r.height / 2 - dasar - simpulEl.offsetHeight / 2)}px`
-        })
-      }
-      taruhSimpul()
-
-      const gumpal = { t: 0 }
-      gsap.to(gumpal, {
-        t: 1,
-        ease: 'none',
-        // Pemicunya REL-nya sendiri, dan batasnya 'top 50%' → 'bottom 50%'.
-        //
-        // Itu bukan angka yang dicoba-coba: dengan batas ini kemajuan bernilai
-        // 0 tepat saat ujung atas rel menyentuh garis tengah layar dan 1 saat
-        // ujung bawahnya menyentuh garis yang sama. Karena posisi gumpalan
-        // dihitung sebagai kemajuan x tinggi rel, gumpalannya jadi selalu
-        // berada persis di garis tengah layar - tempat mata membaca.
-        //
-        // Versi sebelumnya memicu dari SECTION dengan 'top 74%', dan bagian ini
-        // setinggi layar: gumpalannya sudah sampai simpul keempat ketika yang
-        // terbaca di layar baru kartu kedua.
-        scrollTrigger: {
-          scroller,
-          trigger: '.g-rel-cairan',
-          start: 'top 50%',
-          end: 'bottom 50%',
-          scrub: 0.45,
-          onRefresh: taruhSimpul,
-        },
-        onUpdate: () => {
-          const relPipa = document.querySelector<HTMLElement>('.g-rel-cairan')
-          const bola = document.querySelector<HTMLElement>('.g-gumpal')
-          if (!relPipa || !bola) return
-          const tinggi = relPipa.clientHeight
-          gsap.set(bola, { y: gumpal.t * tinggi })
-          // Simpul yang sedang disentuh dihitung dari posisi gumpalan itu
-          // sendiri, bukan dari kemajuan gulir — keduanya tidak sebanding
-          // karena simpulnya tidak berjarak sama.
-          const simpulEl = Array.from(document.querySelectorAll<HTMLElement>('.g-simpul'))
-          let pilih = -1
-          let dekat = Infinity
-          simpulEl.forEach((s, i) => {
-            const d = Math.abs(s.offsetTop + s.clientHeight / 2 - gumpal.t * tinggi)
-            if (d < dekat && d < 110) {
-              dekat = d
-              pilih = i
-            }
-          })
-          setSimpul(pilih)
-        },
-      })
-      gsap.fromTo(
-        '.g-rel-isi',
+        '.g-eko-tulang-isi',
         { scaleY: 0 },
         {
           scaleY: 1,
           ease: 'none',
           scrollTrigger: {
             scroller,
-            trigger: '.g-rel-cairan',
-            start: 'top 50%',
-            end: 'bottom 50%',
-            scrub: 0.45,
+            trigger: '.g-eko-alur',
+            start: 'top 62%',
+            end: 'bottom 72%',
+            scrub: 0.5,
           },
         },
       )
 
-      // --- Angka yang berjalan naik ------------------------------------------
+      // Tiap baris masuk DARI SISINYA sendiri. Itu yang membuat zig-zagnya
+      // terasa sebagai jalur, bukan sebagai dua kolom yang kebetulan berselang.
       //
-      // Nilai akhirnya sudah tertulis di HTML, jadi kalau efek ini tidak pernah
-      // jalan — gerak dimatikan, JavaScript gagal — yang terbaca tetap angka
-      // yang benar, bukan nol.
-      gsap.utils.toArray<HTMLElement>('.g-hitung').forEach((el) => {
-        const akhir = Number(el.dataset.nilai ?? '0')
-        const kotak = { n: 0 }
-        gsap.to(kotak, {
-          n: akhir,
-          duration: 1.5,
-          ease: 'power2.out',
-          scrollTrigger: { scroller, trigger: el, start: 'top 88%', once: true },
-          onUpdate: () => {
-            el.textContent = Math.round(kotak.n).toLocaleString('id-ID')
-          },
+      // GESERAN MENDATARNYA HANYA DI LAYAR LEBAR, dan itu bukan selera. Di
+      // bawah `lg` barisnya satu kolom - tidak ada kiri dan kanan untuk
+      // dimasuki - dan yang lebih menentukan: elemen yang PARKIR di keadaan
+      // awalnya (`x: 54`) sebelum pemicunya sampai benar-benar berdiri 54 px di
+      // luar wadahnya. Terukur di 390 px: halaman jadi bisa digulir MENDATAR
+      // sampai 420 px, persis gejala yang dilarang B.6. Di layar sempit
+      // gerakannya jadi tegak, yang tidak pernah menambah lebar.
+      const lebarBesar = window.matchMedia('(min-width: 1024px)').matches
+      gsap.utils.toArray<HTMLElement>('.g-eko-baris').forEach((el) => {
+        const kiri = el.dataset.sisi === 'kiri'
+        const media = el.querySelector('.g-eko-media')
+        const kata = el.querySelector('.g-eko-kata')
+        const simpul = el.querySelector('.g-eko-simpul')
+        const lengan = el.querySelector('.g-eko-lengan')
+        const tl = gsap.timeline({
+          scrollTrigger: { scroller, trigger: el, start: 'top 82%' },
         })
+        if (media) {
+          tl.from(
+            media,
+            lebarBesar
+              ? { x: kiri ? -54 : 54, opacity: 0, duration: 0.95, ease: 'power3.out' }
+              : { y: 34, opacity: 0, duration: 0.9, ease: 'power3.out' },
+            0,
+          )
+        }
+        if (kata) tl.from(kata, { y: 26, opacity: 0, duration: 0.85, ease: 'power3.out' }, 0.12)
+        if (lengan) tl.from(lengan, { scaleX: 0, duration: 0.5, ease: 'power2.out' }, 0.2)
+        if (simpul) tl.from(simpul, { scale: 0, opacity: 0, duration: 0.5, ease: 'back.out(2.2)' }, 0.28)
       })
 
-      // Heksagon bingkai angka tergambar bersamaan dengan angkanya berjalan
-      // naik. Dua gerakan, satu pemicu - kalau dipisah, garisnya selesai
-      // sebelum angkanya mulai dan keduanya terbaca sebagai dua kejadian.
-      gsap.utils.toArray<HTMLElement>('.g-gores').forEach((el) => {
-        gsap.to(el, {
-          strokeDashoffset: 0,
-          duration: 1.5,
-          ease: 'power2.out',
-          scrollTrigger: { scroller, trigger: el, start: 'top 88%', once: true },
-        })
-      })
-
-      // --- Nama raksasa di penutup, bergerak lebih lambat dari halamannya ----
+      // --- TENGGELAM: nama raksasa di penutup -------------------------------
       gsap.fromTo(
         '.g-raksasa',
         { yPercent: 14 },
@@ -1958,9 +1331,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         ease: 'none',
         scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top 40%', end: 'top -18%', scrub: 0.4 },
       })
-      // Bilah atas ikut turun ke gelap. Ambangnya sedikit lebih awal daripada
-      // saat hitamnya penuh, supaya bilahnya tidak sempat jadi papan putih
-      // menyala di atas latar yang sudah separuh gelap.
       ScrollTrigger.create({
         scroller,
         trigger: '.g-jurang',
@@ -1970,8 +1340,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         onEnterBack: () => setNavGelap(true),
         onLeaveBack: () => setNavGelap(false),
       })
-      // Kartu tim: pemicu PER-ELEMEN. Satu tween berundak yang dipicu wadahnya
-      // pernah berhenti di keadaan awalnya tanpa satu pun galat.
       gsap.utils.toArray<HTMLElement>('.g-orang').forEach((el, i) => {
         gsap.from(el, {
           y: 80,
@@ -1983,1080 +1351,481 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           scrollTrigger: { scroller, trigger: el, start: 'top 92%' },
         })
       })
-
-      // --- Bola kaca: dua gerakan sekaligus ---------------------------------
-      //
-      // `yPercent` diikat gulir, `x` dan `scale` berjalan sendiri. Keduanya
-      // menulis ke properti transform yang sama, tetapi GSAP menyimpan tiap
-      // komponen transform terpisah dan menyusunnya ulang - jadi dua tween pada
-      // satu elemen tidak saling menimpa selama propertinya berbeda.
-      //
-      // Hanyut sendiri itu yang membuat hero tidak pernah benar-benar diam,
-      // bahkan sebelum satu piksel pun digulir.
-      gsap.utils.toArray<HTMLElement>('.g-bola').forEach((el, i) => {
-        gsap.to(el, {
-          yPercent: -28 - i * 16,
-          ease: 'none',
-          scrollTrigger: { scroller, trigger: akar.current, start: 'top top', end: 'bottom bottom', scrub: 0.9 },
-        })
-        // Hanyut sendirinya PINDAH KE CSS, dan dipasang pada PEMBUNGKUS -
-        // bukan pada bola yang sama. Dua penulis untuk satu properti transform
-        // tidak pernah bisa akur: GSAP menulis seluruh transform sekaligus,
-        // jadi apa pun yang ditulis CSS di elemen yang sama akan tertimpa pada
-        // tween berikutnya. Pembungkus memberi masing-masing propertinya
-        // sendiri - parallax gulir di dalam, hanyut di luar.
-        const bungkus = el.parentElement
-        if (bungkus?.classList.contains('g-bola-bungkus')) {
-          // Arahnya dipilih lewat NAMA keyframe, bukan lewat variabel di dalam
-          // keyframe-nya. Dua keyframe berisi angka harfiah tetap bisa
-          // dikomposit; satu keyframe ber-`var()` tidak.
-          bungkus.style.animationName = i % 2 ? 'g-bola-kanan' : 'g-bola-kiri'
-          bungkus.style.animationDelay = `${(i * 0.8).toFixed(2)}s`
-          bungkus.style.animationDuration = `${(5.4 + i * 1.5).toFixed(2)}s`
-        }
-      })
     }, scroller)
 
-    // --- Paralaks motif latar ---------------------------------------------
-    //
-    // Pendengar gulir langsung, BUKAN ScrollTrigger. Percobaan pertama memakai
-    // ScrollTrigger dengan `trigger: akar.current` - dan `akar.current` adalah
-    // scroller-nya sendiri. Pemicu yang sama dengan scroller-nya degenerate:
-    // start dan end jatuh di titik yang sama, `onUpdate` tidak pernah menyala,
-    // dan motifnya diam sepenuhnya. Gagalnya diam - `transform: none` di setiap
-    // posisi gulir, tanpa satu pun galat.
-    //
-    // Pendengar gulir tidak punya semantik pemicu yang bisa salah dipahami.
-    // Ia juga lebih murah: satu penulisan per bingkai yang benar-benar bergulir,
-    // dan tidak ada apa pun saat halaman diam.
-    const motif = Array.from(akar.current?.querySelectorAll<HTMLElement>('.g-motif') ?? [])
-    if (motif.length) {
-      const tulis = motif.map((el) => gsap.quickSetter(el, 'css'))
-      // Berapa derajat cincinnya berputar sepanjang perjalanan bagiannya, dan
-      // seberapa besar dasarnya. Dibaca dari elemen supaya tiap bagian bisa
-      // punya wajah sendiri tanpa daftar kedua di sini yang harus dijaga tetap
-      // sinkron dengan daftar di TEROWONGAN.
-      const putar = motif.map((el) => Number(el.dataset.putar ?? 12))
-
-      // Diukur dari PERJALANAN bagiannya melewati layar, bukan dari jarak gulir
-      // mentah. Versi pertama memakai `(scrollTop - offsetTop) * laju`, dan
-      // konsekuensinya baru terlihat pada bagian yang tinggi: bagian setinggi
-      // 3.250 px membuat motifnya berjalan 550 px - jauh keluar dari bagiannya
-      // sendiri, lalu tergunting. Dinyatakan sebagai pecahan perjalanan,
-      // jaraknya selalu ±amp berapa pun tinggi bagiannya.
-      // `sisi` (tinggi motifnya sendiri) IKUT diukur di sini, dan itu bukan
-      // kerapian - itu perbaikan bug.
-      //
-      // Sebelumnya ia dibaca `motif[i].offsetHeight` DI DALAM loop per-bingkai,
-      // tepat sesudah `tulis[]` menulis transform di iterasi sebelumnya. Tiap
-      // pembacaan itu memaksa peramban menghitung ulang layout - sembilan
-      // paksaan per bingkai gulir, murni untuk mendapat angka yang tidak pernah
-      // berubah kecuali saat layar diubah ukurannya.
-      //
-      // Di bagian lain akibatnya tersamar karena isinya ikut bergeser. Di
-      // bagian kuadran isinya DIAM - ia sticky, gulirnya di tempat - jadi motif
-      // ini satu-satunya yang bergerak, dan tiap bingkai yang jatuh terbaca
-      // langsung sebagai getaran. Itu gejala yang dilaporkan.
-      const ukur = () =>
-        motif.map((el) => {
-          const s = el.offsetParent as HTMLElement | null
-          return { atas: s?.offsetTop ?? 0, tinggi: s?.offsetHeight ?? 1, sisi: el.offsetHeight }
-        })
-      let kotak = ukur()
-      let layar = scroller.clientHeight
-      const ukurUlang = () => {
-        layar = scroller.clientHeight
-        kotak = ukur()
-      }
-
-      let rafGeser = 0
-      const geser = () => {
-        rafGeser = 0
-        const y = scroller.scrollTop
-        for (let i = 0; i < motif.length; i++) {
-          const { atas, tinggi, sisi } = kotak[i]
-          // -1 saat bagiannya baru mau masuk dari bawah, +1 saat ia baru saja
-          // keluar di atas, 0 tepat saat pusatnya di pusat layar.
-          const p = Math.max(-1, Math.min(1, (y + layar / 2 - (atas + tinggi / 2)) / ((layar + tinggi) / 2)))
-          // Duduk di tengah LAYAR, lalu dijepit supaya tidak keluar dari
-          // bagiannya sendiri. Bagian yang lebih pendek daripada layar akan
-          // menjepitnya ke tengah bagian, dan itu memang yang benar di sana.
-          const tengah = y + layar / 2 - atas - sisi / 2
-          const batas = Math.max(0, tinggi - sisi)
-          tulis[i]({
-            y: Math.max(-sisi * 0.15, Math.min(batas + sisi * 0.15, tengah)),
-            // Membesar terus sepanjang perjalanannya - itu yang membuatnya
-            // terbaca sebagai sesuatu yang DIDEKATI, bukan yang mengembang lalu
-            // mengempis lagi.
-            scale: 0.84 + (p + 1) * 0.22,
-            rotation: p * putar[i],
-            // Memuncak saat bagiannya di tengah layar, hilang di kedua ujungnya.
-            // Itu yang menjaga perbatasan antar-bagian tetap bersih.
-            opacity: 1 - Math.abs(p),
-          })
-        }
-      }
-      const saatGulir = () => {
-        if (!rafGeser) rafGeser = requestAnimationFrame(geser)
-      }
-      geser()
-      scroller.addEventListener('scroll', saatGulir, { passive: true })
-      window.addEventListener('resize', ukurUlang)
-      pembersih.push(() => {
-        scroller.removeEventListener('scroll', saatGulir)
-        window.removeEventListener('resize', ukurUlang)
-        if (rafGeser) cancelAnimationFrame(rafGeser)
-      })
-    }
-
-    // --- Animasi di bagian yang tidak terlihat DIHENTIKAN -----------------
-    //
-    // Halaman ini setinggi dua belas ribu piksel dan memuat 28 animasi CSS.
-    // Yang terlihat pada satu saat paling banyak sepertiganya; sisanya tetap
-    // dikomposit tiap bingkai untuk piksel yang tidak akan dilihat siapa pun.
-    //
-    // IntersectionObserver, bukan ScrollTrigger ke-18: ia berjalan di luar
-    // jalur gulir, jadi menambahnya tidak menambah kerja per bingkai gulir.
-    // Bantalan 15% supaya animasinya sudah hidup sebelum bagiannya masuk layar
-    // - animasi yang baru mulai tepat saat terlihat akan tertangkap mata
-    // sebagai sesuatu yang menyala terlambat.
+    // Animasi CSS di bagian yang tidak terlihat DIHENTIKAN lewat atribut yang
+    // dibaca index.css. IntersectionObserver, bukan ScrollTrigger tambahan.
     const pengamat = new IntersectionObserver(
       (masuk) => {
         for (const e of masuk) {
           const el = e.target as HTMLElement
           if (e.isIntersecting) delete el.dataset.diam
           else el.dataset.diam = '1'
-
         }
       },
       { root: akar.current, rootMargin: '15% 0px' },
     )
     akar.current?.querySelectorAll('section').forEach((s) => pengamat.observe(s))
 
-    // Pembatas menggambar dirinya saat masuk layar. Pengamat TERPISAH karena
-    // ambangnya berbeda: bagian dijeda dengan bantalan 15% supaya animasinya
-    // sudah hidup sebelum terlihat, sementara pembatas justru harus menunggu
-    // sampai benar-benar terlihat - garis yang sudah selesai tergambar sebelum
-    // orangnya sampai bukan garis yang menggambar dirinya.
-    const pengamatBatas = new IntersectionObserver(
-      (masuk) => {
-        for (const e of masuk) {
-          if (e.isIntersecting) {
-            ;(e.target as HTMLElement).dataset.tampil = ''
-            pengamatBatas.unobserve(e.target)
-          }
-        }
-      },
-      { root: akar.current, threshold: 0.6 },
-    )
-    akar.current?.querySelectorAll('.g-pembatas').forEach((s) => pengamatBatas.observe(s))
-
-    // Kartu dek memotret dirinya asinkron dan bagian lintang mengukur lebarnya
-    // sendiri. Dua penyegaran lebih murah daripada menebak urutannya.
+    // Kartu dek memotret dirinya asinkron; dua penyegaran lebih murah daripada
+    // menebak urutannya.
     const jam1 = window.setTimeout(() => ScrollTrigger.refresh(), 1400)
     const jam2 = window.setTimeout(() => ScrollTrigger.refresh(), 4200)
 
     return () => {
       pengamat.disconnect()
-      pengamatBatas.disconnect()
       clearTimeout(jam1)
       clearTimeout(jam2)
       pembersih.forEach((f) => f())
       ctx.revert()
     }
-  }, [gerakMati])
+    // Bahasa ikut jadi dep: pergantian bahasa menulis ulang setiap judul, dan
+    // SplitText harus memecah teks yang baru - bukan memegang baris yang lama.
+  }, [gerakMati, bahasa])
+
+  const tombolMasuk = (kelas: string, ukuran: 'kecil' | 'besar') => (
+    <Magnet
+      onClick={() => onMasuk()}
+      kelas={`g-catalyst group inline-flex cursor-pointer items-center gap-3 rounded-full font-semibold ${kelas}`}
+      anak={
+        <>
+          <span className={`g-catalyst-teks ${ukuran === 'besar' ? 'text-[15px]' : 'text-[13.5px]'}`}>
+            {teks.masuk}
+          </span>
+          {ukuran === 'besar' && <PanahKanan />}
+        </>
+      }
+    />
+  )
 
   return (
     <div
       ref={akar}
-      data-tema={gelap ? 'gelap' : 'terang'}
       className="gerbang fixed inset-0 z-[70] overflow-y-auto overflow-x-hidden text-[color:var(--g-ink)]"
     >
-      {/* Filter cairan. Nol piksel, dipakai lewat `filter: url(#g-lengket)`. */}
-      <svg width="0" height="0" className="absolute" aria-hidden focusable="false">
-        <defs>
-          <filter id="g-lengket">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="kabur" />
-            {/* Ambang alfa: yang setengah transparan hasil blur dipaksa jadi
-                pekat atau hilang, dan di situlah dua bentuk yang berdekatan
-                menyatu jadi satu badan. */}
-            <feColorMatrix
-              in="kabur"
-              mode="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7"
-            />
-          </filter>
-          {/* Versi kecil untuk sakelar tema. Blur-nya jauh lebih tipis: rel
-              sakelarnya cuma 78px, dan stdDeviation 6 akan melumerkan seluruh
-              benda jadi satu gumpalan tanpa bentuk. 3,4 cukup untuk membuat
-              gumpalan dan bulatan ujung menyatu saat berdekatan, tidak cukup
-              untuk menghapus keduanya. */}
-          <filter id="g-cair">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="3.4" result="kabur" />
-            <feColorMatrix
-              in="kabur"
-              mode="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8"
-            />
-          </filter>
-        </defs>
-      </svg>
-
-      {/* --- Bola kaca latar. aria-hidden: murni hiasan. ------------------- */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        {/* Pembungkus membawa hanyut CSS, bola di dalamnya membawa parallax
-            gulir dari GSAP. Dua transform yang tidak pernah berebut. */}
-        <span className="g-bola-bungkus absolute left-[7%] top-[16%] h-64 w-64">
-          <span className="g-bola g-kaca block h-full w-full rounded-full" />
-        </span>
-        <span className="g-bola-bungkus absolute right-[5%] top-[34%] h-80 w-80">
-          <span className="g-bola g-kaca block h-full w-full rounded-full" />
-        </span>
-        <span className="g-bola-bungkus absolute left-[20%] top-[62%] h-52 w-52">
-          <span className="g-bola g-kaca block h-full w-full rounded-full" />
-        </span>
-      </div>
-
       {/* --- Bilah atas yang ikut menempel ---------------------------------
-          `sticky`, bukan `fixed`. Keduanya terlihat sama di sini, tapi `fixed`
-          di dalam wadah yang punya backdrop-filter di salah satu leluhurnya
-          adalah kelas jebakan yang sudah pernah kena di repo ini. */}
+          `sticky`, bukan `fixed`: `fixed` di dalam wadah yang punya
+          backdrop-filter di salah satu leluhurnya adalah jebakan yang sudah
+          pernah kena di repo ini. */}
       <div className="sticky top-0 z-50 px-4 pt-4 sm:px-6">
-        {/* Jarak dan bantalan MENGECIL di bawah sm, dan itu bukan kosmetik.
-            Terukur di 390px: logo + tombol akun + ajakan berjumlah 403px di
-            dalam 390px, jadi halaman gerbang bisa digulir MENDATAR - persis
-            gejala yang dilarang B.6 "nyaman di berbagai ukuran layar". Yang
-            TIDAK dilakukan: menyembunyikan salah satu tombolnya. Aksi navigasi
-            yang harus dicari dulu bukan aksi navigasi. */}
         <nav
-          className={`mx-auto flex max-w-[72rem] items-center gap-2 rounded-full py-2 pl-4 pr-2 transition-colors duration-500 ease-liquid sm:gap-4 sm:pl-5 ${
+          className={`mx-auto flex max-w-[72rem] items-center gap-2 rounded-full py-2 pl-4 pr-2 transition-colors duration-500 ease-liquid sm:gap-3 sm:pl-5 ${
             navGelap ? 'g-nav-gelap' : 'g-nav'
           }`}
         >
-          <span className={`papan shrink-0 text-[15px] tracking-[0.02em] ${navGelap ? 'text-white' : ''}`}>
-            Loconomics
-          </span>
-          <span
-            className={`hidden min-w-0 flex-1 truncate text-[12px] sm:block ${navGelap ? 'text-white/55' : 'text-[color:var(--g-ink-3)]'}`}
+          <button
+            onClick={keAtas}
+            className={`papan shrink-0 cursor-pointer text-[15px] tracking-[0.02em] ${navGelap ? 'text-white' : ''}`}
           >
-            {IDENTITAS.judulResmi}
-          </span>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {[
-              ['Cara kerjanya', 'cara-kerja'],
-              ['Tim', 'tim'],
-            ].map(([teks, id]) => (
-              <button
-                key={id}
-                onClick={() => keBagian(id)}
-                className={`hidden cursor-pointer rounded-full px-4 py-2 text-[13px] font-medium transition-colors sm:block ${
-                  navGelap ? 'text-white/70 hover:bg-white/10' : 'text-[color:var(--g-ink-2)] hover:bg-white/50'
-                }`}
-              >
-                {teks}
-              </button>
-            ))}
-            {/* Tombol akun DI SEBELAH KIRI "Masuk ke peta", bukan menggantikannya.
-                Keduanya menjawab pertanyaan yang berbeda: yang satu "boleh saya
-                lihat dulu?", yang lain "apa yang saya dapat kalau bergabung?".
-                Menukar salah satunya dengan yang lain akan menutup satu jalan. */}
+            Loconomics
+          </button>
+          {/* Di bawah `sm` tombol "Masuk ke peta" di bilah ini disembunyikan:
+              terukur di 390px, keempat benda ini berjumlah 445px dan halaman
+              jadi bisa digulir MENDATAR. Yang disembunyikan yang paling tidak
+              dibutuhkan di sini - tombol yang sama berdiri dua kali lebih besar
+              tepat di bawahnya, di hero. */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <SakelarBahasa gelap={navGelap} />
             <TombolAkun varian="gerbang" />
-            <button
-              onClick={() => onMasuk()}
-              className={`cursor-pointer rounded-full px-4 py-2.5 text-[13.5px] font-semibold sm:px-5 ${
-                navGelap ? 'g-nav-terbalik' : 'g-utama'
-              }`}
-            >
-              {AJAKAN}
-            </button>
+            <span className="hidden sm:inline-flex">{tombolMasuk('px-4 py-2', 'kecil')}</span>
           </div>
         </nav>
       </div>
 
-      {/* ================= 1 · HERO ====================================== */}
+      {/* ================= 1 · HERO (dipatok) ============================= */}
       <section
-        ref={hero}
-        className="relative flex min-h-[calc(100vh-5.5rem)] flex-col items-center justify-center overflow-hidden px-6 pb-16 pt-6 text-center"
+        id="hero"
+        className="g-hero sticky top-0 z-0 -mt-[4.5rem] flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-6 pb-16 pt-24 text-center"
       >
-        {/* Kisi heksagon yang menyala mengikuti kursor. Anak hero, bukan lapisan
-            melayang - jadi ia tidak bisa bocor ke bagian mana pun di bawahnya. */}
         <LatarHero />
         <div
           className="pointer-events-none absolute left-1/2 top-[calc(100%-120px)] -z-10 h-[420px] w-[150%] -translate-x-1/2 rounded-[100%] bg-[radial-gradient(closest-side,var(--g-elips)_78%,transparent)] opacity-80"
           aria-hidden
         />
 
-        <p className="g-masuk-awal g-pil mb-7 inline-flex items-center gap-2 rounded-full px-5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-[color:var(--g-ink-2)]">
-          {IDENTITAS.lomba} · {IDENTITAS.tim}
-          <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden className="shrink-0">
-            <path d="M4.5 2.5 8 6l-3.5 3.5" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </p>
-
-        {/* Papan nama yang SAMA dengan bilah atas aplikasi — komponen yang
-            sama, tempo yang sama, arah getar yang sama. Bedanya cuma ukuran. */}
-        <PapanNama
-          teks={NAMA}
-          kelas="g-judul select-none whitespace-nowrap text-[clamp(2.1rem,9.4vw,6.4rem)] leading-[1.02] tracking-[-0.015em]"
-        />
-
-        <p className="g-masuk-awal mx-auto mt-6 max-w-[36rem] text-[clamp(1rem,1.7vw,1.2rem)] leading-relaxed text-[color:var(--g-ink-2)]">
-          {IDENTITAS.judulResmi}. Memilih lokasi usaha di sekitar simpul transportasi massal
-          Jabodetabek — dengan data survei, bukan firasat.
-        </p>
-
-        <div className="g-masuk-awal mt-9 flex flex-wrap items-center justify-center gap-3">
-          <Magnet
-            onClick={() => onMasuk()}
-            kelas="g-utama group inline-flex cursor-pointer items-center gap-3 rounded-full px-8 py-4 text-[15px] font-semibold"
-            anak={
-              <>
-                {AJAKAN}
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform duration-300 ease-jelly group-hover:translate-x-1">
-                  <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden>
-                    <path d="M2 6h8M6.5 2.5 10 6l-3.5 3.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-              </>
-            }
+        <div className="g-hero-isi flex flex-col items-center">
+          <PapanNama
+            teks={NAMA}
+            kelas="g-judul select-none whitespace-nowrap text-[clamp(2.1rem,9.4vw,6.4rem)] leading-[1.02] tracking-[-0.015em]"
           />
-          <Magnet
-            onClick={() => keBagian('kawasan')}
-            kekuatan={0.22}
-            kelas="g-pil cursor-pointer rounded-full px-7 py-4 text-[15px] font-semibold text-[color:var(--g-ink)]"
-            anak="Lihat petanya dulu"
-          />
-        </div>
 
-        <SakelarTema gelap={gelap} onUbah={setGelap} />
-
-        <button
-          onClick={() => keBagian('kawasan')}
-          className="g-masuk-awal mt-14 flex cursor-pointer items-center gap-2 text-[12px] text-[color:var(--g-ink-3)] transition-opacity hover:opacity-70"
-        >
-          <span className="g-panah inline-block">↓</span> enam kawasan, enam sudut pandang
-        </button>
-      </section>
-
-      {/* ================= 2 · PENDIRIAN ================================ */}
-      <Pembatas />
-
-      <section
-        id="pendirian"
-        className="g-adegan relative flex min-h-screen flex-col justify-center px-6 py-28"
-      >
-        <LatarBagian motif="pendirian" />
-        <div className="mx-auto grid w-full max-w-[74rem] items-center gap-14 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-          <div>
-            <p className="g-tirai eyebrow mb-6 text-[color:var(--g-ink-3)]">Yang kami percaya</p>
-            <h2 className="g-tesis papan text-[clamp(1.7rem,4.6vw,3.3rem)] leading-[1.14] tracking-[-0.01em]">
-              {TESIS.split(' ').map((kata, i) => (
-                <span key={i} className="g-kata inline-block">
-                  {kata}&nbsp;
-                </span>
-              ))}
-            </h2>
-          </div>
-
-          {/* Gambar pendamping. Isinya persis apa yang dikatakan kalimatnya:
-              hampir semuanya redup, dan yang menyala bukan yang menonjol. */}
-          <div className="g-buram g-panel rounded-[26px] p-7">
-            <LadangDenyut />
-            <p className="mt-4 text-center text-[12px] leading-snug text-[color:var(--g-ink-3)]">
-              Yang menyala di sini bukan yang paling menonjol — melainkan yang datanya melampaui
-              tampilannya.
-            </p>
-          </div>
-        </div>
-
-        <div className="mx-auto mt-16 grid w-full max-w-[74rem] gap-5 sm:grid-cols-3">
-          {PENDIRIAN.map((p, i) => (
-            <article key={p.kepala} className="g-buram g-panel rounded-[22px] p-7">
-              <span className="tabular mb-4 block text-[11px] font-semibold tracking-[0.16em] text-[color:var(--g-ink-4)]">
-                {String(i + 1).padStart(2, '0')}
-              </span>
-              <h3 className="papan text-[16.5px] leading-snug">{p.kepala}</h3>
-              <p className="mt-2.5 text-[13.5px] leading-relaxed text-[color:var(--g-ink-2)]">{p.isi}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      {/* ================= 3 · DEK KAWASAN =============================== */}
-      {/* `g-adegan` dipasang pada bagian yang isinya tidak dipatok maupun
-          menempel. Bagian kuadran memakai `pin` dan bagian tim memakai `sticky`;
-          transform pada leluhur keduanya akan mematahkan keduanya, jadi
-          keduanya memakai transisinya sendiri - gulir lintang dan jurang. */}
-      <Pembatas />
-
-      <section
-        id="kawasan"
-        className="relative flex min-h-screen flex-col justify-center px-6 py-24"
-      >
-        <LatarBagian motif="kawasan" />
-        <div className="mx-auto mb-12 max-w-[48rem] text-center">
-          <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Yang akan Anda pakai</p>
-          <h2 className="g-tirai papan text-[clamp(1.6rem,4vw,2.8rem)] leading-tight">
-            Enam kawasan pilot, enam sudut pandang
-          </h2>
-          <p className="g-tirai mx-auto mt-4 max-w-[38rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
-            Tiap kartu memakai basemap MAPID dan layer yang berbeda, dan semuanya memuat heksagon
-            sungguhan dari basis data — bukan gambar contoh. Sentuh untuk memiringkannya, klik untuk
-            membukanya langsung di peta.
+          <p className="g-masuk-awal mx-auto mt-6 max-w-[34rem] text-[clamp(1rem,1.7vw,1.2rem)] leading-relaxed text-[color:var(--g-ink-2)]">
+            {teks.hero.isi}
           </p>
-        </div>
 
-        <DekKawasan onBuka={onMasuk} />
-
-        <p className="mx-auto mt-9 max-w-[44rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
-          Keenamnya gambar diam yang dibuat dari basis data lewat pipeline yang sama dengan
-          aplikasinya, bukan tangkapan layar — jadi halaman ini tidak memuat mesin peta sama sekali.
-          Angka di tiap kartu dihitung dari data yang sama pada detik yang sama, dipotret{' '}
-          <span className="tabular">{DIPOTRET}</span>. Peta yang sesungguhnya, yang bisa digeser dan
-          ditanyai, ada di balik tombolnya.
-        </p>
-      </section>
-
-      <PitaBerjalan />
-
-      {/* ================= 4 · EMPAT KUADRAN (lintasan menempel) =========
-          Dibangun ulang 23 Agustus 2026: `pin` milik ScrollTrigger DICABUT,
-          diganti `position: sticky`.
-
-          Pin di dalam wadah yang menggulir sendiri (bukan window) tidak bisa
-          memakai `position: fixed` — GSAP terpaksa MENGGESER BALIK elemennya
-          tiap bingkai sejauh halaman bergulir, supaya ia terlihat diam. Selisih
-          sekecil apa pun antara saat peramban menggambar gulirnya dan saat GSAP
-          menulis transform-nya terlihat sebagai goyangan, dan selisih itu tidak
-          bisa dihilangkan: keduanya berjalan di jalur yang berbeda.
-
-          `sticky` tidak punya masalah itu sama sekali. Yang menahan elemennya
-          peramban sendiri, di compositor, tanpa satu baris JavaScript pun —
-          jadi tidak ada dua sumber kebenaran yang bisa berselisih. Yang tersisa
-          untuk GSAP cuma satu: menggeser lintasannya ke samping.
-
-          Efek sampingnya bonus: tanpa pin tidak ada spacer yang disisipkan, jadi
-          seluruh bagian di bawahnya berhenti bergeser saat penyegaran. */}
-      <Pembatas />
-
-      <section id="kuadran" className="relative">
-        <LatarBagian motif="kuadran" />
-        <div className="mx-auto max-w-[52rem] px-6 pt-28 text-center">
-          <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Tesis produk</p>
-          <h2 className="g-tirai papan text-[clamp(1.7rem,4.4vw,3rem)] leading-tight">
-            Dua sumbu, empat kuadran, dan dua sudut tempat keduanya tidak sejalan
-          </h2>
-          <p className="g-tirai mx-auto mt-5 max-w-[40rem] text-[15px] leading-relaxed text-[color:var(--g-ink-2)]">
-            Sumbu datar: bagaimana sebuah lokasi terlihat. Sumbu tegak: apa kata datanya. Seluruh
-            gunanya produk ini terletak pada dua kuadran tempat keduanya berselisih.
-          </p>
-        </div>
-
-        {gerakMati ? (
-          /* Gerak dimatikan: tumpukan tegak biasa. Lintasan menyamping
-             bergantung penuh pada gulir; tanpa itu ia jadi baris yang melebihi
-             layar tanpa satu pun cara menggulirnya. */
-          <div className="mx-auto mt-14 grid max-w-[58rem] gap-6 px-6">
-            {LANGKAH_TESIS.map((l, i) => (
-              <PanelKuadran key={l.kunci} l={l} i={i} />
-            ))}
-          </div>
-        ) : (
-          /* Tinggi lintasan menentukan berapa jauh harus digulir untuk melewati
-             keempat panel. Empat panel x 88vh terasa pas: cukup lambat untuk
-             dibaca, tidak sampai terasa macet. */
-          <div
-            ref={lintasan}
-            /* Tingginya disetel `aturTinggi()` di efek GSAP, dari jarak geser
-               yang sesungguhnya — angka vh apa pun cuma benar untuk satu lebar
-               layar. */
-            className="relative mt-10"
-          >
-            {/* `overflow-hidden` WAJIB, dan sempat dicoba dilepas.
-                Alasan melepasnya masuk akal — `.gerbang` sudah `overflow-x-hidden`
-                jadi luapannya toh tergunting di tingkat halaman — tetapi
-                terukur, itu SALAH: dengan `overflow-x: hidden` bersama
-                `overflow-y: auto`, peramban tetap melaporkan `scrollWidth`
-                selebar isinya. Halaman langsung melompat dari 1440 ke 3296, dan
-                lebar berlebih itu ikut dipakai menghitung `100vw` di mana pun.
-                Ongkos guntingnya sendiri tidak terukur: median bingkai bagian
-                ini sama saja dengan maupun tanpanya. */}
-            <div className="sticky top-0 flex h-screen items-center overflow-hidden">
-              {/* Kolom kiri: konteks yang tidak ikut bergeser. */}
-              <div className="pointer-events-none absolute left-8 top-1/2 z-20 hidden w-[20rem] -translate-y-1/2 lg:block">
-                <KompasCerita aktif={langkah === null ? null : LANGKAH_TESIS[langkah].kunci} />
-                <p className="mt-5 text-[12px] leading-relaxed text-[color:var(--g-ink-3)]">
-                  Batasnya dibelah di <strong className="font-semibold">median</strong>, bukan di
-                  tengah kotak — jadi keempat kuadran selalu berisi, berapa pun sebaran datanya.
-                </p>
-              </div>
-
-              <div
-                ref={rel}
-                className="flex w-max items-center px-8 lg:pl-[32rem] lg:pr-[32rem]"
-                style={{ perspective: 1600 }}
-              >
-                {LANGKAH_TESIS.map((l, i) => (
-                  <PanelKuadran key={l.kunci} l={l} i={i} lintang />
-                ))}
-              </div>
-
-              {/* Penunjuk kemajuan. Gulir menyamping menghapus satu-satunya
-                  petunjuk yang biasanya dipakai orang — bilah gulir. */}
-              <div className="pointer-events-none absolute bottom-10 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
-                {LANGKAH_TESIS.map((l, i) => (
-                  <span
-                    key={l.kunci}
-                    data-titik={i}
-                    className="h-1.5 rounded-full transition-all duration-500 ease-liquid"
-                    style={{
-                      width: langkah === i ? 34 : 10,
-                      background: langkah === i ? KUADRAN[l.kunci].warna : 'var(--g-garis-halus)',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* ================= 5 · CARA KERJA (cairan) ====================== */}
-      <Pembatas />
-
-      <section
-        id="cara-kerja"
-        className="g-adegan g-pipa relative flex min-h-screen flex-col justify-center px-6 py-28"
-      >
-        <LatarBagian motif="cara-kerja" />
-        <div className="mx-auto max-w-[48rem] text-center">
-          <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Dari lapangan ke layar</p>
-          <h2 className="g-tirai papan text-[clamp(1.7rem,4.4vw,3rem)] leading-tight">
-            Lima langkah, dan tidak satu pun yang disembunyikan
-          </h2>
-        </div>
-
-        <div className="relative mx-auto mt-16 w-full max-w-[52rem] pl-20 sm:pl-28">
-          {/* Rel cairan. Rel, simpul, dan gumpalan semuanya di dalam satu
-              lapisan ber-filter — hanya benda di dalam lapisan yang sama yang
-              bisa melebur satu sama lain. */}
-          <div className="g-rel-cairan pointer-events-none absolute bottom-8 left-5 top-8 w-14 sm:left-9" aria-hidden>
-            {/* Rel statis DI LUAR lapisan cairan.
-                Garis setipis ini tidak pernah selamat dari ambang alfa: setelah
-                di-blur, puncak alfanya jatuh jauh di bawah ambang dan ia hilang
-                seluruhnya - terukur, versi pertama menggambar relnya di dalam
-                filter dan yang tampil cuma titik-titik melayang tanpa jalur. */}
-            <span className="absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full bg-[color:var(--g-ink)]/14" />
-
-            {/* Yang di dalam filter WAJIB tebal. Apa pun yang lebih tipis dari
-                sekitar dua kali simpangan blur akan lenyap, bukan melebur. */}
-            <div className="g-lengket absolute inset-0">
-              <span className="g-rel-isi absolute inset-y-0 left-1/2 w-[15px] -translate-x-1/2 origin-top rounded-full bg-[color:var(--g-teal-terang)]" />
-              {PIPA.map((p) => (
-                <span
-                  key={p.nomor}
-                  className="g-simpul absolute left-1/2 top-0 h-7 w-7 -translate-x-1/2 rounded-full bg-[color:var(--g-teal-terang)]"
-                />
-              ))}
-              <span className="g-gumpal absolute left-1/2 top-0 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[color:var(--g-teal-tua)]" />
-            </div>
-          </div>
-
-          {PIPA.map((p, i) => {
-            const kena = simpul === i
-            return (
-              <article
-                key={p.nomor}
-                className={`g-panel relative mb-6 rounded-[22px] p-7 transition-all duration-500 ease-liquid last:mb-0 ${
-                  kena ? 'shadow-[0_28px_60px_-28px_rgb(6_60_53/0.55)]' : ''
-                }`}
-                style={{
-                  transform: kena ? 'translateX(10px)' : 'translateX(0)',
-                  borderColor: kena ? 'rgb(47 168 145 / 0.55)' : undefined,
-                }}
-              >
-                <div className="mb-2.5 flex flex-wrap items-center gap-3">
-                  <span
-                    className="tabular grid h-8 w-8 shrink-0 place-items-center rounded-full text-[12px] font-semibold transition-colors duration-500"
-                    style={{
-                      background: kena ? 'var(--g-teal)' : 'var(--g-garis-halus-2)',
-                      color: kena ? 'var(--g-teks-terang)' : 'var(--g-ink-2)',
-                    }}
-                  >
-                    {p.nomor}
-                  </span>
-                  <h3 className="papan min-w-0 flex-1 text-[17.5px] leading-snug">{p.kepala}</h3>
-                  <span className="shrink-0 rounded-full bg-[color:var(--g-ink)]/6 px-2.5 py-1 text-[11px] font-medium text-[color:var(--g-ink-3)]">
-                    {p.tanda}
-                  </span>
-                </div>
-                <p className="text-[14px] leading-relaxed text-[color:var(--g-ink-2)]">{p.isi}</p>
-              </article>
-            )
-          })}
-        </div>
-
-        <p className="g-tirai mx-auto mt-12 max-w-[42rem] rounded-[20px] border border-[color:var(--g-ink)]/12 bg-white/45 p-6 text-center text-[13.5px] leading-relaxed text-[color:var(--g-ink-2)]">
-          Skornya dihitung di satu tempat saja, di pipeline. Loconomics AI membaca hasilnya dan
-          menjelaskannya — ia tidak pernah menghitung sendiri, dan tidak pernah bisa mengubah satu
-          angka pun.
-        </p>
-      </section>
-
-      {/* ================= 6 · ENAM FITUR =============================== */}
-      <Pembatas />
-
-      <section
-        id="fitur"
-        className="g-adegan relative flex min-h-screen flex-col justify-center px-6 py-28"
-      >
-        <LatarBagian motif="fitur" />
-        <div className="mx-auto max-w-[48rem] text-center">
-          <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Yang bisa dilakukan di dalam</p>
-          <h2 className="g-tirai papan text-[clamp(1.7rem,4.4vw,3rem)] leading-tight">Enam alat, satu peta</h2>
-          <p className="g-tirai mx-auto mt-5 max-w-[36rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
-            Semuanya membaca basis data yang sama, dan semuanya menjawab satu pertanyaan yang bisa
-            ditanyakan dengan bahasa sehari-hari.
-          </p>
-        </div>
-
-        <div className="mx-auto mt-14 grid w-full max-w-[74rem] gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {FITUR.map((f) => (
-            <article
-              key={f.nama}
-              className="g-balik g-panel group flex flex-col rounded-[24px] p-7"
-              style={{ transformStyle: 'preserve-3d' }}
-            >
-              <div className="mb-5 h-[54px] w-[72px] text-[color:var(--g-teal)] transition-transform duration-500 ease-jelly group-hover:scale-110">
-                <svg viewBox="0 0 72 54" className="h-full w-full" aria-hidden>
-                  {GAMBAR_FITUR[f.nama]}
-                </svg>
-              </div>
-              <div className="mb-2 flex items-baseline justify-between gap-3">
-                <h3 className="papan text-[18px]">{f.nama}</h3>
-                <span className="shrink-0 text-[11.5px] text-[color:var(--g-ink-4)]">{f.ringkas}</span>
-              </div>
-              <p className="text-[13.5px] leading-relaxed text-[color:var(--g-ink-2)]">{f.isi}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      {/* ================= 7 · ANGKA ==================================== */}
-      <Pembatas />
-
-      <section className="g-adegan relative flex min-h-screen flex-col justify-center px-6 py-24">
-        <LatarBagian motif="angka" />
-        <div className="mx-auto mb-14 max-w-[46rem] text-center">
-          <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Yang sudah berdiri</p>
-          <h2 className="g-tirai papan text-[clamp(1.5rem,3.6vw,2.4rem)] leading-tight">
-            Empat angka yang semuanya bisa diperiksa
-          </h2>
-        </div>
-
-        {/* Tegak, bukan mendatar. Susunan lama menaruh heksagon di SEBELAH
-            teksnya, jadi lebar heksagon dibatasi sisa ruang kartu - dan itu
-            yang memaksanya mengecil sampai angkanya tidak muat. Ditumpuk, ia
-            boleh selebar kartunya. */}
-        <div className="mx-auto grid w-full max-w-[74rem] gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {ANGKA.map((a) => (
-            <div
-              key={a.satuan}
-              className="g-buram g-panel flex flex-col items-center rounded-[24px] px-6 pb-7 pt-6 text-center"
-            >
-              <HeksagonAngka
-                anak={
-                  <span className="papan tabular text-[clamp(1.5rem,2.4vw,2.05rem)] leading-none">
-                    <span className="g-hitung" data-nilai={a.nilai}>
-                      {a.nilai.toLocaleString('id-ID')}
-                    </span>
-                  </span>
-                }
-              />
-              <p className="mt-5 text-[14px] font-semibold leading-snug text-[color:var(--g-ink)]">
-                {a.satuan}
-              </p>
-              <p className="mt-1.5 text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
-                {a.catatan}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {/* Catatan kakinya ikut diturunkan dari angka. Yang lama menyatakan
-            "berasal dari data demo" - benar sewaktu demo_seed mengisi peta, dan
-            justru meremehkan datanya sendiri di depan juri sesudah 18 variabel
-            sintetis dikosongkan dan sumber terbuka masuk. Kalau sebuah pemicu
-            perlu dihitung supaya tidak berbohong, kalimatnya perlu dihitung
-            untuk alasan yang persis sama. */}
-        <p className="mx-auto mt-8 max-w-[44rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
-          Keempatnya dibaca langsung dari basis data pada {DIUKUR}, bukan ditulis tangan. Yang masih
-          tipis satu hal, dan disebutkan apa adanya di bawah: survei lapangan baru menyentuh{' '}
-          {RINGKASAN.heksagonBersurvei} dari {RINGKASAN.heksagon} heksagon.
-        </p>
-      </section>
-
-      {/* ================= 8 · TEMUAN =================================== */}
-      {/*
-        Duduk di antara ANGKA dan SUMBER, dan urutan itu disengaja: angka
-        menyatakan apa yang berdiri, temuan menyatakan apa yang dikatakannya,
-        sumber menunjukkan dari mana asalnya. Menaruh temuan sesudah sumber
-        membalik urutan membaca yang wajar - pembacanya akan diminta menilai
-        provenance sebelum tahu ada yang layak dinilai.
-
-        Seluruh isinya dari `lib/ringkasan-data.ts`; bagian ini tidak memuat
-        satu pun angka yang ditulis tangan. Lihat `GerbangTemuan.tsx`.
-      */}
-      <Pembatas />
-
-      <section
-        id="temuan"
-        className="g-adegan relative flex min-h-screen flex-col justify-center px-6 py-28"
-      >
-        <LatarBagian motif="temuan" />
-        <BagianTemuan />
-      </section>
-
-      {/* ================= 9 · SUMBER DATA & BATASAN ==================== */}
-      <Pembatas />
-
-      <section
-        id="sumber"
-        className="g-adegan relative flex min-h-screen flex-col justify-center px-6 py-28"
-      >
-        <LatarBagian motif="sumber" />
-        <div className="mx-auto max-w-[48rem] text-center">
-          {/* Judulnya diganti 3 September 2026.
-
-              "Tujuh sumber, dan yang belum ada disebut juga" menyatakan hal
-              yang benar dengan nada yang salah: ia membuka bagian terkuat
-              halaman ini dengan permintaan maaf. Yang sebenarnya terjadi
-              kebalikannya - tujuh sumber berlisensi terbuka, tiap angkanya
-              bisa dibuka tautannya dan dihitung ulang dari basis data.
-
-              Menyebut yang belum ada TETAP dilakukan, di bawah, dan justru itu
-              yang layak dibanggakan: sedikit sekali produk yang menerbitkan
-              batasnya sendiri. Bedanya cuma satu - ia dinyatakan sebagai
-              standar kerja, bukan sebagai kekurangan yang disesali. */}
-          <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">Dari mana angkanya</p>
-          <h2 className="g-tirai papan text-[clamp(1.7rem,4.4vw,3rem)] leading-tight">
-            Tujuh sumber terbuka, tiap angkanya bisa ditelusuri
-          </h2>
-          <p className="g-tirai mx-auto mt-5 max-w-[38rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
-            Semuanya berlisensi yang mengizinkan pemakaian ini, dan tiap namanya adalah tautan yang
-            bisa dibuka. Kolom cakupan menyatakan berapa heksagon yang benar-benar disentuh
-            sumbernya — bukan berapa yang seharusnya. Dihitung ulang dari basis data pada {DIUKUR}.
-          </p>
-        </div>
-
-        {/* `g-tirai` dipasang pada PEMBUNGKUS, tidak pada tiap <tr>.
-            Dua sebabnya, dan yang kedua yang menentukan: clip-path pada elemen
-            tabel bukan jalur yang bisa diandalkan, dan `gsap.from` yang
-            pemicunya tidak pernah menyala meninggalkan elemennya di keadaan
-            AWAL - untuk tirai itu berarti baris yang tergunting habis, tanpa
-            satu pun galat. Baris tabel adalah isi, bukan hiasan; ia tidak boleh
-            bergantung pada animasi yang menyala. */}
-        {/* Tabelnya duduk di atas PERMUKAAN, bukan langsung di atas latar.
-            Motif heksagon di belakang bagian ini bergaris dan bergerak; tanpa
-            permukaan, garisnya melintas persis di tengah bacaan - keluarga yang
-            sama dengan kaca mode gelap yang dulu terlalu tembus sehingga
-            gelombang kisi terbaca seolah di ATAS teksnya. Yang menutup bukan
-            putihnya melainkan kepekatannya. */}
-        <div className="g-tirai mx-auto mt-12 w-full max-w-[68rem] overflow-hidden rounded-[24px] border border-[color:var(--g-kaca-tepi)] bg-[color:var(--g-kaca-isi-tebal)] px-6 py-1.5">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[38rem] border-collapse text-left text-[13px]">
-              <caption className="sr-only">
-                Sumber data Loconomics beserta lisensi, variabel yang diisinya, dan cakupannya
-              </caption>
-              <thead>
-                <tr className="border-b border-[color:var(--g-ink)]/12 text-[11.5px] uppercase tracking-[0.06em] text-[color:var(--g-ink-4)]">
-                  <th scope="col" className="py-3 pr-4 font-medium">Sumber</th>
-                  <th scope="col" className="py-3 pr-4 font-medium">Lisensi</th>
-                  <th scope="col" className="py-3 pr-4 font-medium">Mengisi</th>
-                  <th scope="col" className="py-3 text-right font-medium">Cakupan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SUMBER.map((s) => (
-                  <tr
-                    key={s.nama}
-                    className="g-baris-sumber border-b border-[color:var(--g-ink)]/8 align-top transition-colors duration-300"
-                  >
-                    <th scope="row" className="py-3.5 pr-4 font-semibold">
-                      <a
-                        href={s.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline decoration-[color:var(--g-ink)]/25 underline-offset-[3px] transition-colors hover:decoration-[color:var(--g-teal)]"
-                      >
-                        {s.nama}
-                      </a>
-                    </th>
-                    {/* Lisensi sebagai PIL, bukan teks lepas. Ia satu-satunya
-                        kolom yang isinya kosakata tertutup - ODbL, CC BY, dan
-                        seterusnya - dan kolom berkosakata tertutup terbaca jauh
-                        lebih cepat sebagai label daripada sebagai kalimat. */}
-                    <td className="py-3.5 pr-4">
-                      <span className="inline-block whitespace-nowrap rounded-full border border-[color:var(--g-ink)]/12 px-2.5 py-1 text-[11.5px] font-medium text-[color:var(--g-ink-2)]">
-                        {s.lisensi}
-                      </span>
-                    </td>
-                    <td className="py-3.5 pr-4 text-[color:var(--g-ink-2)]">{s.mengisi}</td>
-                    {/* `null` dan `0` dua hal yang berbeda dan gampang dilebur:
-                        yang pertama berarti "tidak diukur per heksagon" (basemap),
-                        yang kedua berarti "tidak menyentuh satu pun". Menuliskan
-                        keduanya sebagai "0" akan menuduh basemap tidak dipakai. */}
-                    <td className="tabular py-3.5 pl-3 text-right font-semibold">
-                      {s.cakupan === null ? (
-                        <span className="font-normal text-[color:var(--g-ink-4)]">seluruh peta</span>
-                      ) : (
-                        <>
-                          {s.cakupan.toLocaleString('id-ID')}
-                          <span className="font-normal text-[color:var(--g-ink-4)]">
-                            {' / '}
-                            {RINGKASAN.heksagon.toLocaleString('id-ID')}
-                          </span>
-                          {/* Rel cakupan. Tidak menambah satu angka pun ke
-                              layar - ia menggambar perbandingan yang SUDAH
-                              tertulis di sebelahnya. Gunanya: "703 / 708" dan
-                              "364 / 708" butuh dibaca dan dibandingkan, dua
-                              batang tidak. */}
-                          <span
-                            className="mt-1.5 ml-auto block h-[5px] w-[72px] overflow-hidden rounded-full bg-[color:var(--g-ink)]/[0.09]"
-                            aria-hidden
-                          >
-                            <span
-                              className="block h-full rounded-full bg-[color:var(--g-teal)]"
-                              style={{
-                                width: `${Math.max(
-                                  (s.cakupan / Math.max(RINGKASAN.heksagon, 1)) * 100,
-                                  2,
-                                )}%`,
-                              }}
-                            />
-                          </span>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="mx-auto mt-14 w-full max-w-[68rem]">
-          {/* "Batasan datanya" saja terbaca sebagai daftar kekurangan, dan itu
-              menjual murah satu-satunya hal di halaman ini yang paling sulit
-              ditiru pesaing: produk yang MENERBITKAN batasnya sendiri, dihitung
-              dari basis datanya sendiri, di halaman depannya sendiri.
-
-              Kalimat kartunya tidak disentuh - ia dibangkitkan
-              `s7_publish.py --ekspor` dan tidak boleh ditulis tangan. Yang
-              diganti cuma bingkainya. */}
-          <div className="g-tirai mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-            <p className="eyebrow text-[color:var(--g-ink-3)]">Yang belum terukur — kami sebut sendiri</p>
-            <p className="text-[12px] leading-snug text-[color:var(--g-ink-4)]">
-              Dihitung dari basis data, bukan ditulis tangan
-            </p>
-          </div>
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {BATASAN.map((b, i) => (
-              <li key={b} className="g-buram g-panel flex gap-4 rounded-[20px] p-6">
-                {/* Nomor dalam heksagon. Bentuknya bukan hiasan - ia bentuk
-                    data proyek ini, dan di kartu yang isinya SOAL cakupan
-                    heksagon ia sekaligus menandai apa yang sedang dibicarakan. */}
-                <span className="relative grid h-9 w-8 shrink-0 place-items-center" aria-hidden>
-                  <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
-                    <polygon
-                      points={jalurHeks(46)}
-                      fill="none"
-                      stroke="var(--g-ink)"
-                      strokeOpacity="0.22"
-                      strokeWidth="3"
-                    />
-                  </svg>
-                  <span className="tabular relative text-[11.5px] font-semibold text-[color:var(--g-ink-3)]">
-                    {i + 1}
-                  </span>
-                </span>
-                <p className="text-[13.5px] leading-relaxed text-[color:var(--g-ink-2)]">{b}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="g-tirai mx-auto mt-8 max-w-[46rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
-            Rencana survei lapangan diturunkan dari basis data, bukan ditulis tangan: 30 heksagon
-            berkoordinat, dipilih dari yang berskor tinggi tetapi belum pernah dikunjungi. Dari{' '}
-            {RINGKASAN.titikMisiDitarik?.toLocaleString('id-ID')} titik misi MAPID yang ditarik,{' '}
-            {RINGKASAN.observasiMisi} jatuh di dalam keenam kawasan pilot — sisanya tersebar
-            se-Jabodetabek dan dipakai melatih model pengisi, bukan dibuang.
-          </p>
-        </div>
-      </section>
-
-      {/* ================= 10 · PENUTUP ================================= */}
-      <section className="g-adegan g-penutup relative overflow-hidden px-6 pb-14 pt-28">
-        <LatarBagian motif="penutup" />
-        {/* Tanpa `blur-[70px]`. Elemen sebesar 62vh x 86vw yang di-blur lalu
-            di-scale tiap bingkai harus di-blur ULANG tiap bingkai; gradien
-            radialnya sendiri sudah selembut hasil blur-nya. */}
-        <div className="g-aurora pointer-events-none absolute left-1/2 top-1/2 h-[62vh] w-[86vw] rounded-[50%]" aria-hidden />
-        <div className="g-kisi pointer-events-none absolute inset-0" aria-hidden />
-        <div className="g-raksasa papan pointer-events-none absolute inset-x-0 bottom-0 select-none text-center" aria-hidden>
-          {NAMA}
-        </div>
-        {/* SESUDAH huruf raksasa, bukan sebelumnya: urutannya yang membuat
-            hurufnya tenggelam lebih dulu ke dalam gelap. */}
-        <div className="g-ambang pointer-events-none absolute inset-x-0 bottom-0 h-[46vh]" aria-hidden />
-
-        {/* Judul penutup dibuat benar-benar setebal benda, bukan diberi bayangan
-            yang menyerupainya: delapan salinan huruf ditumpuk mundur di sumbu Z.
-            `perspective` dipasang di pembungkusnya, dan tidak boleh ada
-            `overflow` selain visible di antara keduanya. */}
-        <div className="relative mx-auto max-w-[46rem] text-center" style={{ perspective: 900 }}>
-          <h2 className="g-tirai">
-            <Teks3D
-              teks="Siap melihat petanya?"
-              kelas="papan text-[clamp(1.8rem,4.6vw,3.2rem)] leading-tight"
-            />
-          </h2>
-          <p className="g-tirai mx-auto mt-4 max-w-[34rem] text-[15px] leading-relaxed text-[color:var(--g-ink-2)]">
-            708 heksagon di enam kawasan pilot, lengkap dengan badge keyakinannya masing-masing.
-          </p>
-          <div className="g-tirai mt-9 flex justify-center">
+          <div className="g-masuk-awal mt-9 flex flex-wrap items-center justify-center gap-3">
+            {tombolMasuk('px-8 py-4', 'besar')}
             <Magnet
-              onClick={() => onMasuk()}
-              kelas="g-utama group inline-flex cursor-pointer items-center gap-3 rounded-full px-10 py-5 text-[16px] font-semibold"
-              anak={
-                <>
-                  {AJAKAN}
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform duration-300 ease-jelly group-hover:translate-x-1">
-                    <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden>
-                      <path d="M2 6h8M6.5 2.5 10 6l-3.5 3.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                </>
-              }
+              onClick={() => keBagian('solusi')}
+              kekuatan={0.22}
+              kelas="g-pil cursor-pointer rounded-full px-7 py-4 text-[15px] font-semibold text-[color:var(--g-ink)]"
+              anak={teks.lihatSolusi}
             />
           </div>
-        </div>
 
-        {/* --- Kaki. Sengaja DI ATAS bagian tim: yang di bawahnya bukan lagi
-            bagian dari halaman produk, melainkan ruangnya sendiri. -------- */}
-        <div className="relative mx-auto mt-24 flex max-w-[70rem] flex-col items-center justify-between gap-5 border-t border-[color:var(--g-ink)]/12 pt-7 sm:flex-row">
-          <p className="order-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--g-ink-3)] sm:order-1">
-            {IDENTITAS.produk} · {IDENTITAS.lomba}
-          </p>
-          <p className="g-pil order-1 rounded-full px-5 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--g-ink-2)] sm:order-2">
-            {IDENTITAS.tema}
-          </p>
-          <Magnet
-            onClick={keAtas}
-            label="Kembali ke atas"
-            kekuatan={0.4}
-            kelas="g-pil order-3 grid h-12 w-12 cursor-pointer place-items-center rounded-full text-[color:var(--g-ink-2)]"
-            anak={
-              <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden>
-                <path d="M10 15.5V4.5M4.8 9.7 10 4.5l5.2 5.2" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            }
-          />
+          {/* TANPA `transition-opacity`. GSAP menganimasikan opacity tombol ini
+              saat masuk, dan transisi CSS pada properti yang sama membuat nilai
+              terhitungnya tertinggal di belakang nilai inline - `gsap.from`
+              lalu merekam nilai tertinggal itu (nol) sebagai tujuan tweennya.
+              Terukur: tombol ini diam di opacity 0 selamanya, tanpa galat. */}
+          <button
+            onClick={() => keBagian('masalah')}
+            className="g-masuk-awal mt-16 flex cursor-pointer items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-[color:var(--g-ink-4)] transition-colors hover:text-[color:var(--g-ink-2)]"
+          >
+            <span className="g-panah inline-block">↓</span> {teks.gulir}
+          </button>
         </div>
       </section>
 
-      {/* ================= 11 · JURANG → TIM ============================ */}
-      <section id="tim" className="g-jurang relative">
-        {/* Latar jurang. `sticky` supaya ia menutupi layar selama bagian ini
-            dilewati, dan margin bawah negatif setinggi dirinya sendiri supaya
-            ia TIDAK memakan tinggi dokumen. */}
-        <div className="pointer-events-none sticky top-0 -mb-[100vh] h-screen overflow-hidden" aria-hidden>
-          <div className="g-gelap absolute inset-0 opacity-0" />
-          <svg
-            className="g-terowongan absolute left-1/2 top-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 -translate-y-1/2"
-            viewBox="-100 -100 200 200"
-          >
-            {[100, 76, 55, 38, 24, 13].map((r) => (
-              <polygon key={r} points={jalurHeks(r)} fill="none" stroke="var(--g-teal-muda)" strokeWidth="0.5" opacity={0.55} />
-            ))}
-          </svg>
-        </div>
+      {/* Pembungkus yang MENUTUP hero. Latarnya pekat: yang di bawahnya harus
+          benar-benar tertutup, bukan tembus. */}
+      <div className="g-tutup relative z-10">
+        {/* ================= 2 · MASALAH ==================================
+            SATU bagian, satu judul. Latar belakang dan alasan produk ini ada
+            digabung 10 Sep 2026 - dua judul besar untuk satu gagasan memaksa
+            pembacanya menyambung sendiri, dan sebagian besar tidak.
 
-        <div className="relative flex h-[170vh] flex-col items-center justify-center px-6 text-center">
-          <p className="g-turun eyebrow mb-4 text-[color:var(--g-ink-3)]">Terakhir</p>
-          <p className="g-turun papan max-w-[26rem] text-[clamp(1.3rem,3.4vw,2.1rem)] leading-tight">
-            Turun lebih dalam
-          </p>
-          <span className="g-turun g-panah mt-6 block text-[20px] text-[color:var(--g-ink-3)]" aria-hidden>
-            ↓
-          </span>
-        </div>
+            TANPA animasi masuk. Sengaja, dan itu satu-satunya bagian yang
+            begitu di halaman ini. */}
+        <section id="masalah" className="g-latar-titik relative overflow-hidden px-6 py-28 sm:py-36">
+          <div className="mx-auto w-full max-w-[74rem]">
+            <div className="grid items-start gap-x-14 gap-y-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]">
+              {/* Kolom kiri: judul, paragraf, tiga sebab. */}
+              <div>
+                <p className="eyebrow mb-5 text-[color:var(--g-ink-3)]">{teks.masalah.eyebrow}</p>
+                <h2 className="papan text-[clamp(2.1rem,5vw,3.7rem)] font-light leading-[1.04] tracking-[-0.022em]">
+                  {teks.masalah.judul}
+                </h2>
+                <p className="mt-6 max-w-[34rem] text-[15.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+                  {teks.masalah.isi}
+                </p>
 
-        <div className="relative px-6 pb-36">
-          <div className="mx-auto max-w-[46rem] text-center">
-            <p className="eyebrow mb-4 text-white/45">Lima orang</p>
-            <h2 className="papan text-[clamp(1.7rem,4.2vw,2.9rem)] leading-tight text-white">Tim di baliknya</h2>
-            <p className="mx-auto mt-3 text-[13.5px] text-white/55">
-              {IDENTITAS.institusi} · {IDENTITAS.tim}
+                {/* Tiga sebab, garis rambut, TANPA nomor: ketiganya bukan urutan. */}
+                <ol className="mt-10 divide-y divide-[color:var(--g-garis-halus)] border-y border-[color:var(--g-garis-halus)]">
+                  {teks.masalah.poin.map((p) => (
+                    <li key={p.kepala} className="py-5">
+                      <p className="papan text-[16px] leading-snug text-[color:var(--g-ink)]">{p.kepala}</p>
+                      <p className="mt-1.5 max-w-[34rem] text-[13.5px] leading-relaxed text-[color:var(--g-ink-3)]">
+                        {p.isi}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {/* Kolom kanan: gambar yang menjelaskan ketiganya sekaligus. */}
+              <div className="lg:sticky lg:top-28">
+                <KontrasKawasan />
+              </div>
+            </div>
+
+            {/* Satu kalimat penutup, dan di sinilah namanya disebut pertama
+                kali sebagai jawaban - bukan sebagai judul bagian tersendiri. */}
+            <p className="mt-14 max-w-[52rem] border-l-2 border-[color:var(--g-teal)]/45 pl-6 text-[clamp(1rem,1.6vw,1.22rem)] leading-relaxed text-[color:var(--g-ink)]">
+              {teks.masalah.penutup}
+            </p>
+          </div>
+        </section>
+
+        {/* ================= 3 · SOLUSI ================================== */}
+        <section id="solusi" className="relative px-6 py-28 sm:py-36">
+          <div className="mx-auto mb-12 max-w-[48rem] text-center">
+            <p className="g-sapu eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.solusi.eyebrow}</p>
+            <h2 className="g-sapu judul-bagian text-[clamp(1.5rem,2.8vw,2.35rem)]">{teks.solusi.judul}</h2>
+            <p className="g-sapu mx-auto mt-4 max-w-[38rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+              {teks.solusi.isi}
             </p>
           </div>
 
-          <div className="g-tim-grid mx-auto mt-14 grid max-w-[74rem] gap-5 sm:grid-cols-2 lg:grid-cols-3" style={{ perspective: 1400 }}>
-            {PENDIRI.map((o) => (
-              <article
-                key={o.peran}
-                className="g-orang g-kaca-gelap group relative overflow-hidden rounded-[22px] p-7"
-                style={{ transformStyle: 'preserve-3d' }}
-              >
-                {/* Cahaya yang menyala di belakang inisial saat kartunya
-                    disentuh. Satu-satunya warna di dasar jurang. */}
-                <span
-                  className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
-                  // Satu-satunya warna yang SENGAJA tetap ditulis mati di berkas
-                  // ini. Bagian tim duduk di dasar jurang yang selalu hitam di
-                  // kedua tampilan, jadi mengikatnya ke palet gerbang justru akan
-                  // membuatnya berubah mengikuti tampilan yang tidak berlaku di sini.
-                  style={{ background: 'radial-gradient(circle,#2fa891,transparent 70%)' }}
-                  aria-hidden
-                />
-                <div className="relative flex items-start gap-4">
-                  <span className="relative grid h-14 w-14 shrink-0 place-items-center" aria-hidden>
-                    <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
-                      <polygon points={jalurHeks(46)} fill="rgb(255 255 255 / 0.09)" stroke="rgb(255 255 255 / 0.28)" strokeWidth="2" />
+          <BentoKeputusan onBuka={onMasuk} />
+
+          <p className="mx-auto mt-9 max-w-[44rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
+            {teks.solusi.catatan}
+          </p>
+        </section>
+
+        {/* ================= 4 · EKOSISTEM (zig-zag) ===================== */}
+        <section id="ekosistem" className="g-latar-mesh relative px-6 py-28 sm:py-36">
+          <div className="mx-auto mb-16 max-w-[48rem] text-center sm:mb-24">
+            <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.ekosistem.eyebrow}</p>
+            <h2 className="g-baris judul-bagian text-[clamp(1.5rem,2.8vw,2.35rem)]">{teks.ekosistem.judul}</h2>
+            <p className="g-tirai mx-auto mt-4 max-w-[36rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+              {teks.ekosistem.isi}
+            </p>
+          </div>
+
+          {/* Tulang punggung + enam baris berselang-seling. Garis tegaknya
+              berdiri di lorong antara kedua kolom, jadi ia sama benarnya untuk
+              baris yang gambarnya di kiri maupun di kanan. Di bawah `lg`
+              seluruh rangkaiannya disembunyikan: satu kolom tidak punya lorong,
+              dan garis yang menempel di tepi cuma jadi hiasan. */}
+          <div className="g-eko-alur relative mx-auto w-full max-w-[74rem]">
+            <span
+              className="g-eko-tulang pointer-events-none absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 lg:block"
+              aria-hidden
+            >
+              <span className="g-eko-tulang-isi absolute inset-0 block origin-top" />
+            </span>
+
+            {teks.ekosistem.item.map((it, i) => {
+              const kiri = i % 2 === 0
+              const kartu = KARTU_GERBANG[i % KARTU_GERBANG.length]
+              return (
+                <div
+                  key={it.nama}
+                  data-sisi={kiri ? 'kiri' : 'kanan'}
+                  className="g-eko-baris relative grid items-center gap-8 py-8 sm:py-10 lg:grid-cols-2 lg:gap-16 lg:py-14"
+                >
+                  {/* Simpul + lengan, hanya di lg ke atas. */}
+                  <span
+                    className={`g-eko-lengan pointer-events-none absolute top-1/2 hidden h-px w-[2.6rem] lg:block ${
+                      kiri ? 'right-1/2 origin-right' : 'left-1/2 origin-left'
+                    }`}
+                    aria-hidden
+                  />
+                  <span
+                    className="g-eko-simpul pointer-events-none absolute left-1/2 top-1/2 hidden h-[18px] w-[16px] -translate-x-1/2 -translate-y-1/2 lg:block"
+                    aria-hidden
+                  >
+                    <svg viewBox="-50 -55 100 110" className="h-full w-full">
+                      <polygon
+                        points={jalurHeks(46)}
+                        fill="var(--g-latar-pekat)"
+                        stroke="var(--g-teal)"
+                        strokeWidth="9"
+                      />
                     </svg>
-                    <span className="relative text-[14px] font-semibold text-white">{o.inisial}</span>
                   </span>
-                  <div className="min-w-0">
-                    <p className="text-[15.5px] font-semibold leading-tight text-white">{o.nama}</p>
-                    <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[12.5px] text-white/55">
-                      {o.peran}
-                      {o.ketua && (
-                        <span className="rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-white/80">
-                          Ketua tim
-                        </span>
-                      )}
+
+                  {/* MEDIA: potret peta sungguhan, diredupkan jadi konteks,
+                      dengan satu panel antarmuka di depannya. */}
+                  <figure className={`g-eko-media relative ${kiri ? 'lg:order-1' : 'lg:order-2'}`}>
+                    <div className="g-eko-bingkai relative overflow-hidden rounded-[20px]">
+                      <img
+                        src={`/kartu/${kartu.berkas}.webp`}
+                        alt=""
+                        aria-hidden
+                        width={kartu.lebar}
+                        height={kartu.tinggi}
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
+                        // Peredupannya berbeda menurut basemap potretnya. Lima
+                        // dari enam kartu dipotret di atas basemap TERANG dan
+                        // satu di atas gelap; satu angka untuk keduanya membuat
+                        // barisnya terbaca sebagai enam gambar dari enam tempat
+                        // yang berbeda - terlihat begitu di potret, kartu kedua
+                        // menyala jauh lebih terang daripada tetangganya.
+                        style={{
+                          filter: kartu.gelap
+                            ? 'brightness(0.92) saturate(0.9)'
+                            : 'brightness(0.24) saturate(0.45)',
+                        }}
+                        className="block h-[16rem] w-full scale-[1.06] object-cover sm:h-[18.5rem]"
+                      />
+                      <span className="g-eko-scrim pointer-events-none absolute inset-0" aria-hidden />
+                      <div
+                        className={`pointer-events-none absolute bottom-5 ${
+                          kiri ? 'right-5' : 'left-5'
+                        } max-w-[calc(100%-2.5rem)]`}
+                      >
+                        <PanelEko i={i} teks={teks.ekosistem.panel} />
+                      </div>
+                    </div>
+                  </figure>
+
+                  {/* KATA */}
+                  <div className={`g-eko-kata ${kiri ? 'lg:order-2 lg:pl-8' : 'lg:order-1 lg:pr-8'}`}>
+                    <p className="eyebrow mb-3 text-[color:var(--g-ink-4)]">{it.tanda}</p>
+                    <h3 className="papan text-[clamp(1.3rem,2.2vw,1.85rem)] leading-tight text-[color:var(--g-ink)]">
+                      {it.nama}
+                    </h3>
+                    <p className="mt-3.5 max-w-[30rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+                      {it.isi}
                     </p>
                   </div>
                 </div>
-                <p className="relative mt-5 border-t border-white/10 pt-4 text-[13px] leading-relaxed text-white/65">
-                  {o.kerja}
-                </p>
-              </article>
-            ))}
+              )
+            })}
+          </div>
+        </section>
+
+        {/* ================= 5 · PENUTUP ================================= */}
+        <section className="g-penutup relative overflow-hidden px-6 pb-14 pt-32">
+          <div
+            className="g-aurora pointer-events-none absolute left-1/2 top-1/2 h-[62vh] w-[86vw] rounded-[50%]"
+            aria-hidden
+          />
+          <div className="g-kisi pointer-events-none absolute inset-0" aria-hidden />
+          <div
+            className="g-raksasa papan pointer-events-none absolute inset-x-0 bottom-0 select-none text-center"
+            aria-hidden
+          >
+            {NAMA}
+          </div>
+          <div className="g-ambang pointer-events-none absolute inset-x-0 bottom-0 h-[46vh]" aria-hidden />
+
+          <div className="relative mx-auto max-w-[46rem] text-center" style={{ perspective: 900 }}>
+            <h2 className="g-tirai">
+              <Teks3D teks={teks.penutup.judul} kelas="papan text-[clamp(1.8rem,4.6vw,3.2rem)] leading-tight" />
+            </h2>
+            <p className="g-tirai mx-auto mt-4 max-w-[34rem] text-[15px] leading-relaxed text-[color:var(--g-ink-2)]">
+              {teks.penutup.isi}
+            </p>
+            <div className="g-tirai mt-9 flex justify-center">{tombolMasuk('px-10 py-5', 'besar')}</div>
           </div>
 
-          <div className="mt-16 flex justify-center">
-            <button
-              onClick={keAtas}
-              className="g-pil-gelap flex cursor-pointer items-center gap-2.5 rounded-full px-6 py-3 text-[13px] font-medium text-white/70"
-            >
-              <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden>
-                <path d="M10 15.5V4.5M4.8 9.7 10 4.5l5.2 5.2" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Kembali ke permukaan
-            </button>
+          {/* --- Kaki. Sumber datanya disebut di sini, apa adanya, dengan
+              tautan - ini tempat paling ringkas yang tetap jujur. --------- */}
+          <div className="relative mx-auto mt-24 max-w-[70rem] border-t border-[color:var(--g-ink)]/12 pt-7">
+            <p className="text-center text-[11.5px] leading-relaxed text-[color:var(--g-ink-4)]">
+              {teks.penutup.data}:{' '}
+              {SUMBER.map((s, i) => (
+                <span key={s.nama}>
+                  {i > 0 && <span className="mx-1.5">·</span>}
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[color:var(--g-ink-3)] underline decoration-[color:var(--g-ink)]/20 underline-offset-[3px] transition-colors hover:text-[color:var(--g-ink)]"
+                  >
+                    {s.nama}
+                  </a>
+                </span>
+              ))}
+            </p>
+            <div className="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--g-ink-3)]">
+                {IDENTITAS.produk} · {IDENTITAS.institusi}
+              </p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--g-ink-4)]">{IDENTITAS.lomba}</p>
+              <Magnet
+                onClick={keAtas}
+                label={teks.penutup.keAtas}
+                kekuatan={0.4}
+                kelas="g-pil grid h-11 w-11 cursor-pointer place-items-center rounded-full text-[color:var(--g-ink-2)]"
+                anak={
+                  <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden>
+                    <path
+                      d="M10 15.5V4.5M4.8 9.7 10 4.5l5.2 5.2"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                }
+              />
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+
+        {/* ================= 6 · JURANG → TIM ============================ */}
+        <section id="tim" className="g-jurang relative">
+          <div className="pointer-events-none sticky top-0 -mb-[100vh] h-screen overflow-hidden" aria-hidden>
+            <div className="g-gelap absolute inset-0 opacity-0" />
+            <svg
+              className="g-terowongan absolute left-1/2 top-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 -translate-y-1/2"
+              viewBox="-100 -100 200 200"
+            >
+              {[100, 76, 55, 38, 24, 13].map((r) => (
+                <polygon
+                  key={r}
+                  points={jalurHeks(r)}
+                  fill="none"
+                  stroke="var(--g-teal-muda)"
+                  strokeWidth="0.5"
+                  opacity={0.5}
+                />
+              ))}
+            </svg>
+          </div>
+
+          <div className="relative flex h-[170vh] flex-col items-center justify-center px-6 text-center">
+            <p className="g-turun eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.tim.terakhir}</p>
+            <p className="g-turun papan max-w-[26rem] text-[clamp(1.3rem,3.4vw,2.1rem)] leading-tight">
+              {teks.tim.turun}
+            </p>
+            <span className="g-turun g-panah mt-6 block text-[20px] text-[color:var(--g-ink-3)]" aria-hidden>
+              ↓
+            </span>
+          </div>
+
+          <div className="relative px-6 pb-36">
+            <div className="mx-auto max-w-[46rem] text-center">
+              <p className="eyebrow mb-4 text-white/45">{teks.tim.eyebrow}</p>
+              <h2 className="papan text-[clamp(1.7rem,4.2vw,2.9rem)] leading-tight text-white">{teks.tim.judul}</h2>
+              <p className="mx-auto mt-3 text-[13.5px] text-white/55">{IDENTITAS.institusi}</p>
+            </div>
+
+            <div
+              className="g-tim-grid mx-auto mt-14 grid max-w-[74rem] gap-5 sm:grid-cols-2 lg:grid-cols-3"
+              style={{ perspective: 1400 }}
+            >
+              {PENDIRI.map((o) => (
+                <article
+                  key={o.peran}
+                  className="g-orang g-kaca-gelap group relative overflow-hidden rounded-[22px] p-7"
+                  style={{ transformStyle: 'preserve-3d' }}
+                >
+                  <span
+                    className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+                    style={{ background: 'radial-gradient(circle,#2fa891,transparent 70%)' }}
+                    aria-hidden
+                  />
+                  <div className="relative flex items-start gap-4">
+                    <span className="relative grid h-14 w-14 shrink-0 place-items-center" aria-hidden>
+                      <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
+                        <polygon
+                          points={jalurHeks(46)}
+                          fill="rgb(255 255 255 / 0.09)"
+                          stroke="rgb(255 255 255 / 0.28)"
+                          strokeWidth="2"
+                        />
+                      </svg>
+                      <span className="relative text-[14px] font-semibold text-white">{o.inisial}</span>
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[15.5px] font-semibold leading-tight text-white">{o.nama}</p>
+                      <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[12.5px] text-white/55">
+                        {o.peran}
+                        {o.ketua && (
+                          <span className="rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-white/80">
+                            {teks.tim.ketua}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="relative mt-5 border-t border-white/10 pt-4 text-[13px] leading-relaxed text-white/65">
+                    {bahasa === 'en' && o.kerjaEn ? o.kerjaEn : o.kerja}
+                  </p>
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-16 flex justify-center">
+              <button
+                onClick={keAtas}
+                className="g-pil-gelap flex cursor-pointer items-center gap-2.5 rounded-full px-6 py-3 text-[13px] font-medium text-white/70"
+              >
+                <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden>
+                  <path
+                    d="M10 15.5V4.5M4.8 9.7 10 4.5l5.2 5.2"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {teks.tim.permukaan}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   )
 }

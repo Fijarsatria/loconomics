@@ -2,7 +2,7 @@
    mendahului seluruh aturan lain - dan `@import "tailwindcss"` mengembang
    jadi ratusan aturan. Menaruh baris ini sesudahnya membuat peramban
    membuangnya diam-diam: tidak ada galat, font sekadar tidak pernah muncul. */
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,300..700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 /* ==========================================================================
@@ -401,6 +401,24 @@ td {
   letter-spacing: 0.01em;
 }
 
+/* --- Judul bagian ---------------------------------------------------------
+   BUKAN `.papan`, dan itu mengembalikan aturan yang sudah tertulis di atas:
+   lebar 125% dipakai HANYA untuk identitas dan angka besar. Setiap judul
+   bagian memakainya, dan kodenya jadi melanggar aturannya sendiri.
+
+   Terukur berdampingan dengan susunan yang ditiru halaman ini: judul bagian di
+   sana 36px berat 300; di sini 44,8-48px berat 600 dengan lebar 125%. Sepertiga
+   lebih besar dan dua tingkat lebih tebal - dan itu selisih antara judul yang
+   MENGANTAR isinya dengan judul yang berteriak lebih keras daripada isinya.
+
+   Judul yang tenang menuntut isi yang layak dibaca. Itu memang tuntutan yang
+   diinginkan. */
+.judul-bagian {
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.16;
+}
+
 .eyebrow {
   font-size: 11.5px;
   font-weight: 600;
@@ -491,8 +509,17 @@ td {
   color: var(--color-ink);
 }
 
+/* `.peta-gelap` DIPASANG DI <body> oleh App, bukan ditulis sebagai `body` di
+   sini. Bedanya menentukan: ketiga dialog produk ini dirender lewat
+   `createPortal` ke <body>, jadi secara DOM mereka di LUAR wadah aplikasi -
+   dan tanpa token di akar, yang terlihat panel putih mengambang di atas
+   aplikasi gelap.
+
+   Tetapi menuliskannya sebagai `body` MATI membuat dialog selalu gelap, juga
+   saat basemapnya terang. Yang benar: App menyalakan-mematikan kelasnya
+   mengikuti gaya basemap, dan aturan di bawah ini melayani keduanya. */
 .peta-gelap,
-.gerbang[data-tema='gelap'],
+.gerbang,
 .g-nav-gelap {
   --color-ground: #0d1613;
   --color-ground-2: #16221d;
@@ -754,76 +781,112 @@ input:focus-visible {
    alasan mengarang yang kedua.
    ========================================================================== */
 .gerbang {
+  /* Near-black kehijauan, bukan hitam murni: hitam murni membuat teal di
+     atasnya terbaca sebagai neon yang mengambang, sementara sedikit hijau di
+     dasarnya membuat aksen itu terbaca sebagai cahaya dari bahan yang sama.
+
+     Dua cahaya aksen di sudut berlawanan - teal di kanan atas, ungu di kiri
+     bawah - keduanya di bawah 11%. Yang harus terbaca tetap hitamnya; warna
+     yang terlihat sebagai warna berarti alfanya kelewat tinggi. */
   --g-latar:
-    radial-gradient(1100px 700px at 78% 8%, #ffffff 0%, transparent 55%),
-    radial-gradient(900px 620px at 12% 82%, #ffffff 0%, transparent 50%),
-    linear-gradient(155deg, #6dd5c4 0%, #a8e6da 42%, #dff6f0 100%);
+    radial-gradient(1150px 760px at 80% -8%, rgb(45 232 192 / 0.10) 0%, transparent 58%),
+    radial-gradient(980px 700px at 6% 92%, rgb(124 92 255 / 0.09) 0%, transparent 55%),
+    linear-gradient(168deg, #0b100e 0%, #080b0a 48%, #050706 100%);
 
-  /* Tinta, dari paling pekat ke paling redup. */
-  --g-ink: #0b3d37;
-  --g-ink-2: #12564d;
-  --g-ink-3: #2b6a61;
-  --g-ink-4: #4c8078;
-  --g-teks-terang: #eafaf6;
+  /* Tinta, dari paling pekat ke paling redup. Di halaman gelap "paling pekat"
+     berarti paling TERANG - urutannya soal kontras terhadap latar, bukan soal
+     gelapnya warna. */
+  --g-ink: #e8f5f1;
+  --g-ink-2: #c2d7d1;
+  --g-ink-3: #8aa39c;
+  --g-ink-4: #66807a;
+  /* Teks yang duduk DI ATAS permukaan terang - tombol teal, pil aktif. */
+  --g-teks-terang: #04120f;
 
-  /* Aksen hijau. */
-  --g-teal: #1f8f7d;
-  --g-teal-terang: #2fa891;
-  --g-teal-2: #3fb8a3;
-  --g-teal-muda: #6dd5c4;
-  --g-teal-tua: #17766a;
+  /* Aksen utama: teal listrik. Ini warna Hidden Gem, dan satu-satunya warna
+     di halaman ini yang boleh berteriak. */
+  --g-teal: #2de8c0;
+  --g-teal-terang: #5bf3d3;
+  --g-teal-2: #2de8c0;
+  --g-teal-muda: #7cf7dd;
+  --g-teal-tua: #17be9b;
 
-  /* Kaca: isian, tepi, kilau atas, dan bayangan jatuh. */
-  --g-kaca-isi: rgb(255 255 255 / 0.62);
-  --g-kaca-isi-tebal: rgb(255 255 255 / 0.86);
-  --g-kaca-isi-pil: rgb(255 255 255 / 0.7);
-  --g-kaca-isi-pil-hover: rgb(255 255 255 / 0.84);
-  --g-kaca-tepi: rgb(255 255 255 / 0.55);
-  --g-kaca-tepi-terang: rgb(255 255 255 / 0.92);
-  --g-kaca-kilau: rgb(255 255 255 / 0.85);
-  --g-kaca-bayang: rgb(6 60 53 / 0.35);
-  --g-kaca-kilau-sapu: rgb(255 255 255 / 0.55);
+  /* Aksen kedua: ungu. Pasangan berlawanan arah dari teal, dipakai untuk sisi
+     "terlihat mahal" - Jebakan Gengsi dan sumbu prestise di Kompas Kuadran.
+     Dua kuadran yang berselisih itu tesis produknya, jadi keduanya berhak
+     punya warna sendiri alih-alih dua nilai dari satu rona. */
+  --g-ungu: #7c5cff;
+  --g-ungu-terang: #9e86ff;
+  --g-ungu-tua: #5b3fd9;
 
-  /* Tombol utama. */
-  --g-utama-isi: #0b3d37;
-  --g-utama-isi-hover: #0f5148;
-  --g-utama-teks: #e8fbf6;
-  --g-utama-tepi: rgb(11 61 55 / 0.9);
+  /* Permukaan bento: kartu PEKAT yang menutup apa pun di belakangnya, dengan
+     tepi yang terlihat. Berbeda dari --g-kaca-* yang justru tembus pandang. */
+  --g-kartu-isi: #141a18;
+  --g-kartu-isi-2: #1a211e;
+  --g-kartu-tepi: #2a3330;
+  --g-kartu-tepi-nyala: rgb(45 232 192 / 0.42);
+
+  /* Kaca diberi BADAN, bukan sekadar putih tipis. Yang menutup bukan putihnya
+     melainkan kepekatannya, jadi dasarnya warna gelap halaman - putihnya
+     tinggal jadi kilau di tepi. */
+  --g-kaca-isi: rgb(11 17 15 / 0.74);
+  --g-kaca-isi-tebal: rgb(11 17 15 / 0.9);
+  --g-kaca-isi-pil: rgb(11 17 15 / 0.66);
+  --g-kaca-isi-pil-hover: rgb(20 28 25 / 0.84);
+  --g-kaca-tepi: rgb(255 255 255 / 0.11);
+  --g-kaca-tepi-terang: rgb(255 255 255 / 0.28);
+  --g-kaca-kilau: rgb(255 255 255 / 0.13);
+  --g-kaca-bayang: rgb(0 0 0 / 0.85);
+  --g-kaca-kilau-sapu: rgb(255 255 255 / 0.15);
+
+  /* Tombol utama PUTIH, bukan teal.
+     Diubah 9 Sep 2026 sesudah halaman ini dibandingkan berdampingan dengan
+     susunan yang ditirunya. Di sana chrome-nya nyaris monokrom - hitam, putih,
+     abu - dan warna jenuh hanya muncul di DALAM tangkapan produknya: poligon
+     biru, pin merah, kisi hijau-kuning-merah. Satu-satunya aksen berwarna di
+     seluruh chrome adalah satu tombol bergradien.
+
+     Di sini kebalikannya: teal ada di tombol, eyebrow, angka, tepi hover, dan
+     aksen - jadi tidak ada satu pun yang menonjol, dan yang terbaca cuma
+     "halaman hijau". Warna yang dipakai di mana-mana berhenti berarti apa-apa.
+
+     Putih di atas near-black memberi kontras tertinggi yang bisa dicapai, dan
+     ia membebaskan teal untuk kembali jadi apa yang seharusnya: warna DATA -
+     Hidden Gem di peta, dan satu tombol ajakan bergradien. */
+  --g-utama-isi: #f2f7f5;
+  --g-utama-isi-hover: #ffffff;
+  --g-utama-teks: #06100e;
+  --g-utama-tepi: rgb(242 247 245 / 0.5);
 
   /* Latar hero: kisi, aurora, sarang, cahaya hanyut, nama raksasa. */
-  --g-kisi-garis: rgb(11 61 55 / 0.055);
-  --g-aurora-1: rgb(255 255 255 / 0.9);
-  --g-aurora-2: rgb(168 230 218 / 0.5);
-  --g-sarang: rgb(11 61 55 / 0.13);
-  --g-hanyut-1: rgb(31 143 125 / 0.17);
-  --g-hanyut-2: rgb(31 143 125 / 0.07);
-  --g-lensa-1: rgb(31 143 125 / 0.3);
-  --g-lensa-2: rgb(31 143 125 / 0.12);
-  --g-sarang-nyala: rgb(31 143 125 / 0.78);
-  --g-raksasa-tepi: rgb(11 61 55 / 0.15);
-  --g-raksasa-isi: rgb(11 61 55 / 0.12);
+  --g-kisi-garis: rgb(150 235 220 / 0.055);
+  --g-aurora-1: rgb(45 232 192 / 0.15);
+  --g-aurora-2: rgb(124 92 255 / 0.11);
+  --g-sarang: rgb(150 235 220 / 0.1);
+  --g-hanyut-1: rgb(45 232 192 / 0.13);
+  --g-hanyut-2: rgb(45 232 192 / 0.045);
+  --g-lensa-1: rgb(45 232 192 / 0.24);
+  --g-lensa-2: rgb(45 232 192 / 0.07);
+  --g-sarang-nyala: rgb(45 232 192 / 0.62);
+  --g-raksasa-tepi: rgb(150 235 220 / 0.14);
+  --g-raksasa-isi: rgb(150 235 220 / 0.085);
 
   /* Bilah atas. */
-  --g-nav-isi: rgb(255 255 255 / 0.72);
-  --g-nav-tepi: rgb(255 255 255 / 0.7);
-  --g-nav-bayang: rgb(6 60 53 / 0.45);
+  --g-nav-isi: rgb(9 14 12 / 0.68);
+  --g-nav-tepi: rgb(255 255 255 / 0.13);
+  --g-nav-bayang: rgb(0 0 0 / 0.8);
 
   /* Permukaan PEKAT - kartu yang harus menutupi apa pun yang lewat di
-     belakangnya. Berbeda dari --g-kaca-* yang justru tembus pandang. */
-  --g-kartu-pekat: rgb(255 255 255 / 0.9);
+     belakangnya. */
+  --g-kartu-pekat: rgb(15 22 19 / 0.94);
   /* Garis pembagi halus di dalam kartu: grid kuadran, pemisah baris. */
-  --g-garis-halus: rgb(11 61 55 / 0.18);
-  --g-garis-halus-2: rgb(11 61 55 / 0.1);
-  --g-motif-garis: rgb(11 61 55 / 0.3);
-  --g-elips: #ffffff;
-  --g-scroll: rgb(11 61 55 / 0.18);
-  --g-scroll-hover: rgb(11 61 55 / 0.32);
+  --g-garis-halus: rgb(190 235 225 / 0.15);
+  --g-garis-halus-2: rgb(190 235 225 / 0.085);
+  --g-elips: rgb(45 232 192 / 0.085);
+  --g-scroll: rgb(190 235 225 / 0.18);
+  --g-scroll-hover: rgb(190 235 225 / 0.34);
 
   background: var(--g-latar);
-  /* Halaman ini penuh benda yang mewarisi warnanya lewat `currentColor` dan
-     lewat variabel di atas, jadi satu transisi di akar sudah cukup membuat
-     pergantian tampilannya menyatu alih-alih berkedip. */
-  transition: background 620ms var(--ease-liquid);
   /* TANPA `background-attachment: fixed`, dan tampilannya tidak berubah
      sedikit pun.
 
@@ -833,80 +896,6 @@ input:focus-visible {
      itu, bukan pada isinya. Jadi `fixed` di sini tidak menambah apa pun secara
      visual — ia hanya menyalakan jalur lambat peramban yang memaksa tiga
      gradien selebar layar DILUKIS ULANG setiap bingkai gulir. */
-}
-
-/* --- Mode gelap halaman gerbang -----------------------------------------
-   Warnanya diambil dari DASAR JURANG di bagian tim - keadaan gelap yang sudah
-   ada di halaman ini sejak awal dan sudah terbukti terbaca.
-
-   Kacanya dibalik arahnya, persis seperti .g-kaca-gelap sudah melakukannya di
-   bawah sana: isian putih beralfa rendah di atas gelap, kilau tetap dari atas,
-   bayangan hampir hilang karena di kegelapan tidak ada permukaan yang
-   menampungnya. */
-.gerbang[data-tema='gelap'] {
-  --g-latar: radial-gradient(120% 90% at 50% 0%, #0a1f1b 0%, #04100e 55%, #010806 100%);
-
-  --g-ink: #e6f5f0;
-  --g-ink-2: #bfe6dd;
-  --g-ink-3: #8fc4b9;
-  --g-ink-4: #6b9d93;
-  --g-teks-terang: #04100e;
-
-  --g-teal: #5eead4;
-  --g-teal-terang: #2dd4bf;
-  --g-teal-2: #5eead4;
-  --g-teal-muda: #6dd5c4;
-  --g-teal-tua: #99f6e4;
-
-  /* Kaca gelap diberi BADAN, bukan sekadar putih tipis.
-     Nilai lamanya 6% putih - praktis tembus pandang, dan itu tidak apa-apa
-     selama latarnya gradien rata. Sejak ada gelombang kisi heksagon yang
-     menyala di belakangnya, panel setransparan itu berhenti jadi permukaan:
-     garis terang di belakangnya terbaca seolah melintas DI ATAS bacaan.
-
-     Yang menutup bukan putihnya melainkan kepekatannya, jadi dasarnya warna
-     gelap halaman - putihnya tinggal jadi kilau di tepi. */
-  --g-kaca-isi: rgb(13 26 22 / 0.74);
-  --g-kaca-isi-tebal: rgb(13 26 22 / 0.88);
-  --g-kaca-isi-pil: rgb(13 26 22 / 0.66);
-  --g-kaca-isi-pil-hover: rgb(22 38 33 / 0.82);
-  --g-kaca-tepi: rgb(255 255 255 / 0.12);
-  --g-kaca-tepi-terang: rgb(255 255 255 / 0.3);
-  --g-kaca-kilau: rgb(255 255 255 / 0.14);
-  --g-kaca-bayang: rgb(0 0 0 / 0.85);
-  --g-kaca-kilau-sapu: rgb(255 255 255 / 0.16);
-
-  /* Tombol utama dibalik: di atas gelap, tombol gelap berhenti jadi tombol. */
-  --g-utama-isi: #5eead4;
-  --g-utama-isi-hover: #99f6e4;
-  --g-utama-teks: #04211d;
-  --g-utama-tepi: rgb(94 234 212 / 0.5);
-
-  --g-kisi-garis: rgb(150 230 216 / 0.06);
-  --g-aurora-1: rgb(45 212 191 / 0.16);
-  --g-aurora-2: rgb(13 148 136 / 0.12);
-  --g-sarang: rgb(148 226 213 / 0.12);
-  --g-hanyut-1: rgb(45 212 191 / 0.14);
-  --g-hanyut-2: rgb(45 212 191 / 0.05);
-  --g-lensa-1: rgb(94 234 212 / 0.24);
-  --g-lensa-2: rgb(94 234 212 / 0.08);
-  --g-sarang-nyala: rgb(94 234 212 / 0.66);
-  --g-raksasa-tepi: rgb(148 226 213 / 0.16);
-  --g-raksasa-isi: rgb(148 226 213 / 0.1);
-
-  --g-nav-isi: rgb(10 26 22 / 0.66);
-  --g-nav-tepi: rgb(255 255 255 / 0.14);
-  --g-nav-bayang: rgb(0 0 0 / 0.8);
-
-  /* Elips di kaki hero: di terang ia cahaya putih, di gelap ia harus
-     REDUP - putih 78% di atas hitam berubah jadi lampu sorot. */
-  --g-kartu-pekat: rgb(16 30 26 / 0.94);
-  --g-garis-halus: rgb(190 235 225 / 0.16);
-  --g-garis-halus-2: rgb(190 235 225 / 0.09);
-  --g-motif-garis: rgb(190 235 225 / 0.3);
-  --g-elips: rgb(45 212 191 / 0.09);
-  --g-scroll: rgb(190 235 225 / 0.2);
-  --g-scroll-hover: rgb(190 235 225 / 0.36);
 }
 
 /* Kaca. Tiga lapis yang membuatnya terbaca sebagai benda, bukan kotak pudar:
@@ -992,6 +981,82 @@ input:focus-visible {
     0 26px 54px -18px rgb(6 60 53 / 0.7);
 }
 
+/* --- Tombol ajakan bertepi gradien ---------------------------------------
+   Dipakai HANYA oleh satu tombol di seluruh halaman: "Sign Up untuk akses
+   semua fitur". Itu disengaja - kalau dua benda sama-sama berpendar, tidak ada
+   yang berpendar. Ini satu-satunya yang boleh.
+
+   Tepinya gradien lewat DUA background sekaligus: isian pekat di padding-box,
+   gradien di border-box, dengan `border` transparan sebagai jendelanya. Satu
+   elemen, nol DOM tambahan.
+
+   Denyutnya cincin yang membesar lalu pudar - `transform` dan `opacity` saja,
+   dua properti yang berjalan di compositor. Bukan `box-shadow` yang berdenyut:
+   itu tahap paint, dan halaman ini sudah pernah membayar mahal untuk pelajaran
+   yang sama (lihat jebakan #124). */
+.g-catalyst {
+  position: relative;
+  isolation: isolate;
+  /* Warna teks ditulis walaupun kedua labelnya bergradien: `<Kilau />` di
+     dalamnya mewarisi `currentColor`, dan tanpa baris ini percikannya
+     mengambil warna tombol yang digantikan kelas ini. */
+  color: var(--g-ink);
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--g-kartu-isi), var(--g-kartu-isi)) padding-box,
+    linear-gradient(96deg, var(--g-teal) 0%, var(--g-ungu) 58%, var(--g-teal-terang) 100%) border-box;
+  box-shadow:
+    0 0 22px -6px rgb(45 232 192 / 0.4),
+    0 0 30px -8px rgb(124 92 255 / 0.34);
+  transition:
+    box-shadow 260ms var(--ease-liquid),
+    transform 260ms var(--ease-liquid);
+}
+.g-catalyst:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 30px -4px rgb(45 232 192 / 0.58),
+    0 0 44px -6px rgb(124 92 255 / 0.5);
+}
+.g-catalyst::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  border: 1.5px solid var(--g-teal);
+  opacity: 0;
+  pointer-events: none;
+  animation: g-catalyst-denyut 3400ms ease-out infinite;
+}
+@keyframes g-catalyst-denyut {
+  0% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  62% {
+    opacity: 0;
+    transform: scale(1.13);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.13);
+  }
+}
+/* Teks bergradien. Kedua ujungnya sengaja TERANG - gradien yang turun ke warna
+   pekat di salah satu ujungnya membuat separuh kata hilang di atas latar
+   gelap, dan ini tombol ajakan, bukan hiasan. */
+.g-catalyst-teks {
+  background: linear-gradient(96deg, #8ffbe4 0%, #c0b0ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-catalyst::before {
+    animation: none;
+  }
+}
+
 /* Panah "gulir" bernapas turun-naik. Satu-satunya animasi di halaman ini yang
    berjalan sendiri, karena ia justru mengajak menggulir - ia tidak boleh
    menunggu gulir lebih dulu. */
@@ -1072,26 +1137,175 @@ input:focus-visible {
     0 22px 44px -20px var(--g-kaca-bayang);
 }
 
-/* --- Dek kartu peta -------------------------------------------------------
-   Bahan sedikit lebih padat daripada .g-pil: di dalamnya ada peta, dan peta di
-   balik kaca yang terlalu tipis berubah jadi bubur warna. */
-.g-kartu-peta {
-  background: var(--g-kaca-isi-tebal);
-  border: 1px solid var(--g-kaca-tepi);
-  box-shadow:
-    inset 0 1px 0 var(--g-kaca-kilau),
-    0 26px 50px -26px var(--g-kaca-bayang);
+/* --- Kartu bento ----------------------------------------------------------
+   Permukaan PEKAT dengan tepi yang terlihat, bukan kaca. Di dalamnya ada peta,
+   dan peta di balik kaca yang terlalu tipis berubah jadi bubur warna.
+
+   Tepinya 1,5px dan bukan 1px dengan alasan yang bisa diukur: di atas latar
+   near-black, tepi 1px beralfa rendah menghilang sama sekali pada layar
+   ber-DPR 1, dan kartunya berhenti terbaca sebagai kartu. */
+.g-bento {
+  background: var(--g-kartu-isi);
+  border: 1.5px solid var(--g-kartu-tepi);
   transition:
-    background 320ms var(--ease-liquid),
     border-color 320ms var(--ease-liquid),
+    background 320ms var(--ease-liquid),
     box-shadow 320ms var(--ease-liquid);
 }
-.g-kartu-peta:hover {
-  background: var(--g-kaca-isi-pil-hover);
-  border-color: var(--g-kaca-tepi-terang);
-  box-shadow:
-    inset 0 1px 0 var(--g-kaca-kilau),
-    0 44px 74px -28px var(--g-kaca-bayang);
+.g-bento:hover {
+  background: var(--g-kartu-isi-2);
+  border-color: var(--g-kartu-tepi-nyala);
+  box-shadow: 0 0 0 1px rgb(45 232 192 / 0.1);
+}
+/* Gambar membesar sedikit saat kartunya disentuh kursor. `transform` murni,
+   dijalankan compositor — menggantikan condong-mengikuti-kursor yang dulu
+   memasang pointermove + rAF pada enam kartu sekaligus. */
+/* TANPA `will-change`. Ia memindahkan elemen ke lapisan komposit sendiri -
+   berguna selama dianimasikan, tetapi enam gambar memegang lapisannya
+   masing-masing SELAMANYA, termasuk saat jauh di luar layar. Transisi
+   `transform` sudah dikomposit tanpanya. */
+.g-bento-gambar {
+  transform: scale(1.005);
+  /* Potret kartu dibuat saat aplikasi masih bertema TERANG, dan peta putih di
+     atas halaman near-black terbaca sebagai guntingan mode terang yang
+     ditempel - terlihat jelas begitu halamannya dipotret.
+
+     Perbaikan yang sebenarnya menggambar ulang keenamnya dengan basemap gelap
+     (`node scripts/potret-kartu.mjs`), dan itu MENUNGGU ubin MAPID pulih -
+     sekarang ia menjawab 401, jadi menggambar ulang cuma menghasilkan enam
+     kotak kosong. Sampai saat itu, peredupan ini yang menahannya: cukup untuk
+     berhenti menyilaukan, tidak sampai membuat jalannya tak terbaca. */
+  filter: brightness(0.62) saturate(0.8) contrast(1.08);
+  transition: transform 620ms var(--ease-liquid);
+}
+
+/* Scrim di tepi DALAM gambar, supaya potretnya melebur ke kartunya alih-alih
+   berdiri sebagai persegi terang yang ditempel.
+
+   Meredupkan saja tidak cukup: peta putih yang diredupkan tetap persegi, cuma
+   abu-abu. Yang menghilangkan kesan tempelan adalah TEPINYA yang hilang.
+
+   Arahnya mengikuti sisi tempat gambar bertemu teks, dan sisi itu berbeda di
+   ketiga bentuk kartu. Scrim yang arahnya salah menggelapkan sisi yang tidak
+   bersentuhan dengan apa pun, dan itu terbaca sebagai noda - terlihat begitu
+   di potret ponsel sebelum arahnya dibuat mengikuti bentuk. */
+.g-bento-media {
+  position: relative;
+}
+.g-bento-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* Teks di ATAS gambar: tepinya hilang di sisi atas. Ini juga bawaan untuk
+   SELURUH kartu di bawah 640px, karena di sana semuanya bertumpuk. */
+.g-bento-media-atas::after,
+.g-bento-media-samping::after {
+  background: linear-gradient(
+    180deg,
+    var(--g-kartu-isi) 0%,
+    rgb(20 26 24 / 0.5) 20%,
+    rgb(20 26 24 / 0) 58%
+  );
+}
+/* Gambar di ATAS, teks di bawah: tepinya hilang di sisi bawah. */
+.g-bento-media-bawah::after {
+  background: linear-gradient(
+    0deg,
+    var(--g-kartu-isi) 0%,
+    rgb(20 26 24 / 0.5) 20%,
+    rgb(20 26 24 / 0) 58%
+  );
+}
+/* Baru sejak 640px kartu `belah` benar-benar berdampingan, dan barulah tepi
+   yang bersentuhan pindah ke sisi KIRI. */
+@media (min-width: 640px) {
+  .g-bento-media-samping::after {
+    background: linear-gradient(
+      90deg,
+      var(--g-kartu-isi) 0%,
+      rgb(20 26 24 / 0.55) 24%,
+      rgb(20 26 24 / 0) 66%
+    );
+  }
+}
+
+/* --- Gelombang heksagon di atas potret kartu ------------------------------
+   MENGGANTIKAN lima animasi SVG yang berdiri di sini sebelumnya. Kelimanya
+   digambar sendiri - sapuan skor, batang kuartil, denyut, zona tertolak,
+   sapuan radar - dan tidak satu pun benar-benar terjadi di peta.
+
+   Yang tersisa satu gerakan, dan gerakan itu yang MEMANG dilakukan aplikasinya:
+   layer heksagon mekar dari pusat kawasan, bertahan, lalu surut. Undakannya
+   ditulis per sel lewat `animation-delay` yang dihitung dari JARAK KE PUSAT,
+   jadi bentuk gelombangnya melingkar - bukan menyala satu per satu.
+
+   Dua rem dipasang, dan keduanya wajib:
+
+     1. `animation-play-state: paused` sampai kartunya benar-benar terlihat.
+        Satu IntersectionObserver membalik `data-tampil`.
+     2. `prefers-reduced-motion` mematikannya sama sekali - dan saat mati,
+        heksagonnya DITINGGAL TERLIHAT, bukan hilang: layer yang tidak pernah
+        tergambar bukan gambar yang lebih tenang, ia gambar yang kurang. */
+.g-alun-sel {
+  opacity: 0;
+  animation: g-alun 5200ms cubic-bezier(0.33, 0.9, 0.28, 1) infinite;
+  animation-play-state: paused;
+}
+.g-bento[data-tampil='1'] .g-alun-sel {
+  animation-play-state: running;
+}
+/* Jendela KOSONGNYA sengaja lebih pendek daripada rentang undakannya.
+   Undakan menyebar sampai 1,45 dtk; kalau jendela kosongnya lebih panjang dari
+   itu, ada saat SELURUH sel sedang tersembunyi sekaligus dan kartunya berkedip
+   jadi peta polos - tertangkap di potret, tiga kartu sekaligus. 25% dari 5,2
+   dtk = 1,30 dtk, tepat di bawahnya, jadi selalu ada heksagon yang tertinggal
+   di layar saat gelombang berikutnya berangkat. */
+@keyframes g-alun {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  12% {
+    opacity: 0.42;
+    transform: scale(1);
+  }
+  62% {
+    opacity: 0.42;
+    transform: scale(1);
+  }
+  75% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-alun-sel,
+  .g-bento[data-tampil='1'] .g-alun-sel {
+    animation: none;
+    opacity: 0.38;
+    transform: none;
+  }
+}
+
+.g-visual {
+  background: var(--g-kartu-isi);
+  border: 1.5px solid var(--g-kartu-tepi);
+}
+.g-bento:hover .g-bento-gambar {
+  transform: scale(1.045);
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-bento-gambar,
+  .g-bento:hover .g-bento-gambar {
+    transform: none;
+    transition: none;
+  }
 }
 
 /* --- Kartu isi umum, versi baru -------------------------------------------
@@ -1151,14 +1365,10 @@ input:focus-visible {
    jadi yang dihasilkan putih di atas putih. Persis yang dilaporkan: tombolnya
    hilang sama sekali begitu bagian tim masuk layar.
 
-   Jadi pembalikannya dibatasi ke tampilan terang, dan di gelap tombolnya tetap
-   memakai warna utamanya sendiri - yang memang sudah dirancang untuk latar
-   gelap. */
+   Sejak halaman ini gelap seluruhnya, tombolnya tetap memakai warna utamanya
+   sendiri - yang memang sudah dirancang untuk latar gelap. Pembalikan ke putih
+   dulu hanya berlaku di tampilan terang, dan tampilan itu sudah tidak ada. */
 .g-nav-terbalik {
-  background: #ffffff;
-  color: var(--g-ink);
-}
-.gerbang[data-tema='gelap'] .g-nav-terbalik {
   background: var(--g-utama-isi);
   color: var(--g-utama-teks);
 }
@@ -1484,8 +1694,18 @@ input:focus-visible {
    dan tingginya ditarik balik dengan margin negatif supaya ia menutupi layar
    tanpa memakan satu piksel pun tinggi dokumen. */
 .g-gelap {
-  background:
-    radial-gradient(120% 90% at 50% 0%, #0a1f1b 0%, #04100e 55%, #010806 100%);
+  /* Warnanya WAJIB seturunan dengan `--g-latar`. Sebelumnya ia memakai gradien
+     palet lama (#0a1f1b) sementara halamannya sudah pindah ke #0b100e, dan dua
+     gelap yang berbeda yang bertemu di satu garis mendatar terbaca persis
+     seperti lapisan yang terangkat — dilaporkan begitu, dan memang begitu.
+     Ia lebih PEKAT daripada halaman, bukan lebih hijau: jurang yang menggelap
+     harus terasa lebih dalam, bukan berganti warna. */
+  background: radial-gradient(120% 90% at 50% 0%, #0a0e0d 0%, #060908 55%, #020403 100%);
+  /* Tepi atasnya dilembutkan supaya jurangnya MUNCUL alih-alih tiba-tiba ada.
+     Maskernya DIAM — yang dianimasikan cuma `opacity` elemennya, dan masker
+     yang tidak bergerak tidak memaksa satu pun pelukisan ulang. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 12%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 12%);
 }
 
 /* Baris tabel sumber. Sorotan tipis saja: tabel ini dibaca menyamping (nama ->
@@ -1493,6 +1713,160 @@ input:focus-visible {
    melompat satu baris di kolom terakhir. */
 .g-baris-sumber:hover {
   background: color-mix(in oklab, var(--g-ink) 3.5%, transparent);
+}
+
+/* ==========================================================================
+   Loconomics AI — pembuka panel
+
+   Panel ini kosong sampai ada yang mengetik, dan ruang kosong yang benar-benar
+   DIAM terbaca sebagai fitur yang belum siap. Yang mengisinya di sini bukan
+   ilustrasi melainkan tandanya sendiri, bergetar sangat halus.
+   ========================================================================== */
+
+/* Menutup dengan menyusutkan baris grid-nya, bukan dengan dilepas dari DOM.
+   Melepasnya membuat percakapan melompat ke atas sejauh tinggi pembuka pada
+   bingkai yang sama dengan gelembung pertama muncul. */
+.g-ai-pembuka {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 520ms var(--ease-liquid),
+    opacity 340ms ease,
+    transform 420ms var(--ease-liquid);
+}
+.g-ai-pembuka-tutup {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
+/* GETAR. Amplitudonya di bawah satu piksel dan rotasinya di bawah setengah
+   derajat — cukup untuk terbaca "hidup", tidak cukup untuk terbaca "rusak".
+   Hanya `transform`: ia berjalan di compositor, dan panel ini duduk di atas
+   peta yang juga sedang menggambar. */
+@keyframes g-getar {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  20% {
+    transform: translate3d(-0.6px, 0.4px, 0) rotate(-0.35deg);
+  }
+  40% {
+    transform: translate3d(0.5px, -0.5px, 0) rotate(0.3deg);
+  }
+  60% {
+    transform: translate3d(-0.4px, -0.35px, 0) rotate(-0.22deg);
+  }
+  80% {
+    transform: translate3d(0.55px, 0.35px, 0) rotate(0.26deg);
+  }
+}
+.g-ai-tanda {
+  animation: g-getar 2600ms ease-in-out infinite;
+}
+
+/* Cahaya di belakang tanda, bernapas. `opacity` + `transform` saja; gradiennya
+   sendiri tidak pernah dihitung ulang. */
+@keyframes g-napas {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.06);
+  }
+}
+.g-ai-nyala {
+  /* Warnanya ditulis apa adanya: panel ini hidup di dalam aplikasi, yang tidak
+     memakai token `--g-*` milik gerbang, dan aplikasi belum punya satu token
+     aksen tunggal. Kalau kelak punya, ini tempat pertama yang menggantinya. */
+  background: radial-gradient(closest-side, #2de8c0 0%, transparent 72%);
+  opacity: 0.32;
+  animation: g-napas 4200ms ease-in-out infinite;
+}
+
+/* Saran datang berundak, sekali, saat panel dibuka. */
+@keyframes g-ai-naik {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.g-ai-saran {
+  animation: g-ai-naik 520ms var(--ease-liquid) both;
+  transition:
+    border-color 260ms var(--ease-liquid),
+    background 260ms var(--ease-liquid),
+    transform 260ms var(--ease-liquid);
+}
+.g-ai-saran:hover:not(:disabled) {
+  border-color: var(--color-line-2);
+  background: var(--color-surface-2);
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g-ai-tanda,
+  .g-ai-nyala,
+  .g-ai-saran {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Dialog akun — pertukaran Masuk <-> Daftar
+
+   Sebelumnya kedua formulirnya BERGANTI SEKETIKA: penunjuk sakelarnya menggeser
+   dengan halus selama 300ms, lalu isinya melompat pada bingkai pertama. Yang
+   terlihat bukan satu perpindahan melainkan dua kejadian yang kebetulan
+   berdekatan, dan yang kedua terasa patah.
+
+   Isi barunya sekarang masuk dari sisi yang SAMA dengan arah geseran penunjuk:
+   ke Daftar berarti masuk dari kanan, ke Masuk berarti dari kiri. Arahnya
+   dibawa `data-arah`, bukan dua kelas terpisah - satu atribut lebih sulit
+   ditinggalkan setengah jalan.
+
+   Tinggi wadahnya dikunci `min-height` setinggi varian Daftar yang lebih
+   panjang, jadi tidak ada lompatan tata letak yang harus ikut dianimasikan.
+   ========================================================================== */
+@keyframes ak-tukar-kanan {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes ak-tukar-kiri {
+  from {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+.ak-tukar {
+  animation: ak-tukar-kanan 340ms var(--ease-liquid) both;
+}
+.ak-tukar[data-arah='-1'] {
+  animation-name: ak-tukar-kiri;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ak-tukar {
+    animation: none;
+  }
 }
 
 /* ==========================================================================
@@ -1719,12 +2093,17 @@ input:focus-visible {
    Di tema gelap ia nyaris tidak terlihat, dan memang tidak perlu: latar gerbang
    di sana SUDAH warna dasar jurang. */
 .g-ambang {
+  /* Warnanya WAJIB sama dengan perhentian terdalam `.g-gelap` (#020403), dan
+     ia WAJIB sampai alfa 1 di ujung bawahnya. Sebelumnya keduanya meleset:
+     warnanya #010806 dari palet lama, dan alfanya berhenti di 0,86 - jadi di
+     batas bagian selalu tersisa satu langkah warna yang terbaca sebagai garis
+     mendatar. Terlihat di potret sebagai tepi keras, dan memang begitu. */
   background: linear-gradient(
     to bottom,
-    rgb(1 8 6 / 0) 0%,
-    rgb(1 8 6 / 0.18) 45%,
-    rgb(1 8 6 / 0.55) 78%,
-    rgb(1 8 6 / 0.86) 100%
+    rgb(2 4 3 / 0) 0%,
+    rgb(2 4 3 / 0.22) 42%,
+    rgb(2 4 3 / 0.62) 74%,
+    rgb(2 4 3 / 1) 100%
   );
 }
 
@@ -2093,4 +2472,296 @@ input:focus-visible {
 }
 .pin-simpan:hover {
   transform: translateY(-2px) scale(1.12);
+}
+
+/* ==========================================================================
+   Gerbang, rombakan 9 September 2026
+   ==========================================================================
+   Enam bagian, dan tiap bagian punya latarnya sendiri HANYA kalau latar itu
+   menyatakan sesuatu. Hero: sarang heksagon (bentuk datanya). Masalah: kisi
+   titik - kisi pengukuran, tempat data diambil. Solusi: hitam polos, supaya
+   enam potret petanya satu-satunya yang berwarna. Ekosistem: dua cahaya
+   lembut, teal dan ungu, dua kutub yang jadi tesis produknya. Penutup dan
+   tim memakai yang sudah ada. Yang tidak disebut di sini sengaja polos.
+   ========================================================================== */
+
+.gerbang {
+  /* Dasar pekat untuk pembungkus yang menutup hero, dan untuk cincin stasiun
+     di panel kontras. Bukan var(--g-latar): itu gradien yang diposisikan
+     terhadap SELURUH halaman, dan dipakai ulang di pembungkus ia akan
+     menggandakan cahayanya di tempat yang salah. */
+  --g-latar-pekat: #080b0a;
+  --g-kontras-garis: rgb(190 235 225 / 0.16);
+  /* Sakelar bahasa di bilah gerbang. */
+  --sb-rel: rgb(255 255 255 / 0.08);
+  --sb-isi: rgb(255 255 255 / 0.92);
+  --sb-aktif: #06100e;
+  --sb-redup: var(--g-ink-4);
+  --sb-hover: var(--g-ink);
+}
+
+/* Pembungkus yang menggulir NAIK menutupi hero yang dipatok. Pekat, dengan
+   bayangan tipis di tepi atasnya - tanpa bayangan itu tepi lembarannya tidak
+   terbaca sebagai tepi, dan hero yang menyusut di bawahnya cuma terlihat
+   seperti bagian yang aneh. */
+.g-tutup {
+  background: var(--g-latar-pekat);
+  box-shadow: 0 -30px 60px -20px rgb(0 0 0 / 0.55);
+}
+
+/* Latar bagian MASALAH: kisi titik halus. `radial-gradient` berukuran tetap
+   yang diulang - satu lapisan, nol DOM, dan dilukis sekali. Memudar ke bawah
+   supaya batas ke bagian Solusi tidak berupa garis potong. */
+.g-latar-titik {
+  background-color: var(--g-latar-pekat);
+  background-image:
+    radial-gradient(rgb(190 235 225 / 0.13) 1px, transparent 1.4px),
+    radial-gradient(1100px 600px at 12% 0%, rgb(45 232 192 / 0.07) 0%, transparent 60%);
+  background-size:
+    26px 26px,
+    100% 100%;
+  mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+}
+/* Masker di atas memotong SELURUH bagian, termasuk isinya - jadi bagian ini
+   butuh dasar pekat lagi di belakangnya. Pembungkus .g-tutup yang memberinya. */
+
+/* Latar bagian EKOSISTEM: dua cahaya lembut di sudut berlawanan, dan garis
+   rambut di tepi atasnya sebagai batas dari hitam polos Solusi. */
+.g-latar-mesh {
+  background-color: var(--g-latar-pekat);
+  background-image:
+    radial-gradient(900px 560px at 88% 8%, rgb(45 232 192 / 0.11) 0%, transparent 62%),
+    radial-gradient(820px 560px at 8% 96%, rgb(124 92 255 / 0.12) 0%, transparent 60%);
+  border-top: 1px solid var(--g-garis-halus-2);
+}
+
+/* --- Panel kontras: satu kawasan, dua cara melihat --------------------- */
+.g-kontras {
+  background: var(--g-kartu-isi);
+  border: 1.5px solid var(--g-kartu-tepi);
+}
+/* Kalimat keterangan berganti dengan naik sedikit. `key` di React mengganti
+   simpulnya, jadi animasi ini menyala tiap pergantian. */
+@keyframes g-kontras-naik {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.g-kontras-teks {
+  animation: g-kontras-naik 380ms var(--ease-liquid) both;
+}
+
+/* --- Ikon ekosistem ---------------------------------------------------------
+   Enam gerakan kecil, semuanya transform/opacity. Berhenti saat bagiannya
+   di luar layar lewat aturan [data-diam] di bawah. */
+@keyframes g-eko-putar {
+  to {
+    transform: rotate(180deg);
+  }
+}
+.g-eko-ai {
+  transform-origin: 13px 13px;
+  animation: g-eko-putar 7s linear infinite;
+}
+@keyframes g-eko-kembang {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2.2px);
+  }
+}
+.g-eko-heks {
+  animation: g-eko-kembang 2.6s ease-in-out infinite;
+}
+@keyframes g-eko-tumbuh {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.g-eko-batang {
+  animation: g-eko-tumbuh 2.4s ease-in-out infinite;
+}
+@keyframes g-eko-jatuh {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.g-eko-pin {
+  animation: g-eko-jatuh 2.2s ease-in-out infinite;
+}
+@keyframes g-eko-cincin-denyut {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleX(0.7);
+    opacity: 0.25;
+  }
+}
+.g-eko-cincin {
+  transform-origin: 13px 21px;
+  animation: g-eko-cincin-denyut 2.2s ease-in-out infinite;
+}
+@keyframes g-eko-nyala {
+  0%,
+  20% {
+    opacity: 0.25;
+  }
+  35%,
+  55% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0.25;
+  }
+}
+.g-eko-titik {
+  animation: g-eko-nyala 2.4s ease-in-out infinite;
+}
+@keyframes g-eko-geser {
+  0%,
+  40% {
+    transform: translateX(0);
+  }
+  50%,
+  90% {
+    transform: translateX(9px);
+  }
+}
+.g-eko-kenop {
+  animation: g-eko-geser 3.2s var(--ease-liquid) infinite;
+}
+.g-eko-kartu {
+  transition:
+    border-color 320ms var(--ease-liquid),
+    transform 320ms var(--ease-liquid);
+}
+.g-eko-kartu:hover {
+  border-color: var(--g-kartu-tepi-nyala);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-eko-ai,
+  .g-eko-heks,
+  .g-eko-batang,
+  .g-eko-pin,
+  .g-eko-cincin,
+  .g-eko-titik,
+  .g-eko-kenop,
+  .g-kontras-teks {
+    animation: none;
+  }
+  .g-eko-kartu:hover {
+    transform: none;
+  }
+}
+
+/* Sakelar bahasa di menu pengaturan aplikasi: token aplikasi, bukan gerbang. */
+.app-sakelar-bahasa {
+  --sb-rel: var(--color-surface-2);
+  --sb-isi: var(--color-ink);
+  --sb-aktif: var(--color-surface);
+  --sb-redup: var(--color-ink-3);
+  --sb-hover: var(--color-ink);
+}
+
+/* ==========================================================================
+   Ekosistem: rangkaian zig-zag
+   ==========================================================================
+   Enam baris berselang-seling kiri-kanan, dirangkai satu tulang punggung
+   tegak di lorong antara kedua kolomnya. Tulangnya TUMBUH mengikuti gulir
+   (scaleY dari GSAP), simpulnya menyala saat barisnya sampai, dan lengannya
+   menunjuk ke sisi tempat gambarnya berdiri.
+
+   Semua yang bergerak di sini `transform` atau `opacity`. Tulangnya digambar
+   sebagai satu elemen selebar satu piksel yang di-skala tegak - bukan `height`
+   yang tumbuh, yang akan memaksa tata letak dihitung ulang tiap bingkai gulir.
+   ========================================================================== */
+
+.g-eko-tulang {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--g-garis-halus) 6%,
+    var(--g-garis-halus) 94%,
+    transparent 100%
+  );
+}
+.g-eko-tulang-isi {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--g-teal) 55%, transparent) 8%,
+    color-mix(in srgb, var(--g-teal) 55%, transparent) 92%,
+    transparent 100%
+  );
+}
+.g-eko-lengan {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--g-teal) 70%, transparent),
+    transparent
+  );
+}
+/* Lengan yang menunjuk ke KIRI harus memudar ke kiri juga, bukan ke kanan -
+   kalau tidak, ujung pekatnya mendarat di ujung yang jauh dari simpulnya dan
+   garisnya terbaca terbalik. */
+.g-eko-baris[data-sisi='kiri'] .g-eko-lengan {
+  background: linear-gradient(
+    to left,
+    color-mix(in srgb, var(--g-teal) 70%, transparent),
+    transparent
+  );
+}
+.g-eko-simpul {
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--g-teal) 45%, transparent));
+}
+
+/* Bingkai gambar. Tepinya tipis dan bayangannya dalam - yang membuat potret
+   peta terbaca sebagai LAYAR produk, bukan sebagai gambar yang ditempel. */
+.g-eko-bingkai {
+  border: 1px solid var(--g-kartu-tepi);
+  background: var(--g-kartu-isi);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 30px 60px -30px rgb(0 0 0 / 0.75);
+}
+.g-eko-scrim {
+  background:
+    linear-gradient(to top, rgb(8 11 10 / 0.92) 0%, rgb(8 11 10 / 0.25) 46%, transparent 78%),
+    radial-gradient(120% 90% at 50% 0%, transparent 40%, rgb(8 11 10 / 0.5) 100%);
+}
+/* Panel antarmuka yang melayang di atas potret. Kaca pekat, bukan bening:
+   di atas peta yang berisi jalan dan label, kaca bening membuat tulisannya
+   dibaca di atas tulisan lain. */
+.g-eko-panel {
+  background: rgb(14 19 17 / 0.92);
+  border: 1px solid var(--g-kartu-tepi);
+  box-shadow: 0 18px 40px -20px rgb(0 0 0 / 0.9);
+  backdrop-filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g-eko-simpul {
+    filter: none;
+  }
 }

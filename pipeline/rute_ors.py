@@ -147,6 +147,25 @@ def _meter(a: tuple[float, float], b: tuple[float, float]) -> float:
 DEKAT_M = 1.0
 
 
+def menit_penggal(meter: float, profil: str, jarak_m: float, menit: float) -> float:
+    """Berapa menit tambahan untuk penggal penyambung sepanjang `meter`.
+
+    JALAN KAKI tetap 80 m/menit - angka yang sama dengan
+    `aturan.KECEPATAN_JALAN_M_PER_MENIT`, dan angka yang sudah dipakai setiap
+    rute jalan kaki yang tersimpan. Menggantinya sekarang akan menggeser D04
+    dan setiap menit yang sudah terbit, demi perbaikan yang tidak diminta.
+
+    MOBIL tidak boleh memakainya. Penggal 50 m yang dihargai 0,6 menit masuk
+    akal untuk kaki dan tidak untuk kendaraan: dipakai apa adanya, ia menambah
+    hampir sepersepuluh ke rute mobil rata-rata - dan menambahkannya berarti
+    mencampur dua moda di dalam satu angka. Yang dipakai kecepatan RUTE ITU
+    SENDIRI, satu-satunya laju yang benar-benar terukur untuk perjalanan itu.
+    """
+    if profil == PROFIL_JALAN or menit <= 0 or jarak_m <= 0:
+        return meter / M_PER_MENIT
+    return meter / (jarak_m / menit)
+
+
 def jahit(
     koordinat: list, awal: tuple[float, float], akhir: tuple[float, float]
 ) -> tuple[list, float]:
@@ -442,7 +461,13 @@ def simpan(
     bukan tercepat sebagai jawaban atas "berapa lama jalan kakinya" adalah
     jawaban yang salah, bukan sekadar urutan yang berbeda selera.
     """
-    db.execute(delete(HexRoute).where(HexRoute.h3_index == h3))
+    # HANYA profil yang sedang ditulis. Tanpa saringan ini, penarikan mobil
+    # MENGHAPUS rute jalan kaki heksagon itu sebelum menulis rute mobilnya -
+    # padahal benderanya sendiri menjanjikan "ditambahkan, tidak menggantikan".
+    # Yang hilang data yang butuh berjam-jam dibuat, dan hilangnya diam.
+    db.execute(
+        delete(HexRoute).where(HexRoute.h3_index == h3, HexRoute.profil == PROFIL)
+    )
 
     # Dijahit DULU, baru diurutkan: penggal penyambung panjangnya berbeda-beda
     # per jalur (ORS menempelkan tiap alternatif ke titik yang berlainan), jadi
@@ -451,8 +476,8 @@ def simpan(
     for r in rute:
         r = dict(r)
         r["koordinat"], tambah = jahit(r["koordinat"], awal, akhir)
+        r["menit"] += menit_penggal(tambah, PROFIL, r["jarak_m"], r["menit"])
         r["jarak_m"] += tambah
-        r["menit"] += tambah / M_PER_MENIT
         siap.append(r)
     siap.sort(key=lambda r: r["menit"])
 
@@ -502,7 +527,15 @@ def urutkan_ulang(db) -> int:
             SET urutan = b.baru
             FROM (
                 SELECT id, row_number() OVER (
-                           PARTITION BY h3_index ORDER BY menit, jarak_m, id
+                           -- PROFIL ikut membagi partisinya, dan itu bukan
+                           -- kerapian: `urutan = 0` berarti "rute tercepat
+                           -- untuk moda ini", dan backend membaca `utama` dari
+                           -- situ. Satu partisi untuk dua moda membuat rute
+                           -- mobil - yang selalu lebih cepat - merebut nomor
+                           -- nol, dan rute jalan kaki berhenti jadi yang utama
+                           -- di layar tanpa satu pun galat.
+                           PARTITION BY h3_index, transport_node_id, profil
+                           ORDER BY menit, jarak_m, id
                        ) - 1 AS baru
                 FROM hex_routes
             ) b
@@ -528,7 +561,7 @@ def jahit_ulang(db) -> None:
     baris = db.execute(
         text(
             """
-            SELECT r.id, r.jarak_m, r.menit,
+            SELECT r.id, r.jarak_m, r.menit, r.profil,
                    ST_AsGeoJSON(r.geom) AS geojson,
                    ST_X(ST_Centroid(h.geom)) AS hx, ST_Y(ST_Centroid(h.geom)) AS hy,
                    ST_X(n.geom) AS sx, ST_Y(n.geom) AS sy
@@ -559,7 +592,8 @@ def jahit_ulang(db) -> None:
             {
                 "id": b["id"],
                 "jarak": float(b["jarak_m"]) + tambah,
-                "menit": float(b["menit"]) + tambah / M_PER_MENIT,
+                "menit": float(b["menit"])
+                + menit_penggal(tambah, b["profil"], float(b["jarak_m"]), float(b["menit"])),
                 "wkt": wkt,
             },
         )
@@ -574,16 +608,28 @@ def jahit_ulang(db) -> None:
 
 
 def status(db) -> None:
+    """Cakupan per kawasan, DIPISAH PER PROFIL.
+
+    Satu tabel untuk dua profil pernah berdiri di sini, dan angkanya berbohong
+    tanpa terlihat berbohong: "rata menit" merata-ratakan menit jalan kaki
+    dengan menit berkendara, jadi kawasan yang rute mobilnya baru separuh
+    ditarik tampak makin cepat dijalani KAKI. Yang dibaca orang satu angka;
+    yang dihitung dua hal yang berbeda.
+    """
     baris = (
         db.execute(
             text(
                 """
             SELECT h.kawasan,
-                   count(DISTINCT h.h3_index)                         AS hex,
-                   count(DISTINCT r.h3_index)                         AS dirutekan,
-                   count(r.id)                                        AS baris,
-                   round(avg(r.jarak_m) FILTER (WHERE r.urutan = 0)::numeric) AS rata_m,
-                   round(avg(r.menit) FILTER (WHERE r.urutan = 0)::numeric, 1) AS rata_menit
+                   count(DISTINCT h.h3_index)                                          AS hex,
+                   count(DISTINCT r.h3_index) FILTER (WHERE r.profil = 'foot-walking') AS kaki_hex,
+                   count(r.id)                FILTER (WHERE r.profil = 'foot-walking') AS kaki_baris,
+                   round(avg(r.menit) FILTER (
+                       WHERE r.urutan = 0 AND r.profil = 'foot-walking')::numeric, 1)  AS kaki_menit,
+                   count(DISTINCT r.h3_index) FILTER (WHERE r.profil = 'driving-car')  AS mobil_hex,
+                   count(r.id)                FILTER (WHERE r.profil = 'driving-car')  AS mobil_baris,
+                   round(avg(r.menit) FILTER (
+                       WHERE r.urutan = 0 AND r.profil = 'driving-car')::numeric, 1)   AS mobil_menit
             FROM hex_features h
             LEFT JOIN hex_routes r ON r.h3_index = h.h3_index
             GROUP BY h.kawasan ORDER BY h.kawasan
@@ -594,16 +640,18 @@ def status(db) -> None:
         .all()
     )
     print(
-        f"\n  {'kawasan':<14}{'heksagon':>9}{'dirutekan':>11}"
-        f"{'rute':>7}{'rata jarak':>12}{'rata menit':>12}"
+        f"\n  {'kawasan':<14}{'heks':>6}"
+        f"{'kaki hx':>9}{'kaki rute':>11}{'kaki mnt':>10}"
+        f"{'mobil hx':>10}{'mobil rute':>12}{'mobil mnt':>11}"
     )
-    print("  " + "-" * 65)
+    print("  " + "-" * 83)
     for r in baris:
-        rata = f"{int(r['rata_m'])} m" if r["rata_m"] else "-"
-        menit = f"{r['rata_menit']}" if r["rata_menit"] else "-"
+        kmnt = f"{r['kaki_menit']}" if r["kaki_menit"] else "-"
+        mmnt = f"{r['mobil_menit']}" if r["mobil_menit"] else "-"
         print(
-            f"  {r['kawasan']:<14}{r['hex']:>9}{r['dirutekan']:>11}"
-            f"{r['baris']:>7}{rata:>12}{menit:>12}"
+            f"  {r['kawasan']:<14}{r['hex']:>6}"
+            f"{r['kaki_hex']:>9}{r['kaki_baris']:>11}{kmnt:>10}"
+            f"{r['mobil_hex']:>10}{r['mobil_baris']:>12}{mmnt:>11}"
         )
     total = db.execute(select(func.count()).select_from(HexRoute)).scalar_one()
     iso = db.execute(select(func.count()).select_from(CatchmentArea)).scalar_one()

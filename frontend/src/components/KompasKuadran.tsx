@@ -31,6 +31,7 @@
 import { KUADRAN, URUTAN_KUADRAN } from '../config'
 import type { Kuadran as NamaKuadran, TitikKuadran } from '../types'
 import { Glif } from './primitif'
+import { useNamaZona } from '../lib/bahasa'
 
 interface Props {
   /** Kuadran yang sedang disaring. null = tidak ada filter. */
@@ -88,6 +89,7 @@ export default function KompasKuadran({
   besar,
   onBukaPenuh,
 }: Props) {
+  const namaZona = useNamaZona()
   // Yang KECIL tidak lagi punya lebar sama sekali - ia mengambil sisa ruang.
   //
   // Dulu angkanya 232px, dihitung tangan sebagai "17rem dikurangi bantalan
@@ -202,7 +204,7 @@ export default function KompasKuadran({
                       className={`font-semibold leading-[1.12] ${besar ? 'text-[13px]' : 'text-[11.5px]'}`}
                       style={{ color: q.warna ?? 'var(--color-ink-3)' }}
                     >
-                      {q.nama}
+                      {namaZona(q.kunci)}
                     </span>
                   </span>
                 </button>
@@ -286,7 +288,7 @@ export default function KompasKuadran({
                     className="font-semibold"
                     style={{ color: q.warna ?? 'var(--color-ink-2)' }}
                   >
-                    {q.nama}
+                    {namaZona(q.kunci)}
                   </span>
                   <span className="block text-ink-3">{q.ringkas}</span>
                 </span>

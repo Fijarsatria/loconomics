@@ -35,6 +35,7 @@ import { api } from '../lib/api'
 import { rupiah } from '../lib/format'
 import type { HiddenGem, SkorHeksagon, TitikKuadran } from '../types'
 import { Ajakan, Badge, Glif, Kosong, Memuat } from './primitif'
+import { useNamaZona } from '../lib/bahasa'
 
 type Isi =
   | { jenis: 'skor'; baris: SkorHeksagon[] }
@@ -80,6 +81,7 @@ export default function DaftarLokasi({
   terpilih: string | null
   onPilih: (h3: string) => void
 }) {
+  const namaZona = useNamaZona()
   /**
    * Kuadran yang sedang disaring di dalam daftar. null = semuanya.
    *
@@ -198,7 +200,7 @@ export default function DaftarLokasi({
               {ringkasKuadran.bagian.map((b) => (
                 <span
                   key={b.kunci}
-                  title={`${KUADRAN[b.kunci].nama}: ${b.n}`}
+                  title={`${namaZona(b.kunci)}: ${b.n}`}
                   style={{
                     width: `${(b.n / ringkasKuadran.total) * 100}%`,
                     background: KUADRAN[b.kunci].warna,
@@ -218,7 +220,7 @@ export default function DaftarLokasi({
                     <button
                       onClick={() => setSaring(aktif ? null : b.kunci)}
                       aria-pressed={aktif}
-                      title={`${KUADRAN[b.kunci].nama} — ${KUADRAN[b.kunci].ringkas}`}
+                      title={`${namaZona(b.kunci)} — ${KUADRAN[b.kunci].ringkas}`}
                       className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[11.5px] transition-all duration-200 ease-liquid ${
                         aktif
                           ? 'border-transparent text-ink'
@@ -231,7 +233,7 @@ export default function DaftarLokasi({
                         style={{ background: KUADRAN[b.kunci].warna }}
                         aria-hidden
                       />
-                      {KUADRAN[b.kunci].nama}
+                      {namaZona(b.kunci)}
                       <span className="tabular font-semibold">{b.n}</span>
                     </button>
                   </li>
@@ -430,7 +432,7 @@ export default function DaftarLokasi({
                       style={{ color: KUADRAN[s.kuadran].warna ?? 'var(--color-ink-3)' }}
                       title={KUADRAN[s.kuadran].arti}
                     >
-                      {KUADRAN[s.kuadran].nama}
+                      {namaZona(s.kuadran)}
                     </p>
                   )}
                   {s.zona_izin_komersial === null && (

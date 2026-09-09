@@ -34,9 +34,9 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useTeks } from '../lib/bahasa'
 
 import { api, GalatAPI, setTiket, adaTiket } from '../lib/api'
-import { KARTU_GERBANG } from '../lib/kartu-gerbang'
 import { KAWASAN_PILOT } from '../config'
 import type { Akun, KatalogPaket, Tingkat } from '../types'
 
@@ -333,7 +333,11 @@ function Tirai({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-ink/45 p-4 backdrop-blur-[4px] sm:p-6"
+      // Tirainya HITAM, bukan `bg-ink`: di tema gelap `--color-ink` adalah
+      // krem-putih, dan tirai putih 45% di atas halaman gerbang yang hitam
+      // mengubah seluruh layar jadi abu-abu susu - terlihat begitu di potret.
+      // Tirai gelap benar di kedua tema.
+      className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-[4px] sm:p-6"
       onClick={onTutup}
       role="dialog"
       aria-modal="true"
@@ -388,6 +392,71 @@ function Kolom({
   )
 }
 
+const K_DIALOG = {
+  id: {
+    masuk: 'Masuk',
+    daftar: 'Daftar',
+    tutup: 'Tutup',
+    judulMasuk: 'Selamat datang kembali',
+    judulDaftar: 'Buat akun Loconomics',
+    subMasuk: 'Masuk untuk membuka pantauan dan preferensi Anda.',
+    subDaftar: 'Gratis. Akun menyimpan pantauan dan preferensi; Premium membuka kedalaman datanya.',
+    identitas: 'Nama pengguna atau surel',
+    identitasContoh: 'nama pengguna atau surel Anda',
+    namaPengguna: 'Nama pengguna',
+    namaContoh: 'mis. calonjuragan',
+    surel: 'Surel',
+    surelContoh: 'nama@surel.com',
+    sandi: 'Kata sandi',
+    sandiMinimal: 'minimal 8 karakter',
+    sandiContoh: 'kata sandi Anda',
+    sembunyi: 'Sembunyi',
+    lihat: 'Lihat',
+    sebentar: 'Sebentar…',
+    buatAkun: 'Buat akun — gratis',
+    belumPunya: 'Belum punya akun?',
+    daftarGratis: 'Daftar gratis',
+    sudahPunya: 'Sudah punya akun?',
+    galatNama: 'Nama pengguna minimal 3 karakter.',
+    galatNamaKarakter: 'Nama pengguna hanya boleh huruf, angka, titik, _ dan -.',
+    galatSurel: 'Surelnya belum lengkap.',
+    galatSandi: 'Kata sandi minimal 8 karakter.',
+    galatKosong: 'Isi dulu keduanya.',
+    galatJaringan: 'Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.',
+  },
+  en: {
+    masuk: 'Sign in',
+    daftar: 'Sign up',
+    tutup: 'Close',
+    judulMasuk: 'Welcome back',
+    judulDaftar: 'Create a Loconomics account',
+    subMasuk: 'Sign in to open your watchlist and preferences.',
+    subDaftar: 'Free. An account keeps your watchlist and preferences; Premium unlocks the depth of the data.',
+    identitas: 'Username or email',
+    identitasContoh: 'your username or email',
+    namaPengguna: 'Username',
+    namaContoh: 'e.g. futureowner',
+    surel: 'Email',
+    surelContoh: 'name@email.com',
+    sandi: 'Password',
+    sandiMinimal: 'at least 8 characters',
+    sandiContoh: 'your password',
+    sembunyi: 'Hide',
+    lihat: 'Show',
+    sebentar: 'One moment…',
+    buatAkun: 'Create account — free',
+    belumPunya: 'No account yet?',
+    daftarGratis: 'Sign up for free',
+    sudahPunya: 'Already have an account?',
+    galatNama: 'Username must be at least 3 characters.',
+    galatNamaKarakter: 'Username may only contain letters, digits, dots, _ and -.',
+    galatSurel: 'That email looks incomplete.',
+    galatSandi: 'Password must be at least 8 characters.',
+    galatKosong: 'Fill in both fields first.',
+    galatJaringan: 'Could not reach the server. Check your connection and try again.',
+  },
+}
+
 function DialogAkun({
   alasan,
   onTutup,
@@ -399,7 +468,13 @@ function DialogAkun({
   onBerhasil: (baru: boolean) => void
 }) {
   const { masuk, daftar } = useSesi()
+  const t = useTeks(K_DIALOG)
   const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk')
+  /** Arah perpindahan terakhir: +1 ke Daftar (kanan), -1 ke Masuk (kiri).
+   *  Dipakai supaya isi barunya masuk dari sisi yang SAMA dengan arah
+   *  geseran penunjuk sakelarnya - kalau berlawanan, keduanya terbaca
+   *  sebagai dua kejadian yang tidak berhubungan. */
+  const [arah, setArah] = useState<1 | -1>(1)
   const [identitas, setIdentitas] = useState('')
   const [namaPengguna, setNamaPengguna] = useState('')
   const [email, setEmail] = useState('')
@@ -423,13 +498,13 @@ function DialogAkun({
     // Diperiksa di sini SEBELUM jaringan, supaya kesalahan yang sudah pasti
     // tidak perlu perjalanan bolak-balik untuk diberitahukan.
     if (mode === 'daftar') {
-      if (namaPengguna.trim().length < 3) return setGalat('Nama pengguna minimal 3 karakter.')
+      if (namaPengguna.trim().length < 3) return setGalat(t.galatNama)
       if (!/^[\w.-]+$/.test(namaPengguna.trim()))
-        return setGalat('Nama pengguna hanya boleh huruf, angka, titik, _ dan -.')
-      if (!email.includes('@')) return setGalat('Surelnya belum lengkap.')
-      if (sandi.length < 8) return setGalat('Kata sandi minimal 8 karakter.')
+        return setGalat(t.galatNamaKarakter)
+      if (!email.includes('@')) return setGalat(t.galatSurel)
+      if (sandi.length < 8) return setGalat(t.galatSandi)
     } else if (!identitas.trim() || !sandi) {
-      return setGalat('Isi dulu keduanya.')
+      return setGalat(t.galatKosong)
     }
 
     setSibuk(true)
@@ -451,7 +526,7 @@ function DialogAkun({
       setGalat(
         err instanceof GalatAPI
           ? err.message
-          : 'Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.',
+          : t.galatJaringan,
       )
     } finally {
       setSibuk(false)
@@ -459,133 +534,119 @@ function DialogAkun({
   }
 
   const gantiMode = (m: 'masuk' | 'daftar') => {
+    if (m === mode) return
+    setArah(m === 'daftar' ? 1 : -1)
     setMode(m)
     setGalat(null)
     setSandi('')
   }
 
   return (
-    <Tirai judul={mode === 'masuk' ? 'Masuk' : 'Daftar'} onTutup={onTutup} lebar="52rem">
-      <div className="flex flex-col sm:flex-row">
-        {/* --- Sisi kiri: kenapa harus punya akun -------------------------- */}
-        <aside className="relative hidden shrink-0 overflow-hidden bg-[#0b3d37] p-7 text-white sm:block sm:w-[19rem]">
-          {/* Latarnya POTRET PETA SUNGGUHAN - salah satu kartu WebP halaman
-              gerbang, dirender dari basis data dengan ekspresi pewarnaan yang
-              sama dengan aplikasi. Pola heksagon dekoratif yang dulu di sini
-              cuma wallpaper; ini memperlihatkan barang yang sebenarnya sedang
-              didaftari orangnya. */}
-          <img
-            src={`/kartu/${(KARTU_GERBANG.find((k) => k.utama) ?? KARTU_GERBANG[0]).berkas}.webp`}
-            alt=""
+    <Tirai judul={mode === 'masuk' ? t.masuk : t.daftar} onTutup={onTutup} lebar="26.5rem">
+      {/* SATU kolom. Dirombak 9 Sep 2026.
+
+          Versi sebelumnya dua kolom: sisi kiri berisi tiga fitur berbayar
+          ("43 variabel", "Komparasi", "Laporan PDF") di atas potret peta yang
+          dikuras warnanya, sisi kanan formulirnya. Yang terbaca di potret:
+          dialog selebar 52rem untuk dua kolom isian, dan kolom kirinya
+          menjual sesuatu kepada orang yang baru mau MASUK - bukan membeli.
+          Orang yang membuka dialog ini sudah tahu kenapa; yang ia butuhkan
+          dua kolom isian dan satu tombol, selebar yang perlu, tidak lebih. */}
+      <div className="p-7 sm:p-8">
+        <div className="flex items-start justify-between gap-4">
+          <span className="relative grid h-10 w-10 place-items-center" aria-hidden>
+            <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
+              <polygon
+                points="0,-46 39.84,-23 39.84,23 0,46 -39.84,23 -39.84,-23"
+                fill="var(--color-surface-2)"
+                stroke="var(--color-line-2)"
+                strokeWidth="2.5"
+              />
+            </svg>
+            <span className="relative text-[13px] font-bold tracking-[0.04em] text-ink">L</span>
+          </span>
+          <button
+            onClick={onTutup}
+            aria-label={t.tutup}
+            className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden>
+              <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <h2 key={mode} className="ak-tukar papan mt-6 text-[26px] font-light leading-[1.1] tracking-[-0.01em]" data-arah={arah}>
+          {mode === 'masuk' ? t.judulMasuk : t.judulDaftar}
+        </h2>
+        <p className="mt-2 text-[13.5px] leading-snug text-ink-3">
+          {alasan ?? (mode === 'masuk' ? t.subMasuk : t.subDaftar)}
+        </p>
+
+        {/* Sakelar dua posisi. Penunjuknya permukaan terangkat, bukan `bg-ink`:
+            sakelar ini memilih tampilan, dan benda paling terang di dialog
+            harus tetap tombol kirimnya. */}
+        <div className="relative mt-6 grid grid-cols-2 rounded-full bg-surface-2 p-1">
+          <div
+            className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full border border-line-2 bg-surface transition-transform duration-300 ease-liquid"
+            style={{ transform: mode === 'daftar' ? 'translateX(100%)' : 'none' }}
             aria-hidden
-            className="absolute inset-0 h-full w-full scale-[1.12] object-cover opacity-90"
           />
-          {/* Dua gradien: bawah menggelap supaya teks putihnya selalu lolos
-              kontras, atas tipis supaya potret petanya tetap terlihat hidup. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0b3d37]/70 via-[#0b3d37]/45 to-[#06231f]/95" aria-hidden />
-          <div className="relative">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">
-              Loconomics
-            </p>
-            <h2 className="papan mt-3 text-[25px] leading-[1.15] text-white">
-              Data survei,
-              <br />
-              bukan firasat.
-            </h2>
-            <p className="mt-3.5 text-[13.5px] leading-relaxed text-white/75">
-              Akun gratis menyimpan pantauan dan preferensi Anda. Premium membuka
-              kedalaman datanya.
-            </p>
-            <ul className="mt-6 space-y-3">
-              {[
-                ['43 variabel', 'Seluruh angka pembentuk indeks, bukan ringkasannya'],
-                ['Komparasi', 'Empat lokasi berdampingan dalam satu tabel'],
-                ['Laporan PDF', 'Dokumen resmi untuk pengajuan modal atau sewa'],
-              ].map(([j, k]) => (
-                <li key={j} className="flex gap-2.5">
-                  <Centang />
-                  <span className="text-[13px] leading-snug">
-                    <strong className="font-semibold text-white">{j}</strong>
-                    <span className="block text-white/60">{k}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </aside>
+          {(['masuk', 'daftar'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => gantiMode(m)}
+              className={`relative cursor-pointer rounded-full py-2 text-[13.5px] font-semibold transition-colors duration-300 ${
+                mode === m ? 'text-ink' : 'text-ink-3 hover:text-ink-2'
+              }`}
+            >
+              {m === 'masuk' ? t.masuk : t.daftar}
+            </button>
+          ))}
+        </div>
 
-        {/* --- Sisi kanan: formulir ---------------------------------------- */}
-        <div className="min-w-0 flex-1 p-6 sm:p-7">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h2 className="papan text-[20px]">
-                {mode === 'masuk' ? 'Masuk ke Loconomics' : 'Buat akun Loconomics'}
-              </h2>
-              {alasan && <p className="mt-1 text-[13px] leading-snug text-ink-2">{alasan}</p>}
-            </div>
-            <TombolTutup onTutup={onTutup} />
-          </div>
-
-          {/* Sakelar dua posisi dengan penunjuk yang menggeser. Transform,
-              bukan lebar - lihat CLAUDE.md soal properti yang murah dianimasikan. */}
-          <div className="relative mb-5 grid grid-cols-2 rounded-full bg-surface-2 p-1">
-            <div
-              className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-ink transition-transform duration-300 ease-liquid"
-              style={{ transform: mode === 'daftar' ? 'translateX(100%)' : 'none' }}
-              aria-hidden
-            />
-            {(['masuk', 'daftar'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => gantiMode(m)}
-                className={`relative cursor-pointer rounded-full py-2 text-[13.5px] font-semibold transition-colors duration-300 ${
-                  mode === m ? 'text-surface' : 'text-ink-2 hover:text-ink'
-                }`}
-              >
-                {m === 'masuk' ? 'Masuk' : 'Daftar'}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={kirim} className="space-y-3.5">
+        <form onSubmit={kirim} className="mt-5 space-y-3.5">
+          {/* `key={mode}` mengganti simpulnya, jadi animasi masuknya menyala
+              tiap pergantian dan fokus kembali ke kolom pertama yang baru. */}
+          <div key={mode} data-arah={arah} className="ak-tukar space-y-3.5">
             {mode === 'masuk' ? (
-              <Kolom label="Nama pengguna atau surel">
+              <Kolom label={t.identitas}>
                 <input
                   ref={pertama}
                   className={KELAS_INPUT}
                   value={identitas}
                   onChange={(e) => setIdentitas(e.target.value)}
                   autoComplete="username"
-                  placeholder="nama pengguna atau surel Anda"
+                  placeholder={t.identitasContoh}
                 />
               </Kolom>
             ) : (
               <>
-                <Kolom label="Nama pengguna">
+                <Kolom label={t.namaPengguna}>
                   <input
                     ref={pertama}
                     className={KELAS_INPUT}
                     value={namaPengguna}
                     onChange={(e) => setNamaPengguna(e.target.value)}
                     autoComplete="username"
-                    placeholder="mis. calonjuragan"
+                    placeholder={t.namaContoh}
                   />
                 </Kolom>
-                <Kolom label="Surel">
+                <Kolom label={t.surel}>
                   <input
                     type="email"
                     className={KELAS_INPUT}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email"
-                    placeholder="nama@surel.com"
+                    placeholder={t.surelContoh}
                   />
                 </Kolom>
               </>
             )}
 
-            <Kolom label="Kata sandi">
+            <Kolom label={t.sandi}>
               <div className="relative">
                 <input
                   type={lihatSandi ? 'text' : 'password'}
@@ -593,61 +654,61 @@ function DialogAkun({
                   value={sandi}
                   onChange={(e) => setSandi(e.target.value)}
                   autoComplete={mode === 'masuk' ? 'current-password' : 'new-password'}
-                  placeholder={mode === 'daftar' ? 'minimal 8 karakter' : 'kata sandi Anda'}
+                  placeholder={mode === 'daftar' ? t.sandiMinimal : t.sandiContoh}
                 />
                 <button
                   type="button"
                   onClick={() => setLihatSandi((v) => !v)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded-xs px-2 py-1 text-[12px] font-medium text-ink-3 transition-colors hover:text-ink"
                 >
-                  {lihatSandi ? 'Sembunyi' : 'Lihat'}
+                  {lihatSandi ? t.sembunyi : t.lihat}
                 </button>
               </div>
             </Kolom>
+          </div>
 
-            {galat && (
-              <div
-                role="alert"
-                className="rounded-sm border border-bahaya/30 bg-bahaya-soft px-3.5 py-2.5 text-[13px] leading-snug text-bahaya"
-              >
-                {galat}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={sibuk}
-              className="mt-1 flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-full bg-ink px-6 py-3 text-[14.5px] font-semibold text-surface transition-all duration-300 ease-jelly hover:scale-[1.015] disabled:cursor-wait disabled:opacity-60"
+          {galat && (
+            <div
+              role="alert"
+              className="rounded-md border border-bahaya/30 bg-bahaya-soft px-3.5 py-2.5 text-[13px] leading-snug text-bahaya"
             >
-              {sibuk && <Pusaran />}
-              {sibuk
-                ? 'Sebentar…'
-                : mode === 'masuk'
-                  ? 'Masuk'
-                  : 'Buat akun — gratis'}
-            </button>
-          </form>
+              {galat}
+            </div>
+          )}
 
-          <p className="mt-4 text-[12px] leading-snug text-ink-3">
-            {mode === 'masuk' ? (
-              <>
-                Belum punya akun?{' '}
-                <button
-                  onClick={() => gantiMode('daftar')}
-                  className="cursor-pointer font-semibold text-ink underline-offset-2 hover:underline"
-                >
-                  Daftar gratis
-                </button>
-                .
-              </>
-            ) : (
-              <>
-                Akun gratis tetap bisa melihat seluruh grid heksagon, skor, dan status
-                zonasi. Yang berbayar cuma kedalaman datanya.
-              </>
-            )}
-          </p>
-        </div>
+          <button
+            type="submit"
+            disabled={sibuk}
+            className="mt-2 flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-semibold text-surface transition-all duration-300 ease-jelly hover:scale-[1.015] disabled:cursor-wait disabled:opacity-60"
+          >
+            {sibuk && <Pusaran />}
+            {sibuk ? t.sebentar : mode === 'masuk' ? t.masuk : t.buatAkun}
+          </button>
+        </form>
+
+        <p className="mt-5 text-center text-[12.5px] leading-snug text-ink-3">
+          {mode === 'masuk' ? (
+            <>
+              {t.belumPunya}{' '}
+              <button
+                onClick={() => gantiMode('daftar')}
+                className="cursor-pointer font-semibold text-ink underline-offset-[3px] hover:underline"
+              >
+                {t.daftarGratis}
+              </button>
+            </>
+          ) : (
+            <>
+              {t.sudahPunya}{' '}
+              <button
+                onClick={() => gantiMode('masuk')}
+                className="cursor-pointer font-semibold text-ink underline-offset-[3px] hover:underline"
+              >
+                {t.masuk}
+              </button>
+            </>
+          )}
+        </p>
       </div>
     </Tirai>
   )
@@ -988,8 +1049,52 @@ function KartuPaket({
  * kartu ber-`absolute` di dalamnya naik menempel ke lapisan chrome setinggi
  * layar dan dirender jauh di luar layar.
  */
+const K_TOMBOL = {
+  id: {
+    masukAtauDaftar: 'Masuk atau daftar',
+    daftar: 'Daftar',
+    daftarPanjang: 'Daftar untuk akses semua fitur',
+    premium: 'Premium',
+    gratis: 'Gratis',
+    token: 'token',
+    selamanya: 'Berlaku selamanya.',
+    aktifSampai: (t: string) => `Aktif sampai ${t}.`,
+    langgananAktif: 'Langganan aktif.',
+    jadiPremium: 'Jadi Premium',
+    perBulan: '/bln',
+    preferensi: 'Preferensi usaha',
+    preferensiCatatan: 'Jenis usaha, kawasan incaran, dan anggaran sewa',
+    beliToken: 'Beli token satuan',
+    beliTokenCatatan: 'Buka satu lokasi tanpa berlangganan',
+    keluar: 'Keluar',
+    keluarCatatan: (n: string) => `Sesi ${n} diakhiri`,
+    tanggal: 'id-ID',
+  },
+  en: {
+    masukAtauDaftar: 'Sign in or sign up',
+    daftar: 'Sign up',
+    daftarPanjang: 'Sign up for full access',
+    premium: 'Premium',
+    gratis: 'Free',
+    token: 'tokens',
+    selamanya: 'Valid forever.',
+    aktifSampai: (t: string) => `Active until ${t}.`,
+    langgananAktif: 'Subscription active.',
+    jadiPremium: 'Go Premium',
+    perBulan: '/mo',
+    preferensi: 'Business preferences',
+    preferensiCatatan: 'Business type, target areas, and rent budget',
+    beliToken: 'Buy single tokens',
+    beliTokenCatatan: 'Unlock one location without subscribing',
+    keluar: 'Sign out',
+    keluarCatatan: (n: string) => `End ${n}’s session`,
+    tanggal: 'en-GB',
+  },
+}
+
 export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' }) {
   const { akun, premium, memuat, keluar, mintaMasuk, mintaLangganan, mintaPreferensi } = useSesi()
+  const t = useTeks(K_TOMBOL)
   const [buka, setBuka] = useState(false)
   const wadah = useRef<HTMLDivElement>(null)
 
@@ -1015,21 +1120,26 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
   // yang bisa dibuka. Ikon orang-orangan menjawab pertanyaan yang belum ia
   // ajukan. Kalimatnya yang mengajukan pertanyaan itu untuknya.
   if (!akun) {
-    const kelas =
-      varian === 'gerbang'
-        ? 'g-utama group inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold'
-        : 'group inline-flex cursor-pointer items-center gap-2 rounded-full bg-ink px-3.5 py-2 text-[12.5px] font-semibold text-surface transition-all duration-300 ease-jelly hover:scale-[1.03]'
+    const digerbang = varian === 'gerbang'
+    // Di GERBANG tombol ini pil biasa. Yang berpendar di sana "Masuk ke peta"
+    // - atas permintaan pemilik repo, 9 Sep 2026 - dan kalau dua benda
+    // sama-sama berpendar, tidak ada yang berpendar. Di bilah peta tidak ada
+    // "Masuk ke peta", jadi tombol ini yang mendapat pendarnya.
+    const kelas = digerbang
+      ? 'g-pil inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold text-[color:var(--g-ink)]'
+      : 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-3.5 py-2 text-[12.5px] font-semibold'
+    const kelasTeks = digerbang ? '' : 'g-catalyst-teks'
     return (
       <div ref={wadah} className="relative shrink-0">
         <button
           onClick={() => mintaMasuk(null)}
           disabled={memuat}
           className={kelas}
-          title="Masuk atau daftar"
+          title={t.masukAtauDaftar}
         >
-          <Kilau />
-          <span className="hidden sm:inline">Sign Up untuk akses semua fitur</span>
-          <span className="sm:hidden">Sign Up</span>
+          {!digerbang && <Kilau />}
+          <span className={`hidden sm:inline ${kelasTeks}`}>{digerbang ? t.daftar : t.daftarPanjang}</span>
+          <span className={`sm:hidden ${kelasTeks}`}>{t.daftar}</span>
         </button>
       </div>
     )
@@ -1093,7 +1203,7 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
                   premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
                 }`}
               >
-                {premium ? 'Premium' : 'Gratis'}
+                {premium ? t.premium : t.gratis}
               </span>
               {akun.peran === 'admin' && (
                 <span className="rounded-full bg-pemenang-soft px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-pemenang">
@@ -1101,20 +1211,23 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
                 </span>
               )}
               <span className="tabular ml-auto text-[12px] text-ink-3">
-                {akun.saldo_token} token
+                {akun.saldo_token} {t.token}
               </span>
             </div>
 
             {premium ? (
               <p className="mt-2.5 text-[12px] leading-snug text-ink-3">
                 {akun.langganan?.selamanya
-                  ? 'Berlaku selamanya.'
+                  ? t.selamanya
                   : akun.langganan?.berlaku_sampai
-                    ? `Aktif sampai ${new Date(akun.langganan.berlaku_sampai).toLocaleDateString(
-                        'id-ID',
-                        { day: 'numeric', month: 'long', year: 'numeric' },
-                      )}.`
-                    : 'Langganan aktif.'}
+                    ? t.aktifSampai(
+                        new Date(akun.langganan.berlaku_sampai).toLocaleDateString(t.tanggal, {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        }),
+                      )
+                    : t.langgananAktif}
               </p>
             ) : (
               <button
@@ -1125,7 +1238,7 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
                 className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.02]"
               >
                 <Kilau />
-                Jadi Premium — {rp(25000)}/bln
+                {t.jadiPremium} — {rp(25000)}{t.perBulan}
               </button>
             )}
           </div>
@@ -1136,8 +1249,8 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
                 setBuka(false)
                 mintaPreferensi()
               }}
-              label="Preferensi usaha"
-              catatan="Jenis usaha, kawasan incaran, dan anggaran sewa"
+              label={t.preferensi}
+              catatan={t.preferensiCatatan}
             />
             {!premium && (
               <BarisMenu
@@ -1145,8 +1258,8 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
                   setBuka(false)
                   mintaLangganan(null)
                 }}
-                label="Beli token satuan"
-                catatan="Buka satu lokasi tanpa berlangganan"
+                label={t.beliToken}
+                catatan={t.beliTokenCatatan}
               />
             )}
             <BarisMenu
@@ -1154,8 +1267,8 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
                 setBuka(false)
                 keluar()
               }}
-              label="Keluar"
-              catatan={`Sesi ${akun.nama_pengguna} diakhiri`}
+              label={t.keluar}
+              catatan={t.keluarCatatan(akun.nama_pengguna)}
             />
           </div>
         </div>

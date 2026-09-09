@@ -113,6 +113,20 @@ function ringkasKartu(data: { features: unknown[] }, layer: NamaLayer): RingkasK
   }
   if (layer === 'zoneguard') {
     const boleh = f.filter((x) => x.properties?.zona_izin_komersial === true).length
+    const dilarang = f.filter((x) => x.properties?.zona_izin_komersial === false).length
+    // NOL yang berarti "belum terbit" TIDAK boleh dicetak sebagai nol.
+    //
+    // L01 bertipe tiga-nilai: TRUE mengizinkan, FALSE melarang, NULL berarti
+    // kawasan itu belum punya RDTR digital sama sekali. Menghitung yang TRUE
+    // saja lalu mencetaknya sebagai "0 heksagon boleh usaha" membaca sebagai
+    // "usaha dilarang di seluruh kawasan ini" - dan untuk Depok, yang memang
+    // belum punya RDTR terbit, itu tuduhan yang salah sekaligus membantah
+    // bagian batasan halaman ini sendiri.
+    //
+    // Nol yang jujur hanya kalau ada yang DILARANG. Kalau tidak ada yang
+    // diizinkan DAN tidak ada yang dilarang, yang benar: datanya belum ada.
+    if (boleh === 0 && dilarang === 0)
+      return { n: f.length, kuadran, sorotan: { nilai: '—', label: 'zonasi RDTR belum terbit' } }
     return { n: f.length, kuadran, sorotan: { nilai: String(boleh), label: 'heksagon boleh usaha' } }
   }
   const m = median(kolom('opportunity_score'))

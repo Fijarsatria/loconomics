@@ -24,6 +24,7 @@ import {
 import { createPortal } from 'react-dom'
 
 import { IDENTITAS, KEYAKINAN, KUADRAN, RODA_WARNA } from '../config'
+import { SakelarBahasa, useBahasa, useTeks } from '../lib/bahasa'
 import type { BadgeKeyakinan, Kuadran as NamaKuadran } from '../types'
 
 /** Nilai yang belum ada. Selalu terlihat berbeda dari nol. */
@@ -1153,7 +1154,31 @@ type KunciPengaturan = keyof typeof ISI_PENGATURAN
  * bisa ditekan. Putarannya seperempat lingkaran - satu putaran penuh terbaca
  * sebagai indikator memuat, dan ini bukan sedang memuat apa pun.
  */
-export function MenuPengaturan() {
+/** Empat posisi kerapatan nama tempat, berikut namanya di dua bahasa. */
+const K_NAMA_TEMPAT = {
+  id: {
+    judul: 'Nama tempat',
+    catatan: 'Penanda basemap seperti stasiun, gedung, dan taman',
+    pilihan: { mati: 'Mati', jarang: 'Jarang', normal: 'Normal', rapat: 'Rapat' },
+  },
+  en: {
+    judul: 'Place labels',
+    catatan: 'Basemap markers such as stations, buildings, and parks',
+    pilihan: { mati: 'Off', jarang: 'Sparse', normal: 'Normal', rapat: 'Dense' },
+  },
+}
+
+const URUTAN_KERAPATAN = ['mati', 'jarang', 'normal', 'rapat'] as const
+
+export function MenuPengaturan({
+  namaTempat,
+  onNamaTempat,
+}: {
+  namaTempat?: string
+  onNamaTempat?: (k: string) => void
+} = {}) {
+  const { bahasa } = useBahasa()
+  const tn = useTeks(K_NAMA_TEMPAT)
   const [buka, setBuka] = useState(false)
   const [layar, setLayar] = useState<KunciPengaturan | null>(null)
   const wadah = useRef<HTMLDivElement>(null)
@@ -1233,8 +1258,48 @@ export function MenuPengaturan() {
         {buka && (
           <div
             role="menu"
-            className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[13rem] overflow-hidden rounded-md p-1.5"
+            className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[15.5rem] overflow-hidden rounded-md p-1.5"
           >
+            {/* Bahasa di baris PERTAMA, sebagai sakelar - bukan sebagai layar
+                yang harus dibuka dulu. Ia satu-satunya pengaturan yang
+                mengubah seluruh layar sekaligus, dan orang yang mencarinya
+                biasanya sedang tidak bisa membaca menunya. */}
+            <div className="ungkap flex items-center justify-between gap-3 rounded-sm px-3 py-2.5 text-[13.5px]">
+              <span className="text-ink-2">{bahasa === 'id' ? 'Bahasa' : 'Language'}</span>
+              <SakelarBahasa kelas="app-sakelar-bahasa" />
+            </div>
+
+            {/* Kerapatan nama tempat. Dipasang di sini, bukan sebagai layar
+                tersendiri: ia setelan yang dicari orang SAAT petanya sedang
+                terlalu ramai, dan setelan yang harus dibuka dua kali untuk
+                sampai adalah setelan yang tidak jadi dipakai.
+
+                Empat posisi, bukan sakelar dua posisi. "Mati" saja menghapus
+                satu-satunya cara mengenali tempat; yang sebenarnya dicari
+                sebagian besar orang cuma LEBIH SEDIKIT. */}
+            {onNamaTempat && (
+              <div className="ungkap rounded-sm px-3 py-2.5">
+                <p className="text-[13.5px] text-ink-2">{tn.judul}</p>
+                <p className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{tn.catatan}</p>
+                <div className="mt-2 grid grid-cols-4 gap-1 rounded-full bg-surface-2 p-1">
+                  {URUTAN_KERAPATAN.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => onNamaTempat(k)}
+                      aria-pressed={namaTempat === k}
+                      className={`cursor-pointer rounded-full py-1 text-[11px] font-semibold transition-colors duration-200 ${
+                        namaTempat === k
+                          ? 'bg-ink text-surface'
+                          : 'text-ink-3 hover:text-ink-2'
+                      }`}
+                    >
+                      {tn.pilihan[k]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {(Object.keys(ISI_PENGATURAN) as KunciPengaturan[]).map((k, i) => (
               <button
                 key={k}

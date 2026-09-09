@@ -111,7 +111,11 @@ def hitung_dimensi_perilaku() -> None:
 def simpul_terdekat_dari_rute(rute: pd.DataFrame) -> pd.DataFrame:
     """D03 jarak dan D04 waktu ke simpul terdekat, per heksagon.
 
-    Masukan: kolom h3_index, jarak_m, dan menit dari tabel `hex_routes`.
+    Masukan: kolom h3_index, jarak_m, dan menit dari tabel `hex_routes`,
+    SUDAH DISARING ke profil jalan kaki oleh pemanggilnya. Sejak tabel itu ikut
+    memuat rute mobil, "minimum menit per heksagon" tanpa saringan berarti
+    minimum LINTAS PROFIL - dan mobil selalu menang. D04 akan diam-diam berisi
+    waktu berkendara sementara namanya tetap `waktu_jalan_menit`.
 
     Keduanya diambil dari BARIS YANG SAMA - rute tercepat - bukan dihitung
     sendiri-sendiri sebagai dua minimum yang terpisah. Pada data sekarang

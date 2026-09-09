@@ -87,6 +87,16 @@ export interface Kuadran {
   kunci: string
   nama: string
   /**
+   * Nama zona dalam bahasa Inggris.
+   *
+   * Ada sejak sakelar bahasa dipasang (10 Sep 2026). Empat nama ini muncul di
+   * legenda peta, badge panel, Kompas Kuadran, dan halaman gerbang - dan
+   * membiarkannya berbahasa Indonesia di tampilan Inggris membuat satu-satunya
+   * kosakata yang benar-benar milik produk ini jadi satu-satunya yang tidak
+   * ikut berganti.
+   */
+  namaEn: string
+  /**
    * Satu frasa polos, untuk dibaca orang yang belum pernah melihat layar ini.
    *
    * "Pemenang Jelas" tidak memberi tahu apa pun tentang APA yang menang, dan
@@ -145,6 +155,9 @@ export const KUADRAN: Record<string, Kuadran> = {
   HIDDEN_GEM: {
     kunci: 'HIDDEN_GEM',
     nama: 'Hidden Gem',
+    // Namanya sudah bahasa Inggris di kedua tampilan, dan itu disengaja: ia
+    // istilah yang dipakai apa adanya oleh pelaku usaha di Indonesia.
+    namaEn: 'Hidden Gem',
     ringkas: 'bagus, belum mahal',
     warna: 'var(--q-gem)',
     warnaPeta: '#4C93F7',
@@ -160,6 +173,7 @@ export const KUADRAN: Record<string, Kuadran> = {
     // `arti` di bawah - jadi harganya cuma nama yang panjang dan sulit dibaca
     // di lencana peta. Kuncinya tetap PEMENANG_JELAS.
     nama: 'Aman',
+    namaEn: 'Safe Bet',
     ringkas: 'bagus, dan Anda membayar gengsinya',
     warna: 'var(--q-menang)',
     warnaPeta: '#15803D',
@@ -171,6 +185,7 @@ export const KUADRAN: Record<string, Kuadran> = {
   JEBAKAN_GENGSI: {
     kunci: 'JEBAKAN_GENGSI',
     nama: 'Jebakan Gengsi',
+    namaEn: 'Prestige Trap',
     ringkas: 'terlihat mahal, datanya lemah',
     warna: 'var(--q-jebakan)',
     warnaPeta: '#E58A00',
@@ -182,6 +197,7 @@ export const KUADRAN: Record<string, Kuadran> = {
   HINDARI: {
     kunci: 'HINDARI',
     nama: 'Hindari',
+    namaEn: 'Avoid',
     ringkas: 'sepi, dan tidak menonjol juga',
     warna: 'var(--q-hindari)',
     warnaPeta: '#B01B1B',
@@ -267,6 +283,8 @@ export interface Pendiri {
   inisial: string
   /** Satu kalimat: apa yang benar-benar ia kerjakan di produk ini. */
   kerja: string
+  /** Kalimat yang sama dalam bahasa Inggris, untuk sakelar bahasa gerbang. */
+  kerjaEn?: string
   /** Ditandai di kartu. Hanya satu orang yang boleh membawanya. */
   ketua?: boolean
 }
@@ -277,30 +295,35 @@ export const PENDIRI: Pendiri[] = [
     peran: 'Data Analyst',
     inisial: 'AJ',
     kerja: 'Mengubah hasil misi survei MAPID jadi Kamus Data 43 variabel per heksagon — termasuk membiarkan yang kosong tetap kosong.',
+    kerjaEn: 'Turns MAPID survey missions into a 43-variable data dictionary per hexagon — including leaving the blanks blank.',
   },
   {
     nama: 'Ukas',
     peran: 'AI Engineer',
     inisial: 'UK',
     kerja: 'Loconomics AI: dua belas alat mode strict di dalam satu loop agentik. Modelnya menjawab, tidak pernah menghitung.',
+    kerjaEn: 'Loconomics AI: twelve strict-mode tools inside one agentic loop. The model answers; it never does the math.',
   },
   {
     nama: 'Wily',
     peran: 'UI/UX Designer',
     inisial: 'WL',
     kerja: 'Sistem visual dan Kompas Kuadran — empat kuadran yang bisa dipahami tanpa seorang pun menjelaskannya lebih dulu.',
+    kerjaEn: 'The visual system and the Quadrant Compass — four quadrants anyone can read without a walkthrough.',
   },
   {
     nama: 'Fijar',
     peran: 'WebGIS Developer',
     inisial: 'FJ',
     kerja: 'Peta MapLibre di atas basemap MAPID, API FastAPI, dan basis data PostGIS di Supabase.',
+    kerjaEn: 'The MapLibre map on a MAPID basemap, the FastAPI backend, and the PostGIS database on Supabase.',
   },
   {
     nama: IDENTITAS.ketua,
     peran: 'Business Analyst',
     inisial: 'IR',
     kerja: 'Merumuskan dua pertanyaan yang dijawab produk ini: mana yang tersembunyi, dan mana yang menjebak.',
+    kerjaEn: 'Framed the two questions this product answers: which places are hidden, and which ones are traps.',
     ketua: true,
   },
 ]
@@ -370,6 +393,33 @@ export const LAYER: Record<string, Layer> = {
 }
 
 export type NamaLayer = keyof typeof LAYER
+
+/**
+ * Serapat apa nama tempat basemap ditampilkan.
+ *
+ * Ada karena diminta pemilik repo (10 Sep 2026): "Gedung Wanita", "PTUN",
+ * "Tugu Proklamasi" dan ratusan lainnya menyalakan diri begitu peta di-zoom
+ * masuk, dan pada layer tematik yang penuh warna itu berubah dari konteks jadi
+ * kebisingan. Yang salah bukan penandanya - tanpa penanda, peta berhenti bisa
+ * dicocokkan dengan dunia yang dikenal orang - melainkan tidak adanya kendali
+ * atas seberapa banyak.
+ *
+ * Yang disimpan GESERAN zoom, bukan zoom mutlak. Gaya MAPID punya tiga tingkat
+ * penanda dengan ambang berbeda-beda (`ZOOM_POI` di PetaInteraktif.tsx), dan
+ * menuliskan angka mutlak di sini berarti membuang perbedaan yang memang
+ * disengaja gayanya. Geseran menjaga urutannya: yang penting tetap muncul
+ * lebih dulu daripada yang tidak.
+ *
+ * `null` berarti dimatikan sama sekali.
+ */
+export const KERAPATAN_NAMA: Record<string, { geser: number | null }> = {
+  mati: { geser: null },
+  jarang: { geser: 2 },
+  normal: { geser: 0 },
+  rapat: { geser: -1.5 },
+}
+
+export type KerapatanNama = keyof typeof KERAPATAN_NAMA
 
 // --- Wilayah studi ---------------------------------------------------------
 // Enam kawasan pilot. Sama persis dengan KAWASAN_PILOT di pipeline/config.py dan

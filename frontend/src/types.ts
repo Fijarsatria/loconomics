@@ -333,8 +333,33 @@ export interface SimpulTransit {
  * `koordinat` sudah [lon, lat], urutan GeoJSON - bisa langsung dipakai sebagai
  * geometri LineString tanpa dibalik.
  */
-/** Profil rute yang ada. Motor TIDAK ada, dan tidak akan ada dari ORS. */
+/**
+ * Profil rute yang benar-benar TERSIMPAN. Keduanya, tidak lebih.
+ *
+ * Motor tidak ada di sini dan tidak akan pernah ada dari ORS - layanannya tidak
+ * menyediakan profil sepeda motor sama sekali.
+ */
 export type ProfilRute = 'foot-walking' | 'driving-car'
+
+/**
+ * Moda yang bisa DIPILIH di layar. Bukan hal yang sama dengan `ProfilRute`.
+ *
+ * `motorcycle` diminta pemilik repo, dan ia dilayani apa adanya: jaringan
+ * jalannya memakai rute MOBIL - yang memang jalan yang sama untuk sebagian
+ * besar ruas - sementara WAKTU TEMPUHNYA tidak ditampilkan sama sekali, karena
+ * tidak ada yang pernah mengukurnya.
+ *
+ * Yang TIDAK dilakukan: mengalikan waktu mobil dengan sebuah faktor lalu
+ * mencetaknya sebagai menit. Faktor itu akan jadi satu-satunya angka di seluruh
+ * produk ini yang tidak bisa ditelusuri ke pengukuran mana pun, dan ia akan
+ * tampil dengan kepercayaan diri yang sama dengan angka yang diukur.
+ */
+export type ModaTampil = ProfilRute | 'motorcycle'
+
+/** Profil tersimpan yang dipakai sebuah moda saat meminta rutenya. */
+export function profilUntukModa(m: ModaTampil): ProfilRute {
+  return m === 'motorcycle' ? 'driving-car' : m
+}
 
 export interface RuteJalan {
   urutan: number

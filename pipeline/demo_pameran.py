@@ -454,15 +454,27 @@ def isi(db) -> None:
     # diperagakan bahwa produknya bisa membedakan dua profil, bukan bahwa kami
     # punya jaringan jalan mobil. Waktunya dibagi 3,4 - mobil di jalan kota
     # Jabodetabek kira-kira 15 km/jam melawan 4,3 km/jam jalan kaki.
+    #
+    # HANYA untuk heksagon yang belum punya rute mobil SUNGGUHAN. Sejak
+    # `rute_ors.py --mobil` benar-benar dijalankan, sebagian besar heksagon
+    # punya jalur mobil dari OpenRouteService - dan cerminan ini akan menimpa
+    # ketelitiannya dengan geometri jalan kaki. `ON CONFLICT DO NOTHING` saja
+    # tidak cukup menjaganya: rute sungguhan boleh punya jumlah alternatif yang
+    # berbeda, jadi sebagian barisnya tetap lolos ke nomor urutan yang kosong.
     sebelum_rute = {r[0] for r in db.execute(text("SELECT id FROM hex_routes")).all()}
     db.execute(
         text(
             """
             INSERT INTO hex_routes
                 (h3_index, transport_node_id, urutan, jarak_m, menit, geom, profil)
-            SELECT h3_index, transport_node_id, urutan, jarak_m, menit / 3.4, geom,
-                   'driving-car'
-            FROM hex_routes WHERE profil = 'foot-walking'
+            SELECT w.h3_index, w.transport_node_id, w.urutan, w.jarak_m,
+                   w.menit / 3.4, w.geom, 'driving-car'
+            FROM hex_routes w
+            WHERE w.profil = 'foot-walking'
+              AND NOT EXISTS (
+                  SELECT 1 FROM hex_routes d
+                  WHERE d.h3_index = w.h3_index AND d.profil = 'driving-car'
+              )
             ON CONFLICT DO NOTHING
             """
         )

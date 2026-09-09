@@ -43,16 +43,48 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import { RODA_WARNA, urlGaya } from '../config'
 import { api, GalatAPI } from '../lib/api'
+import { useTeks } from '../lib/bahasa'
 
 const NAMA = 'LOCONOMICS'
 
-/** Empat pekerjaan nyata. Bobotnya sama karena lamanya memang sebanding. */
-const LANGKAH = [
-  'Menghubungi mesin data',
-  'Menyiapkan basemap MAPID',
-  'Memuat tipografi',
-  'Menyusun grid heksagon',
-] as const
+/** Berapa pekerjaan nyata yang ditunggu. Nama tiap langkahnya ikut bahasa. */
+const JUMLAH_LANGKAH = 4
+
+const K = {
+  id: {
+    langkah: [
+      'Menghubungi mesin data',
+      'Menyiapkan basemap MAPID',
+      'Memuat tipografi',
+      'Menyusun grid heksagon',
+    ],
+    eyebrow: 'WebGIS · MAPID Competition 2026',
+    tagline: 'Mencari lokasi usaha yang datanya bagus, bukan yang tampilannya mahal.',
+    gagal: 'Gagal memuat',
+    membangunkan: 'Membangunkan mesin data — sebentar',
+    siap: 'Siap',
+    memuat: (p: number) => `Memuat Loconomics, ${p} persen`,
+    galatMesin: 'Mesin data belum bisa dihubungi.',
+    tetapBisa:
+      'Peta, skor, dan kuadran tetap bisa dilihat. Yang belum bisa dibuka hanya bagian yang menuntut mesin data: Loconomics AI, akun, dan rincian per lokasi.',
+    lanjut: 'Lanjutkan ke peta',
+    cobaLagi: 'Coba lagi',
+  },
+  en: {
+    langkah: ['Reaching the data engine', 'Preparing the MAPID basemap', 'Loading typography', 'Laying the hexagon grid'],
+    eyebrow: 'WebGIS · MAPID Competition 2026',
+    tagline: 'Finding the business location whose data is good, not the one that looks expensive.',
+    gagal: 'Failed to load',
+    membangunkan: 'Waking the data engine — one moment',
+    siap: 'Ready',
+    memuat: (p: number) => `Loading Loconomics, ${p} percent`,
+    galatMesin: 'The data engine could not be reached.',
+    tetapBisa:
+      'The map, scores, and quadrants still work. Only the parts that need the data engine are unavailable: Loconomics AI, accounts, and per-location detail.',
+    lanjut: 'Continue to the map',
+    cobaLagi: 'Try again',
+  },
+}
 
 /** Kota tidak boleh lewat begitu saja. Di bawah ini pembuka terasa tersentak. */
 const TAHAN_MINIMAL_MS = 2400
@@ -164,83 +196,94 @@ async function tungguMesinData(
  * Titik tanah punya Y = 0, jadi (Y - camH) negatif dan tanah selalu jatuh di
  * bawah cakrawala. Makin jauh, makin mendekati cakrawala. Itulah kedalamannya.
  */
-const SISI = 26 // jari-jari heksagon dalam satuan dunia
-const TINGGI_KAMERA = 58
-const TINGGI_KOLOM = 80
-/** Baris terdekat tidak boleh menempel di lensa; 5,5 sisi memberi latar depan
-    yang besar tanpa satu kolom pun menutupi layar. */
-const Z_DEKAT = 5.5 * SISI
+/**
+ * Kamera dan skala kota.
+ *
+ * Ketiganya disetel ulang 10 Sep 2026. Nilai lamanya (26 / 58 / 84) membuat
+ * heksagon terdekat selebar hampir 500 px: yang terlihat di layar bukan kota
+ * melainkan tiga lempeng raksasa. Petak yang lebih kecil DAN kamera yang lebih
+ * tinggi menyelesaikan keduanya sekaligus - kotanya jadi padat, dan yang
+ * terdekat pun masih terbaca sebagai bangunan.
+ *
+ * Satu batas yang mengikat ketiganya: dasar baris terdekat wajib memproyeksi
+ * MELEWATI tepi bawah layar, kalau tidak muncul lagi pita kosong di kaki yang
+ * jadi keluhan awalnya. Batasnya `Z_DEKAT <= f x TINGGI_KAMERA / (0,5 x tinggi)`;
+ * pada 1440x900 itu 182, dan yang dipakai 171.
+ */
+const SISI = 18 // jari-jari heksagon dalam satuan dunia
+const TINGGI_KAMERA = 92
+const TINGGI_KOLOM = 100
+
+/**
+ * Baris terdekat, dan angka ini yang memperbaiki keluhan "bawahnya ga sampai
+ * bawah banget".
+ *
+ * Dulu 5,5 sisi. Dengan f = 0,62 x lebar, dasar kolom terdekat memproyeksi ke
+ * y = cy + f x 58 / 143 - sekitar 70 piksel DI ATAS tepi bawah layar 900px.
+ * Sisanya diisi warna tanah rata, dan pertemuan keduanya jadi satu garis
+ * mendatar yang tegas melintasi layar. Terlihat begitu di potret yang dikirim
+ * pemilik repo.
+ *
+ * 3,6 sisi membuat dasar kolom terdekat jatuh di y ~ 1019: LEWAT tepi bawah,
+ * jadi ia terpotong bingkai - dan kolom yang terpotong bingkai justru yang
+ * membuat orang merasa berdiri DI ANTARA bangunannya, bukan menonton maketnya.
+ */
+const Z_DEKAT = 9.5 * SISI
 /** Grid harus jauh lebih lebar daripada layar, karena kolom terjauh menyusut
-    sampai seperlima. Kurang dari ini, cakrawala berakhir sebagai pita sempit
-    dengan gelap di kiri-kanannya. Yang di luar layar disingkirkan per bingkai,
-    jadi lebar ini nyaris tidak berbiaya. */
-const KOLOM = 20
+    sampai seperlima. Yang di luar layar disingkirkan per bingkai, jadi lebar
+    ini nyaris tidak berbiaya. */
+const KOLOM = 17
 const BARIS = 15
 
-/** Heksagon bertopi datar: enam titik sudut pada kelipatan 60°, di bidang XZ. */
+/** Heksagon bertopi datar: enam titik sudut pada kelipatan 60 derajat, di bidang XZ. */
 const SUDUT = Array.from({ length: 6 }, (_, k) => {
   const a = (Math.PI / 180) * 60 * k
   return { x: Math.cos(a), z: Math.sin(a) }
 })
 
 /**
- * Kota tidak lagi memakai warna kuadran.
+ * KOTA MALAM YANG DIBANGUN DARI DATANYA SENDIRI.
  *
- * Dulu ia meminjam ketiganya, dan itu memakai warna yang punya arti tepat di
- * layar yang belum punya satu pun data untuk diartikan. Sekarang tiga tingkat
- * teal dari palet gerbang - masih tiga warna supaya kolomnya tidak rata, tetapi
- * tidak satu pun yang menjanjikan sesuatu.
+ * Tiga hal yang membedakannya dari versi sebelumnya, dan ketiganya menjawab
+ * satu keluhan yang sama - "kurang tajem, kayak kurang aja":
+ *
+ *   LANTAI  Seluruh bidang di bawah cakrawala sekarang berupa LANTAI HEKSAGON
+ *           yang menyurut ke kejauhan, bergaris tepi. Sebelumnya ia bidang
+ *           warna rata; bidang rata tidak punya detail yang bisa dilihat mata,
+ *           dan itulah yang terbaca sebagai "tidak tajam". Lantainya juga yang
+ *           menjamin tidak ada satu piksel pun di bawah yang kosong.
+ *   SAPUAN  Satu cincin terang menyapu dari dekat ke jauh, berulang. Bukan
+ *           hiasan: itu gerakan yang sama dengan gelombang layer heksagon di
+ *           petanya - hal pertama yang akan dilihat orang begitu layar ini
+ *           hilang.
+ *   KEMAJUAN Tinggi kotanya terikat pada KEMAJUAN MEMUAT, bukan cuma pada
+ *           waktu. Kotanya benar-benar selesai dibangun tepat saat datanya
+ *           selesai dimuat, jadi bilah di bawah dan kota di belakangnya
+ *           menceritakan hal yang sama.
+ *
+ * Paletnya tetap malam, dan yang MENYALA tetap sedikit: tujuh dari sepuluh
+ * kolom cuma bahan bangunan, sisanya teal (datanya kuat) atau ungu (terlihat
+ * mahal) - dua kutub yang sama dengan seluruh sisa situs ini.
  */
-const WARNA_KOTA = ['#1f8f7d', '#2fa891', '#17766a']
-const LANGIT_ATAS = '#e9faf5'
-const LANGIT_BAWAH = '#7fd3c2'
-/** Dasar layar, di bawah cakrawala. Ujung gelap gradien mint gerbang. */
-const TANAH = '#4fbfab'
-/**
- * Bayangan kolom dijatuhkan ke teal SEDANG, bukan ke hitam dan bukan ke teal
- * gelap.
- *
- * Di langit gelap yang lama, hitam adalah dasar yang benar - sisi yang tidak
- * kena cahaya memang melebur ke latarnya. Di langit mint, apa pun yang lebih
- * gelap dari ini terbaca sebagai lubang di layar, dan lubangnya harus ditutup
- * peredam yang begitu tebal sampai kotanya sendiri ikut hilang - itu yang
- * terjadi pada percobaan pertama, kotanya tidak terlihat sama sekali.
- *
- * Kota di sini watermark, bukan siluet - tapi watermark tetap harus terlihat.
- * Percobaan kedua menaruhnya di #2F8F7F dengan kolom teal muda, dan hasilnya
- * kotanya lenyap sama sekali: tinta, isian, dan langit ketiganya jatuh dalam
- * rentang terang yang sama, jadi tidak ada satu tepi pun yang bisa dibedakan.
- * Yang membuatnya terbaca sebagai ruang adalah beda terang antar sisi heksagon
- * yang sama - dan beda itu butuh jarak dari langitnya.
- */
-const TINTA_KOTA = '#124f47'
-
-/** Acak yang stabil: kolom yang sama selalu dapat warna dan fase yang sama. */
-function acak(i: number, j: number) {
-  const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453
-  return n - Math.floor(n)
-}
+type RGB = [number, number, number]
 
 /**
- * Membaca "#rrggbb" MAUPUN "rgb(r,g,b)".
+ * Membaca "#rrggbb".
  *
- * Bentuk kedua bukan kelonggaran, melainkan syarat: campur() dipanggil
- * BERSARANG - hasil pencampuran warna dasar dipakai lagi sebagai masukan
- * pencampuran kabut - dan keluarannya sendiri "rgb(...)".
+ * Dulu ia juga harus mengerti "rgb(r,g,b)", karena `campur()` dipanggil
+ * BERSARANG dan keluarannya sendiri berbentuk rgb(). Sejak pencampuran pindah
+ * ke tupel angka, bentuk itu tidak pernah lagi jadi masukan - tetapi
+ * penerimaannya DIPERTAHANKAN, dan alasannya sejarah yang mahal:
  *
- * Sampai 23 Agustus 2026 parser di sini hanya mengerti heksadesimal, jadi
- * panggilan LUAR selalu mem-parse "rgb(41,148,142)" sebagai heksadesimal dan
- * menghasilkan `rgb(NaN,NaN,7)`. Kanvas menolak fillStyle yang tidak sah TANPA
- * melempar galat: ia diam-diam mempertahankan fillStyle sebelumnya - yang di
- * sini kebetulan gradien langit. Akibatnya seluruh kota digambar dengan warna
- * langit di atas langit, dan layar pembuka ini tampak kosong padahal 16.229
- * heksagon per bingkai benar-benar digambar.
- *
- * Bug ini lebih tua daripada palet terang. Sebelumnya WARNA_KOTA mengambil
- * `KUADRAN.*.warna`, yang sejak palet kuadran pindah ke variabel CSS berisi
- * "var(--q-gem)" - juga bukan heksadesimal, juga NaN, juga diam.
+ * Sampai 23 Agustus 2026 parser ini hanya mengerti heksadesimal, jadi setiap
+ * masukan "rgb(...)" jadi `rgb(NaN,NaN,7)`. Kanvas menolak fillStyle yang tidak
+ * sah TANPA melempar galat - ia diam-diam mempertahankan fillStyle sebelumnya,
+ * yang di sini kebetulan gradien langit. Akibatnya seluruh kota digambar dengan
+ * warna langit di atas langit, dan layar ini tampak kosong padahal 16.229
+ * heksagon per bingkai benar-benar digambar. Kegagalan yang paling sulit
+ * disadari adalah kegagalan yang tidak berbunyi.
  */
-function urai(warna: string): [number, number, number] {
+function urai(warna: string): RGB {
   if (warna.startsWith('#'))
     return [
       parseInt(warna.slice(1, 3), 16),
@@ -251,11 +294,62 @@ function urai(warna: string): [number, number, number] {
   return [r, g, b]
 }
 
-function campur(dari: string, ke: string, t: number) {
-  const [r1, g1, b1] = urai(dari)
-  const [r2, g2, b2] = urai(ke)
-  const m = (a: number, b: number) => Math.round(a + (b - a) * t)
-  return `rgb(${m(r1, r2)},${m(g1, g2)},${m(b1, b2)})`
+const WARNA_KOTA = ['#1b3a38', '#2de8c0', '#6f55f0']
+const LANGIT_ATAS = '#04070a'
+const LANGIT_BAWAH = '#0e2b2f'
+/** Dasar layar, di bawah cakrawala. Sama dengan dasar gerbang. */
+const TANAH = '#060c0b'
+/** Petak lantai dan garis tepinya. Bedanya kecil dengan sengaja: yang dicari
+    tekstur, bukan kisi yang berebut perhatian dengan tulisan di atasnya. */
+const LANTAI = '#091312'
+const LANTAI_TEPI = '#14302c'
+/**
+ * Bayangan kolom dijatuhkan ke sini. Di langit malam, hitam hampir murni benar:
+ * sisi yang tidak kena cahaya memang melebur ke latarnya, dan justru itu yang
+ * memberi kolomnya bentuk.
+ */
+const TINTA_KOTA = '#030605'
+
+/**
+ * Palet yang sama, sudah diurai jadi angka SEKALI di muat modul.
+ *
+ * Ini perbaikan kinerja, bukan kerapian. Versi sebelumnya menyimpan warnanya
+ * sebagai string dan memanggil `campur()` empat sampai lima kali per sel -
+ * dan tiap panggilan mem-parse ulang kedua string masukannya. Pada ~600 sel
+ * yang benar-benar digambar itu berarti sekitar 5.000 penguraian string per
+ * BINGKAI. Terukur di Chromium tanpa GPU: bingkai median 66,7 ms, yaitu 15
+ * bingkai per detik untuk layar yang seluruh gunanya terasa mulus.
+ *
+ * Yang dipakai di dalam gelung sekarang `campurRGB` - aritmetika murni di atas
+ * tupel - dan string cuma dirakit sekali per isian, saat menyerahkannya ke
+ * `fillStyle` yang memang menuntut string.
+ */
+const RGB_KOTA: RGB[] = WARNA_KOTA.map(urai)
+const RGB_TINTA = urai(TINTA_KOTA)
+const RGB_LANGIT_BAWAH = urai(LANGIT_BAWAH)
+const RGB_LANTAI = urai(LANTAI)
+const RGB_LANTAI_TEPI = urai(LANTAI_TEPI)
+const RGB_PUTIH: RGB = [255, 255, 255]
+
+function campurRGB(a: RGB, b: RGB, t: number): RGB {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+}
+
+function ke(c: RGB): string {
+  return `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`
+}
+
+/** Kolom mana yang menyala. Tujuh dari sepuluh gelap; sisanya teal atau ungu. */
+function warnaKolom(r: number): RGB {
+  if (r < 0.72) return RGB_KOTA[0]
+  if (r < 0.9) return RGB_KOTA[1]
+  return RGB_KOTA[2]
+}
+
+/** Acak yang stabil: kolom yang sama selalu dapat warna dan fase yang sama. */
+function acak(i: number, j: number) {
+  const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453
+  return n - Math.floor(n)
 }
 
 function gambarKota(
@@ -263,9 +357,10 @@ function gambarKota(
   lebar: number,
   tinggi: number,
   detik: number,
+  maju: number,
 ) {
   const cx = lebar / 2
-  const cy = tinggi * 0.52
+  const cy = tinggi * 0.5
   const f = Math.max(lebar, 900) * 0.62
   // Kamera menggeser pelan ke samping. Parallax inilah yang meyakinkan mata
   // bahwa yang dilihatnya ruang, bukan gambar.
@@ -273,71 +368,116 @@ function gambarKota(
 
   const langit = ctx.createLinearGradient(0, 0, 0, tinggi)
   langit.addColorStop(0, LANGIT_ATAS)
-  langit.addColorStop(0.55, LANGIT_BAWAH)
+  langit.addColorStop(0.5, LANGIT_BAWAH)
   langit.addColorStop(1, TANAH)
   ctx.fillStyle = langit
   ctx.fillRect(0, 0, lebar, tinggi)
 
   const zJauh = SISI * Math.sqrt(3) * BARIS + Z_DEKAT
+  // Cincin sapuan, dinyatakan sebagai pecahan jarak. Berulang tiap ~2,4 detik.
+  const sapuan = (detik * 0.42) % 1.35
 
   // Jauh dulu, dekat belakangan. Algoritma pelukis - tanpa buffer kedalaman,
-  // urutan gambar ADALAH kedalamannya.
-  for (let j = BARIS; j >= 0; j--) {
+  // urutan gambar ADALAH kedalamannya. Baris NEGATIF ada supaya lantainya
+  // menembus tepi bawah layar; tanpa itu selalu tersisa pita kosong di kaki.
+  for (let j = BARIS; j >= -2; j--) {
     for (let i = -KOLOM; i <= KOLOM; i++) {
       const X = SISI * 1.5 * i
       const Z = SISI * Math.sqrt(3) * (j + (Math.abs(i) % 2 === 1 ? 0.5 : 0))
       const dz = Z + Z_DEKAT
-      if (dz < 1) continue
+      if (dz < 8) continue
 
       // Buang yang di luar layar SEBELUM menghitung apa pun tentangnya. Grid
-      // 41×16 hanya menyisakan sekitar seperempat kolom yang benar-benar
+      // 45x20 hanya menyisakan sekitar seperempat kolom yang benar-benar
       // digambar, dan uji ini dua perkalian.
       const layarX = cx + (f * (X - camX)) / dz
       const lebarLayar = (f * 2 * SISI) / dz
       if (layarX < -lebarLayar || layarX > lebar + lebarLayar) continue
-      if (lebarLayar < 2.5) continue
-
-      const r = acak(i, j)
-      // Gelombang berjalan dari cakrawala ke arah penonton: kota yang sedang
-      // dibangun, bukan kota yang sudah berdiri.
-      const fase = detik * 1.15 - j * 0.42 + i * 0.22
-      const naik = Math.min(1, Math.max(0, detik * 1.6 - j * 0.09))
-      const h = TINGGI_KOLOM * (0.18 + 0.82 * (0.5 + 0.5 * Math.sin(fase))) * naik * (0.55 + r * 0.75)
+      if (lebarLayar < 3.5) continue
 
       const kabut = Math.min(1, Math.max(0, (dz - Z_DEKAT) / (zJauh - Z_DEKAT)))
-      if (kabut > 0.985) continue
-
-      const dasar = WARNA_KOTA[Math.floor(r * WARNA_KOTA.length) % WARNA_KOTA.length]
-      // Dijepit di 1: pengali tinggi acak bisa membawa h melewati TINGGI_KOLOM,
-      // dan campur() dengan t > 1 mengekstrapolasi keluar rentang warna.
-      const terang = Math.min(1, 0.35 + 0.65 * (h / TINGGI_KOLOM))
+      if (kabut > 0.965) continue
 
       const proyeksi = (vx: number, vz: number, vy: number) => {
         const pz = Z + vz + Z_DEKAT
         return {
           x: cx + (f * (X + vx - camX)) / pz,
           y: cy - (f * (vy - TINGGI_KAMERA)) / pz,
-          z: pz,
         }
       }
+      const bawah = SUDUT.map((s) => proyeksi(s.x * SISI, s.z * SISI, 0))
+
+      // --- 1 · Petak lantai ------------------------------------------------
+      // Digambar untuk SETIAP sel, termasuk yang kolomnya belum berdiri. Ia
+      // yang mengisi seluruh kaki layar, dan garis tepinya yang memberi
+      // ketajaman yang hilang dari bidang warna rata.
+      ctx.fillStyle = ke(campurRGB(RGB_LANTAI, RGB_LANGIT_BAWAH, kabut * 0.92))
+      ctx.beginPath()
+      bawah.forEach((p, k) => (k === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)))
+      ctx.closePath()
+      ctx.fill()
+      // Garis tepi lantai hanya untuk petak yang cukup besar. Di kejauhan ia
+      // lebih tipis daripada satu piksel dan cuma menambah kerja.
+      if (lebarLayar > 22) {
+        ctx.strokeStyle = ke(campurRGB(RGB_LANTAI_TEPI, RGB_LANGIT_BAWAH, kabut * 0.95))
+        ctx.lineWidth = Math.max(0.5, lebarLayar * 0.004)
+        ctx.stroke()
+      }
+
+      // --- 2 · Kolom -------------------------------------------------------
+      const r = acak(i, j)
+      // Gelombang berjalan dari cakrawala ke arah penonton: kota yang sedang
+      // dibangun, bukan kota yang sudah berdiri.
+      const fase = detik * 1.15 - j * 0.42 + i * 0.22
+      // Dua pengunci sekaligus. `naik` yang lama menahan barisnya sampai
+      // waktunya tiba; `maju` menahan SELURUHNYA sampai datanya benar-benar
+      // sampai. Yang dipakai yang terkecil, jadi kotanya tidak pernah lebih
+      // jadi daripada muatannya.
+      const naik = Math.min(1, Math.max(0, detik * 1.6 - j * 0.09))
+      const tinggiRelatif = Math.min(naik, 0.25 + 0.75 * maju)
+      const h =
+        TINGGI_KOLOM * (0.18 + 0.82 * (0.5 + 0.5 * Math.sin(fase))) * tinggiRelatif * (0.55 + r * 0.75)
+      if (h < 1.5) continue
+
+      const dasar = warnaKolom(r)
+      // Dijepit di 1: pengali tinggi acak bisa membawa h melewati TINGGI_KOLOM,
+      // dan campur() dengan t > 1 mengekstrapolasi keluar rentang warna.
+      const terang = Math.min(1, 0.35 + 0.65 * (h / TINGGI_KOLOM))
+      // Cincin sapuan: sel yang sedang dilewatinya ikut terang sebentar.
+      const jarakSapu = Math.abs(kabut - sapuan)
+      const sapu = jarakSapu < 0.11 ? Math.pow(1 - jarakSapu / 0.11, 2) : 0
 
       const atas = SUDUT.map((s) => proyeksi(s.x * SISI, s.z * SISI, h))
-      const bawah = SUDUT.map((s) => proyeksi(s.x * SISI, s.z * SISI, 0))
+
+      // TINGKAT RINCIAN. Di bawah 9 px, ketiga sisi kolom bersama-sama cuma
+      // selebar satu sampai dua piksel dan tidak menyumbang satu pun tepi yang
+      // bisa dilihat - tetapi tetap dibayar penuh: tiga jalur, tiga isian, dan
+      // tiga perakitan string warna. Yang jauh cukup atapnya saja.
+      const rinci = lebarLayar > 9
 
       // Sisi yang menghadap kamera saja. Normal keluar sebuah rusuk sama dengan
       // titik tengahnya (heksagon berpusat di titik asal), jadi tidak perlu
       // menghitung silang.
-      for (let k = 0; k < 6; k++) {
+      for (let k = 0; rinci && k < 6; k++) {
         const k2 = (k + 1) % 6
         const nx = (SUDUT[k].x + SUDUT[k2].x) / 2
         const nz = (SUDUT[k].z + SUDUT[k2].z) / 2
         const pandang = { x: X - camX, z: dz }
         if (nx * pandang.x + nz * pandang.z >= 0) continue
 
-        // Cahaya dari kiri atas. Sisi kiri lebih terang daripada sisi kanan -
-        // tanpa beda ini kolomnya terbaca sebagai siluet datar.
-        const cahaya = 0.32 + 0.34 * (0.5 - nx / 2)
-        ctx.fillStyle = campur(campur(TINTA_KOTA, dasar, terang * cahaya), LANGIT_BAWAH, kabut)
+        // Cahaya dari kiri atas. Rentangnya dilebarkan dari 0,32-0,66 jadi
+        // 0,26-0,74: dua sisi yang terangnya berdekatan melebur jadi satu
+        // siluet datar, dan siluet datar itulah yang terbaca sebagai "kurang
+        // tajam". Yang membuat sebuah kotak terlihat sebagai kotak adalah
+        // selisih antar-sisinya, bukan jumlah pikselnya.
+        const cahaya = 0.26 + 0.48 * (0.5 - nx / 2)
+        ctx.fillStyle = ke(
+          campurRGB(
+            campurRGB(RGB_TINTA, dasar, Math.min(1, terang * cahaya + sapu * 0.28)),
+            RGB_LANGIT_BAWAH,
+            kabut,
+          ),
+        )
         ctx.beginPath()
         ctx.moveTo(atas[k].x, atas[k].y)
         ctx.lineTo(atas[k2].x, atas[k2].y)
@@ -347,23 +487,43 @@ function gambarKota(
         ctx.fill()
       }
 
-      ctx.fillStyle = campur(campur(TINTA_KOTA, dasar, terang), LANGIT_BAWAH, kabut)
+      // Tutup atas: bidang paling terang, dan satu-satunya yang menerima
+      // sapuan penuh. Ia yang membuat deretan kolom terbaca sebagai atap-atap
+      // alih-alih sebagai pagar.
+      ctx.fillStyle = ke(
+        campurRGB(
+          campurRGB(RGB_TINTA, dasar, Math.min(1, terang + sapu * 0.55)),
+          RGB_LANGIT_BAWAH,
+          kabut,
+        ),
+      )
       ctx.beginPath()
       atas.forEach((p, k) => (k === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)))
       ctx.closePath()
       ctx.fill()
+      // Garis tepi atap, hanya untuk yang cukup besar. Satu piksel terang di
+      // tepi atap memberi ketajaman yang tidak bisa diberikan isian mana pun.
+      if (lebarLayar > 26) {
+        ctx.strokeStyle = ke(campurRGB(campurRGB(dasar, RGB_PUTIH, 0.22), RGB_LANGIT_BAWAH, kabut))
+        ctx.lineWidth = Math.max(0.5, lebarLayar * 0.005)
+        ctx.stroke()
+      }
     }
   }
 
   // Kabut cakrawala menutup baris terjauh supaya grid tidak berhenti mendadak.
-  const kabutAtas = ctx.createLinearGradient(0, cy - tinggi * 0.22, 0, cy + tinggi * 0.06)
-  kabutAtas.addColorStop(0, LANGIT_BAWAH)
-  kabutAtas.addColorStop(1, 'rgba(127,211,194,0)')
+  // Ia memuncak DI cakrawala dan tembus di kedua ujungnya: versi yang dimulai
+  // pekat di tepi atas menggambar satu garis mendatar tegas melintasi layar,
+  // karena langit di atasnya lebih gelap daripada kabutnya sendiri.
+  const kabutAtas = ctx.createLinearGradient(0, cy - tinggi * 0.24, 0, cy + tinggi * 0.08)
+  kabutAtas.addColorStop(0, 'rgba(14,43,47,0)')
+  kabutAtas.addColorStop(0.76, LANGIT_BAWAH)
+  kabutAtas.addColorStop(1, 'rgba(14,43,47,0)')
   ctx.fillStyle = kabutAtas
-  ctx.fillRect(0, cy - tinggi * 0.22, lebar, tinggi * 0.28)
+  ctx.fillRect(0, cy - tinggi * 0.24, lebar, tinggi * 0.32)
 }
 
-function KotaHeksagon() {
+function KotaHeksagon({ maju }: { maju: React.RefObject<number> }) {
   const kanvas = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -378,6 +538,11 @@ function KotaHeksagon() {
     const mulai = performance.now()
 
     const ukur = () => {
+      // Tetap 2, bukan 2,5. Ketajaman yang dicari datang dari GARIS TEPI yang
+      // digambar di tiap petak lantai dan tiap atap, bukan dari kerapatan
+      // pikselnya - dan menaikkan dpr menaikkan ongkos isian secara kuadratik
+      // untuk perbaikan yang nyaris tidak terlihat. Terukur: 2,5 menyeret
+      // bingkai median ke 66,7 ms.
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       el.width = Math.floor(el.clientWidth * dpr)
       el.height = Math.floor(el.clientHeight * dpr)
@@ -386,18 +551,20 @@ function KotaHeksagon() {
 
     const bingkai = (t: number) => {
       if (lepas) return
-      gambarKota(ctx, el.clientWidth, el.clientHeight, (t - mulai) / 1000)
+      gambarKota(ctx, el.clientWidth, el.clientHeight, (t - mulai) / 1000, maju.current ?? 0)
       if (!diam) rafId = requestAnimationFrame(bingkai)
     }
 
     ukur()
-    // Satu bingkai pada detik ke-3: kota sudah berdiri, tidak sedang tumbuh.
-    if (diam) gambarKota(ctx, el.clientWidth, el.clientHeight, 3)
+    // Satu bingkai pada detik ke-3 dengan kota yang sudah jadi: gerak dimatikan
+    // berarti tidak ada yang menunggu untuk dilihat, jadi yang ditampilkan
+    // keadaan akhirnya - bukan keadaan setengah jadi yang tidak akan berubah.
+    if (diam) gambarKota(ctx, el.clientWidth, el.clientHeight, 3, 1)
     else rafId = requestAnimationFrame(bingkai)
 
     const ulang = () => {
       ukur()
-      if (diam) gambarKota(ctx, el.clientWidth, el.clientHeight, 3)
+      if (diam) gambarKota(ctx, el.clientWidth, el.clientHeight, 3, 1)
     }
     window.addEventListener('resize', ulang)
     return () => {
@@ -405,7 +572,7 @@ function KotaHeksagon() {
       cancelAnimationFrame(rafId)
       window.removeEventListener('resize', ulang)
     }
-  }, [])
+  }, [maju])
 
   return <canvas ref={kanvas} className="absolute inset-0 h-full w-full" aria-hidden />
 }
@@ -415,7 +582,16 @@ function KotaHeksagon() {
 // ---------------------------------------------------------------------------
 
 export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
+  const t = useTeks(K)
   const [selesai, setSelesai] = useState(0)
+  /**
+   * Kemajuan memuat, DIBACA PER BINGKAI oleh kota di belakangnya.
+   *
+   * Ref, bukan state yang diteruskan sebagai prop: kanvasnya menggambar 60 kali
+   * sedetik dan tidak boleh menunggu React merender ulang untuk tahu angkanya
+   * berubah. Efek di bawah yang menyalinnya tiap langkah selesai.
+   */
+  const maju = useRef(0)
   const [galat, setGalat] = useState<string | null>(null)
   /** Percobaan pertama ke /health gagal - backend ada, tetapi masih bangun. */
   const [membangunkan, setMembangunkan] = useState(false)
@@ -429,6 +605,13 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
     const iv = setInterval(() => setKepala((k) => k + 1), 130)
     return () => clearInterval(iv)
   }, [])
+
+  // Kemajuan disalin ke ref di EFEK, bukan saat render: menulis ref di badan
+  // komponen berjalan juga pada render yang dibuang React, dan kanvas di
+  // belakangnya membaca ref itu tiap bingkai.
+  useEffect(() => {
+    maju.current = selesai / JUMLAH_LANGKAH
+  }, [selesai])
 
   useEffect(() => {
     let batal = false
@@ -454,7 +637,7 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
           () => !batal && setMembangunkan(true),
         )
         if (!hidup) {
-          if (!batal) setGalat('Mesin data belum bisa dihubungi.')
+          if (!batal) setGalat('mesin')
           return
         }
         if (!batal) setMembangunkan(false)
@@ -486,29 +669,29 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
     }
   }, [onSelesai])
 
-  const persen = Math.round((selesai / LANGKAH.length) * 100)
+  const persen = Math.round((selesai / JUMLAH_LANGKAH) * 100)
   // Menyebut SEBAB, dalam bahasa orang yang membuka tautan - bukan "cold start",
   // bukan nama penyedianya. Yang dijawabnya satu pertanyaan yang muncul sendiri
   // di kepala orang saat sebuah bilah berhenti bergerak: ini macet, atau memang
   // sedang mengerjakan sesuatu?
   const keterangan = galat
-    ? 'Gagal memuat'
+    ? t.gagal
     : membangunkan
-      ? 'Membangunkan mesin data — sebentar'
-      : selesai >= LANGKAH.length
-        ? 'Siap'
-        : LANGKAH[selesai]
+      ? t.membangunkan
+      : selesai >= JUMLAH_LANGKAH
+        ? t.siap
+        : t.langkah[selesai]
 
   return (
     <div
-      className={`fixed inset-0 z-[100] overflow-hidden bg-[#dff6f0] transition-opacity duration-500 ease-liquid ${
+      className={`fixed inset-0 z-[100] overflow-hidden bg-[#06090a] transition-opacity duration-500 ease-liquid ${
         pergi ? 'pointer-events-none opacity-0' : 'opacity-100'
       }`}
       role="status"
       aria-live="polite"
-      aria-label={`Memuat Loconomics, ${persen} persen`}
+      aria-label={t.memuat(persen)}
     >
-      <KotaHeksagon />
+      <KotaHeksagon maju={maju} />
 
       {/* Peredup supaya teks tetap terbaca berapa pun tinggi kolom di belakangnya */}
       {/* Peredup terbalik DUA KALI.
@@ -521,13 +704,17 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
           sekali, dan yang tersisa cuma bidang mint kosong. Sekarang bagian
           tengah jadi alas bersih untuk teks, dan kotanya muncul justru di
           sekelilingnya. */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_62%_44%_at_50%_50%,rgba(233,250,245,0.95)_0%,rgba(228,248,243,0.6)_58%,rgba(223,246,240,0.12)_100%)]" />
+      {/* Peredup untuk kota malam: yang menjaga jarak baca adalah GELAP di
+          tengah, bukan kabut putih - teksnya terang, jadi alasnya harus lebih
+          gelap daripada kota di sekelilingnya. Tepinya dibiarkan terbuka
+          supaya kolom yang menyala tetap terlihat mengelilingi tulisannya. */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_56%_40%_at_50%_50%,rgba(6,9,10,0.95)_0%,rgba(6,9,10,0.66)_58%,rgba(6,9,10,0.08)_100%)]" />
 
       <div className="relative flex h-full flex-col items-center justify-center px-6">
-        <p className="eyebrow mb-5 text-[#2b6a61]">WebGIS · MAPID Competition 2026</p>
+        <p className="eyebrow mb-5 text-[#8aa39c]">{t.eyebrow}</p>
 
         <h1
-          className="papan flex select-none whitespace-nowrap text-[clamp(2rem,8vw,6.2rem)] leading-none tracking-[0.02em] text-[#0b3d37]"
+          className="papan flex select-none whitespace-nowrap text-[clamp(2rem,8vw,6.2rem)] leading-none tracking-[0.02em] text-[#e8f5f1]"
           aria-label={NAMA}
         >
           {[...NAMA].map((huruf, i) => {
@@ -556,14 +743,14 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
           })}
         </h1>
 
-        <p className="mt-5 max-w-[34ch] text-center text-[15px] leading-relaxed text-[#12564d]">
-          Mencari lokasi usaha yang datanya bagus, bukan yang tampilannya mahal.
+        <p className="mt-5 max-w-[34ch] text-center text-[15px] leading-relaxed text-[#c2d7d1]">
+          {t.tagline}
         </p>
 
         {/* --- Kemajuan ---------------------------------------------------- */}
         <div className="mt-11 w-full max-w-[26rem]">
           <div
-            className="h-[7px] w-full overflow-hidden rounded-full bg-[#0b3d37]/10"
+            className="h-[6px] w-full overflow-hidden rounded-full bg-white/10"
             role="progressbar"
             aria-valuenow={persen}
             aria-valuemin={0}
@@ -577,26 +764,29 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
                 // sama dengan WARNA_KOTA di atas. Arahnya gelap ke terang
                 // supaya ujung yang sudah terisi tetap terbaca di atas jalur
                 // yang terang.
+                // Ungu ke teal: dua kutub yang sama dengan kolom yang menyala
+                // di kota di belakangnya, dan dengan gradien tombol ajakan di
+                // gerbang. Satu bahasa warna dari layar pertama sampai peta.
                 background: galat
-                  ? '#b42318'
-                  : 'linear-gradient(90deg, #0b3d37, #1f8f7d 55%, #6dd5c4)',
+                  ? '#e5484d'
+                  : 'linear-gradient(90deg, #6f55f0, #2de8c0 70%, #7cf7dd)',
               }}
             />
           </div>
 
           <div className="mt-3 flex items-baseline justify-between gap-4">
-            <p className="text-[13.5px] text-[#12564d]">
+            <p className="text-[13.5px] text-[#c2d7d1]">
               {keterangan}
-              {!galat && selesai < LANGKAH.length && '…'}
+              {!galat && selesai < JUMLAH_LANGKAH && '…'}
             </p>
             {!galat && (
-              <p className="tabular text-[13.5px] text-[#4c8078]">{persen}%</p>
+              <p className="tabular text-[13.5px] text-[#8aa39c]">{persen}%</p>
             )}
           </div>
 
           {galat && (
-            <div className="mt-4 rounded-md border border-[#0b3d37]/12 bg-white/60 p-4">
-              <p className="text-[14px] leading-relaxed text-[#0b3d37]">{galat}</p>
+            <div className="mt-4 rounded-md border border-white/12 bg-white/[0.06] p-4">
+              <p className="text-[14px] leading-relaxed text-[#e8f5f1]">{t.galatMesin}</p>
               {/* Ini layar PERTAMA yang dilihat pengunjung, dan sebelumnya ia
                   menyuruh mereka menjalankan `uvicorn app.main:app --reload` -
                   perintah untuk orang yang memegang kode, dibaca orang yang
@@ -606,23 +796,19 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
                   Peta, skor, dan kuadran tetap bisa dilihat tanpa mesin data,
                   jadi jalan keluarnya disebut lebih dulu - bukan disembunyikan
                   di tombol kedua. */}
-              <p className="mt-2 text-[13.5px] leading-relaxed text-[#2b6a61]">
-                Peta, skor, dan kuadran tetap bisa dilihat. Yang belum bisa dibuka
-                hanya bagian yang menuntut mesin data: Loconomics AI, akun, dan
-                rincian per lokasi.
-              </p>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-[#8aa39c]">{t.tetapBisa}</p>
               <div className="mt-3.5 flex gap-2">
                 <button
                   onClick={onSelesai}
-                  className="cursor-pointer rounded-sm bg-[#0b3d37] px-4 py-2 text-[13.5px] font-semibold text-[#e8fbf6] transition-opacity hover:opacity-85"
+                  className="cursor-pointer rounded-full bg-[#e8f5f1] px-4 py-2 text-[13.5px] font-semibold text-[#06100e] transition-opacity hover:opacity-85"
                 >
-                  Lanjutkan ke peta
+                  {t.lanjut}
                 </button>
                 <button
                   onClick={() => window.location.reload()}
-                  className="cursor-pointer rounded-sm border border-[#0b3d37]/20 px-4 py-2 text-[13.5px] font-medium text-[#12564d] transition-colors hover:bg-white/60"
+                  className="cursor-pointer rounded-full border border-white/20 px-4 py-2 text-[13.5px] font-medium text-[#c2d7d1] transition-colors hover:bg-white/10"
                 >
-                  Coba lagi
+                  {t.cobaLagi}
                 </button>
               </div>
             </div>

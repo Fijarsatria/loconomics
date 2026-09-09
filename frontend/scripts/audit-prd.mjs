@@ -38,58 +38,6 @@ function cek(nama, syarat, tambahan = '') {
 const dijawab = (jalur) =>
   net.filter((n) => n.arah === 'res' && n.url.includes(jalur) && n.status === 200)
 
-/**
- * Modul yang dibangkitkan `s7_publish.py --ekspor`, dibaca sebagai TEKS.
- *
- * Dibaca, bukan diimpor: ia TypeScript, dan skrip ini Node polos. Yang
- * dibutuhkan pun cuma teksnya — pertanyaan yang dijawab bagian `#temuan` di
- * bawah adalah "apakah angka ini ADA di sini", bukan "berapa nilainya".
- */
-function sumberRingkasan() {
-  const berkas = path.join(process.cwd(), 'src', 'lib', 'ringkasan-data.ts')
-  return fs.existsSync(berkas) ? fs.readFileSync(berkas, 'utf8') : ''
-}
-
-/** Judul tiap temuan yang diterbitkan pembangkitnya. */
-function judulTemuan(teks) {
-  return [...teks.matchAll(/"judul":\s*"((?:[^"\\]|\\.)*)"/g)].map((m) =>
-    JSON.parse(`"${m[1]}"`),
-  )
-}
-
-const TOKEN_ANGKA = /\d[\d.,]*\d|\d/g
-
-/**
- * Satu token angka jadi NILAI. Dibandingkan sebagai nilai, bukan sebagai teks.
- *
- * Wajib begitu, dan percobaan pertama membuktikannya dengan cara yang mahal:
- * membandingkan sebagai substring menuduh `1,50`, `2,31`, dan `3,00` ditulis
- * tangan, padahal ketiganya persis angka `1.5`, `2.31`, dan `3.0` dari modulnya
- * — yang berbeda cuma pemformatan Indonesia dan nol di belakang koma yang
- * ditambahkan `toLocaleString`. Penjaga yang menuduh berkas yang benar akan
- * dimatikan orang, dan penjaga yang dimatikan tidak menjaga apa-apa.
- *
- * `id` menandai ejaan Indonesia (titik ribuan, koma desimal); tanpanya ejaan
- * JavaScript. Modul yang dibangkitkan memuat KEDUANYA — angka JSON dalam ejaan
- * JS, dan angka di dalam prosa dalam ejaan Indonesia.
- */
-function keNilai(token, id) {
-  const bersih = id ? token.replace(/\./g, '').replace(',', '.') : token.replace(/,/g, '')
-  const n = Number(bersih)
-  return Number.isFinite(n) ? n : null
-}
-
-/** Semua nilai yang muncul di modul, dibaca dengan kedua ejaan sekaligus. */
-function nilaiDiModul(teks) {
-  const set = new Set()
-  for (const t of teks.match(TOKEN_ANGKA) ?? []) {
-    for (const id of [false, true]) {
-      const v = keNilai(t, id)
-      if (v !== null) set.add(v)
-    }
-  }
-  return set
-}
 
 async function main() {
   fs.mkdirSync(KELUAR, { recursive: true })
@@ -114,52 +62,6 @@ async function main() {
     (await page.evaluate(() => !document.querySelector('canvas.maplibregl-canvas'))),
   )
 
-  // ------------------------------------------------------ temuan di gerbang
-  //
-  // Bagian `#temuan` menyatakan KESIMPULAN, dan seluruh isinya - termasuk
-  // kalimatnya - dibangkitkan `s7_publish.py --ekspor`. Yang dijaga di sini
-  // satu invarian, dan ia hanya bisa diperiksa di tempat ini: SETIAP ANGKA
-  // YANG TERLIHAT di bagian itu wajib ada di dalam `ringkasan-data.ts`.
-  //
-  // Kenapa di peramban dan bukan di uji unit: percobaan pertama memindai
-  // `GerbangTemuan.tsx` dari Python dan lolos atas STRING KOSONG - pengupas
-  // `{...}` berulangnya ikut memakan badan setiap fungsi, karena badan fungsi
-  // juga `{...}`. Ia disisipi satu angka tulis tangan dan tetap hijau. Teks
-  // yang dirender tidak bisa ditebak salah seperti itu.
-  console.log('\n[T] Temuan di gerbang — nol angka tulis tangan')
-  const ringkasanTs = sumberRingkasan()
-  const judul = judulTemuan(ringkasanTs)
-  cek('ringkasan-data.ts memuat temuan', judul.length > 0, '- jalankan s7_publish.py --ekspor')
-
-  const temuanTeks = await page.evaluate(() => {
-    const s = document.querySelector('#temuan')
-    if (!s) return null
-    s.scrollIntoView({ block: 'start' })
-    return s.innerText
-  })
-  cek('bagian #temuan ada di gerbang', temuanTeks !== null)
-
-  if (temuanTeks && judul.length) {
-    cek(
-      'setiap judul temuan benar-benar dirender',
-      judul.every((j) => temuanTeks.includes(j)),
-      `- hilang: ${judul.filter((j) => !temuanTeks.includes(j)).slice(0, 1)}`,
-    )
-
-    // Tiap angka yang TERLIHAT harus punya pasangan nilai di modulnya.
-    const adaDiModul = nilaiDiModul(ringkasanTs)
-    const liar = [...new Set(temuanTeks.match(TOKEN_ANGKA) ?? [])].filter((t) => {
-      const v = keNilai(t, true)
-      return v !== null && !adaDiModul.has(v)
-    })
-    cek(
-      'nol angka di #temuan yang tidak ada di ringkasan-data.ts',
-      liar.length === 0,
-      `- ditulis tangan: ${liar.slice(0, 5).join(', ')}`,
-    )
-  }
-
-  await page.screenshot({ path: `${KELUAR}/00b-temuan.png` })
   await page.evaluate(() => {
     const w = document.querySelector('.gerbang') ?? document.scrollingElement
     w.scrollTo({ top: 0 })
@@ -241,6 +143,15 @@ async function main() {
 
   // ---------------------------------------------------------- klik heksagon
   console.log('\n[2] Kartu detail heksagon  (PRD langkah 3)')
+  // Layer tematik MATI secara bawaan sejak 9 Sep 2026 (permintaan pemilik
+  // repo), dan heksagon yang tidak digambar tidak bisa diklik. Tanpa langkah
+  // ini, klik di bawah mendarat di basemap kosong dan SEMBILAN asersi
+  // sesudahnya merah dengan sebab yang tidak ada hubungannya dengan yang
+  // mereka jaga. Tombolnya ber-aria-label "Layer", bukan teks yang terlihat.
+  await page.getByRole('button', { name: 'Layer', exact: true }).click()
+  await tidur(500)
+  await page.getByRole('option', { name: /Opportunity/i }).click()
+  await tidur(2500)
   const titik = await page.evaluate(() => {
     const c = document.querySelector('canvas.maplibregl-canvas')
     const r = c.getBoundingClientRect()

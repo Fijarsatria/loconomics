@@ -38,6 +38,7 @@ import type {
   RiwayatSkor,
 } from '../types'
 import { useSesi } from './Akun'
+import { useNamaZona, useTeks } from '../lib/bahasa'
 import { Badge, Glif, Kosong, Memuat, Terkunci } from './primitif'
 
 // ---------------------------------------------------------------------------
@@ -132,6 +133,10 @@ export function MenuKawasan({
   onUbah: (v: string) => void
 }) {
   const { premium, mintaLangganan } = useSesi()
+  const tk = useTeks({
+    id: { semua: LABEL_SEMUA_KAWASAN, enam: '6 kawasan', n: (n: number) => `${n} kawasan` },
+    en: { semua: 'All areas', enam: '6 areas', n: (n: number) => `${n} areas` },
+  })
   const [buka, setBuka] = useState(false)
   const wadah = useRef<HTMLDivElement>(null)
 
@@ -156,10 +161,10 @@ export function MenuKawasan({
 
   const label =
     dipilih.length === 0
-      ? LABEL_SEMUA_KAWASAN
+      ? tk.semua
       : dipilih.length === 1
         ? dipilih[0]
-        : `${dipilih.length} kawasan`
+        : tk.n(dipilih.length)
 
   const alih = (nama: string) => {
     if (!premium) {
@@ -224,8 +229,8 @@ export function MenuKawasan({
               }`}
             >
               <Kotak aktif={dipilih.length === 0} bulat />
-              {LABEL_SEMUA_KAWASAN}
-              <span className="ml-auto text-[12px] text-ink-3">6 kawasan</span>
+              {tk.semua}
+              <span className="ml-auto text-[12px] text-ink-3">{tk.enam}</span>
             </button>
 
             <div className="my-1 h-px bg-line/70" />
@@ -787,6 +792,7 @@ export function DialogPantauan({
   /** Kirim 2-4 lokasi tersimpan langsung ke baki komparasi. */
   onBandingkanSemua?: (h3: string[]) => void
 }) {
+  const namaZona = useNamaZona()
   const [butir, setButir] = useState<ButirPantauan[] | null>(null)
   const [dinamika, setDinamika] = useState<DinamikaKawasan | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
@@ -895,7 +901,7 @@ export function DialogPantauan({
                           style={{ color: KUADRAN[b.kuadran as NamaKuadran]?.warna }}
                         >
                           <Glif kuadran={b.kuadran} ukuran={9} />
-                          {KUADRAN[b.kuadran as NamaKuadran]?.nama}
+                          {namaZona(b.kuadran)}
                         </span>
                       )}
                       <span className="text-[11px] text-ink-3">
@@ -1026,7 +1032,7 @@ export function DialogPantauan({
                           {urut.map(([k, n]) => (
                             <span
                               key={k}
-                              title={`${KUADRAN[k as NamaKuadran]?.nama ?? k}: ${n}`}
+                              title={`${namaZona(k)}: ${n}`}
                               style={{
                                 width: `${(n / total) * 100}%`,
                                 background: KUADRAN[k as NamaKuadran]?.warna ?? 'var(--color-ink-3)',
@@ -1040,7 +1046,7 @@ export function DialogPantauan({
                           <li key={k} className="flex items-center gap-2 text-[12.5px]">
                             {k in KUADRAN && <Glif kuadran={k} ukuran={10} />}
                             <span className="truncate text-ink-2">
-                              {KUADRAN[k as NamaKuadran]?.nama ?? k.replace(/_/g, ' ').toLowerCase()}
+                              {namaZona(k)}
                             </span>
                             <span className="tabular ml-auto font-medium text-ink">{n}</span>
                             {/* Persennya dihitung dari dua angka yang SUDAH di

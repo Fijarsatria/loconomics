@@ -40,6 +40,7 @@ from config import (
     DATA_MENTAH,
     DATA_OLAHAN,
     KAWASAN_PILOT,
+    KELAS_INDUK,
     KODE_KE_KOLOM,
     ROOT,
     tingkat_keyakinan,
@@ -504,8 +505,15 @@ def isi_d04_dari_rute(db: Session) -> dict[str, int]:
     """
     from s4_spatial import simpul_terdekat_dari_rute
 
+    # HANYA profil jalan kaki. `hex_routes` memuat rute mobil sejak 2026, dan
+    # keduanya berbagi tabel: tanpa saringan ini `simpul_terdekat_dari_rute`
+    # mengambil minimum menit lintas profil, mobil selalu menang, dan D04 -
+    # yang bernama `waktu_jalan_menit` dan ikut menyusun IPT - jadi waktu
+    # BERKENDARA tanpa satu pun galat.
     rute = pd.read_sql(
-        "SELECT h3_index, jarak_m, menit FROM hex_routes", db.connection()
+        "SELECT h3_index, jarak_m, menit FROM hex_routes"
+        " WHERE profil = 'foot-walking'",
+        db.connection(),
     )
     hex_df = simpul_terdekat_dari_rute(rute)
     if hex_df.empty:
@@ -1624,7 +1632,10 @@ def hitung_temuan(db: Session, n_hex: int) -> list[dict[str, Any]]:
                 FROM hex_routes hr
                 JOIN hex_features hf ON hf.h3_index = hr.h3_index
                 JOIN transport_nodes tn ON tn.id = hr.transport_node_id
-                WHERE hr.urutan = 0
+                -- Temuannya berbunyi "rute JALAN KAKI rata-rata 1,78x lebih
+                -- panjang". Tanpa saringan profil ia menghitung rute mobil
+                -- sekalian, dan angkanya berhenti menjawab kalimatnya sendiri.
+                WHERE hr.urutan = 0 AND hr.profil = 'foot-walking'
             ), s AS (SELECT jarak_m / NULLIF(lurus, 0) AS rasio FROM r)
             SELECT count(*),
                    avg(rasio),
@@ -1874,7 +1885,7 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
         n_poi, n_rute, n_jangkau, n_simpul, n_jam, n_menu, n_struk, n_properti = db.execute(
             text(
                 "SELECT (SELECT count(*) FROM business_pois WHERE sumber = 'osm'),"
-                " (SELECT count(*) FROM hex_routes),"
+                " (SELECT count(*) FROM hex_routes WHERE profil = 'foot-walking'),"
                 " (SELECT count(*) FROM catchment_areas),"
                 " (SELECT count(*) FROM transport_nodes),"
                 " (SELECT count(*) FROM hex_hourly_profiles),"
@@ -1883,6 +1894,41 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
                 " (SELECT count(*) FROM property_observations)"
             )
         ).one()
+
+        # Taksonomi 8 kelas induk, dengan jumlah POI dan sebaran heksagonnya.
+        #
+        # Dibangkitkan dan bukan didaftar di frontend dengan alasan yang sama
+        # dengan seluruh berkas ini: daftarnya sudah ada di `config.KELAS_INDUK`,
+        # dan daftar KEDUA yang harus sejalan dengannya adalah daftar yang suatu
+        # saat tidak sejalan. Kelas yang nol POI tetap diterbitkan - "belum ada
+        # yang terpetakan" itu temuan, bukan alasan menyembunyikan barisnya.
+        cacah_kelas = dict(
+            db.execute(
+                text(
+                    "SELECT kelas_induk, count(*) FROM business_pois GROUP BY kelas_induk"
+                )
+            ).all()
+        )
+        hex_kelas = dict(
+            db.execute(
+                text(
+                    "SELECT kelas_induk, count(DISTINCT h3_index) FROM business_pois "
+                    "GROUP BY kelas_induk"
+                )
+            ).all()
+        )
+        kelas_usaha = sorted(
+            (
+                {
+                    "kode": kode,
+                    "nama": nama,
+                    "poi": int(cacah_kelas.get(kode, 0)),
+                    "heksagon": int(hex_kelas.get(kode, 0)),
+                }
+                for kode, nama in KELAS_INDUK.items()
+            ),
+            key=lambda k: (-k["poi"], k["kode"]),
+        )
 
         # Di dalam sesi yang sama - temuan menanyakan tabel yang berbeda, tetapi
         # tidak boleh menanyakan basis data yang berbeda. Ringkasan dan temuan
@@ -2021,6 +2067,32 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
             f"  {{ nama: {js(s['nama'])}, lisensi: {js(s['lisensi'])}, "
             f"url: {js(s['url'])}, mengisi: {js(s['mengisi'])}, cakupan: {js(s['cakupan'])} }},"
             for s in sumber
+        ),
+        "]",
+        "",
+        "export interface KelasUsaha {",
+        "  /** Kode kanonik Kamus Data: F1, R1, S2, ... */",
+        "  kode: string",
+        "  nama: string",
+        "  /** POI terpetakan di kelas ini, seluruh wilayah studi. */",
+        "  poi: number",
+        "  /** Heksagon yang memuat setidaknya satu POI kelas ini. */",
+        "  heksagon: number",
+        "}",
+        "",
+        "/**",
+        " * Delapan kelas induk usaha, diurutkan menurut jumlah POI terpetakan.",
+        " *",
+        " * Satu POI masuk TEPAT SATU kelas — kalau sebuah POI bisa masuk dua,",
+        " * kepadatan kompetitor terhitung dobel dan seluruh indeks kompetisi jadi",
+        " * salah. Angkanya dari `business_pois`, jadi ia berubah begitu penarikan",
+        " * OSM diulang dan tidak bisa basi tanpa ketahuan.",
+        " */",
+        "export const KELAS_USAHA: KelasUsaha[] = [",
+        *(
+            f"  {{ kode: {js(k['kode'])}, nama: {js(k['nama'])}, "
+            f"poi: {js(k['poi'])}, heksagon: {js(k['heksagon'])} }},"
+            for k in kelas_usaha
         ),
         "]",
         "",

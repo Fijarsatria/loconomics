@@ -76,6 +76,35 @@ export const SUMBER: SumberData[] = [
   { nama: "RDTR ATR/BPN lewat GISTARU", lisensi: "Data terbuka pemerintah", url: "https://gistaru.atrbpn.go.id/rdtrinteraktif/", mengisi: "L01 izin komersial, L02 kelas zona, L03 risiko banjir", cakupan: 364 },
 ]
 
+export interface KelasUsaha {
+  /** Kode kanonik Kamus Data: F1, R1, S2, ... */
+  kode: string
+  nama: string
+  /** POI terpetakan di kelas ini, seluruh wilayah studi. */
+  poi: number
+  /** Heksagon yang memuat setidaknya satu POI kelas ini. */
+  heksagon: number
+}
+
+/**
+ * Delapan kelas induk usaha, diurutkan menurut jumlah POI terpetakan.
+ *
+ * Satu POI masuk TEPAT SATU kelas — kalau sebuah POI bisa masuk dua,
+ * kepadatan kompetitor terhitung dobel dan seluruh indeks kompetisi jadi
+ * salah. Angkanya dari `business_pois`, jadi ia berubah begitu penarikan
+ * OSM diulang dan tidak bisa basi tanpa ketahuan.
+ */
+export const KELAS_USAHA: KelasUsaha[] = [
+  { kode: "F1", nama: "Kuliner Duduk", poi: 969, heksagon: 355 },
+  { kode: "R1", nama: "Ritel Kebutuhan Harian", poi: 580, heksagon: 333 },
+  { kode: "K1", nama: "Keuangan", poi: 551, heksagon: 216 },
+  { kode: "S2", nama: "Kesehatan", poi: 533, heksagon: 323 },
+  { kode: "F2", nama: "Kuliner Cepat/Informal", poi: 235, heksagon: 153 },
+  { kode: "S1", nama: "Jasa Personal", poi: 228, heksagon: 137 },
+  { kode: "T1", nama: "Transportasi", poi: 182, heksagon: 121 },
+  { kode: "R2", nama: "Ritel Non-Pangan", poi: 166, heksagon: 106 },
+]
+
 /** Diturunkan dari basis data, bukan didaftar tangan. Lihat docstring pembangkitnya. */
 export const BATASAN: string[] = [
   "18 dari 43 variabel belum punya sumber yang bisa dikutip. Nilainya dibiarkan kosong, bukan dinolkan — indeks yang bahannya kosong dinetralkan ke tengah skala, dan antarmuka menuliskan “belum terukur” alih-alih menampilkan angkanya.",

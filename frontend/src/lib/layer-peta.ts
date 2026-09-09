@@ -155,8 +155,13 @@ export const WARNA_FOKUS = (gaya: NamaGaya) =>
  * Dipilih supaya terbaca di atas keempat basemap MAPID sekaligus - jadi bukan
  * warna kuadran, yang sengaja lembut supaya heksagon tidak berteriak. Rute
  * justru harus berteriak: ia cuma muncul saat diminta, dan cuma sebentar.
+ *
+ * URUTANNYA ditentukan pemilik repo 9 Sep 2026: teal - biru - jingga - merah.
+ * Yang pertama sengaja warna Loconomics sendiri, jadi rute yang paling sering
+ * dilihat orang memakai warna produknya. Ketiga sisanya menjauh berurutan di
+ * roda warna, dan tidak satu pun berdekatan dengan tetangganya.
  */
-export const WARNA_RUTE = ['#0f766e', '#b45309', '#7c3aed', '#be123c'] as const
+export const WARNA_RUTE = ['#2DE8C0', '#3B82F6', '#F59E0B', '#EF4444'] as const
 
 /**
  * Warna rute saat TIDAK sedang membandingkan - satu heksagon terpilih saja.
@@ -175,7 +180,7 @@ export const WARNA_RUTE = ['#0f766e', '#b45309', '#7c3aed', '#be123c'] as const
  * berteriak, dan tidak boleh bisa disalahartikan sebagai salah satu kuadran.
  */
 export const WARNA_RUTE_TUNGGAL = (gaya: NamaGaya) =>
-  BASEMAP_GELAP.includes(gaya) ? '#e9a8ff' : '#9333ea'
+  BASEMAP_GELAP.includes(gaya) ? '#2DE8C0' : '#0EA88C'
 
 /**
  * Warna jalur alternatif. Selalu lebih redup dari yang utama, di gaya mana pun.
