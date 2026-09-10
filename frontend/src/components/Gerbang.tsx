@@ -2114,12 +2114,14 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                         // barisnya terbaca sebagai enam gambar dari enam tempat
                         // yang berbeda - terlihat begitu di potret, kartu kedua
                         // menyala jauh lebih terang daripada tetangganya.
-                        style={{
-                          filter: kartu.gelap
-                            ? 'brightness(0.92) saturate(0.9)'
-                            : 'brightness(0.24) saturate(0.45)',
-                        }}
-                        className="block h-[16rem] w-full scale-[1.06] object-cover sm:h-[18.5rem]"
+                        //
+                        // Pindah ke CSS 11 Sep 2026: angkanya sekarang harus
+                        // bergantung pada TEMA juga, dan tema tidak bisa dibaca
+                        // dari ternary di dalam `style`. `brightness(0.24)` yang
+                        // benar di halaman hitam mengubah kartunya jadi lubang
+                        // hitam di halaman putih.
+                        data-gelap={kartu.gelap ? '1' : '0'}
+                        className="g-eko-gambar block h-[16rem] w-full scale-[1.06] object-cover sm:h-[18.5rem]"
                       />
                       <span className="g-eko-scrim pointer-events-none absolute inset-0" aria-hidden />
                       <div

@@ -1684,8 +1684,16 @@ export default function App() {
                     tombolnya dan tidak ada apa pun yang terlihat muncul.
                     `relative` ikut alur normal persis seperti `static`, bedanya
                     cuma ia tetap jadi jangkar. */}
-                <div className="pointer-events-auto absolute bottom-[calc(56%+0.75rem)] left-0 z-30 order-1 flex flex-col items-start gap-2 lg:relative lg:bottom-auto lg:left-auto lg:mr-auto">
-                  <div className="kaca flex flex-col overflow-hidden rounded-full">
+                <div className="pointer-events-auto absolute bottom-[calc(56svh+0.75rem)] left-0 z-30 order-1 flex flex-col items-start gap-2 lg:relative lg:bottom-auto lg:left-auto lg:mr-auto">
+                  {/* Tombol perbesar/perkecil DISEMBUNYIKAN di layar sempit.
+                      Bukan karena tidak berguna, melainkan karena di sana ia
+                      satu-satunya yang bisa pergi tanpa kehilangan apa pun:
+                      layar sentuh sudah punya cubit-untuk-zoom, dan empat
+                      kelompok tombol di atas lembar setinggi 56svh mendorong
+                      kelompok teratas menembus bilah atas. Terukur di 390x844.
+                      Ketiga sisanya - lokasi tersimpan, kompas, legenda - tidak
+                      punya pengganti gerakan jari. */}
+                  <div className="kaca hidden flex-col overflow-hidden rounded-full sm:flex">
                     <button
                       onClick={() => peta.current?.zoomIn()}
                       aria-label="Perbesar peta"
@@ -1825,7 +1833,16 @@ export default function App() {
             <aside
               data-buka={panelTerbuka}
               aria-hidden={!panelTerbuka}
-              className="kolom-geser melayang absolute inset-x-0 bottom-0 h-[56%] min-h-0 lg:static lg:h-auto"
+              /* `56svh`, BUKAN `56%`, dan itu memperbaiki tumpang tindih yang
+                 nyata di ponsel. Lembar ini dan tumpukan tombol kiri sama-sama
+                 memakai angka 56 - tetapi PERSEN selalu relatif terhadap induk
+                 masing-masing, dan keduanya punya induk yang berbeda. Terukur di
+                 390x844: lembar 473px tinggi (56% dari lapisan chrome), tombol
+                 kiri berhenti di 571px (56% dari pembungkus dalamnya yang cuma
+                 369px) - jadi tiga tombol terbawah duduk DI ATAS daftar lokasi.
+                 `svh` diukur terhadap viewport untuk keduanya, jadi angkanya
+                 tidak bisa lagi berarti dua hal. */
+              className="kolom-geser melayang absolute inset-x-0 bottom-0 h-[56svh] min-h-0 lg:static lg:h-auto"
               style={
                 {
                   '--lebar-kolom': panelTerbuka ? '25rem' : '0rem',
