@@ -221,7 +221,7 @@ const K = {
       ],
       alat: {
         simpul: 'Station',
-        usaha: 'A shop-to-be',
+        usaha: 'New shop',
         putus: 'stops here',
         tampilan: 'Looks',
         jual: 'Sales',
