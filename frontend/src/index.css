@@ -1230,6 +1230,30 @@ input:focus-visible {
 .g-bento-media {
   position: relative;
 }
+
+/* Tepi gambar dilembutkan sepuluh piksel di keempat sisinya.
+   ADA KARENA garis yang dilaporkan pemilik repo di kartu Opportunity Score dan
+   PriceLens. Terukur di potret mode terang: peta berhenti pada luminansi 160,
+   lalu tepi kartu 215, lalu halaman 242 - tiga bidang rata yang bertemu dalam
+   dua piksel. Tepinya sendiri normal (border 1,5px `--g-kartu-tepi`); yang
+   membuatnya terbaca sebagai GARIS adalah peta beresolusi penuh yang berhenti
+   mendadak tepat di sebelahnya.
+   Sejak ubin MAPID hidup lagi, keenam potret berisi detail sampai ke pinggir -
+   sebelumnya sebagian kosong atau gelap, dan pertemuan itu tidak pernah
+   setajam ini.
+   Maskernya dipasang pada PEMBUNGKUS gambar, bukan pada `.g-bento-media`:
+   masker memotong seluruh keturunannya, dan atribusi MAPID tidak boleh ikut
+   memudar - ketentuan A.3 tidak mengenal alasan estetika. */
+.g-bento-media-isi {
+  -webkit-mask-image:
+    linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%),
+    linear-gradient(to right, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%),
+    linear-gradient(to right, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
+  mask-composite: intersect;
+}
 .g-bento-media::after {
   content: '';
   position: absolute;
@@ -3120,100 +3144,45 @@ input:focus-visible {
   inset: 0;
   z-index: 94;
   pointer-events: none;
-  overflow: hidden;
 }
 
-/* Panel selebar DUA layar, pekat di tengah dan memudar di kedua ujungnya.
-   Lebar dua layar bukan pemborosan: intinya yang pekat harus tetap menutupi
-   seratus persen layar pada satu bingkai - bingkai tempat temanya ditukar -
-   sementara kedua tepinya tetap lembut. Inti pekatnya membentang 16%..84%,
-   yaitu 136vw; sisanya bulu di depan dan di belakang. */
+/* Satu lembar warna tema tujuan. Tidak bergerak, tidak punya arah, dan tidak
+   punya tepi yang harus dilembutkan - yang berubah cuma opasitasnya.
+   Bentuk paling sederhana yang masih menyembunyikan pergantian temanya, dan
+   itu justru syarat utamanya: yang tidak boleh terlihat adalah SAAT ratusan
+   warna bertukar sekaligus. */
 .tirai-tema-isi {
   position: absolute;
-  top: -1px;
-  bottom: -1px;
-  left: 0;
-  width: 200vw;
-  will-change: transform;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--tt-warna) 55%, transparent) 8%,
-    var(--tt-warna) 16%,
-    var(--tt-warna) 84%,
-    color-mix(in srgb, var(--tt-warna) 55%, transparent) 92%,
-    transparent 100%
-  );
+  inset: 0;
+  background: var(--tt-warna);
+  will-change: opacity;
 }
 
-/* Satu garis cahaya tipis di bibir depannya. Ini satu-satunya hiasan di
-   seluruh transisi ini, dan ia yang membuat sapuannya terbaca sebagai CAHAYA
-   yang lewat alih-alih kertas yang digeser. Warnanya teal produk, opasitasnya
-   rendah, dan ia hilang bersama panelnya. */
-.tirai-tema-isi::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  width: 26vw;
-  background: linear-gradient(90deg, transparent 0%, rgb(122 214 196 / 0.16) 78%, rgb(163 232 219 / 0.34) 100%);
-}
-.tirai-tema[data-arah='kanan'] .tirai-tema-isi::after {
-  right: 8%;
-}
-.tirai-tema[data-arah='kiri'] .tirai-tema-isi::after {
-  left: 8%;
-  transform: scaleX(-1);
-  transform-origin: left center;
-}
-
-/* SATU lintasan, dipecah dua paruh yang menempuh jarak sama (75% lebar panel).
-   Paruh pertama mempercepat, paruh kedua memperlambat - digabung, ia satu
-   gerakan yang berangkat pelan, melintas, lalu berhenti mulus di seberang.
-   Tidak ada satu pun titik tempat arahnya berbalik. */
-@keyframes tirai-sapu-masuk-kanan {
+@keyframes tirai-pudar-masuk {
   from {
-    transform: translate3d(-100%, 0, 0);
+    opacity: 0;
   }
   to {
-    transform: translate3d(-25%, 0, 0);
+    opacity: 1;
   }
 }
-@keyframes tirai-sapu-keluar-kanan {
+@keyframes tirai-pudar-keluar {
   from {
-    transform: translate3d(-25%, 0, 0);
+    opacity: 1;
   }
   to {
-    transform: translate3d(50%, 0, 0);
-  }
-}
-@keyframes tirai-sapu-masuk-kiri {
-  from {
-    transform: translate3d(100%, 0, 0);
-  }
-  to {
-    transform: translate3d(25%, 0, 0);
-  }
-}
-@keyframes tirai-sapu-keluar-kiri {
-  from {
-    transform: translate3d(25%, 0, 0);
-  }
-  to {
-    transform: translate3d(-50%, 0, 0);
+    opacity: 0;
   }
 }
 
-.tirai-tema[data-fase='tutup'][data-arah='kanan'] .tirai-tema-isi {
-  animation: tirai-sapu-masuk-kanan 520ms cubic-bezier(0.5, 0, 0.75, 0.4) both;
+/* Masuk dengan ease-out (cepat di awal, mendarat pelan), keluar dengan
+   ease-in-out. Bukan simetris, dan itu disengaja: yang masuk menutupi sesuatu
+   yang sudah dilihat mata, yang keluar memperkenalkan sesuatu yang baru. */
+.tirai-tema[data-fase='tutup'] .tirai-tema-isi {
+  animation: tirai-pudar-masuk 240ms cubic-bezier(0.33, 0, 0.2, 1) both;
 }
-.tirai-tema[data-fase='buka'][data-arah='kanan'] .tirai-tema-isi {
-  animation: tirai-sapu-keluar-kanan 540ms cubic-bezier(0.25, 0.6, 0.3, 1) both;
-}
-.tirai-tema[data-fase='tutup'][data-arah='kiri'] .tirai-tema-isi {
-  animation: tirai-sapu-masuk-kiri 520ms cubic-bezier(0.5, 0, 0.75, 0.4) both;
-}
-.tirai-tema[data-fase='buka'][data-arah='kiri'] .tirai-tema-isi {
-  animation: tirai-sapu-keluar-kiri 540ms cubic-bezier(0.25, 0.6, 0.3, 1) both;
+.tirai-tema[data-fase='buka'] .tirai-tema-isi {
+  animation: tirai-pudar-keluar 300ms cubic-bezier(0.4, 0, 0.3, 1) both;
 }
 
 /* TANPA transisi warna menyeluruh, dan itu disengaja.

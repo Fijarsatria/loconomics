@@ -264,12 +264,7 @@ const DASAR: Record<Tema, string> = { gelap: '#0b100e', terang: '#f2f8f6' }
 
 export function TemaProvider({ children }: { children: ReactNode }) {
   const [tema, setTema] = useState<Tema>(bacaTema)
-  const [tirai, setTirai] = useState<{
-    fase: 'tutup' | 'buka'
-    /** Ke mana sapuannya berjalan. Sama dengan arah kenop sakelarnya. */
-    arah: 'kanan' | 'kiri'
-    warna: string
-  } | null>(null)
+  const [tirai, setTirai] = useState<{ fase: 'tutup' | 'buka'; warna: string } | null>(null)
   const jam = useRef<number[]>([])
 
   useEffect(
@@ -292,26 +287,24 @@ export function TemaProvider({ children }: { children: ReactNode }) {
   }, [tema])
 
   /**
-   * SAPUAN MENDATAR, bukan lingkaran yang mekar.
+   * SILANG-PUDAR, dan sesederhana itu memang tujuannya.
    *
-   * Versi lingkaran ditulis saat sakelarnya masih tombol bundar: lingkaran
-   * yang mekar dari titik yang ditekan adalah gerakan yang benar untuk benda
-   * yang ditekan di satu titik. Sakelarnya sekarang SLIDER - kenopnya
-   * meluncur mendatar - dan lingkaran di atas slider terbaca sebagai dua
-   * gerakan yang tidak saling mengenal. Dilaporkan pemilik repo persis begitu:
-   * "ga cocok kalau slider tapi animasi perpindahannya melingkar".
+   * Ini bentuk KETIGA transisi ini, dan dua yang pertama gagal karena alasan
+   * yang sama: keduanya punya PENDAPAT. Lingkaran yang mekar dari titik yang
+   * ditekan cocok untuk tombol bundar, lalu sakelarnya jadi slider dan
+   * lingkarannya berhenti nyambung. Sapuan mendatar cocok untuk slider, tetapi
+   * ia membawa arah - dan arah adalah satu hal lagi yang bisa terasa salah.
+   * Pemilik repo memintanya "yang simple dan elegan", dan itu jawaban yang
+   * benar: pergantian tema bukan peristiwa, ia cuma perubahan suasana.
    *
-   * Yang menggantikannya SATU lintasan yang tidak pernah berbalik. Satu panel
-   * bertepi lembut masuk dari satu sisi sampai menutupi layar - di situ
-   * temanya ditukar, di balik panel, tanpa ada yang melihat - lalu panel yang
-   * SAMA melanjutkan perjalanannya ke sisi seberang dan keluar. Bukan menutup
-   * lalu membuka kembali: menutup lalu MENERUSKAN. Mata mengikuti satu benda
-   * yang lewat, dan itu gerakan yang sama dengan kenop yang barusan digeser.
+   * Yang tersisa satu lembar warna tema tujuan yang muncul, menutupi layar
+   * selama satu bingkai tempat temanya ditukar, lalu hilang. Tidak ada
+   * gerakan, tidak ada arah, tidak ada yang bisa berselisih dengan bentuk
+   * kendali mana pun - jadi ia akan tetap cocok kalau sakelarnya berubah lagi.
    *
-   * ARAHNYA mengikuti kenop. Ke gelap kenopnya berjalan ke kanan, jadi
-   * sapuannya ke kanan; ke terang sebaliknya. Tanpa itu, sapuan bisa berjalan
-   * melawan benda yang memicunya - dan itu terasa salah tanpa bisa ditunjuk
-   * sebabnya.
+   * 240 masuk, 300 keluar. Keluarnya lebih panjang dengan sengaja: yang masuk
+   * menutupi sesuatu yang sudah dilihat mata, yang keluar memperkenalkan
+   * sesuatu yang baru - dan yang baru pantas diberi waktu sedikit lebih lama.
    */
   const gantiTema = useCallback(() => {
     const tujuan: Tema = tema === 'gelap' ? 'terang' : 'gelap'
@@ -319,20 +312,13 @@ export function TemaProvider({ children }: { children: ReactNode }) {
       setTema(tujuan)
       return
     }
-    setTirai({
-      fase: 'tutup',
-      arah: tujuan === 'gelap' ? 'kanan' : 'kiri',
-      warna: DASAR[tujuan],
-    })
-    // 520 + 520. Kedua paruhnya menempuh jarak yang sama persis, jadi durasi
-    // yang sama menghasilkan satu kecepatan - yang membuatnya terbaca sebagai
-    // satu lintasan alih-alih dua animasi yang kebetulan bersambung.
+    setTirai({ fase: 'tutup', warna: DASAR[tujuan] })
     jam.current.push(
       window.setTimeout(() => {
         setTema(tujuan)
         setTirai((t) => (t ? { ...t, fase: 'buka' } : null))
-      }, 520),
-      window.setTimeout(() => setTirai(null), 1060),
+      }, 240),
+      window.setTimeout(() => setTirai(null), 560),
     )
   }, [tema])
 
@@ -344,7 +330,6 @@ export function TemaProvider({ children }: { children: ReactNode }) {
         <div
           className="tirai-tema"
           data-fase={tirai.fase}
-          data-arah={tirai.arah}
           aria-hidden
           style={{ '--tt-warna': tirai.warna } as CSSProperties}
         >

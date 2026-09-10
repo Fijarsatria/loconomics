@@ -1216,6 +1216,28 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       const url = (e as unknown as { error?: { url?: string } }).error?.url ?? ''
       const keUbin = /basemap\.mapid\.io\/data\//.test(url) || /basemap\.mapid\.io\/data\//.test(pesan)
 
+      // GALAT MENATA LAYER BUKAN GALAT MEMUAT BASEMAP, dan menyamakan keduanya
+      // adalah bug yang dilaporkan pemilik repo: layar berbunyi "The basemap
+      // failed to load - Cannot style non-existing layer \"hex-isi\"" padahal
+      // basemapnya baik-baik saja.
+      //
+      // Sebabnya jendela di bawah: `!m.isStyleLoaded()`. Mengganti gaya
+      // basemap membongkar SELURUH layer lalu memasangnya kembali, dan selama
+      // jeda itu `isStyleLoaded()` false - jadi apa pun yang lewat ikut
+      // dilaporkan, termasuk galat yang datang dari kode kita sendiri: sebuah
+      // efek yang menata `hex-isi` sepersekian detik sesudah layernya dibuang
+      // dan sebelum ia dipasang lagi.
+      //
+      // Galat keluarga ini TIDAK PERLU ditindaklanjuti siapa pun: efek yang
+      // sama berjalan lagi pada `styledata` berikutnya dan hasilnya benar.
+      // Yang salah bukan petanya melainkan laporannya. Ke konsol, bukan ke
+      // layar - keluarga yang sama dengan pesan pengembang yang bocor ke
+      // panel, dan ini tempat keempatnya.
+      if (/non-existing layer|does not exist in the map's style/i.test(pesan)) {
+        console.warn('[basemap] penataan layer mendahului pemasangannya:', pesan)
+        return
+      }
+
       // DUA jendela tempat galat boleh dilaporkan, dan yang kedua wajib ada.
       //
       // Pertama: selama gaya dimuat. Sesudah gaya siap, MapLibre masih
@@ -2172,8 +2194,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       const f = saringKuadran
         ? (['==', ['get', 'kuadran'], saringKuadran] as ExpressionSpecification)
         : null
+      // Diperiksa ULANG di sini, bukan cuma di kepala efeknya: `pasangSaringan`
+      // juga dipanggil dari `styledata`, dan di antara pemeriksaan pertama dan
+      // pemanggilan itu gaya basemap bisa sudah dibongkar.
+      if (!m.getLayer(L_ISI)) return
       m.setFilter(L_ISI, f)
-      m.setFilter(L_GARIS, f)
+      if (m.getLayer(L_GARIS)) m.setFilter(L_GARIS, f)
       // Angka WAJIB ikut tersaring. Tanpa baris ini, heksagon yang disembunyikan
       // filter kuadran meninggalkan angkanya melayang di atas peta kosong.
       if (m.getLayer(L_ANGKA)) m.setFilter(L_ANGKA, f)

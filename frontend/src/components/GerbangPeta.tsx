@@ -393,7 +393,7 @@ function Potret({
   return (
     <>
       <div
-        className="absolute inset-0"
+        className="g-bento-media-isi absolute inset-0"
         style={perbesar === 1 ? undefined : { transform: `scale(${perbesar})`, transformOrigin: pusat }}
       >
       <img
