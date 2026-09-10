@@ -407,13 +407,18 @@ export const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification>
   // bentuk heksagon tetap terbaca sementara jalan di dalamnya kembali terlihat.
   // Menurunkan isian TANPA menaikkan garis akan memberi peta petak-petak yang
   // melebur - itu yang diperingatkan catatan lama, dan peringatannya benar.
-  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.14, 0.25],
-  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.06, 0.28],
-  risk_radar: ['case', ['==', ['get', 'indeks_churn'], null], 0.06, 0.26],
-  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.06, 0.28],
+  //
+  // Turun lagi ~25% pada 11 September 2026, permintaan KELIMA, sebabnya masih
+  // sama: jalan dan blok bangunan tertelan isian. Kali ini garisnya IKUT naik
+  // lagi (1,6 -> 1,7 px, 0,85 -> 0,9) - tukaran yang sama dengan turunan
+  // keempat, dan satu-satunya alasan isian setipis ini masih membentuk petak.
+  opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.11, 0.19],
+  hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.05, 0.21],
+  risk_radar: ['case', ['==', ['get', 'indeks_churn'], null], 0.05, 0.2],
+  pricelens: ['case', ['==', ['get', 'harga_sewa_per_m2'], null], 0.05, 0.21],
   // ZoneGuard turun paling sedikit. Ia satu-satunya layer yang menyatakan
   // LARANGAN, dan larangan yang nyaris tidak terlihat berhenti jadi larangan.
-  zoneguard: 0.28,
+  zoneguard: 0.23,
 }
 
 /**
@@ -429,8 +434,8 @@ export const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification>
  * isiannya, jadi isian boleh jauh lebih tipis tanpa membuat petak-petaknya
  * melebur.
  */
-export const TEBAL_GARIS = 1.6
-export const OPASITAS_GARIS = 0.85
+export const TEBAL_GARIS = 1.7
+export const OPASITAS_GARIS = 0.9
 
 /**
  * Cari layer tempat heksagon harus disisipkan: tepat setelah isian dan garis

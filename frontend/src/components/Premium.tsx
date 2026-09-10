@@ -39,7 +39,7 @@ import type {
 } from '../types'
 import { useSesi } from './Akun'
 import { useNamaZona, useTeks } from '../lib/bahasa'
-import { Badge, Glif, Kosong, Memuat, Terkunci } from './primitif'
+import { Badge, Glif, Kosong, Memuat, MemuatNama, Terkunci } from './primitif'
 
 // ---------------------------------------------------------------------------
 // Kerangka dialog (sama dengan Akun.tsx — createPortal, lihat CLAUDE.md)
@@ -621,7 +621,7 @@ export function DialogKomparasi({
       {galat ? (
         <p className="p-6 text-[13.5px] text-bahaya">{galat}</p>
       ) : !data ? (
-        <Memuat baris={6} teks="Menyusun perbandingan…" />
+        <MemuatNama teks="sedang menyusun perbandingan…" />
       ) : (
         <>
           {/* --- Kepala: satu kartu per lokasi, bernomor SAMA dengan peta --- */}

@@ -143,10 +143,11 @@ def bandingkan(
         # Mengatakan "belum ada data harga" kepada orang yang bisa membukanya
         # dengan satu token adalah pernyataan yang salah, bukan sekadar kurang.
         hasil["catatan"] = (
-            "Blok 'harga' pada kedua lokasi ditahan karena pemanggilnya belum "
-            "berlangganan. Nilai null di sana berarti BELUM DIBUKA, bukan tidak "
-            "ada datanya. Jangan katakan datanya kosong - sarankan berlangganan "
-            "atau membuka lokasi itu dengan token."
+            "Blok 'harga', 'indeks', dan 'kuadran_penjelasan' pada kedua lokasi "
+            "ditahan karena pemanggilnya belum berlangganan. Nilai null di sana "
+            "berarti BELUM DIBUKA, bukan tidak ada datanya. Jangan katakan "
+            "datanya kosong - sarankan berlangganan atau membuka lokasi itu "
+            "dengan token."
         )
     return hasil
 
@@ -162,8 +163,10 @@ def jelaskan_skor(
         # Pemanggilnya belum premium, jadi detail_heksagon menahan faktornya -
         # dan model harus TAHU itu, bukan mengira lokasi ini tidak punya faktor.
         ringkas["catatan"] = (
-            "Rincian kontribusi variabel ditahan: pembongkaran skor bagian dari "
-            "Loconomics Premium. Sarankan pengguna berlangganan untuk analisis penuh."
+            "Rincian kontribusi variabel, NILAI keempat indeks, dan kalimat "
+            "penjelasan kuadran ditahan: pembongkaran skor bagian dari "
+            "Loconomics Premium. Nilai null di sana berarti belum dibuka, bukan "
+            "tidak ada datanya. Sarankan pengguna berlangganan untuk analisis penuh."
         )
     return ringkas
 

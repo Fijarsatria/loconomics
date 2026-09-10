@@ -271,10 +271,30 @@ const ZOOM_POI: Record<string, number> = {
  * yang kedua saja juga tidak - `setStyle` mengembalikan seluruh layer ke
  * setelan bawaan gayanya tanpa memberi tahu siapa pun.
  */
+/**
+ * Layer simbol MANA yang dianggap "nama tempat".
+ *
+ * Bukan cuma `poi*`, dan itu perbaikan 11 Sep 2026. Setelan ini bernama "Nama
+ * tempat" dan dijelaskan sebagai "stasiun, gedung, taman" - tetapi hanya
+ * mematikan keluarga `poi*`. Nama kelurahan dan kawasan hidup di keluarga
+ * `place*` (`place_other`, `place_suburb`, `place_village`, `place_town`,
+ * `place_city`), dan nama perairan di `water_name*`. Jadi mematikan setelannya
+ * meninggalkan KEBON MELATI, PETAMBURAN, SLIPI, MENTENG tetap di layar -
+ * dilaporkan pemilik repo apa adanya: "kok masih ada tuh ikon ikon lokasi yang
+ * lain".
+ *
+ * NAMA JALAN SENGAJA TIDAK IKUT (`road_label`, `highway_name_*`). Ia satu-
+ * satunya hal yang memberitahu pengguna heksagon yang dilihatnya ada di jalan
+ * apa, dan permintaan yang sama yang meminta label dimatikan juga meminta
+ * "jalanan dan detail detail jangan ketutupan". Mematikan nama jalan bekerja
+ * melawan permintaan itu.
+ */
+const RE_NAMA_TEMPAT = /^(poi|place|water_name)/
+
 function terapkanNamaTempat(m: MapLibreMap, kerapatan: string) {
   const geser = KERAPATAN_NAMA[kerapatan]?.geser ?? 0
   for (const l of m.getStyle().layers ?? []) {
-    if (!/^poi/.test(l.id) || l.type !== 'symbol') continue
+    if (!RE_NAMA_TEMPAT.test(l.id) || l.type !== 'symbol') continue
     if (geser === null) {
       m.setLayoutProperty(l.id, 'visibility', 'none')
       continue
@@ -297,7 +317,7 @@ function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
   // Kerapatan penandanya diurus `terapkanNamaTempat` di bawah - satu tempat,
   // supaya pilihan pengguna dan pemuatan gaya tidak pernah berselisih.
   for (const l of layers) {
-    if (/^poi/.test(l.id) && l.type === 'symbol') {
+    if (RE_NAMA_TEMPAT.test(l.id) && l.type === 'symbol') {
       // Halo lebih tebal daripada bawaan gaya. Nama tempat sekarang berdiri di
       // atas isian heksagon yang berwarna, bukan di atas kertas putih.
       m.setPaintProperty(l.id, 'text-halo-width', 1.6)
@@ -2570,26 +2590,56 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         pitch: peta.current?.getPitch() ?? 0,
       }),
 
+      /**
+       * Terbang ke satu heksagon dan membingkainya.
+       *
+       * Geometrinya dicari di DATA YANG SUDAH DIMUAT (`dataRef`), bukan lewat
+       * `querySourceFeatures`. Bedanya menentukan, dan ini bug yang dilaporkan
+       * pemilik repo: `querySourceFeatures` hanya mengembalikan fitur dari ubin
+       * yang SEDANG dirender. Heksagon yang diklik dari daftar atau dari tab
+       * "Untuk Anda" hampir selalu berada di luar layar - itu justru sebabnya
+       * ia diklik - jadi kuerinya pulang kosong dan petanya diam saja. Tidak
+       * ada galat, tidak ada gerakan, dan yang terlihat tombol yang rusak.
+       *
+       * Kalau datanya memang belum sampai (baru berganti kawasan), ia MENUNGGU
+       * pemuatan berikutnya alih-alih menyerah - maksimal tiga detik.
+       */
       fokusHeksagon: (h3) => {
         const m = peta.current
-        if (!m?.getSource(SUMBER)) return
-        const f = m.querySourceFeatures(SUMBER, {
-          filter: ['==', ['get', 'h3_index'], h3] as ExpressionSpecification,
-        })[0]
-        if (!f) return
-        // Heksagon selalu Polygon cincin tunggal - ambil kotak pembatasnya.
-        const cincin = (f.geometry as { type: string; coordinates: number[][][] }).coordinates?.[0]
-        if (!cincin?.length) return
-        let [w, sLat, e, n] = [Infinity, Infinity, -Infinity, -Infinity]
-        for (const [x, y] of cincin) {
-          if (x < w) w = x
-          if (x > e) e = x
-          if (y < sLat) sLat = y
-          if (y > n) n = y
+        if (!m) return
+
+        const bingkai = () => {
+          const f =
+            dataRef.current?.features.find((x) => x.properties?.h3_index === h3) ??
+            (m.getSource(SUMBER)
+              ? (m.querySourceFeatures(SUMBER, {
+                  filter: ['==', ['get', 'h3_index'], h3] as ExpressionSpecification,
+                })[0] as unknown as FiturHex | undefined)
+              : undefined)
+          const cincin = f?.geometry?.coordinates?.[0]
+          if (!cincin?.length) return false
+          let [w, sLat, e, n] = [Infinity, Infinity, -Infinity, -Infinity]
+          for (const [x, y] of cincin) {
+            if (x < w) w = x
+            if (x > e) e = x
+            if (y < sLat) sLat = y
+            if (y > n) n = y
+          }
+          // Bantalan besar: heksagon yang memenuhi layar tidak bisa dibaca dalam
+          // konteks tetangganya, dan konteks itulah gunanya peta ini.
+          m.fitBounds([w, sLat, e, n], { padding: 220, duration: 900, maxZoom: 15.4 })
+          return true
         }
-        // Bantalan besar: heksagon yang memenuhi layar tidak bisa dibaca dalam
-        // konteks tetangganya, dan konteks itulah gunanya peta ini.
-        m.fitBounds([w, sLat, e, n], { padding: 220, duration: 900, maxZoom: 15.4 })
+
+        if (bingkai()) return
+        const batas = window.setTimeout(() => m.off('sourcedata', coba), 3000)
+        function coba() {
+          if (bingkai()) {
+            window.clearTimeout(batas)
+            m?.off('sourcedata', coba)
+          }
+        }
+        m.on('sourcedata', coba)
       },
 
       highlight: (hexIds) => {

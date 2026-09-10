@@ -20,7 +20,7 @@
  * memaksa pengguna memegang dua konteks sekaligus.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   KUADRAN,
@@ -34,8 +34,8 @@ import {
 import { api } from '../lib/api'
 import { rupiah } from '../lib/format'
 import type { HiddenGem, SkorHeksagon, TitikKuadran } from '../types'
-import { Ajakan, Badge, Glif, Kosong, Memuat } from './primitif'
-import { useNamaZona } from '../lib/bahasa'
+import { Ajakan, Badge, Glif, Kosong, MemuatNama } from './primitif'
+import { useNamaZona, useTeks } from '../lib/bahasa'
 
 type Isi =
   | { jenis: 'skor'; baris: SkorHeksagon[] }
@@ -64,10 +64,82 @@ const BATAS_BARIS = 200
 const disorot = (kawasanAktif: string, nama: string) =>
   kawasanAktif === SEMUA_KAWASAN || kawasanAktif.split(',').includes(nama)
 
-const LABEL_RISIKO: Record<string, string> = {
-  BAHAYA: 'Pergantian usaha termasuk 10% tertinggi di kawasan ini',
-  WASPADA: 'Pergantian usaha lebih sering daripada 75% area lain',
-  AMAN: 'Pergantian usaha wajar',
+/**
+ * Seluruh kalimat daftar ini, dua bahasa.
+ *
+ * Ditambahkan 11 Sep 2026: panel ini satu-satunya yang tetap berbahasa
+ * Indonesia sekalipun sakelarnya digeser ke Inggris, dan yang paling terlihat
+ * "Skor tertinggi dulu" duduk persis di antara dua tombol berbahasa Inggris.
+ */
+const K = {
+  id: {
+    lokasi: 'lokasi',
+    teratas: 'teratas',
+    saring: 'Semua zona',
+    saringSatu: (n: string) => n,
+    tutupSaring: 'Tutup daftar zona',
+    semua: 'Tampilkan semua',
+    urutTurun: 'Skor tertinggi dulu',
+    urutNaik: 'Skor terendah dulu',
+    balik: 'Balik urutan',
+    terlarang: 'Lokasi berzona terlarang tidak pernah muncul di daftar ini, berapa pun skornya.',
+    potong: (n: number) =>
+      `Menampilkan ${n} berskor tertinggi. Pilih satu kawasan untuk melihat seluruh isinya.`,
+    memuat: 'sedang menyiapkan daftar lokasi…',
+    metode: (n: number) => `${n}/3 metode`,
+    zonaRagu: 'zona belum pasti',
+    zonaBelum: 'Zona belum bisa dipastikan',
+    churn: (v: string) => ` · indeks churn ${v}`,
+    risiko: {
+      BAHAYA: 'Pergantian usaha termasuk 10% tertinggi di kawasan ini',
+      WASPADA: 'Pergantian usaha lebih sering daripada 75% area lain',
+      AMAN: 'Pergantian usaha wajar',
+    } as Record<string, string>,
+    kosong: {
+      risikoJudul: 'Tidak ada peringatan di sini',
+      gemJudul: 'Belum ada hidden gem',
+      skorJudul: 'Belum ada lokasi berskor',
+      risiko: (k: string) =>
+        `Tidak ada area di ${k} yang pergantian usahanya melewati ambang wajar kawasannya sendiri. Itu kabar baik.`,
+      gem: (k: string) =>
+        `Belum ada heksagon di ${k} yang lolos minimal dua dari tiga metode deteksi. Coba kawasan yang prestise visualnya lebih rendah.`,
+      skor: (k: string) => `Skor untuk ${k} belum dihitung. Jalankan pipeline sampai tahap terbit.`,
+    },
+  },
+  en: {
+    lokasi: 'locations',
+    teratas: 'top',
+    saring: 'All zones',
+    saringSatu: (n: string) => n,
+    tutupSaring: 'Close the zone list',
+    semua: 'Show all',
+    urutTurun: 'Highest score first',
+    urutNaik: 'Lowest score first',
+    balik: 'Reverse the order',
+    terlarang: 'Locations in prohibited zones never appear in this list, whatever their score.',
+    potong: (n: number) =>
+      `Showing the top ${n} by score. Pick a single area to see all of it.`,
+    memuat: 'putting the location list together…',
+    metode: (n: number) => `${n}/3 methods`,
+    zonaRagu: 'zoning uncertain',
+    zonaBelum: 'Zoning cannot be confirmed',
+    churn: (v: string) => ` · churn index ${v}`,
+    risiko: {
+      BAHAYA: 'Business turnover is in the top 10% of this area',
+      WASPADA: 'Businesses change hands more often than in 75% of other areas',
+      AMAN: 'Business turnover is normal',
+    } as Record<string, string>,
+    kosong: {
+      risikoJudul: 'No warnings here',
+      gemJudul: 'No hidden gems yet',
+      skorJudul: 'No scored locations yet',
+      risiko: (k: string) =>
+        `No area in ${k} has business turnover past its own area's normal threshold. That is good news.`,
+      gem: (k: string) =>
+        `No hexagon in ${k} passes at least two of the three detection methods. Try an area with lower visual prestige.`,
+      skor: (k: string) => `Scores for ${k} have not been computed. Run the pipeline through publishing.`,
+    },
+  },
 }
 
 export default function DaftarLokasi({
@@ -82,6 +154,7 @@ export default function DaftarLokasi({
   onPilih: (h3: string) => void
 }) {
   const namaZona = useNamaZona()
+  const t = useTeks(K)
   /**
    * Kuadran yang sedang disaring di dalam daftar. null = semuanya.
    *
@@ -135,7 +208,7 @@ export default function DaftarLokasi({
     }
   }, [layer, kawasan])
 
-  if (memuat) return <Memuat baris={6} />
+  if (memuat) return <MemuatNama teks={t.memuat} />
   if (galat) return <Ajakan judul="Daftar gagal dimuat" anak={galat} />
   // Sebaran kuadran seluruh kawasan. Urutannya mengikuti URUTAN_KUADRAN supaya
   // pita dan legendanya selalu sejajar dengan Kompas.
@@ -164,38 +237,34 @@ export default function DaftarLokasi({
   return (
     <div className="scroll-tipis h-full overflow-y-auto">
       {/* --- Kepala daftar -------------------------------------------------
-          Versi sebelumnya cuma dua baris teks: nama layer dan pertanyaannya.
-          Ia menamai daftar tapi tidak memberi tahu satu hal pun tentang ISI-nya
-          - berapa banyak, sebarannya bagaimana, dan apakah yang di layar ini
-          sudah seluruhnya atau baru sepotong.
+          DIRAMPINGKAN 11 Sep 2026, permintaan pemilik repo ("dihapus teksnya
+          biar rapih"). Yang pergi dua paragraf:
 
-          Pita di bawah menjawab itu dalam satu baris: berapa lokasi, dan berapa
-          di antaranya jatuh di tiap kuadran. Lebarnya sebanding jumlahnya, jadi
-          "kawasan ini isinya Hindari semua" terbaca sebelum satu baris pun
-          dibaca. */}
+            "Di mana yang paling menjanjikan?" - pertanyaan layernya. Ia sudah
+            tertulis di menu Layer yang memilihnya, dan mengulanginya di kepala
+            daftar berarti dua tempat menyebut hal yang sama pada layar yang sama.
+
+            "Peringkat untuk semua orang. Untuk daftar yang disaring anggaran
+            dan kawasan Anda, buka tab Untuk Anda." - tiga baris untuk
+            membedakan dua tab yang sudah berjudul berbeda tepat di atasnya.
+
+          Yang tersisa: nama layer, jumlah lokasi, pita sebaran, satu tombol
+          saringan, dan satu tombol urutan. Lima baris jadi dua. */}
       <div className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="eyebrow">{LAYER[layer].nama}</h2>
           {ringkasKuadran && (
             <span className="tabular shrink-0 text-[12px] text-ink-3">
               {ringkasKuadran.total.toLocaleString('id-ID')}{' '}
-              {isi?.jenis === 'skor' && isi.baris.length >= BATAS_BARIS ? 'teratas' : 'lokasi'}
+              {isi?.jenis === 'skor' && isi.baris.length >= BATAS_BARIS ? t.teratas : t.lokasi}
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-[13.5px] leading-snug text-ink-2">
-          {LAYER[layer].pertanyaan}
-        </p>
-        {/* Menyatakan identitasnya sendiri. Tanpa baris ini daftar peringkat dan
-            tab "Untuk Anda" terbaca sebagai dua daftar yang sama — dan itu
-            keluhan yang memang muncul. */}
-        <p className="mt-1 text-[11px] leading-snug text-ink-3">
-          Peringkat untuk semua orang. Untuk daftar yang disaring anggaran dan
-          kawasan Anda, buka tab <strong className="font-semibold text-ink-2">Untuk Anda</strong>.
-        </p>
 
         {ringkasKuadran && (
           <>
+            {/* Pita sebaran. Lebarnya sebanding jumlahnya, jadi "kawasan ini
+                isinya Hindari semua" terbaca sebelum satu baris pun dibaca. */}
             <div className="mt-2.5 flex h-2 gap-[2px] overflow-hidden rounded-full" aria-hidden>
               {ringkasKuadran.bagian.map((b) => (
                 <span
@@ -208,44 +277,18 @@ export default function DaftarLokasi({
                 />
               ))}
             </div>
-            {/* Legenda pita SEKALIGUS saringan. Dua kontrol terpisah untuk
-                satu himpunan yang sama cuma menggandakan tempat yang harus
-                dilihat; di sini yang menerangkan warna dan yang menyaringnya
-                adalah benda yang sama. */}
-            <ul className="mt-2 flex flex-wrap gap-1.5">
-              {ringkasKuadran.bagian.map((b) => {
-                const aktif = saring === b.kunci
-                return (
-                  <li key={b.kunci}>
-                    <button
-                      onClick={() => setSaring(aktif ? null : b.kunci)}
-                      aria-pressed={aktif}
-                      title={`${namaZona(b.kunci)} — ${KUADRAN[b.kunci].ringkas}`}
-                      className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[11.5px] transition-all duration-200 ease-liquid ${
-                        aktif
-                          ? 'border-transparent text-ink'
-                          : 'border-line text-ink-2 hover:border-line-2 hover:text-ink'
-                      }`}
-                      style={{ background: aktif ? KUADRAN[b.kunci].lembut : undefined }}
-                    >
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-[2px]"
-                        style={{ background: KUADRAN[b.kunci].warna }}
-                        aria-hidden
-                      />
-                      {namaZona(b.kunci)}
-                      <span className="tabular font-semibold">{b.n}</span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
 
-            <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="mt-2.5 flex items-center gap-2">
+              <SaringZona
+                bagian={ringkasKuadran.bagian}
+                nilai={saring}
+                onUbah={setSaring}
+                t={t}
+              />
               <button
                 onClick={() => setUrut((u) => (u === 'skor-turun' ? 'skor-naik' : 'skor-turun'))}
-                className="flex cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[11.5px] text-ink-2 transition-colors hover:border-line-2 hover:text-ink"
-                title="Balik urutan"
+                className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1.5 text-[11.5px] text-ink-2 transition-colors hover:border-line-2 hover:text-ink"
+                title={t.balik}
               >
                 <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
                   <path
@@ -257,16 +300,8 @@ export default function DaftarLokasi({
                     strokeLinejoin="round"
                   />
                 </svg>
-                {urut === 'skor-turun' ? 'Skor tertinggi dulu' : 'Skor terendah dulu'}
+                {urut === 'skor-turun' ? t.urutTurun : t.urutNaik}
               </button>
-              {saring && (
-                <button
-                  onClick={() => setSaring(null)}
-                  className="shrink-0 cursor-pointer text-[11.5px] font-semibold text-ink-2 underline decoration-line-2 underline-offset-2 transition-colors hover:text-ink"
-                >
-                  Tampilkan semua
-                </button>
-              )}
             </div>
 
             {/* Kalimat ini dulu tenggelam di kaki daftar dan pemilik repo
@@ -275,17 +310,14 @@ export default function DaftarLokasi({
                 daripada jumlah heksagon di peta. */}
             <p className="mt-2 flex items-start gap-1.5 rounded-sm bg-surface-2 px-2 py-1.5 text-[11px] leading-snug text-ink-2">
               <span className="mt-[3px] h-2 w-2 shrink-0 rounded-[2px] bg-bahaya" aria-hidden />
-              Lokasi berzona terlarang tidak pernah muncul di daftar ini, berapa pun skornya.
+              {t.terlarang}
             </p>
 
             {/* Pemotongan dinyatakan, tidak dibiarkan terbaca sebagai jumlah
                 sebenarnya. Daftar yang berhenti di 200 tanpa berkata apa-apa
                 akan terbaca sebagai "cuma segini yang ada". */}
             {isi.baris.length >= BATAS_BARIS && (
-              <p className="mt-1.5 text-[11px] leading-snug text-ink-3">
-                Menampilkan {BATAS_BARIS} berskor tertinggi. Pilih satu kawasan untuk melihat
-                seluruh isinya.
-              </p>
+              <p className="mt-1.5 text-[11px] leading-snug text-ink-3">{t.potong(BATAS_BARIS)}</p>
             )}
           </>
         )}
@@ -299,17 +331,17 @@ export default function DaftarLokasi({
         <Ajakan
           judul={
             layer === 'risk_radar'
-              ? 'Tidak ada peringatan di sini'
+              ? t.kosong.risikoJudul
               : layer === 'hidden_gem'
-                ? 'Belum ada hidden gem'
-                : 'Belum ada lokasi berskor'
+                ? t.kosong.gemJudul
+                : t.kosong.skorJudul
           }
           anak={
             layer === 'risk_radar'
-              ? `Tidak ada area di ${frasaKawasan(kawasan)} yang pergantian usahanya melewati ambang wajar kawasannya sendiri. Itu kabar baik.`
+              ? t.kosong.risiko(frasaKawasan(kawasan))
               : layer === 'hidden_gem'
-                ? `Belum ada heksagon di ${frasaKawasan(kawasan)} yang lolos minimal dua dari tiga metode deteksi. Coba kawasan yang prestise visualnya lebih rendah.`
-                : `Skor untuk ${frasaKawasan(kawasan)} belum dihitung. Jalankan pipeline sampai tahap terbit.`
+                ? t.kosong.gem(frasaKawasan(kawasan))
+                : t.kosong.skor(frasaKawasan(kawasan))
           }
         />
       ) : (
@@ -357,31 +389,32 @@ export default function DaftarLokasi({
                     ))}
                   </span>
                   <span className="text-[11.5px] text-ink-3">
-                    {g.n_metode_lolos}/3 metode
-                    {g.zoneguard.status === 'TIDAK_DIKETAHUI' && ' · zona belum pasti'}
+                    {t.metode(g.n_metode_lolos)}
+                    {g.zoneguard.status === 'TIDAK_DIKETAHUI' && ` · ${t.zonaRagu}`}
                   </span>
                 </div>
               </Kartu>
             ))}
 
           {isi.jenis === 'risiko' &&
-            isi.baris.map((t, i) => (
+            /* `x`, bukan `t`: `t` sudah dipakai cabang kamus komponen ini. */
+            isi.baris.map((x, i) => (
               <Kartu
-                key={t.h3_index}
+                key={x.h3_index}
                 no={i + 1}
-                h3={t.h3_index}
-                kawasan={t.kawasan}
-                aktif={terpilih === t.h3_index}
+                h3={x.h3_index}
+                kawasan={x.kawasan}
+                aktif={terpilih === x.h3_index}
                 onPilih={onPilih}
-                kuadran={t.kuadran}
-                nilai={t.y_peluang?.toFixed(0) ?? '—'}
+                kuadran={x.kuadran}
+                nilai={x.y_peluang?.toFixed(0) ?? '—'}
                 satuan="Opportunity Score"
-                badge={t.keyakinan}
+                badge={x.keyakinan}
               >
                 {/* Label peringatan — inti kriteria penerimaan RiskRadar. */}
                 <p
                   className={`mt-1 inline-flex items-center gap-1.5 rounded-xs px-1.5 py-[3px] text-[12.5px] font-semibold ${
-                    t.risiko === 'BAHAYA'
+                    x.risiko === 'BAHAYA'
                       ? 'bg-bahaya-soft text-bahaya'
                       : 'text-bahaya ring-1 ring-inset ring-bahaya/35'
                   }`}
@@ -389,18 +422,15 @@ export default function DaftarLokasi({
                   <span
                     aria-hidden
                     className={`h-2.5 w-2.5 rounded-[2px] ${
-                      t.risiko === 'BAHAYA' ? 'bg-bahaya' : 'border-[1.5px] border-bahaya'
+                      x.risiko === 'BAHAYA' ? 'bg-bahaya' : 'border-[1.5px] border-bahaya'
                     }`}
                   />
-                  {t.risiko}
+                  {x.risiko}
                 </p>
                 <p className="mt-1 text-[13.5px] leading-snug text-ink-2">
-                  {LABEL_RISIKO[t.risiko]}
-                  {t.indeks_churn !== null && (
-                    <span className="tabular text-ink-3">
-                      {' '}
-                      · indeks churn {t.indeks_churn.toFixed(2)}
-                    </span>
+                  {t.risiko[x.risiko]}
+                  {x.indeks_churn !== null && (
+                    <span className="tabular text-ink-3">{t.churn(x.indeks_churn.toFixed(2))}</span>
                   )}
                 </p>
               </Kartu>
@@ -441,7 +471,7 @@ export default function DaftarLokasi({
                         aria-hidden
                         className="arsir h-2.5 w-2.5 rounded-[2px] border border-line-2"
                       />
-                      Zona belum bisa dipastikan
+                      {t.zonaBelum}
                     </p>
                   )}
                 </Kartu>
@@ -449,6 +479,144 @@ export default function DaftarLokasi({
         </ol>
       )}
 
+    </div>
+  )
+}
+
+/**
+ * Saringan zona sebagai DROPDOWN, bukan deretan pil.
+ *
+ * Dirombak 11 Sep 2026, permintaan pemilik repo. Versi sebelumnya menaruh
+ * keempat zona sebagai pil yang selalu terlihat: ia sekaligus legenda pita di
+ * atasnya, dan itu memang alasan yang baik - tetapi empat pil berlabel panjang
+ * ("Jebakan Gengsi", "Prestige Trap") membungkus jadi dua baris di panel
+ * selebar 25rem, dan dua baris kontrol di atas daftar yang sudah padat terbaca
+ * sebagai kekacauan, bukan sebagai pilihan.
+ *
+ * Sekarang satu tombol yang menyatakan keadaan saringannya, dan daftarnya baru
+ * terbuka kalau diminta. Warna dan jumlah tiap zona tetap ada DI DALAM daftar
+ * itu, jadi ia tidak berhenti jadi legenda - ia cuma tidak lagi memakan dua
+ * baris sepanjang waktu.
+ */
+function SaringZona({
+  bagian,
+  nilai,
+  onUbah,
+  t,
+}: {
+  bagian: { kunci: string; n: number }[]
+  nilai: string | null
+  onUbah: (k: string | null) => void
+  t: (typeof K)['id']
+}) {
+  const namaZona = useNamaZona()
+  const [buka, setBuka] = useState(false)
+  const wadah = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!buka) return
+    const luar = (e: MouseEvent) => {
+      if (!wadah.current?.contains(e.target as Node)) setBuka(false)
+    }
+    const kunci = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBuka(false)
+    }
+    document.addEventListener('mousedown', luar)
+    document.addEventListener('keydown', kunci)
+    return () => {
+      document.removeEventListener('mousedown', luar)
+      document.removeEventListener('keydown', kunci)
+    }
+  }, [buka])
+
+  const q = nilai ? KUADRAN[nilai] : null
+
+  return (
+    <div ref={wadah} className="relative min-w-0 flex-1">
+      <button
+        onClick={() => setBuka((v) => !v)}
+        aria-expanded={buka}
+        aria-haspopup="listbox"
+        className={`flex w-full cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11.5px] transition-colors ${
+          q ? 'border-transparent text-ink' : 'border-line text-ink-2 hover:border-line-2 hover:text-ink'
+        }`}
+        style={{ background: q ? q.lembut : undefined }}
+      >
+        {q && (
+          <span
+            className="h-2 w-2 shrink-0 rounded-[2px]"
+            style={{ background: q.warna }}
+            aria-hidden
+          />
+        )}
+        <span className="min-w-0 flex-1 truncate text-left">
+          {q ? t.saringSatu(namaZona(q.kunci)) : t.saring}
+        </span>
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 10 10"
+          aria-hidden
+          className={`shrink-0 transition-transform duration-200 ${buka ? 'rotate-180' : ''}`}
+        >
+          <path d="M1 3.5 5 7.5 9 3.5" stroke="currentColor" strokeWidth="1.6" fill="none" />
+        </svg>
+      </button>
+
+      {buka && (
+        <ul
+          role="listbox"
+          /* LEGAP, bukan kaca. Popover ini hidup DI DALAM panel yang sudah
+             ber-`backdrop-filter`, dan backdrop-filter bersarang tidak melihat
+             menembus leluhurnya - jadi `kaca-tebal` di sini tinggal 88%
+             opasitasnya tanpa buram sama sekali, dan kalimat di belakangnya
+             terbaca menembus daftar. Terlihat begitu di potret. */
+          className="pop absolute left-0 top-[calc(100%+6px)] z-30 w-[13.5rem] overflow-hidden rounded-md border border-line bg-surface py-1 shadow-[0_20px_44px_-16px_rgb(0_0_0/0.55)]"
+        >
+          <li>
+            <button
+              role="option"
+              aria-selected={nilai === null}
+              onClick={() => {
+                onUbah(null)
+                setBuka(false)
+              }}
+              className={`flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-surface-2 ${
+                nilai === null ? 'text-ink' : 'text-ink-2'
+              }`}
+            >
+              <span className="min-w-0 flex-1 truncate">{t.semua}</span>
+              <span className="tabular shrink-0 text-[11.5px] text-ink-3">
+                {bagian.reduce((a, b) => a + b.n, 0)}
+              </span>
+            </button>
+          </li>
+          {bagian.map((b) => (
+            <li key={b.kunci}>
+              <button
+                role="option"
+                aria-selected={nilai === b.kunci}
+                onClick={() => {
+                  onUbah(nilai === b.kunci ? null : b.kunci)
+                  setBuka(false)
+                }}
+                title={KUADRAN[b.kunci].ringkas}
+                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-surface-2 ${
+                  nilai === b.kunci ? 'text-ink' : 'text-ink-2'
+                }`}
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                  style={{ background: KUADRAN[b.kunci].warna }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate">{namaZona(b.kunci)}</span>
+                <span className="tabular shrink-0 text-[11.5px] text-ink-3">{b.n}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

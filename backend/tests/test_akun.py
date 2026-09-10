@@ -129,15 +129,25 @@ def main() -> int:
             cek("tamu: variabel kosong", tamu.variabel == {})
             cek("tamu: faktor kosong", tamu.faktor == [])
             cek("tamu: tingkat 'tamu'", tamu.tingkat_akun == "tamu")
-            cek("tamu: terkunci menyebut keduanya",
-                set(tamu.terkunci) == {"variabel", "faktor"})
+            cek("tamu: terkunci menyebut keempatnya",
+                set(tamu.terkunci) == {"variabel", "faktor", "indeks", "kuadran"})
             # Yang GRATIS tetap harus utuh - kalau ini kosong, produknya rusak
             # bagi semua orang, bukan cuma bagi yang belum bayar.
             cek("tamu: skor tetap ada", tamu.skor is not None)
             cek("tamu: zoneguard tetap ada", tamu.zoneguard is not None)
             cek("tamu: risiko tetap ada", tamu.risiko is not None)
             cek("tamu: commuter clock tetap ada", len(tamu.commuter_clock) == 4)
-            cek("tamu: keempat indeks tetap ada", tamu.indeks is not None)
+            # Keempat indeks PINDAH ke sisi berbayar 11 Sep 2026. Yang ditahan
+            # NILAINYA; keterangan mutunya (`cakupan` - berapa bahan tiap indeks
+            # yang benar-benar terukur) tetap gratis, karena pengakuan bahwa
+            # datanya tipis tidak boleh jadi barang dagangan.
+            cek("tamu: nilai keempat indeks ditahan",
+                tamu.indeks.ipt is None and tamu.indeks.iae is None
+                and tamu.indeks.ikp is None and tamu.indeks.ibr is None)
+            cek("tamu: cakupan indeks tetap ikut (keterangan mutu, bukan isi)",
+                bool(tamu.indeks.cakupan))
+            cek("tamu: penjelasan kuadran ditahan", tamu.kuadran_penjelasan is None)
+            cek("tamu: cakupan prestise tetap ikut", tamu.cakupan_prestise is not None)
             cek("tamu: badge keyakinan tetap ikut", tamu.skor.keyakinan is not None)
 
             gratis = detail_heksagon(h3, db, pengguna=u)
@@ -154,6 +164,7 @@ def main() -> int:
             dibuka = detail_heksagon(h3, db, pengguna=u)
             cek("token: variabel terisi 43", len(dibuka.variabel) == 43)
             cek("token: terkunci kosong", dibuka.terkunci == [])
+            cek("token: nilai indeks ikut terbuka", dibuka.indeks.ipt is not None)
             cek("token: tingkat tetap 'gratis'", dibuka.tingkat_akun == "gratis")
 
             # Heksagon LAIN tetap terkunci - pembukaan tidak boleh menular.

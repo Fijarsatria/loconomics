@@ -44,7 +44,7 @@ import { api } from '../lib/api'
 import { useBahasa, useNamaZona, useTeks, type Bahasa } from '../lib/bahasa'
 import type { AksiPeta, JawabanAI, PesanRiwayat, SkorHeksagon, StatusAI } from '../types'
 import type { KendaliPeta, Kriteria } from './PetaInteraktif'
-import { Badge, Markdown, PapanNama } from './primitif'
+import { Badge, Markdown, NamaBerombak, PapanNama } from './primitif'
 
 interface Pesan {
   peran: 'pengguna' | 'asisten'
@@ -339,44 +339,6 @@ function PintasLokasi({
         {q ? namaZona(q.kunci) : (skor?.kawasan ?? t.memuat)}
       </span>
     </button>
-  )
-}
-
-/**
- * Nama produk yang berombak selama asisten menjawab.
- *
- * Menggantikan "Menganalisis…" dengan titik berdenyut. Bedanya bukan
- * kemeriahan: titik berdenyut menyatakan SESUATU sedang berjalan, sementara
- * yang sebenarnya ingin diketahui orang yang baru menekan kirim adalah bahwa
- * pertanyaannya SAMPAI dan sedang dikerjakan - dan tidak ada yang menyatakan
- * itu sebaik nama yang mengerjakannya.
- *
- * Hurufnya dipecah supaya tiap huruf bisa berangkat pada waktunya sendiri;
- * itu yang membuat geraknya terbaca sebagai gelombang yang MENJALAR, bukan
- * sebagai kata yang naik-turun serempak. Spasi di antara "Loconomics" dan
- * "AI" ditulis sebagai escape `\u00A0` (spasi tanpa jeda), BUKAN karakter
- * mentah yang ditempel langsung ke sumber - percobaan pertama menempelkan
- * bytenya langsung, dan hasilnya persis jebakan yang sudah dicatat di
- * jebakan.md: terlihat seperti spasi biasa di editor mana pun, sampai
- * `od -c` membuktikan itu dua byte UTF-8 yang tidak terlihat. Escape yang
- * ditulis penuh tidak menyembunyikan apa pun.
- *
- * `aria-label` memakai kalimat biasa, dan hurufnya disembunyikan dari pembaca
- * layar: dieja satu per satu bukan kabar yang berguna.
- */
-function OmbakBerpikir({ label }: { label: string }) {
-  return (
-    <p
-      className="ai-ombak flex items-center text-[15px] font-semibold tracking-tight text-ink"
-      role="status"
-      aria-label={label}
-    >
-      {'Loconomics AI'.split('').map((h, i) => (
-        <span key={i} aria-hidden style={{ animationDelay: `${i * 85}ms` }}>
-          {h === ' ' ? '\u00A0' : h}
-        </span>
-      ))}
-    </p>
   )
 }
 
@@ -816,7 +778,15 @@ export default function PanelAI({
           </div>
         ))}
 
-        {memuat && <OmbakBerpikir label={t.berpikir} />}
+        {/* Nama yang berombak, bukan titik berdenyut. Titik berdenyut
+            menyatakan SESUATU sedang berjalan; yang sebenarnya ingin diketahui
+            orang yang baru menekan kirim adalah bahwa pertanyaannya SAMPAI dan
+            sedang dikerjakan - dan tidak ada yang menyatakan itu sebaik nama
+            yang mengerjakannya. Komponennya bersama dengan daftar lokasi dan
+            rekomendasi; lihat `NamaBerombak` di primitif.tsx. */}
+        {memuat && (
+          <NamaBerombak teks="Loconomics AI" kelas="justify-start text-[15px]" label={t.berpikir} />
+        )}
         <div ref={akhir} />
       </div>
 

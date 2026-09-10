@@ -32,7 +32,7 @@ import { api, GalatAPI } from '../lib/api'
 import { rupiah } from '../lib/format'
 import type { Rekomendasi as SatuRekomendasi, HasilRekomendasi } from '../types'
 import { useSesi } from './Akun'
-import { Ajakan, Badge, Glif, Memuat } from './primitif'
+import { Ajakan, Badge, Glif, MemuatNama } from './primitif'
 
 /** Ikon per jenis alasan. Bentuk lebih cepat dikenali daripada warna. */
 function IkonAlasan({ jenis }: { jenis: 'cocok' | 'catatan' }) {
@@ -243,7 +243,7 @@ export default function Rekomendasi({
     )
 
   if (galat) return <Ajakan judul="Gagal memuat" anak={galat} />
-  if (!data) return <Memuat baris={4} teks="Menyusun rekomendasi…" />
+  if (!data) return <MemuatNama teks="sedang menyusun rekomendasi untuk Anda…" />
 
   const tanpaKriteria = !data.kriteria.ringkas
 

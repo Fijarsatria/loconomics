@@ -1049,6 +1049,30 @@ export default function PanelInsight({
           Sekarang: kata, bukan desimal; angka sungguhan kalau ada; dan indeks
           yang bahannya belum terukur MENGATAKANNYA. */}
       <Bagian judul="Empat hal yang dinilai" nada="gem" ikon={<><rect x="2.2" y="2.2" width="5" height="5" rx="1.2"/><rect x="8.8" y="2.2" width="5" height="5" rx="1.2"/><rect x="2.2" y="8.8" width="5" height="5" rx="1.2"/><rect x="8.8" y="8.8" width="5" height="5" rx="1.2"/></>}>
+        {/* BERBAYAR sejak 11 Sep 2026, keputusan pemilik repo. Nilainya ditahan
+            DI SERVER - `detail.indeks.*` benar-benar null untuk yang belum
+            membayar, bukan dikirim lalu diburamkan. Tirainya digambar dari
+            `terkunci`, yaitu dari keadaan backend, bukan dari tebakan di sini. */}
+        {detail.terkunci.includes('indeks') ? (
+          <Terkunci
+            judul="Empat hal yang dinilai"
+            kalimat="Akses ke stasiun, perputaran uang, ketatnya persaingan, dan biaya & risiko — masing-masing dengan kata, angka pendukungnya, dan berapa bahannya yang benar-benar terukur."
+            labelAksi="Gabung Loconomics Premium"
+            baris={4}
+            onBuka={ajakanBuka}
+            aksiKedua={
+              akun ? (
+                <button
+                  onClick={ajakanBuka}
+                  className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
+                >
+                  atau buka lokasi ini saja dengan 1 token
+                </button>
+              ) : undefined
+            }
+          />
+        ) : (
+        <>
         {/* Dipendekkan 3 Sep 2026 dari empat baris jadi satu. Yang hilang cuma
             pengulangan: "dihitung di luar aplikasi, sekali" sudah dinyatakan
             lagi di kaki panel, dan pembacanya belum tahu apa itu "pipeline"
@@ -1127,6 +1151,8 @@ export default function PanelInsight({
             </div>
           )
         })}
+        </>
+        )}
       </Bagian>
 
       {/* --- 6. Faktor ------------------------------------------------------
@@ -1308,6 +1334,44 @@ export default function PanelInsight({
           dan pertanyaan itu baru muncul sesudah orang tahu angkanya berapa
           dan bisa apa dengan lokasi ini. */}
       {posisi?.x != null && posisi.y != null && batas?.x != null && batas.y != null && (
+        detail.terkunci.includes('kuadran') ? (
+          /* BERBAYAR sejak 11 Sep 2026. Yang ditahan DI SERVER kalimat
+             penjelasan kuadrannya (`kuadran_penjelasan` benar-benar null);
+             bagian ini menyembunyikan pembacaannya.
+
+             SATU HAL SENGAJA DIBIARKAN DI LUAR TIRAI: kalimat yang menyebut
+             sumbu prestise berdiri di atas bahan apa. Ia bukan fitur melainkan
+             PENGAKUAN bahwa dua dari lima bahannya kosong di seluruh wilayah
+             studi - dan pengakuan tidak boleh jadi barang dagangan. Kuadrannya
+             sendiri sudah tergambar gratis di peta; menagih keterangan mutunya
+             berarti menjual kuadran tanpa peringatannya. */
+          <div className="mt-3">
+            <Bagian judul="Kenapa masuk kuadran ini" nada="gem" ikon={<path d="M8 2v12M2 8h12"/>}>
+              <Terkunci
+                judul="Kenapa masuk kuadran ini"
+                kalimat="Dua batang yang menunjukkan seberapa bagus datanya dan seberapa mahal kelihatannya, masing-masing terhadap titik tengah seluruh lokasi di enam kawasan."
+                labelAksi="Gabung Loconomics Premium"
+                baris={3}
+                onBuka={ajakanBuka}
+                aksiKedua={
+                  akun ? (
+                    <button
+                      onClick={ajakanBuka}
+                      className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
+                    >
+                      atau buka lokasi ini saja dengan 1 token
+                    </button>
+                  ) : undefined
+                }
+              />
+              {frasaPrestise(detail.cakupan_prestise, 'lokasi') && (
+                <p className="mt-2.5 border-t border-line/60 pt-2 text-[11.5px] leading-snug text-ink-3">
+                  {frasaPrestise(detail.cakupan_prestise, 'lokasi')}
+                </p>
+              )}
+            </Bagian>
+          </div>
+        ) : (
         <div className="mt-3 rounded-sm border border-line/70 bg-surface-2/60 px-3 py-2.5">
           <p className="eyebrow mb-2.5">Kenapa masuk kuadran ini</p>
           <SumbuKuadran
@@ -1355,6 +1419,7 @@ export default function PanelInsight({
             </Rinci>
           </div>
         </div>
+        )
       )}
 
       <p className="px-4 pb-6 pt-1 text-[12.5px] leading-snug text-ink-3">

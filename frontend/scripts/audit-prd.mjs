@@ -268,11 +268,24 @@ async function main() {
   // backend/tests/test_aturan.py, yang menyapu seluruh `src/`. Keduanya
   // diperiksa arah gagalnya: yang ini berteriak untuk cabang bawah-median, yang
   // di sana untuk kedua-duanya.
+  //
+  // DIPINDAH KE LINTASAN PELANGGAN 11 Sep 2026. Bagian "Kenapa masuk kuadran
+  // ini" jadi berbayar, jadi kalimat ini tidak lagi ada di layar TAMU - dan
+  // asersi yang mencarinya di sana akan menuduh kode yang benar. Yang menjaga
+  // invariannya di sini sekarang kebalikannya: bagian itu HARUS tertutup untuk
+  // tamu, dan yang ditutup harus tetap mengaku sumbunya berdiri di atas apa.
   cek(
-    'kalimat sumbu prestise berbunyi perkiraan, bukan pengamatan',
-    /Diperkirakan tampak lebih (mahal|biasa) daripada separuh lokasi lain/.test(detail),
-    '- kalimat yang dirender bukan bentuk perkiraan',
+    'penjelasan kuadran ditahan dari tamu',
+    !/Diperkirakan tampak lebih (mahal|biasa)/.test(detail),
+    '- kalimat berbayar bocor ke tamu',
   )
+  if (cakupanX && cakupanX.kosong.length > 0) {
+    cek(
+      'tirai kuadran tetap mengaku sumbunya berdiri di atas apa',
+      Boolean(frasa),
+      '- pengakuan mutu ikut tertutup tirai; ia bukan barang dagangan',
+    )
+  }
 
   // Diagram penuh: satu-satunya tempat sumbu itu DIJELASKAN, jadi keterangannya
   // harus sampai ke sana juga. Kalimat yang sama pernah diperbaiki di satu
@@ -456,6 +469,24 @@ async function main() {
       baruNet.some((n) => n.url.includes('/pricelens/')), '- lihat 04-premium.png')
     cek('Commuter Clock dipanggil untuk pelanggan',
       baruNet.some((n) => n.url.includes('/commuter-clock')))
+
+    // Keempat indeks dan penjelasan kuadran berbayar sejak 11 Sep 2026. Yang
+    // dijaga di sini KEDUA arahnya: tamu tidak melihatnya (di atas), pelanggan
+    // melihatnya - dan kalimatnya tetap berbunyi PERKIRAAN, bukan pengamatan.
+    // Cabang yang satunya ("lebih biasa") dijaga
+    // `test_klaim_melihat_bangunan_tidak_ada_lagi_di_mana_pun` yang menyapu
+    // seluruh src/; asersi negatif atas cabang yang tidak dirender tidak
+    // menguji apa pun, dan itu pelajaran yang sudah dibayar sekali di sini.
+    cek(
+      'pelanggan melihat empat hal yang dinilai',
+      /akses ke stasiun|perputaran uang/i.test(teksP),
+      '- bagian berbayar tidak terbuka untuk pelanggan',
+    )
+    cek(
+      'kalimat sumbu prestise berbunyi perkiraan, bukan pengamatan',
+      /Diperkirakan tampak lebih (mahal|biasa) daripada separuh lokasi lain/.test(teksP),
+      '- kalimat yang dirender bukan bentuk perkiraan',
+    )
   }
 
   // ------------------------------------------------------------------ galat

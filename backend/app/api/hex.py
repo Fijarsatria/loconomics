@@ -634,9 +634,22 @@ def detail_heksagon(
     """Isi panel insight saat heksagon diklik. Juga sumber jawaban jelaskan_skor().
 
     SATU RESPONS, DUA ISI. Yang gratis - skor, kuadran, Commuter Clock,
-    ZoneGuard, RiskRadar, keempat indeks - selalu ikut. Yang berbayar - 43
-    variabel granular dan rincian kontribusi tiap variabel ke skor - hanya ikut
-    kalau pemanggilnya berlangganan atau sudah membuka heksagon ini dengan token.
+    ZoneGuard, RiskRadar - selalu ikut. Yang berbayar - 43 variabel granular,
+    rincian kontribusi tiap variabel ke skor, NILAI keempat indeks, dan kalimat
+    penjelasan kuadran - hanya ikut kalau pemanggilnya berlangganan atau sudah
+    membuka heksagon ini dengan token.
+
+    KEEMPAT INDEKS DAN PENJELASAN KUADRAN PINDAH KE SISI BERBAYAR 11 Sep 2026,
+    keputusan pemilik repo. Keduanya menjawab "kenapa angkanya segitu", dan itu
+    pertanyaan yang sama dengan yang sudah dijawab bagian berbayar di bawahnya -
+    memberikannya gratis di satu tempat dan menagihnya di tempat lain membuat
+    batas berbayarnya tidak bisa diterangkan ke siapa pun.
+
+    YANG TETAP GRATIS meski keduanya ditahan: `cakupan` dan `cakupan_prestise`.
+    Keduanya keterangan MUTU - berapa bahan sebuah indeks yang benar-benar
+    terukur, dan bahan mana yang menyusun sumbu prestise - dan tidak memuat satu
+    pun nilai. Menahannya berarti menahan pengakuan bahwa datanya tipis, dan
+    pengakuan tidak boleh pernah jadi barang dagangan.
 
     Yang ditahan TIDAK dikirim lalu diburamkan di frontend. Buram itu lapisan
     CSS; siapa pun yang membuka panel pengembang bisa mencabutnya, dan yang
@@ -662,7 +675,9 @@ def detail_heksagon(
         # hilang hanya karena ia belum berlangganan bulanan.
         boleh_penuh = sudah_terbuka(db, pengguna, h3_index)
 
-    terkunci: list[str] = [] if boleh_penuh else ["variabel", "faktor"]
+    terkunci: list[str] = (
+        [] if boleh_penuh else ["variabel", "faktor", "indeks", "kuadran"]
+    )
 
     skor = db.execute(
         select(LocationScore).where(
@@ -681,10 +696,13 @@ def detail_heksagon(
     return DetailHeksagon(
         skor=skor_heksagon(hx, skor),
         indeks=IndeksKomposit(
-            ipt=skor.ipt if skor else None,
-            iae=skor.iae if skor else None,
-            ikp=skor.ikp if skor else None,
-            ibr=skor.ibr if skor else None,
+            # Nilainya DITAHAN untuk yang belum membayar, tidak dikirim lalu
+            # diburamkan. Buram itu lapisan CSS; siapa pun yang membuka panel
+            # pengembang bisa mencabutnya.
+            ipt=skor.ipt if (skor and boleh_penuh) else None,
+            iae=skor.iae if (skor and boleh_penuh) else None,
+            ikp=skor.ikp if (skor and boleh_penuh) else None,
+            ibr=skor.ibr if (skor and boleh_penuh) else None,
             # Diturunkan dari `faktor`, yang sudah dimuat di atas apa pun tingkat
             # akunnya. Ini keterangan MUTU, bukan isi berbayar: ia menyebut
             # berapa bahan yang terukur, tidak menyebut satu pun nilainya.
@@ -721,7 +739,9 @@ def detail_heksagon(
         zoneguard=zoneguard(hx),
         risiko=peringatan_risiko(hx, p75, p90),
         kuadran_penjelasan=(
-            PENJELASAN_KUADRAN.get(skor.kuadran) if skor and skor.kuadran else None
+            PENJELASAN_KUADRAN.get(skor.kuadran)
+            if (skor and skor.kuadran and boleh_penuh)
+            else None
         ),
         # Alasannya sama dengan `cakupan` di atas, dan taruhannya lebih besar:
         # kuadran adalah tesis produk ini, dan sumbu datarnya berdiri di atas

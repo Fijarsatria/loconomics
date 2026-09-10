@@ -323,6 +323,75 @@ export function Memuat({ baris = 3, teks = 'Sedang memuat data…' }: { baris?: 
   )
 }
 
+/**
+ * Nama produk yang berombak, dipakai SETIAP tempat yang sedang menunggu data.
+ *
+ * Lahir di panel AI ("Loconomics AI" yang berombak menggantikan titik
+ * berdenyut) dan dipindah ke sini 11 Sep 2026 atas permintaan pemilik repo,
+ * yang menginginkan gerakan yang sama di daftar lokasi dan di tab "Untuk Anda".
+ * Alasannya lebih dari kemiripan: batang abu-abu berkilau menyatakan "sesuatu
+ * sedang dimuat" dan tidak lebih, sementara nama yang bergerak menyatakan SIAPA
+ * yang sedang mengerjakannya - dan di produk yang seluruh isinya dihitung
+ * sendiri, itu kabar yang berbeda.
+ *
+ * Hurufnya dipecah supaya tiap huruf berangkat pada waktunya sendiri; itu yang
+ * membuat geraknya terbaca sebagai gelombang yang MENJALAR, bukan sebagai kata
+ * yang naik-turun serempak. Spasi ditulis sebagai escape `\u00A0`, BUKAN
+ * karakter mentah - jebakan yang sudah tercatat, dan sudah terulang sekali.
+ *
+ * `aria-label` memakai kalimat biasa dan hurufnya disembunyikan dari pembaca
+ * layar: dieja satu per satu bukan kabar yang berguna.
+ */
+export function NamaBerombak({
+  teks = 'Loconomics',
+  kelas = 'text-[15px]',
+  label,
+}: {
+  teks?: string
+  kelas?: string
+  label: string
+}) {
+  return (
+    <p
+      className={`ai-ombak flex items-center justify-center font-semibold tracking-tight text-ink ${kelas}`}
+      role="status"
+      aria-label={label}
+    >
+      {[...teks].map((h, i) => (
+        <span key={i} aria-hidden style={{ animationDelay: `${i * 85}ms` }}>
+          {h === ' ' ? '\u00A0' : h}
+        </span>
+      ))}
+    </p>
+  )
+}
+
+/**
+ * Layar tunggu bernama: papan nama berombak, satu kalimat di bawahnya.
+ *
+ * Menggantikan batang berkilau di tempat-tempat yang menunggu LAMA dan punya
+ * ruang - daftar lokasi, rekomendasi, komparasi. Batang berkilau tetap dipakai
+ * di panel sempit, tempat gerakan sebesar ini akan mendominasi.
+ */
+export function MemuatNama({ teks }: { teks: string }) {
+  return (
+    <div
+      className="flex h-full min-h-[13rem] flex-col items-center justify-center gap-2.5 px-6 py-10 text-center"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span className="relative inline-flex items-center justify-center">
+        <span
+          className="g-ai-nyala pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[190px] w-[190px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          aria-hidden
+        />
+        <NamaBerombak kelas="text-[26px] leading-none" label={teks} />
+      </span>
+      <p className="text-[12.5px] leading-snug text-ink-3">{teks}</p>
+    </div>
+  )
+}
+
 // --- Papan nama ------------------------------------------------------------
 
 
@@ -1158,12 +1227,12 @@ type KunciPengaturan = keyof typeof ISI_PENGATURAN
 const K_NAMA_TEMPAT = {
   id: {
     judul: 'Nama tempat',
-    catatan: 'Penanda basemap seperti stasiun, gedung, dan taman',
+    catatan: 'Penanda dan nama tempat di basemap — stasiun, gedung, taman, nama kelurahan. Nama jalan tetap tampil',
     pilihan: { mati: 'Mati', jarang: 'Jarang', normal: 'Normal', rapat: 'Rapat' },
   },
   en: {
     judul: 'Place labels',
-    catatan: 'Basemap markers such as stations, buildings, and parks',
+    catatan: 'Basemap markers and place names — stations, buildings, parks, neighbourhoods. Street names stay on',
     pilihan: { mati: 'Off', jarang: 'Sparse', normal: 'Normal', rapat: 'Dense' },
   },
 }
