@@ -399,14 +399,25 @@ function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; t
 
   return (
     <div>
-      <div className="flex h-[86px] items-end gap-[3px]">
+      {/* `items-stretch`, BUKAN `items-end`, dan itu memperbaiki grafik yang
+          tidak pernah sekali pun menggambar satu batang.
+
+          Tiap kolom menaruh batangnya dengan `height: N%`, dan persen selalu
+          relatif terhadap TINGGI INDUKNYA. Dengan `items-end`, kolomnya tidak
+          diregangkan - tingginya jadi tinggi isinya sendiri, yaitu tinggi
+          batang yang tingginya persen dari kolom itu. Lingkaran yang jawabannya
+          nol: kolom 0px, batang 0px, delapan belas batang tak terlihat, dan
+          grafiknya terbaca sebagai ruang kosong. Terukur di DOM: `height: 0px`
+          untuk seluruh `.batang-jam`. `justify-end` di tiap kolom yang membuat
+          batangnya tetap duduk di dasar. */}
+      <div className="flex h-[86px] items-stretch gap-[3px]">
         {slot.map(({ jam, data }, i) => {
           const puncak = teramai.includes(jam)
           if (!data)
             return (
               <div
                 key={jam}
-                className="flex min-w-0 flex-1 flex-col justify-end"
+                className="flex h-full min-w-0 flex-1 flex-col justify-end"
                 title={`${String(jam).padStart(2, '0')}.00 — belum ada transaksi tercatat`}
               >
                 {/* Garis rambut di dasar: menempati ruangnya, tetapi tidak
@@ -415,12 +426,18 @@ function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; t
               </div>
             )
           return (
-            <div key={jam} className="group relative flex min-w-0 flex-1 flex-col justify-end">
+            <div key={jam} className="group relative flex h-full min-w-0 flex-1 flex-col justify-end">
               <div
                 className="batang-jam w-full rounded-t-[3px]"
                 style={{
                   height: `${Math.max(3, data.relatif * 100)}%`,
-                  background: puncak ? 'var(--q-menang)' : 'var(--color-line-2)',
+                  /* `--color-line-2` (#3d5048 di tema gelap) hampir sewarna
+                     latarnya sendiri, jadi lima belas dari delapan belas batang
+                     praktis tidak terlihat dan grafiknya terbaca KOSONG -
+                     dilaporkan pemilik repo begitu. `--color-ink-3` kontras di
+                     kedua tema tanpa merebut perhatian dari batang puncaknya. */
+                  background: puncak ? 'var(--q-menang)' : 'var(--color-ink-3)',
+                  opacity: puncak ? 1 : 0.55,
                   animationDelay: `${i * 24}ms`,
                 }}
                 title={`${String(jam).padStart(2, '0')}.00 — ${Math.round(data.relatif * 100)}% dari jam tersibuk`}
@@ -440,6 +457,95 @@ function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; t
         <p className="mt-1 text-[10px] leading-snug text-ink-3">
           {nKosong} jam tanpa transaksi tercatat digambar sebagai rongga — bukan
           berarti sepi, berarti belum ada yang mensurvei jam itu.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Empat bagian hari, dirata-ratakan dari profil jam yang sudah ada.
+ *
+ * Batasnya sama dengan ember Commuter Clock di pipeline (B01-B04) supaya satu
+ * gagasan tidak punya dua definisi di produk yang sama - kecuali ember malam,
+ * yang di sini berhenti di 22.00 karena profil jamnya memang berhenti di sana.
+ *
+ * Bagian yang SELURUH jamnya tak berdata mengaku belum tersurvei alih-alih
+ * ditampilkan sebagai nol. "Tidak ada transaksi tercatat" dan "sepi" adalah dua
+ * pernyataan yang berbeda, dan yang kedua tidak pernah bisa dibuktikan data
+ * yang tidak ada.
+ */
+const BAGIAN_HARI: { nama: string; jam: string; dari: number; sampai: number }[] = [
+  { nama: 'Pagi', jam: '05–10', dari: 5, sampai: 10 },
+  { nama: 'Siang', jam: '11–14', dari: 11, sampai: 14 },
+  { nama: 'Sore', jam: '15–19', dari: 15, sampai: 19 },
+  { nama: 'Malam', jam: '20–22', dari: 20, sampai: 22 },
+]
+
+function BagianHari({ profil }: { profil: HasilSimulasi['profil_jam'] }) {
+  if (!profil.length) return null
+  const menurutJam = new Map(profil.map((j) => [j.jam, j]))
+  const bagian = BAGIAN_HARI.map((b) => {
+    const isi: number[] = []
+    for (let j = b.dari; j <= b.sampai; j++) {
+      const d = menurutJam.get(j)
+      if (d) isi.push(d.relatif)
+    }
+    return { ...b, rata: isi.length ? isi.reduce((a, x) => a + x, 0) / isi.length : null, n: isi.length }
+  })
+  const puncak = bagian.reduce<(typeof bagian)[number] | null>(
+    (a, b) => (b.rata !== null && (a === null || a.rata === null || b.rata > a.rata) ? b : a),
+    null,
+  )
+
+  return (
+    <div className="mt-5">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+        Ramainya terbagi begini
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {bagian.map((b) => {
+          const utama = puncak?.nama === b.nama && b.rata !== null
+          return (
+            <div
+              key={b.nama}
+              className="rounded-lg border px-3 py-2.5 transition-colors"
+              style={{
+                borderColor: utama ? 'transparent' : 'var(--color-line)',
+                background: utama ? 'var(--q-menang-lembut)' : 'var(--color-surface-2)',
+              }}
+            >
+              <p className="flex items-baseline justify-between gap-2">
+                <span
+                  className="text-[13px] font-semibold"
+                  style={{ color: utama ? 'var(--q-menang)' : 'var(--color-ink)' }}
+                >
+                  {b.nama}
+                </span>
+                <span className="tabular text-[10.5px] text-ink-3">{b.jam}</span>
+              </p>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ground-2">
+                <div
+                  className="h-full rounded-full transition-[width] duration-500 ease-liquid"
+                  style={{
+                    width: `${Math.round((b.rata ?? 0) * 100)}%`,
+                    background: utama ? 'var(--q-menang)' : 'var(--color-ink-3)',
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-[10.5px] leading-snug text-ink-3">
+                {b.rata === null
+                  ? 'belum ada transaksi tercatat'
+                  : `${Math.round(b.rata * 100)}% dari jam tersibuk`}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+      {puncak?.rata !== null && puncak && (
+        <p className="mt-2 text-[12px] leading-snug text-ink-2">
+          Paling ramai di <strong className="font-semibold text-ink">{puncak.nama.toLowerCase()}</strong>{' '}
+          ({puncak.jam}). Kalau jam bukanya harus dipilih, itu jam yang paling sedikit terbuang.
         </p>
       )}
     </div>
@@ -1075,8 +1181,44 @@ export default function Simulasi({
                 <div className="mt-4">
                   <GrafikJam profil={hasil.profil_jam} teramai={hasil.jam_teramai} />
                 </div>
-                {L?.rasio_weekend !== null && L?.rasio_weekend !== undefined && (
-                  <div className="mt-5 max-w-[22rem]">
+
+                {/* --- Empat bagian hari -------------------------------------
+                    Ditambahkan 11 Sep 2026. Slide ini sebelumnya berisi satu
+                    grafik dan satu angka, dan sisanya ruang kosong - dilaporkan
+                    pemilik repo ("kayak masa cuma itu aja yang ditampilin, kan
+                    ada banyak space").
+
+                    Yang mengisinya BUKAN angka baru: keempatnya dirata-ratakan
+                    dari `profil_jam` yang sudah ada di respons yang sama. Yang
+                    ditambahkan cuma cara membacanya - orang yang menimbang jam
+                    buka tidak bertanya "pukul 14 seramai apa", ia bertanya
+                    "pagi atau sore". Bagian yang seluruh jamnya tak berdata
+                    MENGATAKANNYA, tidak dihitung sebagai nol. */}
+                <BagianHari profil={hasil.profil_jam} />
+
+                <div className="mt-5 grid gap-x-8 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                  <Fakta
+                    label="Uang berpindah per jam"
+                    nilai={hasil.terukur.belanja_per_jam}
+                    satuan="Rp"
+                    bagian={null}
+                    bantuan="Jumlah rupiah yang berpindah tangan di petak ini tiap jam, dari struk yang tercatat."
+                  />
+                  <Fakta
+                    label="Belanja per struk"
+                    nilai={hasil.terukur.nominal_median_struk}
+                    satuan="Rp"
+                    bagian={null}
+                    bantuan="Nilai tengah satu transaksi. Menentukan berapa pembeli yang dibutuhkan untuk omzet tertentu."
+                  />
+                  <Fakta
+                    label="Harga per porsi di sekitar"
+                    nilai={hasil.terukur.harga_median_porsi}
+                    satuan="Rp"
+                    bagian={null}
+                    bantuan="Harga tengah satu porsi di warung sekitar - pembanding sebelum menentukan harga Anda sendiri."
+                  />
+                  {L?.rasio_weekend !== null && L?.rasio_weekend !== undefined && (
                     <Fakta
                       label="Akhir pekan vs hari kerja"
                       nilai={L.rasio_weekend}
@@ -1084,8 +1226,23 @@ export default function Simulasi({
                       bagian={L.rasio_weekend / 2}
                       bantuan="1,0 berarti akhir pekan sama ramai dengan hari kerja. Di atas 1 berarti lebih bergantung pada Sabtu-Minggu."
                     />
-                  </div>
-                )}
+                  )}
+                  <Fakta
+                    label="Penumpang stasiun / hari"
+                    nilai={L?.ridership_proksi}
+                    satuan="orang"
+                    bagian={null}
+                    bantuan="Perkiraan orang yang melewati simpul terdekat tiap hari."
+                  />
+                  <Fakta
+                    label="Jalan kaki ke stasiun"
+                    nilai={L?.waktu_jalan_menit}
+                    satuan="menit"
+                    bagian={null}
+                    bagus={false}
+                    bantuan="Lewat jalan yang benar-benar ada, bukan garis lurus."
+                  />
+                </div>
               </div>
             </div>
 
