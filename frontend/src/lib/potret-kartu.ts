@@ -90,6 +90,18 @@ export interface HasilSorot {
   sel: number[]
   /** Yang menjawab pertanyaan kartu, URUT sesuai jawabannya. */
   sorot: { x: number; y: number; c: string }[]
+  /**
+   * Rute jalan kaki SUNGGUHAN dari heksagon teratas ke simpul terdekatnya,
+   * dalam piksel kotak gambar yang sama.
+   *
+   * Datang dari `hex_routes` lewat `/hex/{h3}/simpul-terdekat` - geometri
+   * OpenRouteService yang sama yang digambar peta, bukan garis lurus. Itu
+   * bedanya: rute di sini memutar 1,6x dari jarak lurusnya rata-rata, dan garis
+   * lurus akan menggambarkan janji yang tidak ditepati produk ini.
+   *
+   * null kalau heksagon teratasnya memang belum punya rute.
+   */
+  rute: { d: string; ax: number; ay: number; bx: number; by: number; menit: number; simpul: string } | null
 }
 
 /** Nilai yang dipakai memilih, dan arahnya. Null = tidak memenuhi syarat. */
@@ -185,7 +197,7 @@ export async function sorotKartu(p: PesananSorot): Promise<HasilSorot> {
   const bulat = (v: number) => Math.round(v * 10) / 10
   const sel: number[] = []
   const simpul: number[][] = []
-  const daftar: { x: number; y: number; nilai: number | null }[] = []
+  const daftar: { x: number; y: number; nilai: number | null; h3: string }[] = []
 
   for (const f of data.features) {
     const cincin = f.geometry?.coordinates?.[0]
@@ -198,18 +210,53 @@ export async function sorotKartu(p: PesananSorot): Promise<HasilSorot> {
     const y = titik.reduce((a, t) => a + t[1], 0) / 6
     sel.push(bulat(x), bulat(y))
     simpul.push(titik.flatMap((t) => [t[0] - x, t[1] - y]))
-    daftar.push({ x, y, nilai: nilaiPilih(f.properties ?? {}, p.pilih) })
+    daftar.push({
+      x,
+      y,
+      nilai: nilaiPilih(f.properties ?? {}, p.pilih),
+      h3: String(f.properties?.h3_index ?? ''),
+    })
   }
 
   const bentuk = Array.from({ length: 12 }, (_, i) =>
     bulat(simpul.reduce((a, s) => a + s[i], 0) / (simpul.length || 1)),
   )
 
-  const sorot = daftar
-    .filter((d): d is { x: number; y: number; nilai: number } => d.nilai !== null)
+  const terpilih = daftar
+    .filter((d): d is { x: number; y: number; nilai: number; h3: string } => d.nilai !== null)
     .sort((a, c) => c.nilai - a.nilai)
     .slice(0, p.banyak)
-    .map((d) => ({ x: bulat(d.x), y: bulat(d.y), c: warnaDi(d.x, d.y) }))
+  const sorot = terpilih.map((d) => ({ x: bulat(d.x), y: bulat(d.y), c: warnaDi(d.x, d.y) }))
+
+  // Rute heksagon TERATAS saja. Enam rute di satu kartu kecil berhenti jadi
+  // rute dan jadi benang kusut; satu rute menyatakan hal yang sama.
+  let rute: HasilSorot['rute'] = null
+  if (terpilih[0]) {
+    try {
+      const k = await api.simpulTerdekat(terpilih[0].h3)
+      const garis = k.rute?.find((r) => r.utama) ?? k.rute?.[0]
+      const titik = garis?.koordinat
+      if (titik && titik.length > 1 && k.simpul) {
+        const px = titik.map(([a, b]) => m.project([a, b]))
+        const d = px
+          .map((q, i) => `${i ? 'L' : 'M'}${q.x.toFixed(1)},${q.y.toFixed(1)}`)
+          .join('')
+        const b = m.project([k.simpul.lon, k.simpul.lat])
+        rute = {
+          d,
+          ax: bulat(px[0].x),
+          ay: bulat(px[0].y),
+          bx: bulat(b.x),
+          by: bulat(b.y),
+          menit: Math.round(k.menit_jalan ?? 0),
+          simpul: k.simpul.nama,
+        }
+      }
+    } catch {
+      /* Heksagon tanpa rute bukan galat: kartunya cuma tidak menggambar apa
+         pun. Yang salah justru menggambar garis lurus sebagai gantinya. */
+    }
+  }
 
   // Pusat gelombang: rerata posisi seluruh sel, persis `bubuhiUrutan` di peta.
   const cx = daftar.reduce((a, d) => a + d.x, 0) / (daftar.length || 1)
@@ -217,7 +264,7 @@ export async function sorotKartu(p: PesananSorot): Promise<HasilSorot> {
 
   m.remove()
   wadah.remove()
-  return { w: p.lebar, h: p.tinggi, cx: bulat(cx), cy: bulat(cy), bentuk, sel, sorot }
+  return { w: p.lebar, h: p.tinggi, cx: bulat(cx), cy: bulat(cy), bentuk, sel, sorot, rute }
 }
 
 /** Angka yang ikut dikirim bersama gambarnya, supaya kartunya punya isi. */

@@ -202,7 +202,16 @@ function poligon(bentuk: number[], x: number, y: number) {
  * petanya tidak menyala berbarengan, yang justru menghapus kesan "yang satu,
  * lalu yang lain" yang jadi seluruh gunanya kartu itu.
  */
-function LapisanHeks({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
+function LapisanHeks({
+  d,
+  jeda = 0,
+  rute,
+}: {
+  d: KartuGerbang
+  jeda?: number
+  /** Huruf penanda titik asal. Ada = rute jalan kakinya ikut digambar. */
+  rute?: 'A' | 'B'
+}) {
   const s = d.sorot
 
   /**
@@ -281,12 +290,64 @@ function LapisanHeks({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
           }}
         />
       ))}
+
+      {/* --- Rute jalan kaki SUNGGUHAN, dari heksagon teratas ke simpulnya ---
+          Ditambahkan 11 Sep 2026 untuk kartu komparasi, permintaan pemilik
+          repo ("dikasih lihat juga kayak route gitu, dari titik A ke B").
+
+          Geometrinya dari `hex_routes` - jalur OpenRouteService yang sama yang
+          digambar peta, bukan garis lurus antara dua titik. Bedanya bukan
+          kerapian: rute di enam kawasan ini memutar rata-rata 1,8x dari jarak
+          lurusnya, dan garis lurus di kartu produk yang seluruh tesisnya
+          "jaraknya tidak seperti kelihatannya" akan membantah dirinya sendiri.
+
+          BERTITIK, dan tebalnya dua lapis - resep yang sama dengan rute jalan
+          kaki di peta: bayangan gelap yang juga bertitik di bawah titik
+          terangnya, supaya titiknya terbaca di atas jalan maupun di atas atap. */}
+      {rute && s.rute && (
+        <g className="g-heks-rute" style={{ animationDelay: `${(jeda + 1.1).toFixed(2)}s` }}>
+          <path
+            d={s.rute.d}
+            fill="none"
+            stroke="rgba(8,16,13,0.6)"
+            strokeWidth="4.6"
+            strokeLinecap="round"
+            strokeDasharray="0 6.4"
+          />
+          <path
+            d={s.rute.d}
+            fill="none"
+            stroke="#7cf7dd"
+            strokeWidth="3.3"
+            strokeLinecap="round"
+            strokeDasharray="0 8.9"
+          />
+          {/* Simpul: cincin, bukan pin. Pin menandai tujuan yang dipilih; ini
+              stasiun yang sudah ada di sana sebelum siapa pun memilih apa pun. */}
+          <circle cx={s.rute.bx} cy={s.rute.by} r="5" fill="rgba(8,16,13,0.8)" stroke="#e8f5f1" strokeWidth="1.6" />
+          <circle cx={s.rute.bx} cy={s.rute.by} r="1.7" fill="#e8f5f1" />
+          {/* Titik asal, berhuruf. A di peta kiri, B di kanan - huruf yang sama
+              dipakai tabel komparasi di dalam aplikasinya. */}
+          <circle cx={s.rute.ax} cy={s.rute.ay} r="7.4" fill="#5bf3d3" stroke="rgba(8,16,13,0.75)" strokeWidth="1.4" />
+          <text
+            x={s.rute.ax}
+            y={s.rute.ay + 2.9}
+            textAnchor="middle"
+            fontSize="8.4"
+            fontWeight="700"
+            fill="#08100d"
+            style={{ fontFamily: 'inherit' }}
+          >
+            {rute}
+          </text>
+        </g>
+      )}
     </svg>
   )
 }
 
 /** Potret layer + heksagonnya + atribusi. */
-function Potret({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
+function Potret({ d, jeda = 0, rute }: { d: KartuGerbang; jeda?: number; rute?: 'A' | 'B' }) {
   const label = useTeks(LABEL)
   return (
     <>
@@ -309,7 +370,7 @@ function Potret({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
         draggable={false}
         className="g-bento-gambar absolute inset-0 h-full w-full object-cover"
       />
-      <LapisanHeks d={d} jeda={jeda} />
+      <LapisanHeks d={d} jeda={jeda} rute={rute} />
       {/* Atribusi ditulis sendiri: kontrol MapLibre tidak ikut terpotret, dan
           ketentuan A.3 tidak gugur cuma karena gambarnya statis. */}
       <span className="pointer-events-none absolute bottom-1.5 right-2.5 max-w-[70%] truncate text-[8.5px] text-white/40">
@@ -382,11 +443,11 @@ function KartuKeputusan({
   const mediaBanding = pembanding && (
     <div className="relative flex min-h-[150px] flex-1 self-stretch overflow-hidden">
       <div className="g-bento-media g-bento-media-samping relative min-w-0 flex-1 overflow-hidden">
-        <Potret d={d} />
+        <Potret d={d} rute="A" />
       </div>
       <span className="w-px shrink-0 bg-[color:var(--g-kartu-tepi)]" aria-hidden />
       <div className="g-bento-media g-bento-media-samping relative min-w-0 flex-1 overflow-hidden">
-        <Potret d={pembanding} jeda={2.1} />
+        <Potret d={pembanding} jeda={2.1} rute="B" />
       </div>
     </div>
   )

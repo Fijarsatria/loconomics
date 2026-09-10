@@ -1318,9 +1318,38 @@ input:focus-visible {
   stroke-opacity: 0.9;
   stroke-linejoin: round;
 }
+.g-heks-rute {
+  opacity: 0;
+  animation-name: g-heks-rute;
+  animation-duration: 9s;
+  animation-timing-function: cubic-bezier(0.33, 0.9, 0.28, 1);
+  animation-iteration-count: infinite;
+  animation-play-state: paused;
+}
 .g-bento[data-tampil='1'] .g-heks-cincin,
-.g-bento[data-tampil='1'] .g-heks-jawab {
+.g-bento[data-tampil='1'] .g-heks-jawab,
+.g-bento[data-tampil='1'] .g-heks-rute {
   animation-play-state: running;
+}
+
+/* Rute datang PALING AKHIR - sesudah kisinya berdiri dan sesudah jawabannya
+   menyala - dan pergi paling awal. Urutannya menceritakan bacaannya: ini
+   petaknya, ini yang menjawab, dan ini cara sampai ke sana. */
+@keyframes g-heks-rute {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Kisi: mekar 0 -> 7%, bertahan sampai 72%, surut sampai 80%.
@@ -1379,8 +1408,10 @@ input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .g-heks-cincin,
   .g-heks-jawab,
+  .g-heks-rute,
   .g-bento[data-tampil='1'] .g-heks-cincin,
-  .g-bento[data-tampil='1'] .g-heks-jawab {
+  .g-bento[data-tampil='1'] .g-heks-jawab,
+  .g-bento[data-tampil='1'] .g-heks-rute {
     animation: none;
     opacity: 1;
     transform: none;

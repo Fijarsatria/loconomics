@@ -175,7 +175,8 @@ for (const p of DAFTAR) {
     '  sorot ' + p.berkas.padEnd(14) +
     String(hasil.sel.length / 2).padStart(4) + ' sel  ' +
     String(hasil.sorot.length).padStart(3) + ' disorot (' + p.pilih + ')  ' +
-    'r=' + Math.hypot(hasil.bentuk[0], hasil.bentuk[1]).toFixed(1) + 'px',
+    'r=' + Math.hypot(hasil.bentuk[0], hasil.bentuk[1]).toFixed(1) + 'px' +
+    (hasil.rute ? '  rute ' + hasil.rute.menit + ' mnt -> ' + hasil.rute.simpul : '  tanpa rute'),
   )
 }
 
@@ -227,6 +228,15 @@ const baris = [
   '    bentuk: number[]',
   '    sel: number[]',
   '    sorot: { x: number; y: number; c: string }[]',
+  '    rute: {',
+  '      d: string',
+  '      ax: number',
+  '      ay: number',
+  '      bx: number',
+  '      by: number',
+  '      menit: number',
+  '      simpul: string',
+  '    } | null',
   '  }',
   '}',
   '',

@@ -2003,11 +2003,22 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                 Panel ini yang menutup bagian, dan kalimat penutupnya berdiri di
                 sebelahnya - bukan di bawah seluruh halaman, tempat ia kehilangan
                 gambar yang seharusnya membuktikannya. */}
-            <div className="mt-8 grid items-center gap-10 border-t border-[color:var(--g-garis-halus-2)] pt-16 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1fr)] lg:gap-14 sm:mt-12">
-              <div className="g-mas-panggung">
+            {/* Panel di KANAN, kalimat di kiri - dan urutannya penting.
+                Ketiga baris di atas menaruh gambarnya kiri, kanan, kiri; baris
+                penutup ini semula menaruh panelnya di kiri lagi, jadi dua baris
+                berturut-turut punya susunan yang sama dan zig-zagnya patah
+                persis di baris terakhir. Dilaporkan pemilik repo: "biar kanan
+                kiri kanan kiri gitu nah".
+
+                `lg:order-*`, bukan urutan DOM yang dibalik: yang dibaca pembaca
+                layar dan yang dibaca mata boleh berbeda, dan di layar sempit
+                gambarnya memang harus datang lebih dulu seperti tiga baris di
+                atasnya. */}
+            <div className="mt-8 grid items-center gap-10 border-t border-[color:var(--g-garis-halus-2)] pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-14 sm:mt-12">
+              <div className="g-mas-panggung lg:order-2">
                 <KontrasKawasan />
               </div>
-              <p className="max-w-[32rem] border-l-2 border-[color:var(--g-teal)]/45 pl-6 text-[clamp(1rem,1.6vw,1.2rem)] leading-relaxed text-[color:var(--g-ink)]">
+              <p className="max-w-[32rem] border-l-2 border-[color:var(--g-teal)]/45 pl-6 text-[clamp(1rem,1.6vw,1.2rem)] leading-relaxed text-[color:var(--g-ink)] lg:order-1">
                 {teks.masalah.penutup}
               </p>
             </div>
