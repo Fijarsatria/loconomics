@@ -64,6 +64,7 @@ import {
   KAWASAN_AWAL,
   KUADRAN,
   ZOOM_AWAL,
+  bubuhiKunciBasemap,
   urlGaya,
   type NamaGaya,
   type NamaLayer,
@@ -1121,6 +1122,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       style: urlGaya(gayaAwal.current),
       center: KAWASAN_AWAL.pusat,
       zoom: ZOOM_AWAL,
+      // SATU kait untuk gaya, TileJSON, ubin, font, dan sprite sekaligus.
+      // Kuncinya dibubuhkan di sini alih-alih dituliskan ke berkas gaya,
+      // supaya berkas yang di-commit tetap bersih dari kunci.
+      transformRequest: (url) => ({ url: bubuhiKunciBasemap(url) }),
       // Atribusi dipasang sendiri di bawah, bukan lewat opsi ini, supaya
       // posisinya bisa dipindah ke kiri bawah.
       attributionControl: false,

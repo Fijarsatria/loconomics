@@ -608,6 +608,47 @@ def test_petunjuk_deploy_tidak_menyuruh_menyetel_ors():
     )
 
 
+
+def test_kunci_basemap_tidak_pernah_masuk_git():
+    """Kunci basemap boleh hidup di peramban; ia tidak boleh hidup di git.
+
+    Keduanya pernyataan yang berbeda, dan yang kedua yang bisa dijaga di sini.
+    Kunci itu sampai ke peramban lewat `VITE_MAPID_BASEMAP_KEY` yang diisi
+    GitHub Actions dari sebuah secret; berkas gaya di `public/basemap/` tetap
+    bersih, dan yang membubuhkannya `transformRequest` MapLibre saat permintaan
+    berangkat.
+
+    Yang paling mudah merusaknya: seseorang menjalankan `gaya-basemap.mjs`
+    versi lama, atau menempelkan kunci ke `.env.example` "supaya gampang".
+    Repositori ini PUBLIK, dan kunci di dalam git dipanen crawler dalam hitungan
+    jam - jauh sebelum ada yang membukanya di peramban.
+    """
+    import re
+
+    akar = Path(__file__).resolve().parents[2]
+    heks = re.compile(r"[0-9a-f]{20,40}")
+
+    contoh = (akar / "frontend" / ".env.example").read_text(encoding="utf-8")
+    baris = [b for b in contoh.splitlines() if b.startswith("VITE_MAPID_BASEMAP_KEY=")]
+    assert baris, ".env.example wajib MENYEBUTKAN variabelnya, supaya tidak dicari-cari"
+    assert baris[0].strip() == "VITE_MAPID_BASEMAP_KEY=", (
+        f"nilainya harus kosong di .env.example, terbaca: {baris[0]!r}"
+    )
+
+    for gaya in sorted((akar / "frontend" / "public" / "basemap").glob("*.json")):
+        isi = gaya.read_text(encoding="utf-8")
+        assert "key=" not in isi, (
+            f"{gaya.name} memuat 'key=' - berkas gaya yang di-commit wajib bersih; "
+            "kuncinya dibubuhkan transformRequest saat permintaan berangkat"
+        )
+
+    # Dan tidak ada kunci yang menyelinap ke sumber frontend.
+    for berkas in (akar / "frontend" / "src").rglob("*.ts*"):
+        isi = berkas.read_text(encoding="utf-8")
+        for m in re.finditer(r"key=([0-9a-f]{20,40})", isi):
+            raise AssertionError(f"{berkas.name}: kunci tertulis di sumber - {m.group(1)[:6]}...")
+        _ = heks
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

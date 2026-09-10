@@ -266,9 +266,8 @@ export function TemaProvider({ children }: { children: ReactNode }) {
   const [tema, setTema] = useState<Tema>(bacaTema)
   const [tirai, setTirai] = useState<{
     fase: 'tutup' | 'buka'
-    x: number
-    y: number
-    d: number
+    /** Ke mana sapuannya berjalan. Sama dengan arah kenop sakelarnya. */
+    arah: 'kanan' | 'kiri'
     warna: string
   } | null>(null)
   const jam = useRef<number[]>([])
@@ -292,32 +291,50 @@ export function TemaProvider({ children }: { children: ReactNode }) {
     }
   }, [tema])
 
-  const gantiTema = useCallback(
-    (asal?: { x: number; y: number }) => {
-      const tujuan: Tema = tema === 'gelap' ? 'terang' : 'gelap'
-      const pelan = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      if (pelan || !asal) {
+  /**
+   * SAPUAN MENDATAR, bukan lingkaran yang mekar.
+   *
+   * Versi lingkaran ditulis saat sakelarnya masih tombol bundar: lingkaran
+   * yang mekar dari titik yang ditekan adalah gerakan yang benar untuk benda
+   * yang ditekan di satu titik. Sakelarnya sekarang SLIDER - kenopnya
+   * meluncur mendatar - dan lingkaran di atas slider terbaca sebagai dua
+   * gerakan yang tidak saling mengenal. Dilaporkan pemilik repo persis begitu:
+   * "ga cocok kalau slider tapi animasi perpindahannya melingkar".
+   *
+   * Yang menggantikannya SATU lintasan yang tidak pernah berbalik. Satu panel
+   * bertepi lembut masuk dari satu sisi sampai menutupi layar - di situ
+   * temanya ditukar, di balik panel, tanpa ada yang melihat - lalu panel yang
+   * SAMA melanjutkan perjalanannya ke sisi seberang dan keluar. Bukan menutup
+   * lalu membuka kembali: menutup lalu MENERUSKAN. Mata mengikuti satu benda
+   * yang lewat, dan itu gerakan yang sama dengan kenop yang barusan digeser.
+   *
+   * ARAHNYA mengikuti kenop. Ke gelap kenopnya berjalan ke kanan, jadi
+   * sapuannya ke kanan; ke terang sebaliknya. Tanpa itu, sapuan bisa berjalan
+   * melawan benda yang memicunya - dan itu terasa salah tanpa bisa ditunjuk
+   * sebabnya.
+   */
+  const gantiTema = useCallback(() => {
+    const tujuan: Tema = tema === 'gelap' ? 'terang' : 'gelap'
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setTema(tujuan)
+      return
+    }
+    setTirai({
+      fase: 'tutup',
+      arah: tujuan === 'gelap' ? 'kanan' : 'kiri',
+      warna: DASAR[tujuan],
+    })
+    // 520 + 520. Kedua paruhnya menempuh jarak yang sama persis, jadi durasi
+    // yang sama menghasilkan satu kecepatan - yang membuatnya terbaca sebagai
+    // satu lintasan alih-alih dua animasi yang kebetulan bersambung.
+    jam.current.push(
+      window.setTimeout(() => {
         setTema(tujuan)
-        return
-      }
-      // Diameter = dua kali jarak terjauh dari titik asal ke sudut layar.
-      const jauh = Math.max(
-        Math.hypot(asal.x, asal.y),
-        Math.hypot(window.innerWidth - asal.x, asal.y),
-        Math.hypot(asal.x, window.innerHeight - asal.y),
-        Math.hypot(window.innerWidth - asal.x, window.innerHeight - asal.y),
-      )
-      setTirai({ fase: 'tutup', x: asal.x, y: asal.y, d: jauh * 2.2, warna: DASAR[tujuan] })
-      jam.current.push(
-        window.setTimeout(() => {
-          setTema(tujuan)
-          setTirai((t) => (t ? { ...t, fase: 'buka' } : null))
-        }, 460),
-        window.setTimeout(() => setTirai(null), 900),
-      )
-    },
-    [tema],
-  )
+        setTirai((t) => (t ? { ...t, fase: 'buka' } : null))
+      }, 520),
+      window.setTimeout(() => setTirai(null), 1060),
+    )
+  }, [tema])
 
   const nilai = useMemo(() => ({ tema, gantiTema }), [tema, gantiTema])
   return (
@@ -327,15 +344,9 @@ export function TemaProvider({ children }: { children: ReactNode }) {
         <div
           className="tirai-tema"
           data-fase={tirai.fase}
+          data-arah={tirai.arah}
           aria-hidden
-          style={
-            {
-              '--tt-x': `${tirai.x}px`,
-              '--tt-y': `${tirai.y}px`,
-              '--tt-d': `${tirai.d}px`,
-              '--tt-warna': tirai.warna,
-            } as CSSProperties
-          }
+          style={{ '--tt-warna': tirai.warna } as CSSProperties}
         >
           <span className="tirai-tema-isi" />
         </div>
@@ -378,15 +389,7 @@ export function SakelarTema({ kelas = '' }: { kelas?: string }) {
       role="switch"
       aria-checked={!terang}
       data-tema={tema}
-      onClick={(e) => {
-        // Titik asal tirainya PUSAT KENOP, bukan pusat tombol. Kenopnya berdiri
-        // di ujung yang berbeda pada tiap tema, dan lingkaran yang mekar dari
-        // tengah pil saat kenopnya di tepi terbaca sebagai dua gerakan yang
-        // tidak berhubungan.
-        const k = e.currentTarget.querySelector('.st-kenop')
-        const r = (k ?? e.currentTarget).getBoundingClientRect()
-        gantiTema({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
-      }}
+      onClick={() => gantiTema()}
       title={t.ganti}
       aria-label={t.ganti}
       className={`sakelar-tema ${kelas}`}

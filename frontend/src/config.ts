@@ -70,6 +70,52 @@ export type NamaGaya = keyof typeof GAYA_BASEMAP
 export const urlGaya = (nama: NamaGaya = 'terang') =>
   `${import.meta.env.BASE_URL}basemap/${GAYA_BASEMAP[nama].id}.json`
 
+/**
+ * Kunci basemap MAPID, dan kenapa ia sekarang ADA di peramban lagi.
+ *
+ * Sejak 6 September 2026 seluruh host `basemap.mapid.io` dijawab 401 oleh
+ * nginx - BUKAN cuma ubinnya, melainkan `/`, `/health`, dan `/styles/` juga.
+ * Yang semula terbaca sebagai pemadaman ternyata tembok otentikasi: dengan
+ * kunci, `/styles/*` menjawab 200 dan satu ubin z14 di atas Manggarai pulang
+ * 397 KB. Diuji 11 Sep 2026.
+ *
+ * Sebelum itu ubin MAPID terbuka tanpa kunci, jadi kuncinya bisa dicabut
+ * seluruhnya dari peramban dan gayanya dilayani sebagai berkas statis. Itu
+ * tidak mungkin lagi: peramban HARUS mengirim kunci di tiap permintaan ubin,
+ * dan satu-satunya cara menghindarinya adalah memproksikan setiap ubin lewat
+ * backend - yang berdiri di Azure F1 dan tidak akan sanggup.
+ *
+ * YANG TIDAK BERUBAH, dan ini bagian penting aturan 5: MAPID **Data** API key
+ * dan kunci LLM tetap backend-only. Yang pindah ke peramban cuma kunci
+ * basemap - kunci baca-saja untuk ubin peta, kelas kredensial yang memang
+ * dirancang hidup di klien dan dijaga oleh pembatasan domain di sisi MAPID,
+ * bukan oleh kerahasiaan. Terbukti: ia menuntut header `Referer` yang cocok.
+ *
+ * Nilainya TIDAK PERNAH masuk git. Berkas gaya di `public/basemap/` tetap
+ * bersih dari kunci; yang membubuhkannya `transformRequest` MapLibre saat
+ * permintaan berangkat, dari variabel yang diisi GitHub Actions dari sebuah
+ * secret. Kalau variabelnya kosong, petanya berperilaku persis seperti
+ * sebelumnya - dan pita "Ubin MAPID menolak" yang sudah ada yang menjelaskannya.
+ */
+const KUNCI_BASEMAP: string = import.meta.env.VITE_MAPID_BASEMAP_KEY ?? ''
+
+/** Host yang menuntut kunci itu. Sengaja sempit: kunci tidak boleh menempel
+ *  pada permintaan ke mana pun selain pemiliknya. */
+const HOST_BASEMAP = 'basemap.mapid.io'
+
+/**
+ * Bubuhkan kunci basemap ke sebuah URL, kalau memang perlu.
+ *
+ * Dipakai lewat `transformRequest` MapLibre - satu kait untuk gaya, TileJSON,
+ * ubin, font, dan sprite sekaligus. Menuliskannya ke dalam berkas gaya akan
+ * menaruh kuncinya di git; membubuhkannya di sini tidak.
+ */
+export function bubuhiKunciBasemap(url: string): string {
+  if (!KUNCI_BASEMAP || !url.includes(HOST_BASEMAP)) return url
+  if (url.includes('key=')) return url
+  return `${url}${url.includes('?') ? '&' : '?'}key=${KUNCI_BASEMAP}`
+}
+
 // --- Kuadran ---------------------------------------------------------------
 // Satu-satunya warna jenuh di seluruh antarmuka. Lolos enam pemeriksaan
 // validator palet: pita terang, lantai chroma, separasi CVD (deutan 19,0 ·

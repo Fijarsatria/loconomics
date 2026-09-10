@@ -64,13 +64,13 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 720,
     "n": 108,
     "kuadran": {
-      "HIDDEN_GEM": 18,
-      "PEMENANG_JELAS": 73,
-      "JEBAKAN_GENGSI": 14,
-      "HINDARI": 3
+      "HIDDEN_GEM": 11,
+      "HINDARI": 11,
+      "PEMENANG_JELAS": 66,
+      "JEBAKAN_GENGSI": 20
     },
     "sorotan": {
-      "nilai": "55",
+      "nilai": "46",
       "label": "opportunity score median"
     },
     "sorot": {
@@ -404,14 +404,14 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 122,
     "kuadran": {
-      "PEMENANG_JELAS": 52,
-      "HIDDEN_GEM": 38,
-      "JEBAKAN_GENGSI": 28,
-      "HINDARI": 4
+      "JEBAKAN_GENGSI": 31,
+      "HIDDEN_GEM": 20,
+      "PEMENANG_JELAS": 35,
+      "HINDARI": 36
     },
     "sorotan": {
-      "nilai": "—",
-      "label": "data sewa belum ada"
+      "nilai": "Rp62 rb",
+      "label": "sewa median per m²"
     },
     "sorot": {
       "w": 620,
@@ -762,12 +762,13 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 97,
     "kuadran": {
-      "JEBAKAN_GENGSI": 9,
-      "HIDDEN_GEM": 23,
-      "PEMENANG_JELAS": 65
+      "JEBAKAN_GENGSI": 14,
+      "HINDARI": 4,
+      "PEMENANG_JELAS": 64,
+      "HIDDEN_GEM": 15
     },
     "sorotan": {
-      "nilai": "11",
+      "nilai": "18",
       "label": "kandidat Hidden Gem"
     },
     "sorot": {
@@ -1069,13 +1070,13 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
-      "HINDARI": 42,
-      "JEBAKAN_GENGSI": 46,
+      "PEMENANG_JELAS": 39,
       "HIDDEN_GEM": 29,
-      "PEMENANG_JELAS": 10
+      "JEBAKAN_GENGSI": 12,
+      "HINDARI": 47
     },
     "sorotan": {
-      "nilai": "0",
+      "nilai": "119",
       "label": "heksagon boleh usaha"
     },
     "sorot": {
@@ -1417,14 +1418,14 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
-      "JEBAKAN_GENGSI": 24,
-      "HINDARI": 75,
-      "HIDDEN_GEM": 23,
-      "PEMENANG_JELAS": 5
+      "HINDARI": 76,
+      "JEBAKAN_GENGSI": 13,
+      "HIDDEN_GEM": 16,
+      "PEMENANG_JELAS": 22
     },
     "sorotan": {
-      "nilai": "—",
-      "label": "indeks pergantian belum ada"
+      "nilai": "0,10",
+      "label": "pergantian usaha median"
     },
     "sorot": {
       "w": 620,
@@ -1785,13 +1786,13 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
-      "HINDARI": 84,
-      "JEBAKAN_GENGSI": 23,
-      "HIDDEN_GEM": 15,
-      "PEMENANG_JELAS": 5
+      "HINDARI": 78,
+      "JEBAKAN_GENGSI": 12,
+      "PEMENANG_JELAS": 26,
+      "HIDDEN_GEM": 11
     },
     "sorotan": {
-      "nilai": "37",
+      "nilai": "25",
       "label": "opportunity score median"
     },
     "sorot": {

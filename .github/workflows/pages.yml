@@ -58,6 +58,21 @@ jobs:
           VITE_BASE: /${{ github.event.repository.name }}/
           # Kosong = pakai GeoJSON statis. Isi dengan URL backend begitu ada.
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          # Kunci basemap MAPID. Sejak 6 Sep 2026 seluruh host basemap.mapid.io
+          # menolak permintaan TANPA kunci - termasuk ubinnya - jadi peramban
+          # harus mengirimnya atau tidak ada peta sama sekali.
+          #
+          # Datang dari SECRET, bukan variable, dan tidak pernah masuk git:
+          # berkas gaya di public/basemap/ tetap bersih, dan yang membubuhkan
+          # kuncinya `transformRequest` MapLibre saat permintaan berangkat.
+          # Kalau secret-nya kosong, petanya berperilaku persis seperti
+          # sebelumnya dan pita "Ubin MAPID menolak" yang menjelaskannya.
+          #
+          # Ini BUKAN pelonggaran aturan 5: MAPID **Data** API key dan kunci
+          # LLM tetap backend-only. Yang di sini kunci baca-saja untuk ubin
+          # peta - kelas kredensial yang memang dirancang hidup di klien dan
+          # dijaga pembatasan domain di sisi MAPID, bukan kerahasiaan.
+          VITE_MAPID_BASEMAP_KEY: ${{ secrets.MAPID_BASEMAP_KEY }}
         run: npx vite build
 
       - uses: actions/configure-pages@v5

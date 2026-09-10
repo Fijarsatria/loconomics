@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 250 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 254 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -175,10 +175,28 @@ untuk perhitungan, nilainya **0,5** (tengah skala ternormalisasi), bukan 0.
 
 ### 5. Kunci API lewat environment variable
 
-MAPID Data API key dan kunci LLM **backend-only** — termasuk tidak lewat variabel
-`VITE_`, yang seluruhnya ikut ter-bundel ke berkas publik. Kunci basemap MAPID
-Maps pun sudah dicabut dari peramban: gaya basemap dilayani sebagai berkas
-statis di `frontend/public/basemap/`.
+MAPID **Data** API key dan kunci LLM **backend-only** — termasuk tidak lewat
+variabel `VITE_`, yang seluruhnya ikut ter-bundel ke berkas publik. Itu bagian
+aturan ini yang tidak punya pengecualian.
+
+Kunci **basemap** beda kelas, dan sejak 11 Sep 2026 ia kembali hidup di
+peramban. Sebabnya bukan kelalaian: sejak 6 Sep seluruh host
+`basemap.mapid.io` menjawab 401 tanpa kunci — `/`, `/health`, `/styles/`, dan
+ubinnya sekaligus — jadi peramban harus mengirimnya atau tidak ada peta sama
+sekali. Satu-satunya jalan lain memproksikan tiap ubin lewat backend, dan
+backend itu Azure F1. Kunci ubin memang dirancang hidup di klien; yang
+menjaganya pembatasan domain di sisi MAPID (ia menuntut `Referer` yang cocok),
+bukan kerahasiaan.
+
+Yang tetap dijaga, dan ada ujinya:
+
+- Nilainya **tidak pernah masuk git**. Berkas gaya di `frontend/public/basemap/`
+  tetap bersih dari kunci; yang membubuhkannya `transformRequest` MapLibre saat
+  permintaan berangkat, dari `VITE_MAPID_BASEMAP_KEY` yang diisi GitHub Actions
+  dari secret `MAPID_BASEMAP_KEY`. Dijaga `test_infra.py`.
+- Kunci **tidak boleh menempel pada permintaan ke host selain
+  `basemap.mapid.io`**. Dijaga `audit-prd.mjs` — asersinya dipersempit, bukan
+  dicabut.
 
 ### 6. Basemap hanya MAPID Maps
 
@@ -396,7 +414,7 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 250 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 254 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit

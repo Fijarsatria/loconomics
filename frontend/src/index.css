@@ -3122,62 +3122,98 @@ input:focus-visible {
   pointer-events: none;
   overflow: hidden;
 }
+
+/* Panel selebar DUA layar, pekat di tengah dan memudar di kedua ujungnya.
+   Lebar dua layar bukan pemborosan: intinya yang pekat harus tetap menutupi
+   seratus persen layar pada satu bingkai - bingkai tempat temanya ditukar -
+   sementara kedua tepinya tetap lembut. Inti pekatnya membentang 16%..84%,
+   yaitu 136vw; sisanya bulu di depan dan di belakang. */
 .tirai-tema-isi {
   position: absolute;
-  left: var(--tt-x, 50%);
-  top: var(--tt-y, 50%);
-  width: var(--tt-d, 200vmax);
-  height: var(--tt-d, 200vmax);
-  margin-left: calc(var(--tt-d, 200vmax) / -2);
-  margin-top: calc(var(--tt-d, 200vmax) / -2);
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    var(--tt-warna) 0%,
-    var(--tt-warna) 78%,
+  top: -1px;
+  bottom: -1px;
+  left: 0;
+  width: 200vw;
+  will-change: transform;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--tt-warna) 55%, transparent) 8%,
+    var(--tt-warna) 16%,
+    var(--tt-warna) 84%,
     color-mix(in srgb, var(--tt-warna) 55%, transparent) 92%,
     transparent 100%
   );
 }
-/* Mekarnya membawa OPACITY-nya sendiri, dan itu yang membedakan tirai yang
-   terasa mahal dari cakram yang membesar. Cakram pekat sejak piksel pertama
-   punya tepi yang tajam sepanjang lintasannya; yang berangkat dari 0,55 lalu
-   memekat sambil melebar terbaca sebagai cahaya yang tumbuh.
 
-   Skalanya juga berhenti di 1,04, bukan 1 - seperempat langkah melewati sudut
-   terjauh layar, supaya tidak pernah ada bingkai tempat sudutnya terlihat
-   belum tertutup pada layar yang rasionya ekstrem. */
-@keyframes tirai-tema-mekar {
+/* Satu garis cahaya tipis di bibir depannya. Ini satu-satunya hiasan di
+   seluruh transisi ini, dan ia yang membuat sapuannya terbaca sebagai CAHAYA
+   yang lewat alih-alih kertas yang digeser. Warnanya teal produk, opasitasnya
+   rendah, dan ia hilang bersama panelnya. */
+.tirai-tema-isi::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  width: 26vw;
+  background: linear-gradient(90deg, transparent 0%, rgb(122 214 196 / 0.16) 78%, rgb(163 232 219 / 0.34) 100%);
+}
+.tirai-tema[data-arah='kanan'] .tirai-tema-isi::after {
+  right: 8%;
+}
+.tirai-tema[data-arah='kiri'] .tirai-tema-isi::after {
+  left: 8%;
+  transform: scaleX(-1);
+  transform-origin: left center;
+}
+
+/* SATU lintasan, dipecah dua paruh yang menempuh jarak sama (75% lebar panel).
+   Paruh pertama mempercepat, paruh kedua memperlambat - digabung, ia satu
+   gerakan yang berangkat pelan, melintas, lalu berhenti mulus di seberang.
+   Tidak ada satu pun titik tempat arahnya berbalik. */
+@keyframes tirai-sapu-masuk-kanan {
   from {
-    transform: scale(0);
-    opacity: 0.55;
-  }
-  60% {
-    opacity: 1;
+    transform: translate3d(-100%, 0, 0);
   }
   to {
-    transform: scale(1.04);
-    opacity: 1;
+    transform: translate3d(-25%, 0, 0);
   }
 }
-/* Membukanya TIDAK sekadar memudar. Ia ikut mengembang sedikit lagi sambil
-   hilang - gerakan yang searah dengan yang barusan dilihat mata, jadi
-   peralihannya terbaca sebagai satu tarikan napas, bukan dua kejadian. */
-@keyframes tirai-tema-pudar {
+@keyframes tirai-sapu-keluar-kanan {
   from {
-    opacity: 1;
-    transform: scale(1.04);
+    transform: translate3d(-25%, 0, 0);
   }
   to {
-    opacity: 0;
-    transform: scale(1.22);
+    transform: translate3d(50%, 0, 0);
   }
 }
-.tirai-tema[data-fase='tutup'] .tirai-tema-isi {
-  animation: tirai-tema-mekar 540ms cubic-bezier(0.34, 0.02, 0.2, 1) both;
+@keyframes tirai-sapu-masuk-kiri {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(25%, 0, 0);
+  }
 }
-.tirai-tema[data-fase='buka'] .tirai-tema-isi {
-  animation: tirai-tema-pudar 560ms cubic-bezier(0.32, 0.1, 0.2, 1) both;
+@keyframes tirai-sapu-keluar-kiri {
+  from {
+    transform: translate3d(25%, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.tirai-tema[data-fase='tutup'][data-arah='kanan'] .tirai-tema-isi {
+  animation: tirai-sapu-masuk-kanan 520ms cubic-bezier(0.5, 0, 0.75, 0.4) both;
+}
+.tirai-tema[data-fase='buka'][data-arah='kanan'] .tirai-tema-isi {
+  animation: tirai-sapu-keluar-kanan 540ms cubic-bezier(0.25, 0.6, 0.3, 1) both;
+}
+.tirai-tema[data-fase='tutup'][data-arah='kiri'] .tirai-tema-isi {
+  animation: tirai-sapu-masuk-kiri 520ms cubic-bezier(0.5, 0, 0.75, 0.4) both;
+}
+.tirai-tema[data-fase='buka'][data-arah='kiri'] .tirai-tema-isi {
+  animation: tirai-sapu-keluar-kiri 540ms cubic-bezier(0.25, 0.6, 0.3, 1) both;
 }
 
 /* TANPA transisi warna menyeluruh, dan itu disengaja.

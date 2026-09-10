@@ -96,9 +96,38 @@ async function main() {
 
   // ------------------------------------------------------------- kepatuhan
   console.log('\n[K] Kepatuhan kunci & basemap')
-  const berkunci = net.filter((n) => /[?&]key=|access_token=/.test(n.url))
-  cek('nol URL membawa key/access_token', berkunci.length === 0,
+  // DIPERSEMPIT 11 Sep 2026, dan sengaja tidak DICABUT.
+  //
+  // Sejak 6 Sep seluruh host basemap.mapid.io menolak permintaan tanpa kunci -
+  // termasuk ubinnya - jadi peramban HARUS mengirim kunci basemap atau tidak
+  // ada peta sama sekali. Satu-satunya jalan lain memproksikan tiap ubin lewat
+  // backend, dan backend itu berdiri di Azure F1.
+  //
+  // Yang dijaga asersi ini sejak awal bukan "tidak ada kunci di URL" melainkan
+  // "tidak ada kunci RAHASIA yang bocor": MAPID Data API key dan kunci LLM.
+  // Keduanya tetap backend-only dan tetap terlarang di sini. Yang sekarang
+  // diizinkan cuma kunci baca-saja milik ubin peta, dan HANYA pada host
+  // pemiliknya - kunci yang menempel pada permintaan ke host lain tetap
+  // kegagalan, karena itu berarti ia bocor ke pihak yang tidak berhak.
+  //
+  // Melonggarkannya jadi "abaikan semua key=" akan membuat asersi ini berhenti
+  // menjaga apa pun. Yang benar mempersempit sasarannya, bukan mematikannya.
+  const berkunci = net.filter(
+    (n) => /[?&]key=|access_token=/.test(n.url) && !n.url.includes('basemap.mapid.io'),
+  )
+  cek('nol kunci di URL selain ubin basemap', berkunci.length === 0,
     `- ${berkunci.slice(0, 2).map((b) => b.url.slice(0, 70))}`)
+  // Dan kunci basemapnya sendiri tidak boleh terlihat seperti kunci Data API:
+  // keduanya kredensial yang sama sekali berbeda kelasnya, dan memakai yang
+  // satu di tempat yang lain adalah kebocoran yang tidak akan terlihat.
+  const kunciUbin = net
+    .map((n) => /basemap\.mapid\.io.*?[?&]key=([^&]+)/.exec(n.url)?.[1])
+    .find(Boolean)
+  cek(
+    'kunci ubin berbentuk kunci basemap (24 heksadesimal), bukan kunci lain',
+    !kunciUbin || /^[0-9a-f]{20,40}$/.test(kunciUbin),
+    `- ${kunciUbin ? kunciUbin.slice(0, 6) + '…' : 'tidak ada'}`,
+  )
   cek('ubin datang dari basemap.mapid.io',
     dijawab('basemap.mapid.io/data/mapidtiles/').length > 0)
   const lain = net.filter((n) =>

@@ -23,7 +23,7 @@
 import { Map as MapLibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
-import { urlGaya, type NamaGaya, type NamaLayer } from '../config'
+import { bubuhiKunciBasemap, urlGaya, type NamaGaya, type NamaLayer } from '../config'
 import { api } from './api'
 import {
   ANGKA_LAYER,
@@ -404,6 +404,7 @@ export async function potretKartu(
   const m = new MapLibreMap({
     container: wadah,
     style: urlGaya(p.gaya),
+    transformRequest: (url: string) => ({ url: bubuhiKunciBasemap(url) }),
     center: [106.81, -6.2],
     zoom: 12,
     pitch: 0,
