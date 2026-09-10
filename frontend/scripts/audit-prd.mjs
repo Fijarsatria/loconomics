@@ -372,9 +372,17 @@ async function main() {
     await page.screenshot({ path: `${KELUAR}/03-ai.png` })
     const ai = await page.evaluate(() => document.body.innerText)
     cek('panel AI terbuka', /(Loconomics AI|tanya|Tanya|prompt|LLM|kunci)/i.test(ai))
-    cek('status AI dinyatakan apa adanya',
-      /(belum|LLM_API_KEY|tidak aktif|siap)/i.test(ai),
-      '- panel harus mengaku kalau kuncinya belum ada')
+    // Lencana "Siap / Memeriksa" DICABUT 11 Sep 2026, jadi kata "siap" tidak
+    // lagi muncul di layar saat asisten memang siap. Asersi lama akan menuduh
+    // kode yang benar - jebakan yang sama persis dengan "Konsultan AI" di atas.
+    //
+    // Yang dijaga tetap hal yang sama, dan sekarang lebih tegas: kalau asisten
+    // hidup, kotak tanyanya HARUS bisa diketik; kalau mati, panel harus
+    // mengatakan sebabnya dalam kalimat manusia.
+    const bisaTanya = await page.locator('#tanya-ai').isEnabled().catch(() => false)
+    cek('kesiapan AI dinyatakan apa adanya',
+      bisaTanya || /(belum|LLM_API_KEY|tidak aktif|plafon|tersambung)/i.test(ai),
+      '- asisten yang mati harus mengatakan sebabnya, bukan diam')
   } catch (e) {
     cek('panel AI bisa dibuka', false, `- ${e.message.slice(0, 60)}`)
   }

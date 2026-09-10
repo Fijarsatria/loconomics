@@ -9,20 +9,22 @@
  *                 sendiri ("Keramaian bisa dilihat…" lalu "Dua dunia yang belum
  *                 pernah dipertemukan…") - dua tesis untuk satu gagasan, dan
  *                 pembacanya harus menyambung sendiri. Sekarang satu judul,
- *                 satu paragraf, tiga sebab, satu gambar.
+ *                 lalu TIGA masalah yang dijelaskan satu per satu, masing-
+ *                 masing dengan gambarnya sendiri, dan ditutup satu panel yang
+ *                 mempertemukan ketiganya.
  *   3. SOLUSI     enam keputusan, enam potret peta sungguhan.
  *   4. EKOSISTEM  enam bagian produk, ZIG-ZAG satu per satu.
  *   5. PENUTUP    ajakan terakhir dan kaki halaman.
  *   6. TIM        jurang hitam, lima orang.
  *
- * TIAP BAGIAN MASUK DENGAN CARANYA SENDIRI - kecuali MASALAH, yang sengaja
- * TIDAK punya animasi masuk sama sekali (permintaan pemilik repo, 10 Sep 2026).
- * Ia bagian pertama sesudah hero, dan hero sudah bergerak menutup di belakangnya;
- * satu gerakan lagi di depannya cuma menahan orang membaca. Animasi yang dulu
- * ada di sini pindah ke EKOSISTEM.
+ * TIAP BAGIAN MASUK DENGAN CARANYA SENDIRI.
  *
  *   MENUTUP   hero DIPATOK (sticky) dan bagian berikutnya menggulir NAIK
  *             MENUTUPINYA seperti lembaran. Yang di bawah menyusut dan meredup.
+ *   BERGANTIAN Masalah: tiga baris, masing-masing masuk DARI SISI GAMBARNYA,
+ *             dan sisinya berselang. Di antaranya JEDA - satu tali yang tumbuh
+ *             mengikuti gulir, supaya hero sempat selesai menutup sebelum
+ *             bagian berikutnya mulai berbicara.
  *   MENYAPU   judul Solusi terungkap dari kiri ke kanan lewat clip-path, lalu
  *             kartunya mekar dari tengah susunan ke tepinya.
  *   MERANGKAI Ekosistem: tulang punggung tumbuh mengikuti gulir, tiap simpul
@@ -73,23 +75,37 @@ const K = {
     masalah: {
       eyebrow: 'Latar belakang',
       judul: 'Ramai belum tentu laku.',
-      isi: 'Pemilik usaha memilih tempat dari yang terlihat: mana yang ramai, mana yang kelihatan mahal. Padahal yang menentukan laku atau tidak — siapa yang lewat, berapa yang mereka belanjakan, dan berapa sewa yang wajar — tidak pernah sampai ke tangan mereka.',
+      isi: 'Orang memilih tempat usaha dari yang bisa dilihat: mana yang ramai, mana yang kelihatan mahal. Yang sebenarnya menentukan laku atau tidak justru tidak terlihat dari trotoar.',
+      antar: 'Tiga hal yang membuatnya begitu',
       poin: [
         {
-          kepala: 'Data orang yang lewat tidak pernah sampai',
-          isi: 'Ratusan ribu orang melewati stasiun tiap hari. Angkanya ada, tapi tidak pernah sampai ke orang yang mau buka warung di sebelahnya.',
+          tanda: 'Datanya ada, tidak sampai',
+          kepala: 'Angka orang yang lewat berhenti di tengah jalan',
+          isi: 'Ratusan ribu orang melewati stasiun setiap hari, dan hampir semuanya tercatat di suatu tempat. Catatan itu tidak pernah sampai ke orang yang mau buka warung di sebelahnya.',
         },
         {
-          kepala: 'Sewa ikut gengsi, bukan penjualan',
-          isi: 'Tempat yang kelihatan mahal dipasang harga mahal — walaupun yang ramai cuma orang lewat, bukan pembeli.',
+          tanda: 'Harga ikut tampilan',
+          kepala: 'Sewa dipatok dari gengsi, bukan dari penjualan',
+          isi: 'Tempat yang kelihatan mahal dipasang harga mahal. Padahal ramai belum tentu berbelanja — dan yang dibayar tiap bulan tetap sewanya.',
         },
         {
-          kepala: 'Yang menguntungkan sering tidak kelihatan',
-          isi: 'Lokasi yang datanya bagus tapi tampilannya biasa saja terlewat begitu saja, justru karena belum ada yang menghitungnya.',
+          tanda: 'Yang bagus tidak menonjol',
+          kepala: 'Lokasi terbaik sering tidak kelihatan istimewa',
+          isi: 'Ada tempat yang datanya bagus tetapi tampilannya biasa saja. Justru itu yang paling sering terlewat, karena belum ada yang menghitungnya.',
         },
       ],
+      alat: {
+        simpul: 'Stasiun',
+        usaha: 'Calon usaha',
+        putus: 'terputus di sini',
+        tampilan: 'Tampilan',
+        jual: 'Penjualan',
+        sewa: 'Sewa',
+        hitung: 'Menghitung',
+        temu: 'Hidden Gem',
+      },
       penutup:
-        'Loconomics menghitungnya. Data orang yang lewat dan data transaksi di sekitarnya dipertemukan di satu peta, lalu tiap lokasi diberi satu dari empat zona — supaya keputusannya berdiri di atas angka, bukan firasat.',
+        'Loconomics menghitungnya. Data orang yang lewat dan data belanja di sekitarnya dipertemukan di satu peta, lalu tiap lokasi diberi satu dari empat zona — supaya keputusannya berdiri di atas angka, bukan firasat.',
     },
     kontras: {
       judul: 'Satu kawasan, dua cara melihat',
@@ -184,23 +200,37 @@ const K = {
     masalah: {
       eyebrow: 'Background',
       judul: 'Busy doesn’t mean profitable.',
-      isi: 'Shop owners pick a spot by what they can see: what looks busy, what looks expensive. The things that actually decide whether it sells — who walks past, how much they spend, and what rent is fair — never reach them.',
+      isi: 'People pick a shop location by what they can see: what looks busy, what looks expensive. What actually decides whether it sells cannot be seen from the pavement.',
+      antar: 'Three reasons it works out that way',
       poin: [
         {
-          kepala: 'Footfall data never reaches the owner',
-          isi: 'Hundreds of thousands of people pass through a station every day. The numbers exist, but never reach the person about to open a shop next door.',
+          tanda: 'The data exists, elsewhere',
+          kepala: 'Footfall numbers stop halfway down the line',
+          isi: 'Hundreds of thousands of people pass through a station every day, and nearly all of it is recorded somewhere. That record never reaches the person about to open a shop next door.',
         },
         {
-          kepala: 'Rent follows prestige, not sales',
-          isi: 'A place that looks expensive is priced expensive — even when the crowd is only passing through, not buying.',
+          tanda: 'Price follows the facade',
+          kepala: 'Rent is set by prestige, not by sales',
+          isi: 'A place that looks expensive is priced expensive. But a crowd is not the same as customers — and the rent is due either way.',
         },
         {
-          kepala: 'The profitable ones often go unseen',
-          isi: 'Places with strong data but an ordinary face slip past everyone, precisely because nobody has counted them yet.',
+          tanda: 'The good ones look ordinary',
+          kepala: 'The best locations rarely look special',
+          isi: 'Some places have strong data and an ordinary face. Those are the ones most often missed, precisely because nobody has counted them yet.',
         },
       ],
+      alat: {
+        simpul: 'Station',
+        usaha: 'A shop-to-be',
+        putus: 'stops here',
+        tampilan: 'Looks',
+        jual: 'Sales',
+        sewa: 'Rent',
+        hitung: 'Counting',
+        temu: 'Hidden Gem',
+      },
       penutup:
-        'Loconomics counts them. Footfall data and the transactions around it meet on one map, and every location is placed in one of four zones — so the decision rests on numbers, not instinct.',
+        'Loconomics counts them. Footfall data and the spending around it meet on one map, and every location is placed in one of four zones — so the decision rests on numbers, not instinct.',
     },
     kontras: {
       judul: 'One area, two ways of seeing',
@@ -471,7 +501,7 @@ function LatarHero() {
   return (
     <div
       ref={akar}
-      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      className="g-hero-latar pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       style={{
         maskImage: 'linear-gradient(to bottom, #000 52%, transparent 96%)',
         WebkitMaskImage: 'linear-gradient(to bottom, #000 52%, transparent 96%)',
@@ -491,6 +521,292 @@ function LatarHero() {
     </div>
   )
 }
+/* ==========================================================================
+   Tiga gambar untuk tiga masalah
+   ==========================================================================
+
+   BUKAN ilustrasi yang menghiasi kalimat di sebelahnya - masing-masing
+   MENGGAMBARKAN kalimatnya, dan kalau kalimatnya berubah gambarnya ikut salah.
+   Itu satu-satunya alasan gambar boleh ada di halaman seperti ini.
+
+   Ketiganya sengaja memakai bahasa visual yang BERBEDA dari bagian Ekosistem
+   di bawahnya. Ekosistem memakai foto peta sungguhan dalam bingkai membulat;
+   yang di sini alat ukur: pelat gelap, siku di keempat sudut, label huruf
+   mono kecil. Dua bagian yang berurutan harus bisa dibedakan tanpa membaca
+   judulnya, kalau tidak halamannya terbaca sebagai satu bagian yang panjang.
+
+   TIDAK ADA SATU ANGKA PUN di ketiganya, dan itu disengaja. Ini gambar tentang
+   gagasan; angka sungguhan ada di enam kartu bagian berikutnya, lengkap dengan
+   sumbernya. Angka karangan di gambar yang terlihat seperti alat ukur adalah
+   persis jebakan yang sudah tercatat di repo ini.
+
+   Geraknya HANYA `transform` dan `opacity`, seluruhnya keyframe CSS, dan
+   berhenti sendiri di luar layar lewat `[data-diam]` yang dipasang pengamat
+   di Gerbang().
+   ========================================================================== */
+
+type AlatTeks = (typeof K)['id']['masalah']['alat']
+
+/** Siku di keempat sudut pelat. Menandai "ini bidang ukur", bukan bingkai foto. */
+function SikuPelat() {
+  const d = [
+    'M6 20V6h14',
+    'M300 6h14v14',
+    'M314 160v14h-14',
+    'M20 174H6v-14',
+  ]
+  return (
+    <g stroke="var(--g-mas-siku)" strokeWidth="1.2" fill="none" strokeLinecap="square">
+      {d.map((j) => (
+        <path key={j} d={j} />
+      ))}
+    </g>
+  )
+}
+
+/** Label huruf mono kecil di dalam pelat. */
+function LabelAlat({
+  x,
+  y,
+  teks,
+  anchor = 'middle',
+}: {
+  x: number
+  y: number
+  teks: string
+  anchor?: 'start' | 'middle' | 'end'
+}) {
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor={anchor}
+      fontSize="8.5"
+      fill="var(--g-ink-4)"
+      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}
+    >
+      {teks.toUpperCase()}
+    </text>
+  )
+}
+
+/**
+ * 1 · Angka orang yang lewat berhenti di tengah jalan.
+ *
+ * Titik-titik berangkat dari stasiun, menyusuri jalur, lalu PADAM di sebuah
+ * garis putus - dan yang di seberang garis itu tidak pernah menerima satu pun.
+ * Gerakan yang berhenti sebelum sampai adalah satu-satunya cara menggambarkan
+ * "datanya ada, tapi tidak sampai" tanpa satu kata pun.
+ */
+function AlatSampai({ t }: { t: AlatTeks }) {
+  return (
+    <svg viewBox="0 0 320 180" className="block h-auto w-full" aria-hidden>
+      <SikuPelat />
+      {/* Jalur. Ruas sesudah dinding digambar putus-putus: ia ada, tapi kosong. */}
+      <path d="M58 96h134" stroke="var(--g-mas-jalur)" strokeWidth="1.4" fill="none" />
+      <path
+        d="M200 96h58"
+        stroke="var(--g-mas-jalur)"
+        strokeWidth="1.4"
+        strokeDasharray="3 6"
+        fill="none"
+      />
+
+      {/* Stasiun: cincin bertitik, sama dengan yang dipakai panel kontras. */}
+      <g transform="translate(44 96)">
+        <circle r="12" fill="none" stroke="var(--g-teal)" strokeWidth="1.4" strokeOpacity="0.5" />
+        <circle r="6" fill="var(--g-latar-pekat)" stroke="var(--g-ink)" strokeWidth="1.6" />
+        <circle r="2" fill="var(--g-ink)" />
+      </g>
+      <LabelAlat x={44} y={130} teks={t.simpul} />
+
+      {/* Enam titik yang berangkat berurutan dan padam di dinding. */}
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <circle
+          key={i}
+          className="g-mas-alir"
+          cx="60"
+          cy="96"
+          r="3.2"
+          fill="var(--g-teal)"
+          style={{ animationDelay: `${(i * 0.42).toFixed(2)}s` }}
+        />
+      ))}
+
+      {/* Dinding. Ungu, rona yang sama dipakai "kasat mata" di panel kontras -
+          di halaman ini ungu selalu berarti "yang terlihat, bukan yang terukur". */}
+      <path
+        d="M196 60v72"
+        stroke="var(--g-ungu-terang)"
+        strokeWidth="1.6"
+        strokeDasharray="5 5"
+        fill="none"
+      />
+      <LabelAlat x={196} y={148} teks={t.putus} />
+
+      {/* Calon usaha: kotak dengan tenda, kosong. */}
+      <g transform="translate(258 96)">
+        <rect x="-19" y="-16" width="38" height="32" rx="4" fill="none" stroke="var(--g-ink-4)" strokeWidth="1.4" />
+        <path d="M-19-16h38" stroke="var(--g-ink-3)" strokeWidth="2.4" />
+        <path d="M-6 4h12" stroke="var(--g-ink-4)" strokeWidth="1.4" strokeLinecap="round" />
+      </g>
+      <LabelAlat x={258} y={130} teks={t.usaha} />
+    </svg>
+  )
+}
+
+/**
+ * 2 · Sewa dipatok dari gengsi, bukan dari penjualan.
+ *
+ * Dua batang tumbuh berbeda tinggi, dan GARIS SEWA naik mengikuti yang KIRI.
+ * Yang membuatnya terbaca bukan batangnya melainkan garis itu: ia berhenti
+ * sejajar dengan tampilan, jauh di atas penjualan, dan di situlah selisih yang
+ * dibayar tiap bulan.
+ */
+function AlatSewa({ t }: { t: AlatTeks }) {
+  return (
+    <svg viewBox="0 0 320 180" className="block h-auto w-full" aria-hidden>
+      <SikuPelat />
+      <path d="M40 146h240" stroke="var(--g-mas-jalur)" strokeWidth="1.2" fill="none" />
+
+      {/* Batang tampilan - tinggi, ungu: yang dilihat mata. */}
+      <rect
+        className="g-mas-batang"
+        x="86"
+        y="52"
+        width="46"
+        height="94"
+        rx="3"
+        fill="var(--g-ungu)"
+        fillOpacity="0.75"
+        style={{ animationDelay: '0.1s' }}
+      />
+      <LabelAlat x={109} y={162} teks={t.tampilan} />
+
+      {/* Batang penjualan - pendek, teal: yang terukur. */}
+      <rect
+        className="g-mas-batang"
+        x="188"
+        y="118"
+        width="46"
+        height="28"
+        rx="3"
+        fill="var(--g-teal)"
+        fillOpacity="0.7"
+        style={{ animationDelay: '0.45s' }}
+      />
+      <LabelAlat x={211} y={162} teks={t.jual} />
+
+      {/* Garis sewa: naik terlambat, lalu berhenti sejajar dengan TAMPILAN. */}
+      <g className="g-mas-sewa">
+        <path d="M46 52h228" stroke="var(--g-ink)" strokeWidth="1.4" strokeDasharray="6 5" fill="none" />
+        <text
+          x={274}
+          y={42}
+          textAnchor="end"
+          fontSize="8.5"
+          fill="var(--g-ink-2)"
+          style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}
+        >
+          {t.sewa.toUpperCase()}
+        </text>
+      </g>
+    </svg>
+  )
+}
+
+/**
+ * Yang jadi jawabannya, sebagai INDEKS ke `SEL_KONTRAS`.
+ *
+ * Sel ke-5 di sana ditulis `[-1, 1, 0.35, 'HIDDEN_GEM']`: menonjolnya 0,35 -
+ * di bawah ambang "terlihat menonjol" - dan zonanya Hidden Gem. Persis kalimat
+ * yang sedang digambarkan: datanya bagus, tampilannya biasa saja. Kalau suatu
+ * saat sel itu diubah, gambar ini ikut salah, dan `assert` di bawah yang
+ * memberitahunya - bukan mata siapa pun berbulan-bulan kemudian.
+ */
+const I_TEMU = 5
+
+/**
+ * 3 · Lokasi terbaik sering tidak kelihatan istimewa.
+ *
+ * Petaknya SAMA PERSIS dengan petak panel "satu kawasan, dua cara melihat" di
+ * bawah - dan itu bukan penghematan, itu kalimatnya. Gambar ini memperlihatkan
+ * kawasan yang sama sebelum ada yang menghitung: seluruh petaknya seragam, dan
+ * tidak ada satu pun yang terlihat lebih menjanjikan. Satu sapuan lewat, satu
+ * petak berubah jadi Hidden Gem, dan panel di bawah melanjutkan dari situ
+ * dengan keempat zonanya.
+ *
+ * Yang membuat gambar ini bekerja adalah petak itu tidak pernah terlihat
+ * berbeda sebelum sapuannya sampai.
+ */
+function AlatTemu({ t }: { t: AlatTeks }) {
+  const r = 15
+  const titik = jalurHeks(r - 1.4)
+  const pos = (q: number, rr: number) => ({
+    x: 160 + r * Math.sqrt(3) * (q + rr / 2),
+    y: 88 + r * 1.5 * rr,
+  })
+  const temu = pos(SEL_KONTRAS[I_TEMU][0], SEL_KONTRAS[I_TEMU][1])
+  return (
+    <svg viewBox="0 0 320 180" className="block h-auto w-full" aria-hidden>
+      <SikuPelat />
+      <defs>
+        {/* Sapuan yang terlalu pekat berhenti jadi sapuan dan jadi TIANG -
+            benda yang berdiri di depan petaknya alih-alih melewatinya.
+            Terlihat begitu di potret pada 0,5; 0,26 menyapu tanpa menutupi. */}
+        <linearGradient id="g-sapu-temu" x1="0" x2="1">
+          <stop offset="0%" stopColor="var(--g-teal)" stopOpacity="0" />
+          <stop offset="50%" stopColor="var(--g-teal)" stopOpacity="0.26" />
+          <stop offset="100%" stopColor="var(--g-teal)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {SEL_KONTRAS.map(([q, rr], i) => {
+        const { x, y } = pos(q, rr)
+        return (
+          <polygon
+            key={i}
+            points={titik}
+            transform={`translate(${x.toFixed(1)} ${y.toFixed(1)})`}
+            fill="var(--g-ink-4)"
+            fillOpacity="0.16"
+            stroke="var(--g-kontras-garis)"
+            strokeWidth="1"
+          />
+        )
+      })}
+
+      {/* Jawabannya, digambar DI ATAS petak seragam tadi.
+          DUA `<g>`, dan itu bukan kelebihan satu simpul: `transform` dari CSS
+          MENIMPA atribut `transform` milik SVG, ia tidak ditumpuk di atasnya.
+          Menaruh keduanya di simpul yang sama membuat heksagon ini melompat ke
+          pojok kiri atas pelat begitu animasinya menulis `scale()` - terlihat
+          persis begitu di potret sebelum dipisah. */}
+      <g transform={`translate(${temu.x.toFixed(1)} ${temu.y.toFixed(1)})`}>
+        <g className="g-mas-temu">
+          <polygon points={titik} fill={warnaZona('HIDDEN_GEM')} fillOpacity="0.85" />
+          <polygon points={jalurHeks(r + 1.4)} fill="none" stroke="#ffffff" strokeOpacity="0.85" strokeWidth="1.5" />
+        </g>
+      </g>
+
+      {/* Sapuan. Lebar tetap, bergerak mendatar - `transform`, bukan `x`. */}
+      <rect className="g-mas-sapu" x="-26" y="18" width="52" height="128" fill="url(#g-sapu-temu)" />
+
+      <LabelAlat x={26} y={168} teks={t.hitung} anchor="start" />
+      <LabelAlat x={294} y={168} teks={t.temu} anchor="end" />
+    </svg>
+  )
+}
+
+/** Pelat alat ukur: satu bingkai untuk ketiga gambar di atas. */
+function PelatMasalah({ i, t }: { i: number; t: AlatTeks }) {
+  return (
+    <div className="g-mas-plat relative overflow-hidden rounded-[18px] p-3 sm:p-4">
+      {i === 0 ? <AlatSampai t={t} /> : i === 1 ? <AlatSewa t={t} /> : <AlatTemu t={t} />}
+    </div>
+  )
+}
+
 
 /* ==========================================================================
    Satu kawasan, dua cara melihat
@@ -564,6 +880,18 @@ const warnaZona = (k: KunciKuadran) => `color-mix(in srgb, ${KUADRAN[k].warna} 7
 /** Ambang "terlihat menonjol". Dipakai menghitung kalimat di bawah gambar. */
 const AMBANG_MENONJOL = 0.6
 
+/**
+ * Gambar ketiga bagian masalah meminjam sel ini dan MENYEBUTNYA Hidden Gem
+ * yang tidak menonjol. Kalau daftarnya diurut ulang, gambarnya jadi berbohong
+ * tanpa satu pun galat - jadi biarkan ini yang berteriak lebih dulu.
+ */
+if (import.meta.env.DEV) {
+  const s = SEL_KONTRAS[I_TEMU]
+  if (!s || s[3] !== 'HIDDEN_GEM' || s[2] >= AMBANG_MENONJOL) {
+    throw new Error('SEL_KONTRAS[I_TEMU] bukan lagi Hidden Gem yang tidak menonjol')
+  }
+}
+
 function KontrasKawasan() {
   const k = useTeks(K).kontras
   const namaZona = useNamaZona()
@@ -630,7 +958,7 @@ function KontrasKawasan() {
   return (
     <div ref={akar} className="g-kontras relative rounded-[22px] p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p className="papan text-[15px] leading-snug text-[color:var(--g-ink)]">{k.judul}</p>
+        <p className="judul-anak text-[15px] leading-snug text-[color:var(--g-ink)]">{k.judul}</p>
         {/* Penunjuk fase, bukan tombol: gambarnya berganti sendiri. Yang aktif
             memakai warna sisinya sendiri - ungu untuk yang dilihat mata, teal
             untuk yang dibaca dari data. */}
@@ -1171,21 +1499,117 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         delay: 0.55,
       })
 
+      /**
+       * Dipakai DUA blok di bawah, jadi ia diukur sekali di sini.
+       *
+       * Geseran mendatar hanya boleh di layar lebar, dan itu bukan selera:
+       * elemen yang PARKIR di keadaan awalnya (`x: 54`) sebelum pemicunya
+       * sampai benar-benar berdiri 54 px di luar wadahnya. Terukur di 390 px:
+       * halaman jadi bisa digulir MENDATAR sampai 420 px, persis gejala yang
+       * dilarang B.6.
+       */
+      const lebarBesar = window.matchMedia('(min-width: 1024px)').matches
+
       // --- MENUTUP: hero dipatok, bagian berikutnya menggulir menutupinya ---
       //
       // Hero-nya `sticky`, jadi pembungkus di bawahnya naik MENIMPANYA. Yang
       // dianimasikan cuma isi hero: menyusut dan meredup seiring tertutup,
       // supaya yang terbaca adalah lembaran yang menutup benda di bawahnya -
       // bukan dua bagian yang kebetulan bertumpuk.
-      //
-      // Bagian MASALAH sendiri tidak punya animasi masuk sama sekali; gerakan
-      // di sini seluruhnya milik hero yang ditutupinya.
       gsap.to('.g-hero-isi', {
         scale: 0.93,
         y: -36,
         opacity: 0.18,
         ease: 'none',
         scrollTrigger: { scroller, trigger: '.g-tutup', start: 'top bottom', end: 'top 12%', scrub: 0.5 },
+      })
+
+      /**
+       * Latar hero DIPADAMKAN begitu lembar penutupnya benar-benar menutupinya.
+       *
+       * Hero itu `sticky`, jadi ia tidak pernah keluar dari viewport dan tidak
+       * pernah dipadamkan pengamat `[data-diam]` - dan sarang heksagon plus
+       * lensanya terus DILUKIS di belakang lembar pekat sepanjang halaman.
+       * Terukur di build produksi, gulir 55px/bingkai: bingkai median 43,2 ms
+       * dengan latar itu hidup, 32,0 ms tanpa. Sebelas milidetik per bingkai
+       * untuk gambar yang tidak bisa dilihat siapa pun.
+       *
+       * Yang dipadamkan HANYA lapisan hiasnya, yang memang sudah `aria-hidden`.
+       * Isi hero - judul, kalimat, kedua tombol - dibiarkan utuh: ia masih di
+       * pohon aksesibilitas, dan pembaca layar yang menggulir kembali ke atas
+       * tetap menemukannya.
+       */
+      ScrollTrigger.create({
+        scroller,
+        trigger: '.g-tutup',
+        start: 'top top',
+        onEnter: () => akar.current?.querySelector('.g-hero')?.setAttribute('data-tertutup', '1'),
+        onLeaveBack: () => akar.current?.querySelector('.g-hero')?.removeAttribute('data-tertutup'),
+      })
+
+      // --- JEDA: tali yang tumbuh mengikuti gulir --------------------------
+      //
+      // `scrub`, bukan tween yang berjalan sendiri: benda yang menandai JARAK
+      // harus tumbuh sepanjang jarak itu, bukan selesai dalam satu detik lalu
+      // menunggu. Yang tumbuh `scaleY` dengan titik asal di atas.
+      gsap.fromTo(
+        '.g-jeda-isi',
+        { scaleY: 0 },
+        {
+          scaleY: 1,
+          ease: 'none',
+          scrollTrigger: { scroller, trigger: '.g-jeda', start: 'top 78%', end: 'bottom 62%', scrub: 0.5 },
+        },
+      )
+      // Heksagon di ujung tali ikut SCRUB yang sama, bukan tween sendiri.
+      //
+      // Tween `from` di sini pernah meninggalkannya di opacity 0 selamanya:
+      // pemicunya `bottom 72%`, dan siapa pun yang mendarat di bagian ini lewat
+      // tautan langsung sudah melewatinya sebelum ScrollTrigger sempat
+      // mengukurnya. Jebakan yang sama persis pernah memakan tombol "gulir" di
+      // hero. Diikat ke scrub, ia tidak punya keadaan "belum dipicu".
+      gsap.fromTo(
+        '.g-jeda-heks',
+        { scale: 0.2, opacity: 0 },
+        {
+          scale: 1,
+          opacity: 1,
+          ease: 'none',
+          scrollTrigger: { scroller, trigger: '.g-jeda', start: 'top 60%', end: 'bottom 70%', scrub: 0.5 },
+        },
+      )
+
+      // --- BERGANTIAN: tiga masalah, satu per satu -------------------------
+      //
+      // Tiap baris masuk DARI SISI GAMBARNYA, dan sisinya berselang - jadi
+      // arah masuknya sendiri yang memberi tahu bahwa ini masalah berikutnya,
+      // bukan lanjutan dari yang barusan. Katanya menyusul 0,12 dtk sesudah
+      // pelatnya; dua benda yang datang bersamaan terbaca sebagai satu benda.
+      //
+      // TANPA hanyut pada pelatnya, dan itu keputusan yang diukur, bukan selera.
+      //
+      // Versi pertama menghanyutkan pelat 3,5% naik-turun sepanjang barisnya
+      // lewat. Terlihat bagus, dan mahal: pelat itu berlatar dua gradien
+      // bergaris seperti kertas milimeter, dan menggesernya tiap bingkai
+      // memaksa seluruh latar itu DILUKIS ULANG bersama SVG di atasnya.
+      // Terukur di build produksi, gulir sungguhan 55px/bingkai: bingkai median
+      // 48,2 ms dengan hanyut, 40,4 ms tanpa - hampir seluruh ongkos tiga
+      // pelat ini ada di sana, untuk gerakan setinggi sepuluh piksel.
+      gsap.utils.toArray<HTMLElement>('.g-mas-baris').forEach((el) => {
+        const kiri = el.dataset.sisi === 'kiri'
+        const panggung = el.querySelector('.g-mas-panggung')
+        const kata = el.querySelector('.g-mas-kata')
+        const tl = gsap.timeline({ scrollTrigger: { scroller, trigger: el, start: 'top 84%' } })
+        if (panggung) {
+          tl.from(
+            panggung,
+            lebarBesar
+              ? { x: kiri ? -50 : 50, opacity: 0, duration: 0.95, ease: 'power3.out' }
+              : { y: 32, opacity: 0, duration: 0.9, ease: 'power3.out' },
+            0,
+          )
+        }
+        if (kata) tl.from(kata, { y: 26, opacity: 0, duration: 0.85, ease: 'power3.out' }, 0.12)
       })
 
       // --- MENYAPU: judul Solusi terungkap kiri ke kanan, kartu mekar dari tengah
@@ -1269,7 +1693,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
       // luar wadahnya. Terukur di 390 px: halaman jadi bisa digulir MENDATAR
       // sampai 420 px, persis gejala yang dilarang B.6. Di layar sempit
       // gerakannya jadi tegak, yang tidak pernah menambah lebar.
-      const lebarBesar = window.matchMedia('(min-width: 1024px)').matches
       gsap.utils.toArray<HTMLElement>('.g-eko-baris').forEach((el) => {
         const kiri = el.dataset.sisi === 'kiri'
         const media = el.querySelector('.g-eko-media')
@@ -1480,50 +1903,111 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
       {/* Pembungkus yang MENUTUP hero. Latarnya pekat: yang di bawahnya harus
           benar-benar tertutup, bukan tembus. */}
       <div className="g-tutup relative z-10">
-        {/* ================= 2 · MASALAH ==================================
-            SATU bagian, satu judul. Latar belakang dan alasan produk ini ada
-            digabung 10 Sep 2026 - dua judul besar untuk satu gagasan memaksa
-            pembacanya menyambung sendiri, dan sebagian besar tidak.
+        {/* --- JARAK SENGAJA antara hero dan latar belakang -------------
+            Bukan ruang yang lupa diisi. Hero-nya dipatok dan menyusut di
+            baliknya; tanpa jeda ini judul bagian berikutnya sudah menutupinya
+            sebelum gerakan itu sempat terbaca sebagai gerakan.
 
-            TANPA animasi masuk. Sengaja, dan itu satu-satunya bagian yang
-            begitu di halaman ini. */}
-        <section id="masalah" className="g-latar-titik relative overflow-hidden px-6 py-28 sm:py-36">
+            Yang berdiri di sini cuma satu garis rambut yang TUMBUH mengikuti
+            gulir, dan sebuah heksagon di ujungnya. Satu benda, satu gerakan -
+            jeda yang diisi lebih dari itu berhenti jadi jeda. */}
+        <div className="g-jeda relative flex min-h-[58vh] items-end justify-center px-6 pb-2 sm:min-h-[68vh]">
+          <span className="relative block h-[30vh] w-px" aria-hidden>
+            <span className="g-jeda-rel absolute inset-0 block" />
+            <span className="g-jeda-isi absolute inset-0 block origin-top" />
+            <span className="g-jeda-heks absolute -bottom-[10px] left-1/2 block h-[20px] w-[18px] -translate-x-1/2">
+              <svg viewBox="-50 -55 100 110" className="h-full w-full">
+                <polygon
+                  points={jalurHeks(46)}
+                  fill="var(--g-latar-pekat)"
+                  stroke="var(--g-teal)"
+                  strokeWidth="9"
+                />
+              </svg>
+            </span>
+          </span>
+        </div>
+
+        {/* ================= 2 · MASALAH ==================================
+            SATU bagian, satu judul, TIGA masalah yang dijelaskan satu per satu.
+
+            Dirombak 11 Sep 2026. Sebelumnya ketiganya berdiri sebagai tiga
+            baris daftar bergaris rambut di kolom kiri, dan gambarnya satu untuk
+            ketiganya di kolom kanan - jadi tidak ada satu pun masalah yang
+            benar-benar punya gambarnya sendiri, dan pembacanya harus memutuskan
+            sendiri gambar itu menerangkan yang mana.
+
+            Sekarang tiap masalah punya barisnya sendiri, gambarnya sendiri, dan
+            gilirannya sendiri saat digulir - berselang kiri-kanan, jadi mata
+            berhenti tiga kali alih-alih sekali.
+
+            BEDANYA DENGAN EKOSISTEM di bawah, dan bedanya harus terbaca tanpa
+            membaca judul: Ekosistem memakai tulang punggung di tengah, simpul
+            heksagon, dan FOTO peta dalam bingkai membulat. Di sini tidak ada
+            tulang punggung sama sekali, dan gambarnya PELAT ALAT UKUR - siku di
+            sudut, garis tipis, label huruf mono. Satu bagian menunjukkan produk;
+            yang ini menerangkan keadaan sebelum produknya ada. */}
+        <section id="masalah" className="g-latar-titik relative overflow-hidden px-6 pb-28 pt-14 sm:pb-36 sm:pt-20">
           <div className="mx-auto w-full max-w-[74rem]">
-            <div className="grid items-start gap-x-14 gap-y-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]">
-              {/* Kolom kiri: judul, paragraf, tiga sebab. */}
+            {/* Pembuka EDITORIAL: judul kiri, paragraf kanan. Ekosistem membuka
+                di tengah; dua bagian berurutan yang membuka dengan susunan yang
+                sama terbaca sebagai satu bagian yang panjang. */}
+            <div className="grid gap-x-14 gap-y-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-end">
               <div>
                 <p className="eyebrow mb-5 text-[color:var(--g-ink-3)]">{teks.masalah.eyebrow}</p>
-                <h2 className="papan text-[clamp(2.1rem,5vw,3.7rem)] font-light leading-[1.04] tracking-[-0.022em]">
-                  {teks.masalah.judul}
-                </h2>
-                <p className="mt-6 max-w-[34rem] text-[15.5px] leading-relaxed text-[color:var(--g-ink-2)]">
-                  {teks.masalah.isi}
-                </p>
-
-                {/* Tiga sebab, garis rambut, TANPA nomor: ketiganya bukan urutan. */}
-                <ol className="mt-10 divide-y divide-[color:var(--g-garis-halus)] border-y border-[color:var(--g-garis-halus)]">
-                  {teks.masalah.poin.map((p) => (
-                    <li key={p.kepala} className="py-5">
-                      <p className="papan text-[16px] leading-snug text-[color:var(--g-ink)]">{p.kepala}</p>
-                      <p className="mt-1.5 max-w-[34rem] text-[13.5px] leading-relaxed text-[color:var(--g-ink-3)]">
-                        {p.isi}
-                      </p>
-                    </li>
-                  ))}
-                </ol>
+                <h2 className="judul-bagian text-[clamp(2rem,4.6vw,3.4rem)]">{teks.masalah.judul}</h2>
               </div>
-
-              {/* Kolom kanan: gambar yang menjelaskan ketiganya sekaligus. */}
-              <div className="lg:sticky lg:top-28">
-                <KontrasKawasan />
-              </div>
+              <p className="max-w-[34rem] text-[15.5px] leading-relaxed text-[color:var(--g-ink-2)] lg:pb-2">
+                {teks.masalah.isi}
+              </p>
             </div>
 
-            {/* Satu kalimat penutup, dan di sinilah namanya disebut pertama
-                kali sebagai jawaban - bukan sebagai judul bagian tersendiri. */}
-            <p className="mt-14 max-w-[52rem] border-l-2 border-[color:var(--g-teal)]/45 pl-6 text-[clamp(1rem,1.6vw,1.22rem)] leading-relaxed text-[color:var(--g-ink)]">
-              {teks.masalah.penutup}
-            </p>
+            {/* Pengantar ke ketiga baris. Garis rambut penuh lebar sebagai
+                batas - bukan judul kedua, yang akan jadi tesis kedua untuk satu
+                gagasan (kesalahan yang persis pernah dibuat halaman ini). */}
+            <div className="mt-14 flex items-center gap-4 border-t border-[color:var(--g-garis-halus-2)] pt-5 sm:mt-20">
+              <span className="eyebrow text-[color:var(--g-ink-4)]">{teks.masalah.antar}</span>
+            </div>
+
+            {/* Tiga baris, berselang kiri-kanan. */}
+            <div className="g-mas-alur">
+              {teks.masalah.poin.map((butir, i) => {
+                const kiri = i % 2 === 0
+                return (
+                  <div
+                    key={butir.kepala}
+                    data-sisi={kiri ? 'kiri' : 'kanan'}
+                    className="g-mas-baris relative grid items-center gap-8 py-10 sm:py-12 lg:grid-cols-2 lg:gap-16 lg:py-16"
+                  >
+                    <figure className={`g-mas-panggung relative ${kiri ? 'lg:order-1' : 'lg:order-2'}`}>
+                      <PelatMasalah i={i} t={teks.masalah.alat} />
+                    </figure>
+                    <div className={`g-mas-kata ${kiri ? 'lg:order-2 lg:pl-6' : 'lg:order-1 lg:pr-6'}`}>
+                      <p className="eyebrow mb-3 text-[color:var(--g-ink-4)]">{butir.tanda}</p>
+                      <h3 className="judul-anak text-[clamp(1.22rem,2.1vw,1.7rem)] leading-tight text-[color:var(--g-ink)]">
+                        {butir.kepala}
+                      </h3>
+                      <p className="mt-3.5 max-w-[30rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+                        {butir.isi}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Ketiganya bertemu di sini: satu kawasan, dilihat dua cara.
+                Panel ini yang menutup bagian, dan kalimat penutupnya berdiri di
+                sebelahnya - bukan di bawah seluruh halaman, tempat ia kehilangan
+                gambar yang seharusnya membuktikannya. */}
+            <div className="mt-8 grid items-center gap-10 border-t border-[color:var(--g-garis-halus-2)] pt-16 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1fr)] lg:gap-14 sm:mt-12">
+              <div className="g-mas-panggung">
+                <KontrasKawasan />
+              </div>
+              <p className="max-w-[32rem] border-l-2 border-[color:var(--g-teal)]/45 pl-6 text-[clamp(1rem,1.6vw,1.2rem)] leading-relaxed text-[color:var(--g-ink)]">
+                {teks.masalah.penutup}
+              </p>
+            </div>
           </div>
         </section>
 
@@ -1637,7 +2121,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                   {/* KATA */}
                   <div className={`g-eko-kata ${kiri ? 'lg:order-2 lg:pl-8' : 'lg:order-1 lg:pr-8'}`}>
                     <p className="eyebrow mb-3 text-[color:var(--g-ink-4)]">{it.tanda}</p>
-                    <h3 className="papan text-[clamp(1.3rem,2.2vw,1.85rem)] leading-tight text-[color:var(--g-ink)]">
+                    <h3 className="judul-anak text-[clamp(1.3rem,2.2vw,1.85rem)] leading-tight text-[color:var(--g-ink)]">
                       {it.nama}
                     </h3>
                     <p className="mt-3.5 max-w-[30rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
@@ -1667,7 +2151,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
 
           <div className="relative mx-auto max-w-[46rem] text-center" style={{ perspective: 900 }}>
             <h2 className="g-tirai">
-              <Teks3D teks={teks.penutup.judul} kelas="papan text-[clamp(1.8rem,4.6vw,3.2rem)] leading-tight" />
+              <Teks3D teks={teks.penutup.judul} kelas="judul-bagian text-[clamp(1.8rem,4.6vw,3.2rem)] font-medium leading-tight" />
             </h2>
             <p className="g-tirai mx-auto mt-4 max-w-[34rem] text-[15px] leading-relaxed text-[color:var(--g-ink-2)]">
               {teks.penutup.isi}
@@ -1744,7 +2228,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
 
           <div className="relative flex h-[170vh] flex-col items-center justify-center px-6 text-center">
             <p className="g-turun eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.tim.terakhir}</p>
-            <p className="g-turun papan max-w-[26rem] text-[clamp(1.3rem,3.4vw,2.1rem)] leading-tight">
+            <p className="g-turun judul-bagian max-w-[26rem] text-[clamp(1.3rem,3.4vw,2.1rem)] leading-tight">
               {teks.tim.turun}
             </p>
             <span className="g-turun g-panah mt-6 block text-[20px] text-[color:var(--g-ink-3)]" aria-hidden>
@@ -1755,7 +2239,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           <div className="relative px-6 pb-36">
             <div className="mx-auto max-w-[46rem] text-center">
               <p className="eyebrow mb-4 text-white/45">{teks.tim.eyebrow}</p>
-              <h2 className="papan text-[clamp(1.7rem,4.2vw,2.9rem)] leading-tight text-white">{teks.tim.judul}</h2>
+              <h2 className="judul-bagian text-[clamp(1.7rem,4.2vw,2.9rem)] leading-tight text-white">{teks.tim.judul}</h2>
               <p className="mx-auto mt-3 text-[13.5px] text-white/55">{IDENTITAS.institusi}</p>
             </div>
 

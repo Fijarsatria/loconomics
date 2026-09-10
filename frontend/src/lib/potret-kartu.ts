@@ -36,6 +36,190 @@ import {
   idLabelPertama,
 } from './layer-peta'
 
+/**
+ * Geometri heksagon SUNGGUHAN untuk lapisan sorot kartu gerbang.
+ *
+ * Kenapa ada: kartu Solusi dulu memakai kisi heksagon karangan yang menutupi
+ * seluruh kotak gambar - kisi yang tidak berdiri di tempat mana pun, tidak
+ * membawa satu angka pun, dan tidak menjawab pertanyaan kartunya. Dilaporkan
+ * apa adanya: "animasi layer heksagon yang jelek dan ga nyambung sama masing
+ * masing konteks".
+ *
+ * Yang keluar dari sini heksagon yang BENAR-BENAR ada di petanya, pada posisi
+ * piksel yang sama persis dengan posisinya di dalam WebP di sebelahnya - kamera
+ * `fitBounds` yang dipakai `potretKartu()` di atas dipakai ulang apa adanya.
+ * Warnanya pun tidak ditebak: heksagonnya digambar MapLibre memakai
+ * `WARNA_LAYER` yang sama dengan aplikasinya, lalu piksel di titik pusatnya
+ * DIBACA kembali dari kanvas. Tidak ada salinan kedua aturan pewarnaan yang
+ * bisa berpisah diam-diam.
+ *
+ * Dan yang disorot bukan sembarang heksagon: tiap kartu memilih yang MENJAWAB
+ * pertanyaannya sendiri - skor tertinggi untuk kartu memilih lokasi, sewa
+ * termurah untuk kartu menakar sewa, zona terlarang untuk ZoneGuard.
+ */
+export type PilihSorot = 'skor' | 'sewa-murah' | 'gem' | 'terlarang' | 'churn'
+
+export interface PesananSorot {
+  kawasan: string
+  layer: NamaLayer
+  lebar: number
+  tinggi: number
+  pilih: PilihSorot
+  banyak: number
+}
+
+export interface HasilSorot {
+  /** Kotak gambar, sama dengan potretnya. Jadi viewBox SVG di gerbang. */
+  w: number
+  h: number
+  /** Pusat kawasan dalam piksel - titik asal gelombang, sama dengan di peta. */
+  cx: number
+  cy: number
+  /**
+   * Simpangan enam simpul dari pusat selnya, dalam piksel.
+   *
+   * SATU bentuk untuk seluruh sel di satu kartu. Bukan penyederhanaan yang
+   * dikira-kira: simpangan terbesar antar sel pada kartu terbesar terukur
+   * 0,01 piksel - di bawah seperseratus piksel, karena satu kawasan cuma
+   * membentang dua kilometer dan distorsi Mercator sebesar itu tidak ada.
+   * Menyimpan 108 poligon lengkap akan melipatgandakan berkasnya untuk
+   * perbedaan yang tidak bisa dilihat alat ukur mana pun.
+   */
+  bentuk: number[]
+  /** Pusat SELURUH sel: [x0, y0, x1, y1, ...]. Kisi konteks. */
+  sel: number[]
+  /** Yang menjawab pertanyaan kartu, URUT sesuai jawabannya. */
+  sorot: { x: number; y: number; c: string }[]
+}
+
+/** Nilai yang dipakai memilih, dan arahnya. Null = tidak memenuhi syarat. */
+function nilaiPilih(p: Record<string, unknown>, pilih: PilihSorot): number | null {
+  const angka = (k: string) => (typeof p[k] === 'number' ? (p[k] as number) : null)
+  if (pilih === 'skor') return angka('opportunity_score')
+  if (pilih === 'gem') return angka('hidden_gem_score')
+  if (pilih === 'churn') return angka('indeks_churn')
+  if (pilih === 'sewa-murah') {
+    const v = angka('harga_sewa_per_m2')
+    // Dibalik supaya "besar = lebih dulu" berlaku untuk kelimanya: yang
+    // termurah yang paling menjawab kartu "menakar sewa".
+    return v === null ? null : -v
+  }
+  // ZoneGuard: yang DILARANG, dan hanya yang benar-benar berstatus false.
+  // NULL berarti kawasannya belum punya RDTR digital - bukan larangan, dan
+  // memperlakukannya sebagai larangan adalah tuduhan yang salah.
+  return p.zona_izin_komersial === false ? 1 : null
+}
+
+export async function sorotKartu(p: PesananSorot): Promise<HasilSorot> {
+  const wadah = document.createElement('div')
+  wadah.style.cssText = `position:fixed;left:0;top:0;width:${p.lebar}px;height:${p.tinggi}px;z-index:-1;opacity:0;pointer-events:none`
+  document.body.appendChild(wadah)
+
+  const data = (await api.layerHeksagon({ kawasan: p.kawasan })) as {
+    features: { geometry?: { coordinates?: number[][][] }; properties?: Record<string, unknown> }[]
+  }
+
+  // Gaya KOSONG, sengaja: yang dihitung di sini geometri dan warna isian, dan
+  // keduanya tidak butuh satu ubin pun. Latarnya hitam legap supaya piksel yang
+  // dibaca nanti benar-benar warna isian, bukan campuran dengan apa pun.
+  const m = new MapLibreMap({
+    container: wadah,
+    style: {
+      version: 8,
+      sources: {},
+      layers: [{ id: 'latar', type: 'background', paint: { 'background-color': '#000000' } }],
+    },
+    center: [106.81, -6.2],
+    zoom: 12,
+    pitch: 0,
+    bearing: 0,
+    interactive: false,
+    attributionControl: false,
+    canvasContextAttributes: { preserveDrawingBuffer: true },
+    pixelRatio: 1,
+  })
+  await new Promise<void>((selesai) => m.on('load', () => selesai()))
+
+  m.addSource('s', { type: 'geojson', data: data as never })
+  m.addLayer({
+    id: 's-isi',
+    type: 'fill',
+    source: 's',
+    paint: {
+      'fill-color': WARNA_LAYER[p.layer],
+      // Legap DAN tanpa antialias: yang dibaca nanti satu piksel di titik
+      // pusat, dan piksel itu harus warna ekspresinya apa adanya.
+      'fill-opacity': 1,
+      'fill-antialias': false,
+    },
+  })
+
+  const b = bingkaiDari(data)
+  if (b) {
+    m.fitBounds(b, {
+      padding: Math.round(Math.max(14, Math.min(p.tinggi * 0.13, p.lebar * 0.1, 90))),
+      animate: false,
+    })
+  }
+  await new Promise<void>((selesai) => m.once('idle', () => selesai()))
+
+  // Piksel dibaca SEKALI untuk seluruh kanvas. Membacanya per heksagon berarti
+  // 108 kali penyalinan kanvas untuk satu kartu.
+  const salin = document.createElement('canvas')
+  salin.width = p.lebar
+  salin.height = p.tinggi
+  const ctx = salin.getContext('2d')
+  if (!ctx) throw new Error('kanvas 2d tidak tersedia')
+  ctx.drawImage(m.getCanvas(), 0, 0, p.lebar, p.tinggi)
+  const piksel = ctx.getImageData(0, 0, p.lebar, p.tinggi).data
+
+  const dua = (v: number) => v.toString(16).padStart(2, '0')
+  const warnaDi = (x: number, y: number) => {
+    const i =
+      (Math.min(p.tinggi - 1, Math.max(0, Math.round(y))) * p.lebar +
+        Math.min(p.lebar - 1, Math.max(0, Math.round(x)))) *
+      4
+    return `#${dua(piksel[i])}${dua(piksel[i + 1])}${dua(piksel[i + 2])}`
+  }
+
+  const bulat = (v: number) => Math.round(v * 10) / 10
+  const sel: number[] = []
+  const simpul: number[][] = []
+  const daftar: { x: number; y: number; nilai: number | null }[] = []
+
+  for (const f of data.features) {
+    const cincin = f.geometry?.coordinates?.[0]
+    if (!cincin || cincin.length < 6) continue
+    const titik = cincin.slice(0, 6).map(([a, c]) => {
+      const q = m.project([a, c])
+      return [q.x, q.y]
+    })
+    const x = titik.reduce((a, t) => a + t[0], 0) / 6
+    const y = titik.reduce((a, t) => a + t[1], 0) / 6
+    sel.push(bulat(x), bulat(y))
+    simpul.push(titik.flatMap((t) => [t[0] - x, t[1] - y]))
+    daftar.push({ x, y, nilai: nilaiPilih(f.properties ?? {}, p.pilih) })
+  }
+
+  const bentuk = Array.from({ length: 12 }, (_, i) =>
+    bulat(simpul.reduce((a, s) => a + s[i], 0) / (simpul.length || 1)),
+  )
+
+  const sorot = daftar
+    .filter((d): d is { x: number; y: number; nilai: number } => d.nilai !== null)
+    .sort((a, c) => c.nilai - a.nilai)
+    .slice(0, p.banyak)
+    .map((d) => ({ x: bulat(d.x), y: bulat(d.y), c: warnaDi(d.x, d.y) }))
+
+  // Pusat gelombang: rerata posisi seluruh sel, persis `bubuhiUrutan` di peta.
+  const cx = daftar.reduce((a, d) => a + d.x, 0) / (daftar.length || 1)
+  const cy = daftar.reduce((a, d) => a + d.y, 0) / (daftar.length || 1)
+
+  m.remove()
+  wadah.remove()
+  return { w: p.lebar, h: p.tinggi, cx: bulat(cx), cy: bulat(cy), bentuk, sel, sorot }
+}
+
 /** Angka yang ikut dikirim bersama gambarnya, supaya kartunya punya isi. */
 export interface RingkasKartu {
   n: number

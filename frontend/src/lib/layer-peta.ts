@@ -293,10 +293,15 @@ export const WARNA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
 
   // Hanya yang punya skor gem yang berwarna. Sisanya diabukan supaya jawabannya
   // berupa daftar pendek yang tegas, bukan peta penuh warna yang harus ditafsirkan.
+  //
+  // Ujung pucatnya `lembutPeta`, BUKAN `lembut`. `lembut` bernilai
+  // `var(--q-gem-lembut)`, dan satu `var()` di dalam ekspresi cat membuat
+  // SELURUH layer isian gagal dipasang tanpa satu pun galat - layer ini
+  // benar-benar tampil tanpa warna sampai 10 Sep 2026.
   hidden_gem: [
     'case',
     ['==', ['get', 'hidden_gem_score'], null], ABU_HINDARI,
-    ['interpolate', ['linear'], ['get', 'hidden_gem_score'], 0, KUADRAN.HIDDEN_GEM.lembut, 1, q('HIDDEN_GEM')],
+    ['interpolate', ['linear'], ['get', 'hidden_gem_score'], 0, KUADRAN.HIDDEN_GEM.lembutPeta, 1, q('HIDDEN_GEM')],
   ],
 
   // RiskRadar diwarnai oleh INDEKS CHURN, bukan oleh kuadran.

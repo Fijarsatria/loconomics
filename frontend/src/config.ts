@@ -122,6 +122,16 @@ export interface Kuadran {
    */
   warnaPeta: string
   lembut: string
+  /**
+   * Ujung PUCAT skala, untuk MapLibre. Alasannya sama persis dengan
+   * `warnaPeta`, dan biayanya sudah dibayar sekali: layer Hidden Gem memakai
+   * `lembut` di dalam ekspresi `interpolate` selama berminggu-minggu, dan
+   * `var(--q-gem-lembut)` di kanvas WebGL tidak melempar galat apa pun - ia
+   * membuat SELURUH layer isian gagal dipasang. Yang terlihat cuma garis
+   * heksagon di atas basemap tanpa satu pun warna, di peta maupun di kartu
+   * gerbang. Ditemukan 10 Sep 2026 dengan membaca kembali piksel kartunya.
+   */
+  lembutPeta: string
   glif: string
   arti: string
   /** Posisi di grid 2×2 Kompas Kuadran: [kolom, baris], baris 0 = atas. */
@@ -162,6 +172,7 @@ export const KUADRAN: Record<string, Kuadran> = {
     warna: 'var(--q-gem)',
     warnaPeta: '#4C93F7',
     lembut: 'var(--q-gem-lembut)',
+    lembutPeta: '#DCEAFD',
     glif: 'M8 1.6 14.4 8 8 14.4 1.6 8Z', // belah ketupat — sesuatu yang ditemukan
     arti: 'Datanya bagus, tampilannya biasa saja. Sewanya biasanya jauh lebih murah.',
     sel: [0, 0],
@@ -178,6 +189,7 @@ export const KUADRAN: Record<string, Kuadran> = {
     warna: 'var(--q-menang)',
     warnaPeta: '#15803D',
     lembut: 'var(--q-menang-lembut)',
+    lembutPeta: '#D7ECDF',
     glif: 'M8 1.5A6.5 6.5 0 1 1 8 14.5 6.5 6.5 0 0 1 8 1.5Z', // lingkaran penuh
     arti: 'Datanya bagus dan tampilannya mahal. Aman, tetapi Anda ikut membayar gengsinya.',
     sel: [1, 0],
@@ -190,6 +202,7 @@ export const KUADRAN: Record<string, Kuadran> = {
     warna: 'var(--q-jebakan)',
     warnaPeta: '#E58A00',
     lembut: 'var(--q-jebakan-lembut)',
+    lembutPeta: '#FCECD4',
     glif: 'M8 1.4 15 14.2H1Z', // segitiga — rambu peringatan
     arti: 'Tampilannya mahal tetapi ekonominya tidak mendukung. Kuadran yang paling sering menjebak.',
     sel: [1, 1],
@@ -202,6 +215,7 @@ export const KUADRAN: Record<string, Kuadran> = {
     warna: 'var(--q-hindari)',
     warnaPeta: '#B01B1B',
     lembut: 'var(--q-hindari-lembut)',
+    lembutPeta: '#F8DCDC',
     glif: 'M2.5 2.5h11v11h-11Z', // kotak kosong — tidak ada apa-apa
     arti: 'Potensi ekonomi dan daya tarik visualnya sama-sama rendah.',
     sel: [0, 1],

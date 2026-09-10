@@ -419,6 +419,21 @@ td {
   line-height: 1.16;
 }
 
+/* --- Judul anak: kartu, baris, panel kecil --------------------------------
+   Ada karena halaman gerbang memakai `.papan` untuk TUJUH tingkat judul yang
+   berbeda sekaligus - nama produk, judul bagian, judul kartu, judul baris,
+   judul panel. Lebar 125% milik `.papan` dirancang untuk identitas dan angka
+   besar; dipakai di judul kartu setinggi 16px ia bukan lagi penekanan,
+   melainkan LEBAR HURUF yang berbeda dari kalimat di sebelahnya. Dilaporkan
+   apa adanya: "font di landing page kayak beda sekali".
+
+   Yang membedakan judul anak dari teks isi cuma beratnya dan jaraknya. Satu
+   sumbu, bukan dua. */
+.judul-anak {
+  font-weight: 500;
+  letter-spacing: -0.008em;
+}
+
 .eyebrow {
   font-size: 11.5px;
   font-weight: 600;
@@ -1231,15 +1246,26 @@ input:focus-visible {
   }
 }
 
-/* --- Gelombang heksagon di atas potret kartu ------------------------------
-   MENGGANTIKAN lima animasi SVG yang berdiri di sini sebelumnya. Kelimanya
-   digambar sendiri - sapuan skor, batang kuartil, denyut, zona tertolak,
-   sapuan radar - dan tidak satu pun benar-benar terjadi di peta.
+/* --- Heksagon sungguhan di atas potret kartu ------------------------------
+   Yang bergerak di sini BUKAN kisi karangan, melainkan heksagon kartu itu
+   sendiri: posisinya dihitung dengan kamera yang sama dengan WebP-nya, dan
+   warnanya dibaca kembali dari peta yang menggambarnya. Lihat kepala
+   `GerbangPeta.tsx`.
 
-   Yang tersisa satu gerakan, dan gerakan itu yang MEMANG dilakukan aplikasinya:
-   layer heksagon mekar dari pusat kawasan, bertahan, lalu surut. Undakannya
-   ditulis per sel lewat `animation-delay` yang dihitung dari JARAK KE PUSAT,
-   jadi bentuk gelombangnya melingkar - bukan menyala satu per satu.
+   DUA lapisan, dua irama, dan pembagian itulah yang membuatnya terbaca:
+
+     KISI    tujuh cincin jarak, garis saja. Mekar dari pusat kawasan ke tepi,
+             bertahan, lalu surut - kutipan `jalankanGelombang` di peta.
+     JAWAB   heksagon yang menjawab pertanyaan kartunya, berisi warna aslinya.
+             Menyusul SESUDAH kisinya berdiri, satu per satu menurut peringkat,
+             dan PERGI lebih dulu daripada kisinya.
+
+   Urutan pergi itu disengaja: jawaban yang lenyap sementara kisinya masih di
+   sana terbaca sebagai daftar yang habis dibacakan. Kebalikannya terbaca
+   sebagai layer yang mati.
+
+   Satu siklus 9 dtk untuk KEDUANYA, jadi keduanya tidak pernah bisa berpisah
+   fase. Undakannya lewat `animation-delay`, bukan lewat durasi yang berbeda.
 
    Dua rem dipasang, dan keduanya wajib:
 
@@ -1248,47 +1274,92 @@ input:focus-visible {
      2. `prefers-reduced-motion` mematikannya sama sekali - dan saat mati,
         heksagonnya DITINGGAL TERLIHAT, bukan hilang: layer yang tidak pernah
         tergambar bukan gambar yang lebih tenang, ia gambar yang kurang. */
-.g-alun-sel {
+.g-heks-cincin,
+.g-heks-jawab {
   opacity: 0;
-  animation: g-alun 5200ms cubic-bezier(0.33, 0.9, 0.28, 1) infinite;
+  animation-duration: 9s;
+  animation-timing-function: cubic-bezier(0.33, 0.9, 0.28, 1);
+  animation-iteration-count: infinite;
   animation-play-state: paused;
+  transform-box: view-box;
 }
-.g-bento[data-tampil='1'] .g-alun-sel {
+.g-heks-cincin {
+  animation-name: g-heks-kisi;
+}
+.g-heks-jawab {
+  animation-name: g-heks-jawab;
+  /* Bukan hiasan: warna isian heksagon di sini datang dari layer tematik yang
+     memang separuh tembus pandang di peta, dan jalan di bawahnya harus tetap
+     terbaca. Garisnya yang legap - itu yang menandai "yang ini". */
+  fill-opacity: 0.68;
+  stroke-opacity: 0.9;
+  stroke-linejoin: round;
+}
+.g-bento[data-tampil='1'] .g-heks-cincin,
+.g-bento[data-tampil='1'] .g-heks-jawab {
   animation-play-state: running;
 }
-/* Jendela KOSONGNYA sengaja lebih pendek daripada rentang undakannya.
-   Undakan menyebar sampai 1,45 dtk; kalau jendela kosongnya lebih panjang dari
-   itu, ada saat SELURUH sel sedang tersembunyi sekaligus dan kartunya berkedip
-   jadi peta polos - tertangkap di potret, tiga kartu sekaligus. 25% dari 5,2
-   dtk = 1,30 dtk, tepat di bawahnya, jadi selalu ada heksagon yang tertinggal
-   di layar saat gelombang berikutnya berangkat. */
-@keyframes g-alun {
+
+/* Kisi: mekar 0 -> 7%, bertahan sampai 72%, surut sampai 80%.
+   Undakan cincinnya menyebar 0,62 dtk, jadi cincin terluar masih berangkat
+   saat cincin terdalam sudah berdiri - itu bentuk gelombangnya.
+
+   OPACITY SAJA, tanpa `scale`, dan itu diukur. Tiap cincin satu `<path>` berisi
+   lima belas sampai delapan belas heksagon; menskalakannya berarti seluruh
+   geometri itu DIRASTER ULANG tiap bingkai, enam kartu sekaligus. Yang hilang
+   cuma sedikit "mekar" yang toh sudah dibawa undakan antar cincin - dan
+   undakan itulah yang membuat gelombangnya terbaca, bukan skalanya. */
+@keyframes g-heks-kisi {
   0% {
     opacity: 0;
-    transform: scale(0.5);
   }
-  12% {
-    opacity: 0.42;
-    transform: scale(1);
+  7% {
+    opacity: 1;
   }
-  62% {
-    opacity: 0.42;
-    transform: scale(1);
+  72% {
+    opacity: 1;
   }
-  75% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
+  80%,
   100% {
     opacity: 0;
-    transform: scale(0.5);
   }
 }
+
+/* Jawaban: menyala sesudah kisinya berdiri (jeda 0,5 dtk + peringkat), sedikit
+   melewati ukurannya sendiri lalu mendarat - itu yang membuatnya terbaca
+   sebagai "ditemukan", bukan sebagai "dinyalakan". Pergi di 58%, sebelum
+   kisinya. */
+@keyframes g-heks-jawab {
+  0%,
+  4% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  11% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  15% {
+    transform: scale(1);
+  }
+  52% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  58%,
+  100% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .g-alun-sel,
-  .g-bento[data-tampil='1'] .g-alun-sel {
+  .g-heks-cincin,
+  .g-heks-jawab,
+  .g-bento[data-tampil='1'] .g-heks-cincin,
+  .g-bento[data-tampil='1'] .g-heks-jawab {
     animation: none;
-    opacity: 0.38;
+    opacity: 1;
     transform: none;
   }
 }
@@ -1740,6 +1811,16 @@ input:focus-visible {
   transform: translateY(-10px);
   pointer-events: none;
 }
+/* Selama percakapannya masih kosong, pembuka MENGISI panel - dan itulah yang
+   menaruh papan namanya di tengah-tengah alih-alih di tengah atas.
+
+   Sebelumnya tingginya cuma setinggi isinya sendiri, jadi ia duduk di puncak
+   kolom dengan ruang kosong sepanjang panel di bawahnya. Yang terbaca bukan
+   "layar pembuka", melainkan "isi yang belum selesai dimuat". */
+.g-ai-pembuka-penuh {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
 /* GETAR. Amplitudonya di bawah satu piksel dan rotasinya di bawah setengah
    derajat — cukup untuk terbaca "hidup", tidak cukup untuk terbaca "rusak".
@@ -1768,15 +1849,32 @@ input:focus-visible {
 }
 
 /* Cahaya di belakang tanda, bernapas. `opacity` + `transform` saja; gradiennya
-   sendiri tidak pernah dihitung ulang. */
-@keyframes g-napas {
+   sendiri tidak pernah dihitung ulang.
+
+   NAMANYA SENDIRI, dan itu memperbaiki bug yang berumur berminggu-minggu.
+   Sebelumnya ia memakai `g-napas` - nama yang SUDAH DIPAKAI `.g-aurora` di
+   halaman gerbang, dengan isi yang berbeda: keyframe itu menulis
+   `translate(-50%, -50%) scale(...)` karena `.g-aurora` memang memusatkan
+   dirinya lewat keyframe-nya. Dua `@keyframes` bernama sama adalah SATU nama;
+   yang menang ditentukan kaskade, dan yang di sana ditulis DI LUAR `@layer`
+   sementara yang di sini di dalam `@layer components` - dan deklarasi tanpa
+   lapisan mengalahkan seluruh deklarasi berlapis. Jadi halo panel AI selalu
+   memakai keyframe milik aurora.
+
+   Akibatnya: elemen ini memusatkan dirinya lewat properti `translate` milik
+   Tailwind v4, keyframe itu MENAMBAH satu geseran setengah-ukuran lagi lewat
+   `transform` (keduanya bertumpuk, bukan saling mengganti), dan halonya duduk
+   sejauh satu ukuran penuh dari tempatnya. Pada 168px dulu ia cuma terbaca
+   sebagai cahaya yang melenceng; pada 300px ia jadi bercak teal bersudut tajam
+   di pojok panel. Terlihat di potret 11 Sep 2026. */
+@keyframes g-ai-napas {
   0%,
   100% {
-    opacity: 0.32;
+    opacity: 0.2;
     transform: scale(0.94);
   }
   50% {
-    opacity: 0.6;
+    opacity: 0.38;
     transform: scale(1.06);
   }
 }
@@ -1784,9 +1882,108 @@ input:focus-visible {
   /* Warnanya ditulis apa adanya: panel ini hidup di dalam aplikasi, yang tidak
      memakai token `--g-*` milik gerbang, dan aplikasi belum punya satu token
      aksen tunggal. Kalau kelak punya, ini tempat pertama yang menggantinya. */
-  background: radial-gradient(closest-side, #2de8c0 0%, transparent 72%);
-  opacity: 0.32;
-  animation: g-napas 4200ms ease-in-out infinite;
+  background: radial-gradient(closest-side, #2de8c0 0%, transparent 70%);
+  opacity: 0.2;
+  animation: g-ai-napas 4200ms ease-in-out infinite;
+}
+
+/* --- Mercusuar: tiga lapis cahaya di belakang papan nama ------------------
+   Ditambah 11 Sep 2026 atas permintaan pemilik repo ("efek shine dari belakang
+   teks/logonya, jadi kayak mewah dan elegan").
+
+   Tiga lapis, dan masing-masing menjawab hal yang berbeda. Satu lapis saja
+   sudah pernah dicoba dan hasilnya cuma noda hijau: halo tanpa tepi tidak
+   punya bentuk, dan yang tidak punya bentuk tidak terbaca sebagai cahaya.
+
+     NYALA         halo lembut yang bernapas - menyatakan panel ini hidup
+     KILAU         cincin conic yang berputar sangat pelan; ia yang memberi
+                   ARAH, dan arah itulah bedanya "sumber cahaya" dari "gambar"
+     CINCIN KABUT  garis tipis yang mengurung keduanya, supaya halo punya tepi
+
+   Ketiganya `transform` dan `opacity` saja. Gradiennya dilukis sekali. */
+/* Tanpa `translate(-50%, -50%)`, alasannya sama dengan `g-napas` di atas:
+   pemusatnya dipasang properti `translate` milik Tailwind v4, dan properti itu
+   bertumpuk dengan `transform` alih-alih diganti olehnya. */
+@keyframes g-ai-putar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.g-ai-kilau {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgb(45 232 192 / 0.5) 42deg,
+    transparent 96deg,
+    transparent 200deg,
+    rgb(124 92 255 / 0.34) 250deg,
+    transparent 310deg
+  );
+  /* Cincin, bukan cakram: isinya dilubangi masker radial supaya papan namanya
+     berdiri di dalam lingkaran cahaya, bukan di depan piringan berwarna. */
+  mask-image: radial-gradient(closest-side, transparent 52%, #000 66%, #000 88%, transparent 100%);
+  -webkit-mask-image: radial-gradient(closest-side, transparent 52%, #000 66%, #000 88%, transparent 100%);
+  opacity: 0.5;
+  filter: blur(9px);
+  animation: g-ai-putar 22s linear infinite;
+}
+.g-ai-cincin-kabut {
+  border: 1px solid rgb(45 232 192 / 0.16);
+  box-shadow: inset 0 0 34px rgb(45 232 192 / 0.07);
+}
+
+/* Sapuan spekular: satu kilatan melintasi namanya tiap tujuh detik.
+   Inilah yang membuat hurufnya terbaca sebagai BAHAN alih-alih sebagai teks
+   berwarna. `plus-lighter` menambahkan cahaya alih-alih mengecatnya, jadi ia
+   bekerja sama di panel terang maupun gelap tanpa dua aturan. */
+@keyframes g-ai-sapuan {
+  0%,
+  62% {
+    transform: translateX(-118%);
+  }
+  84%,
+  100% {
+    transform: translateX(118%);
+  }
+}
+.g-ai-sapuan {
+  background: linear-gradient(
+    104deg,
+    transparent 38%,
+    rgb(255 255 255 / 0.42) 50%,
+    transparent 62%
+  );
+  mix-blend-mode: plus-lighter;
+  animation: g-ai-sapuan 7s cubic-bezier(0.5, 0, 0.2, 1) infinite;
+}
+
+/* Pintasan lokasi di dalam jawaban. Tepinya menyala saat disorot - tombol yang
+   memindahkan peta harus terasa bisa ditekan sebelum ditekan. */
+.g-ai-pintas {
+  transition:
+    border-color 240ms var(--ease-liquid),
+    background 240ms var(--ease-liquid),
+    transform 240ms var(--ease-liquid);
+}
+.g-ai-pintas:hover {
+  border-color: var(--color-line-2);
+  background: var(--color-surface-2);
+  transform: translateY(-1px);
+}
+
+/* Laci riwayat: menutupi percakapan, masuk dari atas. */
+@keyframes g-ai-laci {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ai-laci {
+  animation: g-ai-laci 260ms var(--ease-liquid) both;
 }
 
 /* Saran datang berundak, sekali, saat panel dibuka. */
@@ -1816,8 +2013,16 @@ input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .g-ai-tanda,
   .g-ai-nyala,
-  .g-ai-saran {
+  .g-ai-kilau,
+  .g-ai-sapuan,
+  .g-ai-saran,
+  .ai-laci {
     animation: none;
+  }
+  /* Sapuan yang berhenti di tengah nama adalah pita putih yang menempel di
+     sana selamanya. Yang berhenti harus berhenti DI LUAR. */
+  .g-ai-sapuan {
+    opacity: 0;
   }
 }
 
@@ -2510,21 +2715,37 @@ input:focus-visible {
 }
 
 /* Latar bagian MASALAH: kisi titik halus. `radial-gradient` berukuran tetap
-   yang diulang - satu lapisan, nol DOM, dan dilukis sekali. Memudar ke bawah
-   supaya batas ke bagian Solusi tidak berupa garis potong. */
+   yang diulang - satu lapisan, nol DOM, dan dilukis sekali.
+
+   Motifnya hidup di `::before`, BUKAN di elemennya sendiri, dan itu bukan
+   selera. `mask-image` pada elemen memotong SELURUH isinya, bukan cuma
+   latarnya - dan begitu maskernya dibuat memudar di tepi ATAS supaya batas ke
+   jeda di atasnya tidak berupa garis potong, judul bagian ikut memudar
+   bersamanya. Terlihat di potret: "Ramai belum tentu laku." berubah dari putih
+   jadi abu. Di pseudo-elemen, yang memudar cuma motifnya.
+
+   `isolation: isolate` membuat `z-index: -1` berhenti di batas bagian ini -
+   tanpa itu motifnya jatuh ke belakang pembungkus `.g-tutup` yang pekat dan
+   hilang sama sekali. */
 .g-latar-titik {
   background-color: var(--g-latar-pekat);
+  isolation: isolate;
+}
+.g-latar-titik::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     radial-gradient(rgb(190 235 225 / 0.13) 1px, transparent 1.4px),
     radial-gradient(1100px 600px at 12% 0%, rgb(45 232 192 / 0.07) 0%, transparent 60%);
   background-size:
     26px 26px,
     100% 100%;
-  mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 9%, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 9%, #000 80%, transparent 100%);
 }
-/* Masker di atas memotong SELURUH bagian, termasuk isinya - jadi bagian ini
-   butuh dasar pekat lagi di belakangnya. Pembungkus .g-tutup yang memberinya. */
 
 /* Latar bagian EKOSISTEM: dua cahaya lembut di sudut berlawanan, dan garis
    rambut di tepi atasnya sebagai batas dari hitam polos Solusi. */
@@ -2534,6 +2755,199 @@ input:focus-visible {
     radial-gradient(900px 560px at 88% 8%, rgb(45 232 192 / 0.11) 0%, transparent 62%),
     radial-gradient(820px 560px at 8% 96%, rgb(124 92 255 / 0.12) 0%, transparent 60%);
   border-top: 1px solid var(--g-garis-halus-2);
+}
+
+/* --- Jarak sengaja antara hero dan latar belakang -------------------------
+   Garisnya punya DUA lapis: rel yang selalu ada (supaya jeda ini tidak pernah
+   terlihat kosong sama sekali) dan isi yang tumbuh mengikuti gulir. Yang
+   tumbuh hanya `scaleY` - bukan `height`, yang memaksa tata letak dihitung
+   ulang tiap bingkai untuk garis selebar satu piksel. */
+.g-jeda-rel {
+  background: linear-gradient(to bottom, transparent, var(--g-garis-halus-2) 30%, var(--g-garis-halus-2));
+}
+.g-jeda-isi {
+  background: linear-gradient(to bottom, transparent, var(--g-teal) 85%);
+  opacity: 0.55;
+}
+.g-jeda-heks {
+  filter: drop-shadow(0 0 10px rgb(45 232 192 / 0.35));
+}
+
+/* --- Pelat alat ukur bagian masalah ---------------------------------------
+   Sengaja BUKAN bahasa visual bingkai foto Ekosistem: tanpa bayangan, tanpa
+   kilau, tepinya lurus dan tipis. Yang membuatnya terbaca sebagai alat ukur
+   adalah kisi halus di dalamnya - sama seperti kertas milimeter, ia menyatakan
+   "di sini sesuatu diukur" tanpa satu kata pun. */
+/* Keadaan PARKIR animasi masuk berdiri di luar barisnya - `x: ±50` di layar
+   lg. Pada 1024px persis, dua kolom mengisi lebar tanpa sisa, jadi 50 px itu
+   membuat halaman melebar 30 px: terukur `scrollWidth` 1054 vs `clientWidth`
+   1024, dan bisa digeser mendatar. Gejala yang dilarang B.6, dan yang sama
+   pernah terjadi di 390px pada baris ekosistem.
+
+   `overflow-x: clip`, BUKAN `hidden`: `hidden` membuat barisnya jadi wadah
+   gulir sekaligus konteks pemformatan baru, dan `clip` memotong tanpa menjadi
+   keduanya - satu-satunya nilai yang boleh dipasangkan dengan `overflow-y:
+   visible`, yang memang harus tetap visible supaya gerakan tegaknya di layar
+   sempit tidak ikut terpotong. */
+.g-mas-baris,
+.g-eko-baris {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* Lapisan hias hero berhenti dilukis begitu lembar penutupnya benar-benar
+   menutupinya. `content-visibility`, bukan `display: none`: yang kedua akan
+   membongkar seluruh sub-pohonnya dan membangunnya lagi saat orang menggulir
+   kembali ke atas - dan `<pattern>` SVG di dalamnya tidak murah dibangun.
+   Penandanya dipasang satu ScrollTrigger di Gerbang.tsx. */
+.g-hero[data-tertutup='1'] .g-hero-latar {
+  content-visibility: hidden;
+}
+
+.g-mas-plat {
+  --g-mas-siku: rgb(190 235 225 / 0.28);
+  --g-mas-jalur: rgb(190 235 225 / 0.22);
+  background:
+    linear-gradient(rgb(190 235 225 / 0.045) 1px, transparent 1px) 0 0 / 100% 22px,
+    linear-gradient(90deg, rgb(190 235 225 / 0.045) 1px, transparent 1px) 0 0 / 22px 100%,
+    var(--g-kartu-isi);
+  border: 1.5px solid var(--g-kartu-tepi);
+}
+
+/* Titik data berangkat dari stasiun dan PADAM di dinding. Jarak tempuhnya
+   136px di ruang viewBox 320px - persis dari tepi stasiun sampai dindingnya,
+   tidak sepiksel pun lebih. Kalau ia melewati dinding, gambarnya membantah
+   kalimat yang menyertainya. */
+@keyframes g-mas-alir {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  72% {
+    transform: translateX(122px);
+    opacity: 1;
+  }
+  86%,
+  100% {
+    transform: translateX(136px);
+    opacity: 0;
+  }
+}
+.g-mas-alir {
+  animation: g-mas-alir 2.6s linear infinite;
+}
+
+/* Batang tumbuh dari alasnya. `transform-box: fill-box` supaya titik asalnya
+   dihitung terhadap kotak batangnya sendiri, bukan terhadap seluruh viewBox. */
+@keyframes g-mas-batang {
+  0% {
+    transform: scaleY(0);
+  }
+  26%,
+  82% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0);
+  }
+}
+.g-mas-batang {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: g-mas-batang 5.2s cubic-bezier(0.33, 0.9, 0.28, 1) infinite;
+}
+
+/* Garis sewa naik BELAKANGAN, lalu berhenti sejajar dengan batang tampilan.
+   Naik dari ketinggian penjualan (66px di bawahnya) - jadi yang terlihat bukan
+   garis yang muncul, melainkan garis yang MENGIKUTI yang salah. */
+@keyframes g-mas-sewa {
+  0%,
+  18% {
+    transform: translateY(66px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  46%,
+  82% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(66px);
+    opacity: 0;
+  }
+}
+.g-mas-sewa {
+  animation: g-mas-sewa 5.2s cubic-bezier(0.33, 0.9, 0.28, 1) infinite;
+}
+
+/* Sapuan melintas; jawabannya menyala TEPAT saat sapuan melewatinya, lalu
+   bertahan sampai sapuan berikutnya. Kedua keyframe di bawah memakai durasi
+   yang sama persis - kalau berbeda, keduanya akan berpisah fase dalam beberapa
+   putaran dan heksagonnya menyala di tempat yang tidak sedang disapu. */
+@keyframes g-mas-sapu {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(354px);
+  }
+}
+.g-mas-sapu {
+  animation: g-mas-sapu 4.8s linear infinite;
+}
+@keyframes g-mas-temu {
+  0%,
+  34% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  44% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  50%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+}
+.g-mas-temu {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: g-mas-temu 4.8s cubic-bezier(0.33, 0.9, 0.28, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g-mas-alir,
+  .g-mas-batang,
+  .g-mas-sewa,
+  .g-mas-sapu,
+  .g-mas-temu {
+    animation: none;
+  }
+  /* Ditinggal dalam keadaan yang MENYATAKAN sesuatu, bukan dalam keadaan awal:
+     batang yang tingginya nol dan jawaban yang tak pernah muncul bukan gambar
+     yang lebih tenang, ia gambar yang kosong. */
+  .g-mas-alir {
+    opacity: 1;
+  }
+  .g-mas-sewa,
+  .g-mas-temu {
+    opacity: 1;
+  }
+  .g-mas-sapu {
+    opacity: 0;
+  }
 }
 
 /* --- Panel kontras: satu kawasan, dua cara melihat --------------------- */
@@ -2673,6 +3087,68 @@ input:focus-visible {
   .g-eko-kartu:hover {
     transform: none;
   }
+}
+
+/* --- Tirai pulang: peta -> halaman perkenalan -----------------------------
+   HEKSAGON, bukan lembar persegi, dan bukan pudar biasa. Halaman ini penuh
+   heksagon dari ujung ke ujung - peta, kartu gerbang, layar pembuka, ikon
+   simpul - dan bentuk yang menutupi layar saat berpindah adalah tempat paling
+   murah untuk menyebut nama produk tanpa satu kata pun.
+
+   Ia MEKAR dari tengah sambil berputar sedikit, sampai jauh lebih besar
+   daripada layar. Putarannya kecil (14 derajat) dengan sengaja: cukup untuk
+   membuat tepinya terbaca sebagai benda yang datang, tidak cukup untuk terbaca
+   sebagai roda yang berputar.
+
+   Fase KEDUA cuma memudar. Di baliknya halaman perkenalan sudah memasang
+   dirinya dan animasi masuknya sudah berjalan; heksagon yang menyusut di atas
+   halaman yang sama gelapnya tidak akan terlihat sama sekali, sementara pudar
+   membiarkan gerakan yang sudah ada di sana yang mengambil alih.
+
+   `transform` dan `opacity` saja. Tirai ini hidup persis 860 ms dan dilepas
+   dari DOM sesudahnya - tidak ada lapisan compositor yang tertinggal. */
+.pulang {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  overflow: hidden;
+  pointer-events: none;
+}
+.pulang-heks {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 240vmax;
+  height: 240vmax;
+  margin-left: -120vmax;
+  margin-top: -120vmax;
+  /* Warna dasar halaman perkenalan, bukan hitam murni: yang muncul sesudahnya
+     halaman itu, dan tirai yang warnanya berbeda membuat pertukarannya terbaca
+     sebagai dua kejadian. */
+  background: #0b100e;
+  clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+}
+@keyframes pulang-tumbuh {
+  from {
+    transform: scale(0) rotate(-14deg);
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes pulang-pudar {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.pulang[data-fase='tutup'] .pulang-heks {
+  animation: pulang-tumbuh 430ms cubic-bezier(0.5, 0, 0.2, 1) both;
+}
+.pulang[data-fase='buka'] .pulang-heks {
+  animation: pulang-pudar 430ms ease-out both;
 }
 
 /* Sakelar bahasa di menu pengaturan aplikasi: token aplikasi, bukan gerbang. */

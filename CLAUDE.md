@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 198 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 231 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -61,9 +61,12 @@ frontend/    React + Vite + MapLibre GL. Sengaja ramping; berkas baru butuh alas
              lib/bahasa.tsx        — dua bahasa (id/en). Tiap komponen memegang kamusnya
                                       SENDIRI lewat `useTeks(K)`; kalimat tanpa pasangan
                                       Inggrisnya gagal di tsc, bukan tampil sebagai kunci
-             components/GerbangPeta.tsx — enam kartu Solusi. Animasinya SATU: gelombang
-                                      heksagon yang mekar lalu surut, kutipan dari
-                                      `jalankanGelombang` di peta — bukan efek karangan
+             components/GerbangPeta.tsx — enam kartu Solusi. Yang bergerak di atas tiap
+                                      potret adalah heksagon SUNGGUHAN kartu itu, pada
+                                      posisi piksel yang sama dengan di dalam WebP-nya,
+                                      berwarna sesuai `WARNA_LAYER` — dibangkitkan
+                                      `scripts/potret-kartu.mjs --sorot`, bukan digambar
+                                      tangan. Yang disorot menjawab pertanyaan kartunya
              lib/layer-peta.ts     — aturan pewarnaan layer, dipakai peta DAN gerbang
              lib/potret-kartu.ts   — HANYA dipakai skrip; tidak masuk bundel
              lib/kartu-gerbang.ts  — DIBUAT OTOMATIS skrip; jangan disunting
@@ -331,6 +334,10 @@ cd frontend && npx vite build               # ukur ulang pemecahan bundel
 cd frontend && node scripts/gaya-basemap.mjs # gaya statis; butuh backend hidup
 cd frontend && SANDI=... node scripts/audit-prd.mjs   # 43 asersi; butuh keduanya hidup
 cd frontend && node scripts/potret-kartu.mjs # kartu gerbang; butuh keduanya hidup
+# `--sorot` menyegarkan GEOMETRI heksagon kartunya saja, tanpa menggambar ulang
+# satu WebP pun. Ada karena keduanya bersyarat berbeda: WebP menuntut ubin MAPID
+# hidup, geometri tidak menuntut apa pun selain basis data.
+cd frontend && node scripts/potret-kartu.mjs --sorot
 ```
 
 ---
@@ -349,7 +356,7 @@ cd frontend && node scripts/potret-kartu.mjs # kartu gerbang; butuh keduanya hid
 | Apa pun yang berbayar | `test_akun.py` — yang penting bukan "apakah pelanggan bisa masuk", melainkan apakah tamu dan akun gratis benar-benar TIDAK menerima isinya |
 | Model / skema | `alembic upgrade head` berhasil di basis data nyata |
 | Frontend | `npx tsc -p tsconfig.app.json --noEmit` dan `npx oxlint` (**bukan** `npx tsc --noEmit`) |
-| Palet kuadran, ekspresi pewarnaan, ambang skor | `node scripts/potret-kartu.mjs` — kartu gerbang adalah gambar yang di-commit; tanpa ini ia diam-diam memperlihatkan keadaan lama |
+| Palet kuadran, ekspresi pewarnaan, ambang skor | `node scripts/potret-kartu.mjs` — kartu gerbang adalah gambar yang di-commit; tanpa ini ia diam-diam memperlihatkan keadaan lama. Warna baru WAJIB hex harfiah: `var(...)` di dalam ekspresi cat membuat SELURUH layer isian gagal dipasang tanpa satu pun galat (sudah terjadi pada Hidden Gem) |
 | Kalimat di gerbang, dialog, atau pembuka | Kedua cabang kamusnya (`id` DAN `en`) — `tsc` menjaga bentuknya, potret Playwright menjaga isinya. Nama produk (PriceLens, ZoneGuard, …) tidak diterjemahkan dengan sengaja |
 | Sumbu prestise, `BAHAN_PRESTISE`, `hitung_prestise_visual()` | `test_aturan.py` DAN `audit-prd.mjs` — yang dijaga bukan "apakah sumbunya tergambar", melainkan apakah layar masih MENYEBUTKAN sumbu itu berdiri di atas bahan apa |
 
@@ -385,7 +392,7 @@ cd frontend && node scripts/potret-kartu.mjs # kartu gerbang; butuh keduanya hid
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 198 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 231 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit

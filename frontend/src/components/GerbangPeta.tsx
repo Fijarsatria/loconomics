@@ -29,9 +29,27 @@
  * KENAPA GAMBARNYA COCOK DENGAN KALIMATNYA. Tiap kartu dipasangkan menurut
  * LAYER yang benar-benar tergambar di berkasnya: kartu "menakar sewa" memakai
  * potret layer PriceLens, kartu "memastikan boleh" memakai potret ZoneGuard.
+ *
+ * YANG BERGERAK DI ATASNYA adalah heksagon SUNGGUHAN kartu itu (11 Sep 2026).
+ *
+ * Sebelumnya di sini berdiri kisi heksagon karangan yang menutupi seluruh kotak
+ * gambar: ia tidak berdiri di tempat mana pun, tidak membawa satu angka pun,
+ * dan tidak menjawab pertanyaan kartunya. Dilaporkan apa adanya - "animasi
+ * layer heksagon yang jelek dan ga nyambung sama masing masing konteks". Kisi
+ * itu memang tidak nyambung; ia tidak bisa nyambung, karena tidak pernah ada
+ * hubungannya dengan peta di belakangnya.
+ *
+ * Yang menggantikannya datang dari `KARTU_GERBANG[i].sorot`, dihitung
+ * `scripts/potret-kartu.mjs --sorot` dengan KAMERA YANG SAMA dengan WebP-nya -
+ * jadi tiap heksagon berdiri persis di atas dirinya sendiri di dalam gambar.
+ * Warnanya pun dibaca kembali dari peta yang digambar MapLibre, bukan ditebak.
+ *
+ * Dan yang DISOROT menjawab pertanyaan kartunya: skor tertinggi untuk "memilih
+ * lokasi", sewa termurah untuk "menakar sewa", zona terlarang untuk "memastikan
+ * boleh" - yang lalu PERGI, persis yang dijanjikan kalimatnya.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 import { LAYER, type NamaLayer } from '../config'
 import { KARTU_GERBANG, type KartuGerbang } from '../lib/kartu-gerbang'
@@ -135,105 +153,131 @@ const LABEL: Record<Bahasa, { buka: (k: string, l: string) => string; peta: (l: 
 }
 
 /* ==========================================================================
-   Gelombang heksagon di atas potret peta
+   Lapisan heksagon di atas potret peta
    ==========================================================================
 
-   MENGGANTIKAN lima animasi SVG yang berdiri di sini sebelumnya - sapuan skor,
-   batang kuartil, denyut hidden gem, zona yang ditolak, sapuan radar. Kelimanya
-   digambar sendiri dan tidak satu pun benar-benar terjadi di peta; dilaporkan
-   apa adanya sebagai "efek animasi layer yang ga jelas".
+   TIGA hal yang membuatnya "beneran dari mapsnya", dan ketiganya bisa
+   diperiksa:
 
-   Yang bergerak sekarang hal yang MEMANG dilakukan aplikasinya, dan cuma satu:
-   layer heksagon MEKAR dari pusat kawasan, bertahan, lalu SURUT ke tepi - resep
-   yang sama persis dengan `jalankanGelombang` di `PetaInteraktif.tsx`, sampai ke
-   arah dan urutannya. Petanya sendiri tidak pernah ikut hilang: yang datang dan
-   pergi cuma lapisan heksagonnya, seperti menyalakan dan mematikan layer.
+   1. POSISINYA. `sorot.sel` berisi pusat tiap heksagon dalam piksel kotak
+      gambar, dihitung dengan `fitBounds` yang sama persis dengan yang dipakai
+      menggambar WebP-nya. Diuji: kamera aritmetika di skrip dan `map.project`
+      MapLibre berselisih 0,0000 piksel.
 
-   Undakannya dihitung dari JARAK KE PUSAT, bukan dari nomor urut - itu yang
-   membuatnya terbaca sebagai gelombang melingkar alih-alih sebagai daftar yang
-   menyala satu per satu. Sama dengan `bubuhiUrutan` di peta sungguhan.
+   2. BENTUKNYA. `sorot.bentuk` simpangan enam simpul dari pusat sel, dirata-
+      ratakan atas seluruh sel kartu itu. Simpangan antar sel terukur 0,01
+      piksel - satu kawasan cuma membentang dua kilometer.
 
-   HANYA `transform` dan `opacity`, dan seluruhnya keyframe CSS: nol pekerjaan
-   JavaScript per bingkai, dan berhenti sendiri saat kartunya di luar layar
-   lewat `[data-tampil]` yang dipasang pengamat di bawah.
+   3. WARNANYA. Dibaca kembali dari kanvas MapLibre yang menggambar heksagon
+      memakai `WARNA_LAYER` milik aplikasi. Tidak ada tabel warna kedua di
+      berkas ini yang bisa berpisah diam-diam dari peta.
+
+   Geraknya mengutip `jalankanGelombang` di peta: kisi MEKAR dari pusat kawasan,
+   heksagon yang menjawab menyusul satu per satu, semuanya bertahan, lalu SURUT.
+   Undakannya dihitung dari JARAK KE PUSAT untuk kisi dan dari PERINGKAT untuk
+   jawabannya - yang pertama membuatnya terbaca sebagai gelombang melingkar,
+   yang kedua membuatnya terbaca sebagai daftar yang sedang dibacakan.
+
+   HANYA `transform` dan `opacity`, seluruhnya keyframe CSS: nol pekerjaan
+   JavaScript per bingkai, dan berhenti sendiri di luar layar lewat
+   `[data-tampil]` yang dipasang pengamat di bawah.
    ========================================================================== */
 
-/** Kotak gambar gelombang. Dipotong `slice`, jadi ia menutupi bentuk apa pun. */
-const W_ALUN = 120
-const H_ALUN = 90
-const R_ALUN = 14
+/** Berapa cincin jarak dipakai mengundak kisi. Tujuh sudah terbaca sebagai gelombang. */
+const N_CINCIN = 7
 
-/**
- * Warna tiap layer, TIGA rona per layer.
- *
- * Tiga, bukan satu: layer tematik yang sungguhan tidak pernah satu warna rata -
- * ia skala, dan skala itulah yang membuatnya terbaca sebagai data alih-alih
- * sebagai selubung berwarna. Ronanya sengaja diambil dari ujung-ujung skala
- * yang dipakai `lib/layer-peta.ts`, bukan dikarang baru.
- */
-const RONA_LAYER: Record<NamaLayer, [string, string, string]> = {
-  opportunity: ['#2de8c0', '#1f9f86', '#4c93f7'],
-  pricelens: ['#5bf3d3', '#2de8c0', '#17be9b'],
-  hidden_gem: ['#4c93f7', '#7cf7dd', '#2de8c0'],
-  zoneguard: ['#29a35a', '#2de8c0', '#b01b1b'],
-  risk_radar: ['#e58a00', '#d4443f', '#7c5cff'],
-}
-
-/** Sel gelombang: posisi, jarak ternormalkan dari pusat, dan ronanya. */
-const SEL_ALUN = (() => {
-  const sel: { x: number; y: number; d: number; i: number }[] = []
-  const dx = R_ALUN * Math.sqrt(3)
-  const dy = R_ALUN * 1.5
-  const cx = W_ALUN / 2
-  const cy = H_ALUN / 2
-  let i = 0
-  for (let baris = -1; baris <= H_ALUN / dy + 1; baris++) {
-    for (let kolom = -1; kolom <= W_ALUN / dx + 1; kolom++) {
-      const x = kolom * dx + (baris % 2 ? dx / 2 : 0)
-      const y = baris * dy
-      sel.push({ x, y, d: Math.hypot(x - cx, y - cy), i: i++ })
-    }
+/** Poligon dari satu pusat dan simpangan enam simpulnya. */
+function poligon(bentuk: number[], x: number, y: number) {
+  let d = ''
+  for (let i = 0; i < 6; i++) {
+    d += `${i ? 'L' : 'M'}${(x + bentuk[i * 2]).toFixed(1)},${(y + bentuk[i * 2 + 1]).toFixed(1)}`
   }
-  const maks = Math.max(...sel.map((s) => s.d)) || 1
-  return sel.map((s) => ({ ...s, d: s.d / maks }))
-})()
-
-/** Satu heksagon kecil berjari-jari r di (x, y). */
-function heksMini(r: number, x: number, y: number) {
-  return Array.from({ length: 6 }, (_, k) => {
-    const a = (Math.PI / 180) * (60 * k - 30)
-    return `${(x + r * Math.cos(a)).toFixed(2)},${(y + r * Math.sin(a)).toFixed(2)}`
-  }).join(' ')
+  return d + 'Z'
 }
 
 /**
- * Lapisan heksagon yang mekar lalu surut, di atas potret.
+ * Lapisan heksagon sungguhan di atas potret.
  *
  * `jeda` menggeser seluruh siklusnya - dipakai kartu komparasi supaya kedua
- * petanya tidak mekar berbarengan, yang justru menghapus kesan "yang satu, lalu
- * yang lain" yang jadi seluruh gunanya kartu itu.
+ * petanya tidak menyala berbarengan, yang justru menghapus kesan "yang satu,
+ * lalu yang lain" yang jadi seluruh gunanya kartu itu.
  */
-function GelombangHeks({ layer, jeda = 0 }: { layer: NamaLayer; jeda?: number }) {
-  const rona = RONA_LAYER[layer]
+function LapisanHeks({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
+  const s = d.sorot
+
+  /**
+   * Kisi dipecah jadi tujuh CINCIN, bukan satu path tunggal maupun 108 simpul.
+   *
+   * Satu path tidak bisa diundak - dan tanpa undakan tidak ada gelombang, cuma
+   * kisi yang berkedip. Seratus delapan simpul bisa diundak, tetapi itu 108
+   * elemen yang dianimasikan di enam kartu sekaligus, dan halaman ini sudah
+   * pernah dibuat berat oleh hal yang persis seperti itu. Tujuh path membeli
+   * gelombangnya dengan tujuh elemen.
+   */
+  const cincin = useMemo(() => {
+    const jarak: number[] = []
+    let maks = 0
+    for (let i = 0; i < s.sel.length; i += 2) {
+      const j = Math.hypot(s.sel[i] - s.cx, s.sel[i + 1] - s.cy)
+      jarak.push(j)
+      if (j > maks) maks = j
+    }
+    const kotak: string[] = Array.from({ length: N_CINCIN }, () => '')
+    for (let i = 0; i < jarak.length; i++) {
+      const k = Math.min(N_CINCIN - 1, Math.floor((jarak[i] / (maks || 1)) * N_CINCIN))
+      kotak[k] += poligon(s.bentuk, s.sel[i * 2], s.sel[i * 2 + 1])
+    }
+    return kotak
+  }, [s])
+
+  // Garis kisi harus melawan basemapnya, sama alasannya dengan `GARIS_HEX` di
+  // peta: garis gelap di atas basemap gelap tidak menggambar apa pun.
+  const garis = d.gelap ? 'rgba(233,244,240,0.5)' : 'rgba(16,33,28,0.42)'
+  /**
+   * Cincin heksagon yang menjawab. WARNANYA LAWAN BASEMAP, bukan warna isinya.
+   *
+   * Percobaan pertama memakai warna isian juga, dan itu gagal persis di kartu
+   * yang paling membutuhkannya: ujung MURAH skala PriceLens `#e4ece9` - hampir
+   * putih - digambar di atas basemap terang, dengan garis yang juga hampir
+   * putih. Yang terlihat noda pucat, bukan heksagon yang dipilih. Isinya tetap
+   * membawa datanya; cincinnya yang membuatnya terbaca sebagai "yang ini".
+   */
+  const tepiJawab = d.gelap ? 'rgba(255,255,255,0.92)' : 'rgba(12,22,18,0.78)'
+
   return (
     <svg
-      viewBox={`0 0 ${W_ALUN} ${H_ALUN}`}
+      viewBox={`0 0 ${s.w} ${s.h}`}
       preserveAspectRatio="xMidYMid slice"
-      className="g-alun pointer-events-none absolute inset-0 h-full w-full"
+      className="g-heks pointer-events-none absolute inset-0 h-full w-full"
       aria-hidden
     >
-      {SEL_ALUN.map((s) => (
-        <polygon
-          key={s.i}
-          className="g-alun-sel"
-          points={heksMini(R_ALUN - 0.9, s.x, s.y)}
+      {cincin.map((jalur, i) =>
+        jalur ? (
+          <path
+            key={i}
+            className="g-heks-cincin"
+            d={jalur}
+            fill="none"
+            stroke={garis}
+            strokeWidth="0.9"
+            style={{
+              transformOrigin: `${s.cx}px ${s.cy}px`,
+              animationDelay: `${(jeda + (i / N_CINCIN) * 0.62).toFixed(2)}s`,
+            }}
+          />
+        ) : null,
+      )}
+      {s.sorot.map((h, i) => (
+        <path
+          key={i}
+          className="g-heks-jawab"
+          d={poligon(s.bentuk, h.x, h.y)}
+          fill={h.c}
+          stroke={tepiJawab}
+          strokeWidth="1.5"
           style={{
-            fill: rona[s.i % 3],
-            transformOrigin: `${s.x.toFixed(2)}px ${s.y.toFixed(2)}px`,
-            // Yang di pusat berangkat lebih dulu; yang di tepi menyusul.
-            // 1,45 dtk dari pusat ke tepi - cukup lambat untuk terbaca sebagai
-            // gelombang, cukup cepat untuk selesai sebelum mata berpindah.
-            animationDelay: `${(jeda + s.d * 1.45).toFixed(2)}s`,
+            transformOrigin: `${h.x}px ${h.y}px`,
+            animationDelay: `${(jeda + 0.5 + i * 0.085).toFixed(2)}s`,
           }}
         />
       ))}
@@ -241,7 +285,7 @@ function GelombangHeks({ layer, jeda = 0 }: { layer: NamaLayer; jeda?: number })
   )
 }
 
-/** Potret layer + gelombangnya + atribusi. */
+/** Potret layer + heksagonnya + atribusi. */
 function Potret({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
   const label = useTeks(LABEL)
   return (
@@ -265,7 +309,7 @@ function Potret({ d, jeda = 0 }: { d: KartuGerbang; jeda?: number }) {
         draggable={false}
         className="g-bento-gambar absolute inset-0 h-full w-full object-cover"
       />
-      <GelombangHeks layer={d.layer} jeda={jeda} />
+      <LapisanHeks d={d} jeda={jeda} />
       {/* Atribusi ditulis sendiri: kontrol MapLibre tidak ikut terpotret, dan
           ketentuan A.3 tidak gugur cuma karena gambarnya statis. */}
       <span className="pointer-events-none absolute bottom-1.5 right-2.5 max-w-[70%] truncate text-[8.5px] text-white/40">
@@ -281,7 +325,7 @@ function Teks({ d, k }: { d: KartuGerbang; k: Keputusan }) {
   return (
     <>
       <p className="eyebrow mb-2 text-[color:var(--g-ink-4)]">{k.alat}</p>
-      <h3 className="papan flex items-center gap-2 text-[clamp(1.05rem,1.7vw,1.3rem)] leading-snug text-[color:var(--g-ink)]">
+      <h3 className="judul-anak flex items-center gap-2 text-[clamp(1.05rem,1.7vw,1.3rem)] leading-snug text-[color:var(--g-ink)]">
         {kal.judul}
         {/* Panahnya menempel di JUDUL sejak baris kaki dicabut. Kartu yang bisa
             diklik harus menyatakannya di suatu tempat, dan tempat yang tersisa
@@ -332,8 +376,8 @@ function KartuKeputusan({
    *
    * Sebelumnya ia satu potret seperti kelima kartu lain - kartu yang berbicara
    * tentang membandingkan dua tempat sambil menunjukkan satu tempat. Sekarang
-   * bentuknya sendiri yang mengatakannya, dan gelombang heksagonnya digeser
-   * setengah siklus supaya yang kiri mekar lebih dulu.
+   * bentuknya sendiri yang mengatakannya, dan lapisan heksagonnya digeser
+   * setengah siklus supaya yang kiri menyala lebih dulu.
    */
   const mediaBanding = pembanding && (
     <div className="relative flex min-h-[150px] flex-1 self-stretch overflow-hidden">
@@ -397,7 +441,7 @@ export default function BentoKeputusan({ onBuka }: { onBuka: (p: PilihanKawasan)
   const grid = useRef<HTMLDivElement>(null)
 
   /**
-   * Gelombang HANYA berjalan selagi kartunya terlihat.
+   * Lapisan heksagon HANYA berjalan selagi kartunya terlihat.
    *
    * Enam animasi tak berujung yang terus memutar dirinya walaupun jauh di luar
    * layar adalah persis yang membuat halaman ini dulu berat. Di sini

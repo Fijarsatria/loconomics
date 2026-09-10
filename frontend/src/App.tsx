@@ -649,22 +649,6 @@ export default function App() {
     setRutaTampil(false)
   }, [hexTerpilih])
 
-  /**
-   * Kelas tema dipasang di <body>, bukan cuma di wadah aplikasi.
-   *
-   * Ketiga dialog dirender lewat `createPortal` ke <body> - secara DOM mereka
-   * di LUAR wadah aplikasi. Tanpa kelas di akar, dialognya tidak pernah ikut
-   * gelap, dan yang terlihat panel putih mengambang di atas aplikasi gelap.
-   *
-   * Dipasang lewat efek dan bukan ditulis mati di CSS, karena terangnya
-   * mengikuti gaya basemap yang dipilih orang - dan itu berubah saat aplikasi
-   * berjalan.
-   */
-  useEffect(() => {
-    const gelap = GAYA_GELAP.includes(gaya)
-    document.body.classList.toggle('peta-gelap', gelap)
-    return () => document.body.classList.remove('peta-gelap')
-  }, [gaya])
   const [saringKuadran, setSaringKuadran] = useState<NamaKuadran | null>(null)
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
   const [kuadranPenuh, setKuadranPenuh] = useState(false)
@@ -745,6 +729,34 @@ export default function App() {
    * berhenti jadi perkenalan dan mulai jadi penghalang.
    */
   const [gerbang, setGerbang] = useState(!AWAL.masuk)
+
+  /**
+   * Kelas tema dipasang di <body>, bukan cuma di wadah aplikasi.
+   *
+   * Ketiga dialog dirender lewat `createPortal` ke <body> - secara DOM mereka
+   * di LUAR wadah aplikasi. Tanpa kelas di akar, dialognya tidak pernah ikut
+   * gelap, dan yang terlihat panel putih mengambang di atas aplikasi gelap.
+   *
+   * Dipasang lewat efek dan bukan ditulis mati di CSS, karena terangnya
+   * mengikuti gaya basemap yang dipilih orang - dan itu berubah saat aplikasi
+   * berjalan.
+   *
+   * HALAMAN GERBANG IKUT MEMAKSANYA GELAP, dan itu memperbaiki bug yang
+   * dilaporkan pemilik repo dengan potret: kolom nama pengguna dan sandi di
+   * dialog Masuk tampil sebagai BILAH PUTIH di atas halaman yang hitam pekat.
+   *
+   * Sebabnya bukan warna yang salah dipilih, melainkan tempat dialognya
+   * berdiri. Gerbang membawa paletnya sendiri lewat kelas `.gerbang`, tetapi
+   * dialognya dirender `createPortal` ke <body> - di luar simpul itu. Selama
+   * basemap peta di belakang kebetulan terang, <body> memakai token TERANG, dan
+   * `bg-surface` di kolom isian jadi putih. Gerbang selalu gelap; sekarang
+   * <body> ikut menyatakannya selama gerbang terbuka.
+   */
+  useEffect(() => {
+    const gelap = gerbang || GAYA_GELAP.includes(gaya)
+    document.body.classList.toggle('peta-gelap', gelap)
+    return () => document.body.classList.remove('peta-gelap')
+  }, [gaya, gerbang])
   /** Arah kompas & kemiringan peta. Tombol pelurus muncul hanya kalau miring. */
   const [arahPeta, setArahPeta] = useState({ bearing: 0, pitch: 0 })
   /** Simulasi terbuka di atas detail heksagon. Ditutup saat heksagon berganti. */
@@ -855,18 +867,71 @@ export default function App() {
 
   const tutupPembuka = useCallback(() => setPembuka(false), [])
 
+  /** Fase tirai pulang. Lihat `keLanding` di bawah. */
+  const [pulang, setPulang] = useState<'tutup' | 'buka' | null>(null)
+  const jamPulang = useRef<number[]>([])
+  useEffect(
+    () => () => {
+      jamPulang.current.forEach((j) => window.clearTimeout(j))
+    },
+    [],
+  )
+
+  /**
+   * Pintasan lokasi di jawaban AI ditekan.
+   *
+   * Petanya terbang dan heksagonnya TERPILIH - tapi tabnya TIDAK diganti, dan
+   * itu keputusan yang sengaja. Melempar orang ke tab "Daftar lokasi" berarti
+   * menutup percakapan yang barusan menyebut lokasi ini, dan pertanyaan
+   * berikutnya hampir selalu tentang lokasi yang sama ("kenapa skornya
+   * segitu?"). Panel detailnya cuma satu ketukan tab dari sini.
+   */
+  const keLokasiAI = useCallback((h3: string) => {
+    setHexTerpilih(h3)
+    setHexBanding(null)
+    setSimulasiTerbuka(false)
+    setPanelTerbuka(true)
+    peta.current?.highlight([h3])
+    peta.current?.fokusHeksagon(h3)
+  }, [])
+
   /**
    * Kembali ke halaman perkenalan, atas permintaan eksplisit penggunanya.
    *
    * Penanda sesi ikut DIHAPUS. Tanpa itu, refresh berikutnya membacanya dan
    * melempar orangnya kembali ke peta - persis kebalikan dari yang baru saja
    * ia minta.
+   *
+   * LEWAT TIRAI, bukan pertukaran seketika (11 Sep 2026, permintaan pemilik
+   * repo). Jalan MASUK sudah punya layar pembukanya sendiri - empat langkah,
+   * kota heksagon yang dibangun - sementara jalan PULANG mengganti seluruh
+   * layar dalam satu bingkai. Yang terbaca bukan "kembali", melainkan aplikasi
+   * yang mendadak hilang.
+   *
+   * Tirainya heksagon yang MEKAR dari tengah sampai menutupi layar, lalu
+   * memudar di atas halaman perkenalan yang animasi masuknya sudah berjalan di
+   * baliknya. Dua fase, dua jam, dan keduanya dibersihkan saat komponen dilepas
+   * supaya tidak ada `setState` yang mendarat di komponen yang sudah pergi.
    */
   const keLanding = useCallback(() => {
-    setGerbang(true)
-    setHexTerpilih(null)
-    setSimulasiTerbuka(false)
-    tulisSesiMasuk(false)
+    const selesaikan = () => {
+      setGerbang(true)
+      setHexTerpilih(null)
+      setSimulasiTerbuka(false)
+      tulisSesiMasuk(false)
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      selesaikan()
+      return
+    }
+    setPulang('tutup')
+    jamPulang.current.push(
+      window.setTimeout(() => {
+        selesaikan()
+        setPulang('buka')
+      }, 430),
+      window.setTimeout(() => setPulang(null), 860),
+    )
   }, [])
 
   /**
@@ -1257,6 +1322,15 @@ export default function App() {
         <Suspense fallback={<div className="fixed inset-0 z-40 bg-[#eaf6f1]" />}>
           <Gerbang onMasuk={masukKePeta} />
         </Suspense>
+      )}
+      {/* Tirai pulang. DI ATAS gerbang (z 70) dan dialog (z 80), DI BAWAH layar
+          pembuka (z 100) - keduanya tidak pernah hidup bersamaan, tapi urutan
+          yang ditulis apa adanya lebih murah daripada urutan yang harus
+          dibuktikan. */}
+      {pulang && (
+        <div className="pulang" data-fase={pulang} aria-hidden>
+          <span className="pulang-heks" />
+        </div>
       )}
       {pembuka && (
         // Fallback WAJIB legap, dan alasannya sama persis dengan alasan gerbang
@@ -1871,16 +1945,13 @@ export default function App() {
                       Diperbaiki dengan pola yang SAMA dengan detail-di-atas-
                       daftar tepat di bawah ini: tetap terpasang, disembunyikan
                       lewat CSS (`hidden`, bukan pelepasan komponen) saat bukan
-                      gilirannya. `terbuka` tetap `true` - itu keadaan "terbuka"
-                      MILIK PANELNYA SENDIRI, terpisah dari tab mana yang
-                      sedang dilihat orang. */}
+                      gilirannya. */}
                   <div className={tab === 'ai' ? 'h-full min-h-0' : 'hidden'}>
                     <PanelAI
                       kendali={kendali}
                       hexTerpilih={hexTerpilih}
                       layerAktif={layer}
-                      terbuka
-                      onLipat={() => setTab('daftar')}
+                      onKeLokasi={keLokasiAI}
                     />
                   </div>
                 </div>

@@ -17,10 +17,19 @@
  *
  * DUA KELUARAN, dan keduanya di-commit:
  *   public/kartu/*.webp        gambarnya
- *   src/lib/kartu-gerbang.ts   angka yang menyertainya
+ *   src/lib/kartu-gerbang.ts   angka DAN geometri heksagon yang menyertainya
  *
  * Keduanya lahir dari data yang sama pada detik yang sama, jadi gambar dan
  * keterangannya tidak akan pernah bercerita hal yang berbeda.
+ *
+ * `--sorot` MENYEGARKAN GEOMETRINYA SAJA, tanpa menggambar ulang satu WebP pun.
+ *
+ * Ada karena keduanya punya syarat yang berbeda. Menggambar WebP menuntut ubin
+ * MAPID hidup; menghitung geometri heksagon tidak menuntut apa pun selain
+ * basis data - kameranya murni aritmetika, dan warnanya dibaca dari heksagon
+ * yang digambar di atas latar polos. Saat ubin MAPID sedang tidak melayani
+ * (401, sudah terjadi berhari-hari), mode penuh akan menerbitkan enam kartu
+ * tanpa basemap; mode ini tetap bisa dijalankan dan gambarnya tidak disentuh.
  *
  * JALANKAN ULANG kalau salah satu dari ini berubah:
  *   - palet kuadran atau ekspresi pewarnaan layer
@@ -57,14 +66,29 @@ const ALAMAT = process.env.ALAMAT_DEV ?? 'http://localhost:5173/'
  * dan api.maptiler.com dengan kunci milik orang lain, sementara ketentuan A.3
  * menuntut basemap MAPID Maps. Lihat catatan panjangnya di `src/config.ts`.
  */
+/*
+ * `pilih` MENGIKAT animasi kartu ke kalimat kartu.
+ *
+ * Tiap kartu menyorot heksagon yang menjawab pertanyaannya sendiri, bukan
+ * sekumpulan heksagon yang kebetulan ada di sana: "memilih lokasi" menyorot
+ * skor tertinggi, "menakar sewa" menyorot sewa termurah, "memastikan boleh"
+ * menyorot yang zonanya melarang - lalu yang terlarang itu PERGI, persis yang
+ * dijanjikan kalimatnya ("tidak pernah muncul sebagai rekomendasi").
+ *
+ * `banyak` sengaja belasan, bukan seluruhnya: yang disorot adalah JAWABAN, dan
+ * jawaban yang menutupi seluruh kawasan bukan jawaban.
+ */
 const DAFTAR = [
-  { berkas: 'tanah-abang', kawasan: 'Tanah Abang', gaya: 'dasar', layer: 'opportunity', condong: -0.7, utama: true, lebar: 1120, tinggi: 720, angka: true, mutu: 0.74 },
-  { berkas: 'manggarai', kawasan: 'Manggarai', gaya: 'terang', layer: 'pricelens', condong: 1.2, lebar: 620, tinggi: 380, angka: false, mutu: 0.72 },
-  { berkas: 'dukuh-atas', kawasan: 'Dukuh Atas BNI', gaya: 'gelap', layer: 'hidden_gem', condong: -1.3, lebar: 620, tinggi: 380, angka: false, mutu: 0.72 },
-  { berkas: 'depok-baru', kawasan: 'Depok Baru', gaya: 'jalan', layer: 'zoneguard', condong: 1.5, lebar: 620, tinggi: 380, angka: false, mutu: 0.72 },
-  { berkas: 'bekasi', kawasan: 'Bekasi', gaya: 'dasar', layer: 'risk_radar', condong: -1, lebar: 620, tinggi: 380, angka: false, mutu: 0.72 },
-  { berkas: 'harjamukti', kawasan: 'Harjamukti', gaya: 'terang', layer: 'opportunity', condong: 0.9, lebar: 620, tinggi: 380, angka: false, mutu: 0.72 },
+  { berkas: 'tanah-abang', kawasan: 'Tanah Abang', gaya: 'dasar', layer: 'opportunity', condong: -0.7, utama: true, lebar: 1120, tinggi: 720, angka: true, mutu: 0.74, pilih: 'skor', banyak: 14 },
+  { berkas: 'manggarai', kawasan: 'Manggarai', gaya: 'terang', layer: 'pricelens', condong: 1.2, lebar: 620, tinggi: 380, angka: false, mutu: 0.72, pilih: 'sewa-murah', banyak: 12 },
+  { berkas: 'dukuh-atas', kawasan: 'Dukuh Atas BNI', gaya: 'gelap', layer: 'hidden_gem', condong: -1.3, lebar: 620, tinggi: 380, angka: false, mutu: 0.72, pilih: 'gem', banyak: 12 },
+  { berkas: 'depok-baru', kawasan: 'Depok Baru', gaya: 'jalan', layer: 'zoneguard', condong: 1.5, lebar: 620, tinggi: 380, angka: false, mutu: 0.72, pilih: 'terlarang', banyak: 12 },
+  { berkas: 'bekasi', kawasan: 'Bekasi', gaya: 'dasar', layer: 'risk_radar', condong: -1, lebar: 620, tinggi: 380, angka: false, mutu: 0.72, pilih: 'churn', banyak: 12 },
+  { berkas: 'harjamukti', kawasan: 'Harjamukti', gaya: 'terang', layer: 'opportunity', condong: 0.9, lebar: 620, tinggi: 380, angka: false, mutu: 0.72, pilih: 'skor', banyak: 10 },
 ]
+
+/** `--sorot`: segarkan geometri heksagonnya saja, jangan sentuh satu WebP pun. */
+const hanyaSorot = process.argv.includes('--sorot')
 
 /** Gaya yang latarnya gelap butuh pita nama layer yang terang di kartunya. */
 const GAYA_GELAP = ['gelap']
@@ -80,9 +104,24 @@ await halaman.waitForTimeout(2500)
 await mkdir(TUJUAN, { recursive: true })
 
 let totalKb = 0
-const manifes = []
+let manifes = []
 
-for (const p of DAFTAR) {
+/*
+ * Mode `--sorot` membaca angka kartu dari manifes yang SUDAH ada.
+ *
+ * Manifesnya ditulis `JSON.stringify`, jadi potongan di antara kurung siku
+ * pertama dan terakhir memang JSON yang sah - tidak perlu penafsir TypeScript
+ * hanya untuk membaca enam baris angka kembali.
+ */
+if (hanyaSorot) {
+  const { readFile } = await import('node:fs/promises')
+  const teks = await readFile(join(AKAR, 'src', 'lib', 'kartu-gerbang.ts'), 'utf-8')
+  const mulai = teks.indexOf('[', teks.indexOf('=', teks.indexOf('export const KARTU_GERBANG')))
+  manifes = JSON.parse(teks.slice(mulai, teks.lastIndexOf(']') + 1))
+  console.log('  --sorot: ' + manifes.length + ' kartu dibaca dari manifes, WebP tidak disentuh')
+}
+
+for (const p of hanyaSorot ? [] : DAFTAR) {
   const mulai = Date.now()
   const hasil = await halaman.evaluate(async (pesan) => {
     const mod = await import('/src/lib/potret-kartu.ts')
@@ -115,6 +154,28 @@ for (const p of DAFTAR) {
     String(p.lebar).padStart(4) + 'x' + p.tinggi + '  ' +
     kb.toFixed(0).padStart(4) + ' KB  ' +
     hasil.ringkas.sorotan.nilai.padStart(9) + '  ' + detik + 's',
+  )
+}
+
+/*
+ * Lapisan sorot: heksagon sungguhan, pada posisi piksel yang sama dengan
+ * potretnya. Selalu dihitung, di kedua mode - kalau WebP baru saja digambar
+ * ulang, geometrinya wajib ikut, kalau tidak keduanya berselisih separuh
+ * piksel dan tidak ada yang memberi tahu.
+ */
+for (const p of DAFTAR) {
+  const baris = manifes.find((m) => m.berkas === p.berkas)
+  if (!baris) continue
+  const hasil = await halaman.evaluate(async (pesan) => {
+    const mod = await import('/src/lib/potret-kartu.ts')
+    return mod.sorotKartu(pesan)
+  }, { kawasan: p.kawasan, layer: p.layer, lebar: p.lebar, tinggi: p.tinggi, pilih: p.pilih, banyak: p.banyak })
+  baris.sorot = hasil
+  console.log(
+    '  sorot ' + p.berkas.padEnd(14) +
+    String(hasil.sel.length / 2).padStart(4) + ' sel  ' +
+    String(hasil.sorot.length).padStart(3) + ' disorot (' + p.pilih + ')  ' +
+    'r=' + Math.hypot(hasil.bentuk[0], hasil.bentuk[1]).toFixed(1) + 'px',
   )
 }
 
@@ -151,6 +212,22 @@ const baris = [
   '  n: number',
   '  kuadran: Record<string, number>',
   '  sorotan: { nilai: string; label: string }',
+  '  /**',
+  '   * Heksagon sungguhan kartu ini, dalam piksel kotak gambarnya.',
+  '   *',
+  '   * `sel` pusat SELURUH heksagon; `sorot` yang menjawab pertanyaan kartunya,',
+  '   * urut sesuai jawabannya, dengan warna yang DIBACA dari peta - bukan dari',
+  '   * salinan kedua aturan pewarnaan. `bentuk` dipakai bersama keduanya.',
+  '   */',
+  '  sorot: {',
+  '    w: number',
+  '    h: number',
+  '    cx: number',
+  '    cy: number',
+  '    bentuk: number[]',
+  '    sel: number[]',
+  '    sorot: { x: number; y: number; c: string }[]',
+  '  }',
   '}',
   '',
   '/** Tanggal potret terakhir, dinyatakan apa adanya di halamannya. */',
@@ -163,7 +240,7 @@ const baris = [
 await writeFile(join(AKAR, 'src', 'lib', 'kartu-gerbang.ts'), baris, 'utf-8')
 
 console.log(
-  '\n  ' + DAFTAR.length + ' kartu, total ' + totalKb.toFixed(0) + ' KB -> public/kartu/' +
+  '\n  ' + (hanyaSorot ? 'WebP tidak disentuh' : DAFTAR.length + ' kartu, total ' + totalKb.toFixed(0) + ' KB -> public/kartu/') +
   '\n  manifes -> src/lib/kartu-gerbang.ts',
 )
 await peramban.close()

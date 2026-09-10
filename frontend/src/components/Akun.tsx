@@ -38,6 +38,7 @@ import { useTeks } from '../lib/bahasa'
 
 import { api, GalatAPI, setTiket, adaTiket } from '../lib/api'
 import { KAWASAN_PILOT } from '../config'
+import { PapanNama } from './primitif'
 import type { Akun, KatalogPaket, Tingkat } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -554,17 +555,20 @@ function DialogAkun({
           dua kolom isian dan satu tombol, selebar yang perlu, tidak lebih. */}
       <div className="p-7 sm:p-8">
         <div className="flex items-start justify-between gap-4">
-          <span className="relative grid h-10 w-10 place-items-center" aria-hidden>
-            <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
-              <polygon
-                points="0,-46 39.84,-23 39.84,23 0,46 -39.84,23 -39.84,-23"
-                fill="var(--color-surface-2)"
-                stroke="var(--color-line-2)"
-                strokeWidth="2.5"
-              />
-            </svg>
-            <span className="relative text-[13px] font-bold tracking-[0.04em] text-ink">L</span>
-          </span>
+          {/* NAMA LENGKAP, bukan inisial di dalam heksagon.
+              
+              Heksagon-berhuruf-L itu lambang yang tidak dipakai di mana pun
+              lagi di produk ini: bilah atas peta, bilah gerbang, dan layar
+              pembuka ketiganya memakai papan nama yang sama. Satu-satunya
+              tempat orang bertemu "L" adalah dialog ini - jadi ia bukan
+              pengingat identitas, ia identitas KEDUA.
+
+              Komponen yang sama persis dengan yang di pojok kiri bilah
+              pencarian, bukan tiruannya: perilaku per-hurufnya - melenting saat
+              disentuh, lalu mengambil warna yang luntur beberapa detik kemudian
+              - ikut apa adanya, dan tidak ada salinan yang bisa berpisah tempo
+              pada perubahan berikutnya. */}
+          <PapanNama teks="Loconomics" sebagai="div" kelas="text-[17px] leading-none text-ink" />
           <button
             onClick={onTutup}
             aria-label={t.tutup}
@@ -576,7 +580,7 @@ function DialogAkun({
           </button>
         </div>
 
-        <h2 key={mode} className="ak-tukar papan mt-6 text-[26px] font-light leading-[1.1] tracking-[-0.01em]" data-arah={arah}>
+        <h2 key={mode} className="ak-tukar judul-bagian mt-6 text-[26px] leading-[1.1]" data-arah={arah}>
           {mode === 'masuk' ? t.judulMasuk : t.judulDaftar}
         </h2>
         <p className="mt-2 text-[13.5px] leading-snug text-ink-3">
