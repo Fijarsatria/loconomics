@@ -1066,6 +1066,29 @@ input:focus-visible {
   background-clip: text;
   color: transparent;
 }
+/* Di halaman TERANG, gradien yang kedua ujungnya terang jadi teks putih di
+   atas kertas putih - persis kesalahan yang catatan di atas ini peringatkan,
+   cuma dengan latar yang terbalik. Ujungnya diturunkan ke rona tua yang sama;
+   yang dijaga tetap hal yang sama: kedua ujung gradien harus KONTRAS terhadap
+   latarnya, dan latarnya berganti. */
+:root[data-tema='terang'] .g-catalyst-teks {
+  background: linear-gradient(96deg, #0a7a64 0%, #452fa8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+/* Pendar teal-ungu di sekelilingnya juga dirancang untuk latar hitam. Di atas
+   kertas ia jadi noda; yang tersisa bayangan biasa plus cincin gradiennya. */
+:root[data-tema='terang'] .g-catalyst {
+  box-shadow:
+    0 1px 2px rgb(20 40 34 / 0.08),
+    0 10px 26px -12px rgb(20 40 34 / 0.28);
+}
+:root[data-tema='terang'] .g-catalyst:hover {
+  box-shadow:
+    0 2px 4px rgb(20 40 34 / 0.1),
+    0 16px 34px -12px rgb(20 40 34 / 0.34);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .g-catalyst::before {
     animation: none;
@@ -2711,6 +2734,211 @@ input:focus-visible {
   --sb-redup: var(--g-ink-4);
   --sb-hover: var(--g-ink);
 }
+
+/* ==========================================================================
+   Halaman gerbang, TERANG
+   ==========================================================================
+
+   Ditambahkan 11 Sep 2026: aplikasi punya sakelar terang/gelap yang berdiri
+   sendiri, dan gerbang harus ikut - sakelar yang tidak mengubah halaman
+   pertama adalah sakelar yang terbaca rusak.
+
+   BUKAN pembalikan mekanis. Tiga hal ditangani berbeda:
+
+     AKSEN. Teal #2de8c0 dan ungu #7c5cff dirancang menyala di atas hitam; di
+     atas putih keduanya kehilangan kontras teks sama sekali. Yang dipakai di
+     sini versi TUA-nya (#0f9c80, #5b3fd9), yang lolos kontras di atas kertas.
+     Ronanya tidak digeser - ia tetap warna Hidden Gem yang sama.
+
+     LAPISAN CAHAYA. Aurora, sarang, lensa, dan nama raksasa semuanya dirancang
+     sebagai CAHAYA - benda yang lebih terang daripada latarnya. Di halaman
+     terang tidak ada yang lebih terang daripada kertas, jadi ketiganya dibalik
+     jadi BAYANGAN: alfa hitam-kehijauan yang sangat rendah. Kalau dibiarkan
+     putih, hero terang akan tampil benar-benar kosong.
+
+     TOMBOL UTAMA. Di halaman gelap ia putih; di halaman terang putih di atas
+     putih bukan tombol. Ia jadi hijau-tua pekat dengan teks terang - satu-
+     satunya benda paling pekat di layar, seperti seharusnya. */
+.gerbang[data-tema='terang'] {
+  --g-latar:
+    radial-gradient(1150px 760px at 80% -8%, rgb(15 156 128 / 0.10) 0%, transparent 58%),
+    radial-gradient(980px 700px at 6% 92%, rgb(91 63 217 / 0.08) 0%, transparent 55%),
+    linear-gradient(168deg, #f4f9f7 0%, #eef5f2 48%, #e8f1ee 100%);
+  --g-latar-pekat: #f2f8f6;
+
+  --g-ink: #0c1714;
+  --g-ink-2: #2f4741;
+  --g-ink-3: #5d7772;
+  --g-ink-4: #7d968f;
+  --g-teks-terang: #f2f7f5;
+
+  --g-teal: #0f9c80;
+  --g-teal-terang: #17be9b;
+  --g-teal-2: #0f9c80;
+  --g-teal-muda: #2de8c0;
+  --g-teal-tua: #0a7a64;
+
+  --g-ungu: #5b3fd9;
+  --g-ungu-terang: #7c5cff;
+  --g-ungu-tua: #452fa8;
+
+  --g-kartu-isi: #ffffff;
+  --g-kartu-isi-2: #f7fbf9;
+  --g-kartu-tepi: #d7e5e0;
+  --g-kartu-tepi-nyala: rgb(15 156 128 / 0.45);
+
+  --g-kaca-isi: rgb(255 255 255 / 0.78);
+  --g-kaca-isi-tebal: rgb(255 255 255 / 0.93);
+  --g-kaca-isi-pil: rgb(255 255 255 / 0.72);
+  --g-kaca-isi-pil-hover: rgb(255 255 255 / 0.95);
+  --g-kaca-tepi: rgb(12 23 20 / 0.1);
+  --g-kaca-tepi-terang: rgb(12 23 20 / 0.16);
+  --g-kaca-kilau: rgb(255 255 255 / 0.9);
+  --g-kaca-bayang: rgb(20 40 34 / 0.16);
+  --g-kaca-kilau-sapu: rgb(255 255 255 / 0.75);
+
+  --g-utama-isi: #0f2c25;
+  --g-utama-isi-hover: #123a30;
+  --g-utama-teks: #f2f7f5;
+  --g-utama-tepi: rgb(15 44 37 / 0.35);
+
+  /* Cahaya jadi BAYANGAN. Lihat catatan di kepala blok ini. */
+  --g-kisi-garis: rgb(12 60 50 / 0.055);
+  --g-aurora-1: rgb(15 156 128 / 0.16);
+  --g-aurora-2: rgb(91 63 217 / 0.12);
+  --g-sarang: rgb(12 60 50 / 0.1);
+  --g-hanyut-1: rgb(15 156 128 / 0.13);
+  --g-hanyut-2: rgb(15 156 128 / 0.05);
+  --g-lensa-1: rgb(15 156 128 / 0.3);
+  --g-lensa-2: rgb(15 156 128 / 0.08);
+  --g-sarang-nyala: rgb(15 156 128 / 0.55);
+  --g-raksasa-tepi: rgb(12 60 50 / 0.13);
+  --g-raksasa-isi: rgb(12 60 50 / 0.06);
+
+  --g-nav-isi: rgb(255 255 255 / 0.8);
+  --g-nav-tepi: rgb(12 23 20 / 0.1);
+  --g-nav-bayang: rgb(20 40 34 / 0.14);
+
+  --g-kartu-pekat: rgb(255 255 255 / 0.96);
+  --g-garis-halus: rgb(12 60 50 / 0.14);
+  --g-garis-halus-2: rgb(12 60 50 / 0.075);
+  --g-elips: rgb(15 156 128 / 0.09);
+  --g-scroll: rgb(12 60 50 / 0.2);
+  --g-scroll-hover: rgb(12 60 50 / 0.36);
+  --g-kontras-garis: rgb(12 60 50 / 0.16);
+
+  --sb-rel: rgb(12 23 20 / 0.07);
+  --sb-isi: #0f2c25;
+  --sb-aktif: #f2f7f5;
+  --sb-redup: var(--g-ink-4);
+  --sb-hover: var(--g-ink);
+}
+
+/* Pelat alat ukur bagian masalah ikut membalik ronanya: kisi milimeter yang
+   terang di atas kertas putih tidak menggambar apa pun. */
+.gerbang[data-tema='terang'] .g-mas-plat {
+  --g-mas-siku: rgb(12 60 50 / 0.32);
+  --g-mas-jalur: rgb(12 60 50 / 0.26);
+  background:
+    linear-gradient(rgb(12 60 50 / 0.05) 1px, transparent 1px) 0 0 / 100% 22px,
+    linear-gradient(90deg, rgb(12 60 50 / 0.05) 1px, transparent 1px) 0 0 / 22px 100%,
+    var(--g-kartu-isi);
+}
+
+/* Motif titik bagian Latar belakang: sama, ronanya dibalik. */
+.gerbang[data-tema='terang'] .g-latar-titik::before {
+  background-image:
+    radial-gradient(rgb(12 60 50 / 0.14) 1px, transparent 1.4px),
+    radial-gradient(1100px 600px at 12% 0%, rgb(15 156 128 / 0.08) 0%, transparent 60%);
+}
+.gerbang[data-tema='terang'] .g-latar-mesh {
+  background-image:
+    radial-gradient(900px 560px at 88% 8%, rgb(15 156 128 / 0.12) 0%, transparent 62%),
+    radial-gradient(820px 560px at 8% 96%, rgb(91 63 217 / 0.12) 0%, transparent 60%);
+}
+.gerbang[data-tema='terang'] .g-tutup {
+  box-shadow: 0 -30px 60px -20px rgb(20 40 34 / 0.16);
+}
+/* Bagian TIM tetap gelap di kedua tema: ia jurang, dan jurang yang terang
+   berhenti jadi jurang. Yang dijaga cuma tintanya, yang memang sudah putih. */
+.gerbang[data-tema='terang'] .g-jurang {
+  --g-ink: #e8f5f1;
+  --g-ink-2: #c2d7d1;
+  --g-ink-3: #8aa39c;
+  --g-ink-4: #66807a;
+}
+
+/* --- Tirai cair sakelar tema ---------------------------------------------
+   Lingkaran yang MEKAR dari tombolnya sampai menutupi layar, tema ditukar di
+   balik lingkaran itu, lalu lingkarannya memudar. Tiga fase, satu elemen.
+
+   Bukan `document.startViewTransition`: aplikasi ini berisi kanvas WebGL
+   seukuran layar, dan memotretnya dua kali untuk sebuah pergantian warna
+   adalah harga yang tidak sepadan - selain API-nya belum ada di setiap
+   peramban yang harus dilayani halaman lomba.
+
+   Warnanya diberi TEPI LEMBUT lewat radial-gradient, bukan potongan tegas.
+   Itu satu-satunya hal yang membedakan "cairan yang menyebar" dari "lingkaran
+   yang membesar". */
+.tirai-tema {
+  position: fixed;
+  inset: 0;
+  z-index: 94;
+  pointer-events: none;
+  overflow: hidden;
+}
+.tirai-tema-isi {
+  position: absolute;
+  left: var(--tt-x, 50%);
+  top: var(--tt-y, 50%);
+  width: var(--tt-d, 200vmax);
+  height: var(--tt-d, 200vmax);
+  margin-left: calc(var(--tt-d, 200vmax) / -2);
+  margin-top: calc(var(--tt-d, 200vmax) / -2);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--tt-warna) 0%,
+    var(--tt-warna) 78%,
+    color-mix(in srgb, var(--tt-warna) 55%, transparent) 92%,
+    transparent 100%
+  );
+}
+@keyframes tirai-tema-mekar {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes tirai-tema-pudar {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.tirai-tema[data-fase='tutup'] .tirai-tema-isi {
+  animation: tirai-tema-mekar 460ms cubic-bezier(0.5, 0, 0.2, 1) both;
+}
+.tirai-tema[data-fase='buka'] .tirai-tema-isi {
+  animation: tirai-tema-pudar 420ms ease-out both;
+}
+
+/* TANPA transisi warna menyeluruh, dan itu disengaja.
+
+   Godaannya besar: satu aturan `* { transition: background-color, color }` dan
+   pergantiannya jadi mulus di mana-mana. Harganya dua, dan keduanya sudah
+   pernah dibayar halaman ini. Pertama, transisi pada ribuan elemen sekaligus
+   adalah pekerjaan yang dilakukan pada SETIAP hover dan setiap perubahan warna
+   lain, bukan cuma saat tema berganti. Kedua - dan ini yang mahal - transisi
+   CSS pada properti yang juga ditulis skrip membuat nilai terhitungnya
+   tertinggal, dan itu jebakan yang sudah memakan tombol "gulir" di hero.
+
+   Ia juga tidak dibutuhkan: tirainya MENUTUPI seluruh layar pada saat tema
+   ditukar. Yang berubah di baliknya tidak dilihat siapa pun. */
 
 /* Pembungkus yang menggulir NAIK menutupi hero yang dipatok. Pekat, dengan
    bayangan tipis di tepi atasnya - tanpa bayangan itu tepi lembarannya tidak

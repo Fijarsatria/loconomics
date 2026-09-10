@@ -72,7 +72,7 @@ import PanelInsight from './components/PanelInsight'
 // bundel awal; peta mendapat utas utamanya lebih cepat.
 const Gerbang = lazy(() => import('./components/Gerbang'))
 import { TombolAkun, useSesi } from './components/Akun'
-import { useTeks, type Bahasa } from './lib/bahasa'
+import { SakelarTema, useTema, useTeks, type Bahasa } from './lib/bahasa'
 import { MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
 // Kedua dialog ini besar dan jarang dibuka. MenuKawasan tetap statis - ia
@@ -115,20 +115,23 @@ import { Glif, Menu, MenuPengaturan, PapanNama, PilihBasemap } from './component
  */
 const LAYER_KUADRAN: NamaLayer[] = ['opportunity', 'hidden_gem']
 
-/**
- * Gaya basemap yang GELAP. Chrome aplikasi mengikutinya.
+/*
+ * `GAYA_GELAP` DICABUT 11 Sep 2026, dan ini kali kedua ia dicabut - jadi
+ * alasannya layak ditulis lengkap supaya tidak dikembalikan untuk ketiga kali.
  *
- * Dikembalikan 9 Sep 2026 sesudah sempat dicabut. Pencabutannya membuat seluruh
- * aplikasi gelap tanpa syarat - dan itu SALAH untuk produk yang benda terbesar
- * di layarnya adalah peta: kaca gelap di atas basemap terang membuat chrome dan
- * petanya terbaca sebagai dua produk yang ditempel. Terangnya peta ditentukan
- * gaya basemap yang dipilih orang, jadi terangnya chrome harus mengikuti hal
- * yang sama.
+ * Ia dulu menurunkan terangnya chrome dari gaya basemap: memilih basemap Gelap
+ * menggelapkan seluruh panel. Pencabutan PERTAMA (9 Sep) dibatalkan karena
+ * penggantinya "gelap tanpa syarat", dan itu memang salah - kaca gelap di atas
+ * basemap terang membuat chrome dan petanya terbaca sebagai dua produk yang
+ * ditempel.
  *
- * Keempat gaya MAPID: `terang`, `dasar`, `jalan` semuanya terang; hanya `gelap`
- * yang gelap.
+ * Yang berbeda kali ini: penggantinya bukan "tanpa syarat" melainkan SAKELAR
+ * yang dipegang pembacanya (`useTema`). Keberatan lama tetap benar dan tetap
+ * bisa dijawab - orang yang memilih basemap gelap tinggal menekan sakelarnya -
+ * dan sekarang orang yang menginginkan kebalikannya juga punya jalan. Yang
+ * dulu tidak punya jalan sama sekali: halaman gerbang, yang tidak punya
+ * basemap untuk diikuti.
  */
-const GAYA_GELAP: NamaGaya[] = ['gelap']
 
 /** Indeks H3 resolusi 9: 15 digit heksadesimal. Dipakai pencarian. */
 const POLA_H3 = /^[0-9a-f]{15}$/i
@@ -625,6 +628,7 @@ export default function App() {
    * yang tidak pernah membukanya tidak melihat satu pun perubahan.
    */
   const [namaTempat, setNamaTempat] = useState<string>(AWAL.namaTempat ?? 'normal')
+  const { tema } = useTema()
   /**
    * Apakah rute & kawasan jangkau digambar untuk heksagon yang dipilih.
    *
@@ -737,26 +741,51 @@ export default function App() {
    * di LUAR wadah aplikasi. Tanpa kelas di akar, dialognya tidak pernah ikut
    * gelap, dan yang terlihat panel putih mengambang di atas aplikasi gelap.
    *
-   * Dipasang lewat efek dan bukan ditulis mati di CSS, karena terangnya
-   * mengikuti gaya basemap yang dipilih orang - dan itu berubah saat aplikasi
-   * berjalan.
+   * DARI SAKELAR TEMA, bukan lagi dari gaya basemap (11 Sep 2026).
    *
-   * HALAMAN GERBANG IKUT MEMAKSANYA GELAP, dan itu memperbaiki bug yang
-   * dilaporkan pemilik repo dengan potret: kolom nama pengguna dan sandi di
-   * dialog Masuk tampil sebagai BILAH PUTIH di atas halaman yang hitam pekat.
+   * Sampai hari ini terangnya chrome mengikuti basemap yang kebetulan dipilih:
+   * memilih basemap Gelap menggelapkan seluruh panel. Itu pintar dan salah -
+   * orang yang ingin basemap gelap dengan panel terang tidak punya cara
+   * menyatakannya, dan gerbang tidak ikut sama sekali. Sekarang temanya berdiri
+   * sendiri, bawaannya gelap, dan basemap cuma soal peta.
    *
-   * Sebabnya bukan warna yang salah dipilih, melainkan tempat dialognya
-   * berdiri. Gerbang membawa paletnya sendiri lewat kelas `.gerbang`, tetapi
-   * dialognya dirender `createPortal` ke <body> - di luar simpul itu. Selama
-   * basemap peta di belakang kebetulan terang, <body> memakai token TERANG, dan
-   * `bg-surface` di kolom isian jadi putih. Gerbang selalu gelap; sekarang
-   * <body> ikut menyatakannya selama gerbang terbuka.
+   * Ini sekaligus memperbaiki bug yang dilaporkan pemilik repo dengan potret:
+   * kolom nama pengguna dan sandi di dialog Masuk tampil sebagai BILAH PUTIH di
+   * atas halaman yang hitam pekat. Sebabnya tempat dialognya berdiri - gerbang
+   * membawa paletnya sendiri lewat kelas `.gerbang`, sementara dialognya
+   * dirender `createPortal` ke <body>, di luar simpul itu. Dengan tema yang
+   * berdiri sendiri, <body> dan gerbang selalu menyatakan hal yang sama.
    */
   useEffect(() => {
-    const gelap = gerbang || GAYA_GELAP.includes(gaya)
-    document.body.classList.toggle('peta-gelap', gelap)
+    document.body.classList.toggle('peta-gelap', tema === 'gelap')
     return () => document.body.classList.remove('peta-gelap')
-  }, [gaya, gerbang])
+  }, [tema])
+
+  /**
+   * Basemap IKUT saat temanya diganti - tapi hanya saat DIGANTI, bukan saat
+   * dimuat.
+   *
+   * Keberatan lama masih berlaku dan masih benar: kaca gelap di atas basemap
+   * terang membuat chrome dan petanya terbaca sebagai dua produk yang ditempel.
+   * Yang salah dulu bukan menyelaraskan keduanya, melainkan MENGUNCI-nya - orang
+   * yang ingin kombinasi lain tidak punya jalan.
+   *
+   * Jadi: sakelar tema menyelaraskan keduanya sebagai TITIK BERANGKAT, lalu
+   * menu Basemap tetap berkuasa penuh sesudahnya. Efek ini melewati jalannya
+   * yang pertama, jadi basemap yang dipulihkan dari localStorage tidak pernah
+   * ditimpa hanya karena aplikasinya baru dimuat.
+   */
+  const temaPertama = useRef(true)
+  useEffect(() => {
+    if (temaPertama.current) {
+      temaPertama.current = false
+      return
+    }
+    setGaya((g) => {
+      if (tema === 'gelap') return g === 'gelap' ? g : 'gelap'
+      return g === 'gelap' ? 'dasar' : g
+    })
+  }, [tema])
   /** Arah kompas & kemiringan peta. Tombol pelurus muncul hanya kalau miring. */
   const [arahPeta, setArahPeta] = useState({ bearing: 0, pitch: 0 })
   /** Simulasi terbuka di atas detail heksagon. Ditutup saat heksagon berganti. */
@@ -1353,11 +1382,7 @@ export default function App() {
         </Suspense>
       )}
 
-      <div
-        className={`relative h-full overflow-hidden ${
-          GAYA_GELAP.includes(gaya) ? 'peta-gelap' : ''
-        }`}
-      >
+      <div className={`relative h-full overflow-hidden ${tema === 'gelap' ? 'peta-gelap' : ''}`}>
         {/* --- Lapisan 1: peta, seluruh layar ------------------------------
             Peta TIDAK dipasang selama halaman gerbang masih terbuka.
 
@@ -1486,6 +1511,11 @@ export default function App() {
               />
               {/* Tombol "Lokasi tersimpan" pindah ke tumpukan kiri di atas
                   peta, sesumbu dengan pemilih basemap. Lihat alasannya di sana. */}
+              {/* Sakelar tema BERDIRI SENDIRI, bukan di dalam menu pengaturan.
+                  Ia satu-satunya setelan yang diubah orang berkali-kali dalam
+                  satu sesi - siang di kereta, malam di rumah - dan setelan
+                  sesering itu tidak boleh butuh dua ketukan. */}
+              <SakelarTema />
               <MenuPengaturan namaTempat={namaTempat} onNamaTempat={setNamaTempat} />
               {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
                   visual keduanya terbaca sebagai satu kelompok tombol. */}

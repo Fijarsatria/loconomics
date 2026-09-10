@@ -54,7 +54,7 @@ import { TombolAkun } from './Akun'
 import BentoKeputusan, { type PilihanKawasan } from './GerbangPeta'
 import { KARTU_GERBANG } from '../lib/kartu-gerbang'
 import { SUMBER } from '../lib/ringkasan-data'
-import { SakelarBahasa, useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
+import { SakelarBahasa, SakelarTema, useBahasa, useNamaZona, useTeks, useTema } from '../lib/bahasa'
 
 gsap.registerPlugin(ScrollTrigger, SplitText)
 
@@ -1450,6 +1450,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
   const akar = useRef<HTMLDivElement>(null)
   const teks = useTeks(K)
   const { bahasa } = useBahasa()
+  const { tema } = useTema()
 
   const [gerakMati] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   /** Bilah atas berganti bahan begitu halaman masuk jurang. */
@@ -1824,6 +1825,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
   return (
     <div
       ref={akar}
+      data-tema={tema}
       className="gerbang fixed inset-0 z-[70] overflow-y-auto overflow-x-hidden text-[color:var(--g-ink)]"
     >
       {/* --- Bilah atas yang ikut menempel ---------------------------------
@@ -1848,6 +1850,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
               dibutuhkan di sini - tombol yang sama berdiri dua kali lebih besar
               tepat di bawahnya, di hero. */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            <SakelarTema gelap={navGelap} />
             <SakelarBahasa gelap={navGelap} />
             <TombolAkun varian="gerbang" />
             <span className="hidden sm:inline-flex">{tombolMasuk('px-4 py-2', 'kecil')}</span>

@@ -4,7 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { SesiProvider } from './components/Akun.tsx'
 import { bangunkan } from './lib/api.ts'
-import { BahasaProvider } from './lib/bahasa.tsx'
+import { BahasaProvider, TemaProvider } from './lib/bahasa.tsx'
 
 // Dipanggil SEBELUM render, bukan di dalam sebuah useEffect.
 //
@@ -25,10 +25,15 @@ bangunkan()
 // dibaca, dan masuk dari halaman perkenalan tidak akan terbawa ke peta.
 // BahasaProvider di LUAR SesiProvider: pilihan bahasa tidak bergantung pada
 // siapa yang masuk, dan dialog masuk itu sendiri butuh membaca bahasanya.
+// TemaProvider di luar keduanya, dengan alasan yang sama sekaligus satu
+// tambahan: tirai pergantian temanya harus bisa menutupi SELURUH layar,
+// termasuk dialog yang di-portal ke <body>.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BahasaProvider>
-      <SesiProvider anak={<App />} />
-    </BahasaProvider>
+    <TemaProvider>
+      <BahasaProvider>
+        <SesiProvider anak={<App />} />
+      </BahasaProvider>
+    </TemaProvider>
   </StrictMode>,
 )
