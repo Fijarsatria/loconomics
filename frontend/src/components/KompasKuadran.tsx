@@ -31,7 +31,7 @@
 import { KUADRAN, URUTAN_KUADRAN } from '../config'
 import type { Kuadran as NamaKuadran, TitikKuadran } from '../types'
 import { Glif } from './primitif'
-import { useNamaZona, useTeks } from '../lib/bahasa'
+import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 
 interface Props {
   /** Kuadran yang sedang disaring. null = tidak ada filter. */
@@ -116,6 +116,7 @@ export default function KompasKuadran({
 }: Props) {
   const namaZona = useNamaZona()
   const tk = useTeks(K)
+  const { bahasa } = useBahasa()
   // Yang KECIL tidak lagi punya lebar sama sekali - ia mengambil sisa ruang.
   //
   // Dulu angkanya 232px, dihitung tangan sebagai "17rem dikurangi bantalan
@@ -192,7 +193,7 @@ export default function KompasKuadran({
                   key={kunci}
                   onClick={() => onSaring(aktif ? null : (kunci as NamaKuadran))}
                   aria-pressed={aktif}
-                  title={q.arti}
+                  title={bahasa === 'en' ? q.artiEn : q.arti}
                   className="group absolute cursor-pointer text-left transition-opacity duration-200"
                   style={{
                     // Kotak mutlak, bukan sel grid. Grid hanya bisa membelah di
@@ -316,7 +317,9 @@ export default function KompasKuadran({
                   >
                     {namaZona(q.kunci)}
                   </span>
-                  <span className="block text-ink-3">{q.ringkas}</span>
+                  <span className="block text-ink-3">
+                    {bahasa === 'en' ? q.ringkasEn : q.ringkas}
+                  </span>
                 </span>
               </li>
             )

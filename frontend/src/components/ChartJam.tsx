@@ -27,11 +27,15 @@ const K = {
     kosong: 'Belum ada struk berjam untuk heksagon ini',
     transaksi: (n: number) => `${n} transaksi`,
     estimasi: 'estimasi',
+    captive: 'Captive — tak punya pilihan lain',
+    choice: 'Choice — punya kendaraan, memilih transit',
   },
   en: {
     kosong: 'No time-stamped receipts for this hexagon yet',
     transaksi: (n: number) => `${n} transactions`,
     estimasi: 'estimate',
+    captive: 'Captive — no other way to travel',
+    choice: 'Choice — owns a vehicle, picks transit anyway',
   },
 }
 
@@ -61,11 +65,11 @@ export default function ChartJam({
       <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-2">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-[2px] bg-jam-kuat" />
-          Captive — tak punya pilihan lain
+          {t.captive}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-[2px] bg-jam-lemah" />
-          Choice — punya kendaraan, memilih transit
+          {t.choice}
         </span>
       </div>
 

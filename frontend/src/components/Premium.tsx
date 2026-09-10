@@ -38,8 +38,214 @@ import type {
   RiwayatSkor,
 } from '../types'
 import { useSesi } from './Akun'
-import { useNamaZona, useTeks } from '../lib/bahasa'
+import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 import { Badge, Glif, Kosong, Memuat, MemuatNama, Terkunci } from './primitif'
+
+/**
+ * Kalimat keempat alat berbayar ini, dua bahasa.
+ *
+ * Label dan keterangan keenam belas metrik komparasi TIDAK di sini melainkan
+ * di `METRIK` sebagai `labelEn`/`bantuanEn` - satu metrik dijelaskan di satu
+ * tempat, bersama `arah` dan `format`-nya, bukan separuh di sini separuh di
+ * sana.
+ *
+ * `dinamika.catatan`, `b.catatan`, `b.risiko.label`, dan tiap pesan galat
+ * datang dari backend dan dibiarkan apa adanya.
+ */
+const K = {
+  id: {
+    tutup: 'Tutup',
+    locale: 'id-ID',
+
+    kawasan: 'Kawasan',
+    semua: LABEL_SEMUA_KAWASAN,
+    enam: '6 kawasan',
+    ajakanFilter: 'Filter multi-kawasan menggabungkan beberapa kawasan dalam satu tampilan.',
+    pilihBeberapa: 'Pilih beberapa kawasan sekaligus',
+    pilihBeberapaIsi: 'Bandingkan Bekasi dan Depok Baru dalam satu peta — Premium.',
+
+    gagalKomparasi: 'Gagal memuat komparasi.',
+    pdfPremium: 'Ekspor PDF perbandingan bagian dari Loconomics Premium.',
+    pdfMasuk: 'Buat akun dulu untuk mengunduh perbandingan.',
+    gagalPdf: 'Gagal mengunduh PDF.',
+    judulBanding: (n: number) => `Membandingkan ${n} lokasi`,
+    ketBanding:
+      'Bar paling panjang berarti paling baik di baris itu — arahnya sudah diperhitungkan, jadi sewa termurah dan pesaing tersedikit juga tampil sebagai bar terpanjang.',
+    menyiapkan: 'Menyiapkan…',
+    unduhPdf: 'Unduh PDF',
+    menyusunBanding: 'sedang menyusun perbandingan…',
+    bukaDiPeta: 'Buka di peta',
+    zonaLarangKartu: 'Zona melarang usaha — berapa pun skornya',
+    unggulDi: (n: number, total: number) => `Unggul di ${n} dari ${total} hal`,
+    lihatIndeks: 'Lihat empat indeks pembentuk skor',
+    izinRisiko: 'Izin dan risiko',
+    bolehUsaha: 'Boleh dipakai usaha',
+    zonaLarang: 'Zona melarang usaha',
+    izinTakPasti: 'Izin belum bisa dipastikan',
+    kakiBanding:
+      'Lokasi berzona terlarang sengaja ikut ditampilkan — ini alat perbandingan, bukan rekomendasi, dan alasan terkuat untuk tidak memilih sebuah lokasi tidak boleh disembunyikan.',
+
+    gagalPantauan: 'Gagal memuat pantauan.',
+    judulSimpan: 'Lokasi tersimpan',
+    ketSimpan:
+      'Selisih dihitung terhadap skor yang dibekukan saat Anda menyimpan lokasinya — bukan terhadap angka yang dihitung ulang sekarang.',
+    yangDisimpan: 'Lokasi yang Anda simpan',
+    bandingkanTeratas: (n: number) => `Bandingkan ${n} teratas`,
+    memuatPantauan: 'Memuat pantauan…',
+    belumAdaSimpan: 'Belum ada lokasi tersimpan',
+    belumAdaSimpanIsi:
+      'Buka satu heksagon di peta lalu tekan “Simpan lokasi”. Ia muncul sebagai pin di peta, skornya dibekukan saat itu juga, dan perubahannya dilaporkan di sini.',
+    lihatRinci: 'Lihat rincian lokasi ini',
+    disimpan: 'disimpan',
+    dariSkor: (v: string) => `dari ${v}`,
+    rKawasan: 'Kawasan',
+    rSkorSimpan: 'Skor saat disimpan',
+    belumTercatat: 'belum tercatat',
+    rSkorSekarang: 'Skor sekarang',
+    rRisiko: 'Risiko pergantian usaha',
+    // Tingkat risiko datang sebagai KODE (`AMAN`/`WASPADA`/`BAHAYA`), bukan
+    // kalimat - jadi ia memang milik kamus, bukan milik backend.
+    tingkat: { AMAN: 'aman', WASPADA: 'waspada', BAHAYA: 'bahaya' } as Record<string, string>,
+    belumDinilai: 'belum dinilai',
+    rH3: 'Indeks H3',
+    rVersi: 'Versi skor',
+    selisihNol:
+      'Selisihnya nol karena skornya belum pernah diterbitkan ulang sejak Anda menyimpan lokasi ini — bukan karena tidak ada yang berubah.',
+    fokusPeta: 'Fokus ke peta',
+    lepasPantauan: 'Lepas dari pantauan',
+    berhentiPantau: (h3: string) => `Berhenti memantau ${h3}`,
+
+    dinamikaJudul: 'Dinamika kawasan',
+    dinamikaIsi:
+      'Latar untuk lokasi yang Anda simpan: seberapa sering usaha berganti tangan di kawasan ini, dan berapa banyak lokasinya yang sudah lewat batas wajar. Lokasi berskor bagus di kawasan yang pergantiannya tinggi menuntut pertimbangan yang berbeda.',
+    pilihSatuKawasan:
+      'Pilih satu kawasan di bilah atas untuk melihat sebaran churn-nya. Menggabungkan beberapa kawasan membuat persentilnya bercampur dan berhenti berarti.',
+    menghitungSebaran: 'Menghitung sebaran…',
+    nHeksagon: (n: string) => `${n} heksagon dihitung`,
+    churnBelum: 'Pergantian usaha belum terukur.',
+    churnBelumIsi:
+      'Ketiga ambangnya — tengah, waspada, bahaya — dihitung dari data yang belum ada sumbernya, jadi kawasan ini belum bisa dinilai risikonya.',
+    churnTengah: 'Pergantian usaha, lokasi tengah',
+    batasWaspada: 'Batas mulai waspada',
+    batasBahaya: 'Batas bahaya',
+    lewatWaspada: 'Lokasi yang sudah lewat batas waspada',
+    lewatBahaya: 'Lokasi yang sudah lewat batas bahaya',
+    nLokasi: (n: number) => `${n} lokasi`,
+    rataOS: 'Opportunity Score rata-rata',
+    sudahSurvei: 'Sudah disurvei langsung',
+    persenLokasi: (n: number) => `${n}% lokasi`,
+    komposisi: 'Komposisi kuadran',
+
+    belumAcuan: 'belum ada acuan',
+    belumBerubah: 'belum berubah',
+
+    riwayatJudul: 'Riwayat perubahan skor',
+    riwayatIsi:
+      'Lihat bagaimana skor lokasi ini bergerak setiap kali pipeline menerbitkan versi baru.',
+    bukaPremium: 'Buka dengan Premium',
+    daftarBuka: 'Sign Up untuk membuka',
+    riwayatPremium: 'Riwayat skor bagian dari Loconomics Premium.',
+    riwayatMasuk: 'Buat akun dulu untuk membuka riwayat skor.',
+    riwayatGagal: 'Riwayat tidak bisa dimuat.',
+    memuatRiwayat: 'Memuat riwayat…',
+    awal: 'awal',
+  },
+  en: {
+    tutup: 'Close',
+    locale: 'en-GB',
+
+    kawasan: 'Area',
+    semua: 'All areas',
+    enam: '6 areas',
+    ajakanFilter: 'The multi-area filter puts several areas into one view.',
+    pilihBeberapa: 'Pick several areas at once',
+    pilihBeberapaIsi: 'Compare Bekasi and Depok Baru on one map — Premium.',
+
+    gagalKomparasi: 'Could not load the comparison.',
+    pdfPremium: 'Exporting the comparison as a PDF is part of Loconomics Premium.',
+    pdfMasuk: 'Create an account first to download the comparison.',
+    gagalPdf: 'Could not download the PDF.',
+    judulBanding: (n: number) => `Comparing ${n} locations`,
+    ketBanding:
+      'The longest bar is the best on that row — direction is already accounted for, so the cheapest rent and the fewest rivals also come out as the longest bar.',
+    menyiapkan: 'Preparing…',
+    unduhPdf: 'Download PDF',
+    menyusunBanding: 'putting the comparison together…',
+    bukaDiPeta: 'Open on the map',
+    zonaLarangKartu: 'Zoning prohibits business — whatever the score',
+    unggulDi: (n: number, total: number) => `Ahead on ${n} of ${total}`,
+    lihatIndeks: 'See the four indices behind the score',
+    izinRisiko: 'Permission and risk',
+    bolehUsaha: 'Business is allowed',
+    zonaLarang: 'Zoning prohibits business',
+    izinTakPasti: 'Permission cannot be confirmed',
+    kakiBanding:
+      'Locations in prohibited zones are shown on purpose — this is a comparison tool, not a recommendation, and the strongest reason not to pick a location must never be hidden.',
+
+    gagalPantauan: 'Could not load your saved locations.',
+    judulSimpan: 'Saved locations',
+    ketSimpan:
+      'The difference is measured against the score frozen when you saved the location — not against a figure recomputed now.',
+    yangDisimpan: 'The locations you saved',
+    bandingkanTeratas: (n: number) => `Compare the top ${n}`,
+    memuatPantauan: 'Loading saved locations…',
+    belumAdaSimpan: 'No saved locations yet',
+    belumAdaSimpanIsi:
+      'Open a hexagon on the map and press “Save location”. It appears as a pin on the map, its score is frozen right then, and any change is reported here.',
+    lihatRinci: 'See the detail for this location',
+    disimpan: 'saved',
+    dariSkor: (v: string) => `from ${v}`,
+    rKawasan: 'Area',
+    rSkorSimpan: 'Score when saved',
+    belumTercatat: 'not recorded',
+    rSkorSekarang: 'Score now',
+    rRisiko: 'Turnover risk',
+    tingkat: { AMAN: 'safe', WASPADA: 'caution', BAHAYA: 'danger' } as Record<string, string>,
+    belumDinilai: 'not judged yet',
+    rH3: 'H3 index',
+    rVersi: 'Score version',
+    selisihNol:
+      'The difference is zero because the score has not been published again since you saved this location — not because nothing has changed.',
+    fokusPeta: 'Focus the map here',
+    lepasPantauan: 'Stop watching',
+    berhentiPantau: (h3: string) => `Stop watching ${h3}`,
+
+    dinamikaJudul: 'Area dynamics',
+    dinamikaIsi:
+      'Background for the locations you save: how often businesses change hands in this area, and how many of its locations are already past the reasonable limit. A high-scoring location in an area with heavy turnover calls for a different kind of thinking.',
+    pilihSatuKawasan:
+      'Pick a single area in the top bar to see its churn spread. Combining several areas mixes the percentiles and they stop meaning anything.',
+    menghitungSebaran: 'Working out the spread…',
+    nHeksagon: (n: string) => `${n} hexagons counted`,
+    churnBelum: 'Business turnover is not measured yet.',
+    churnBelumIsi:
+      'All three thresholds — middle, caution, danger — are computed from data that has no source yet, so the risk in this area cannot be judged.',
+    churnTengah: 'Business turnover, middle location',
+    batasWaspada: 'Where caution starts',
+    batasBahaya: 'Danger threshold',
+    lewatWaspada: 'Locations past the caution line',
+    lewatBahaya: 'Locations past the danger line',
+    nLokasi: (n: number) => `${n} locations`,
+    rataOS: 'Average Opportunity Score',
+    sudahSurvei: 'Surveyed on the ground',
+    persenLokasi: (n: number) => `${n}% of locations`,
+    komposisi: 'Quadrant mix',
+
+    belumAcuan: 'no baseline yet',
+    belumBerubah: 'unchanged',
+
+    riwayatJudul: 'How the score has changed',
+    riwayatIsi:
+      "See how this location's score moves every time the pipeline publishes a new version.",
+    bukaPremium: 'Open with Premium',
+    daftarBuka: 'Sign up to open',
+    riwayatPremium: 'Score history is part of Loconomics Premium.',
+    riwayatMasuk: 'Create an account first to open the score history.',
+    riwayatGagal: 'The history could not be loaded.',
+    memuatRiwayat: 'Loading history…',
+    awal: 'baseline',
+  },
+}
 
 // ---------------------------------------------------------------------------
 // Kerangka dialog (sama dengan Akun.tsx — createPortal, lihat CLAUDE.md)
@@ -61,6 +267,7 @@ function Lembar({
   aksi?: React.ReactNode
   children: React.ReactNode
 }) {
+  const t = useTeks(K)
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onTutup()
     document.addEventListener('keydown', k)
@@ -95,7 +302,7 @@ function Lembar({
               onClick={onTutup}
               className="cursor-pointer rounded-full border border-line px-4 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
             >
-              Tutup
+              {t.tutup}
             </button>
           </div>
         </div>
@@ -133,9 +340,10 @@ export function MenuKawasan({
   onUbah: (v: string) => void
 }) {
   const { premium, mintaLangganan } = useSesi()
-  const tk = useTeks({
-    id: { semua: LABEL_SEMUA_KAWASAN, enam: '6 kawasan', n: (n: number) => `${n} kawasan` },
-    en: { semua: 'All areas', enam: '6 areas', n: (n: number) => `${n} areas` },
+  const tk = useTeks(K)
+  const tn = useTeks({
+    id: { n: (n: number) => `${n} kawasan` },
+    en: { n: (n: number) => `${n} areas` },
   })
   const [buka, setBuka] = useState(false)
   const wadah = useRef<HTMLDivElement>(null)
@@ -164,7 +372,7 @@ export function MenuKawasan({
       ? tk.semua
       : dipilih.length === 1
         ? dipilih[0]
-        : tk.n(dipilih.length)
+        : tn.n(dipilih.length)
 
   const alih = (nama: string) => {
     if (!premium) {
@@ -192,7 +400,7 @@ export function MenuKawasan({
             : 'border-line bg-surface/60 hover:border-line-2 hover:bg-surface'
         }`}
       >
-        <span className="eyebrow hidden 2xl:inline">Kawasan</span>
+        <span className="eyebrow hidden 2xl:inline">{tk.kawasan}</span>
         <span className="whitespace-nowrap">{label}</span>
         {dipilih.length > 1 && (
           <span className="rounded-full bg-gem px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-white">
@@ -213,7 +421,7 @@ export function MenuKawasan({
       {buka && (
         <div
           role="listbox"
-          aria-label="Kawasan"
+          aria-label={tk.kawasan}
           className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[17rem] overflow-hidden rounded-md"
         >
           <div className="p-1.5">
@@ -259,9 +467,7 @@ export function MenuKawasan({
             <button
               onClick={() => {
                 setBuka(false)
-                mintaLangganan(
-                  'Filter multi-kawasan menggabungkan beberapa kawasan dalam satu tampilan.',
-                )
+                mintaLangganan(tk.ajakanFilter)
               }}
               className="flex w-full cursor-pointer items-start gap-2.5 border-t border-line/70 bg-surface-2/60 px-3.5 py-3 text-left transition-colors hover:bg-surface-2"
             >
@@ -273,10 +479,10 @@ export function MenuKawasan({
               </span>
               <span className="min-w-0">
                 <span className="block text-[12.5px] font-semibold text-ink">
-                  Pilih beberapa kawasan sekaligus
+                  {tk.pilihBeberapa}
                 </span>
                 <span className="block text-[11.5px] leading-snug text-ink-3">
-                  Bandingkan Bekasi dan Depok Baru dalam satu peta — Premium.
+                  {tk.pilihBeberapaIsi}
                 </span>
               </span>
             </button>
@@ -328,16 +534,23 @@ function Kotak({ aktif, bulat }: { aktif: boolean; bulat?: boolean }) {
 const METRIK: {
   kunci: string
   label: string
+  labelEn: string
   bantuan: string
+  bantuanEn: string
   ambil: (b: Komparasi['baris'][number]) => number | null
-  format: (v: number | null) => string | null
+  /** `en` cuma dipakai tiga metrik yang satuannya memang kata: tempat, menit,
+   *  orang. Sisanya mengabaikannya, dan itu sah - rupiah dan angka tanpa
+   *  satuan sudah sama di kedua bahasa. */
+  format: (v: number | null, en: boolean) => string | null
   arah: 'tinggi' | 'rendah'
   utama?: boolean
 }[] = [
   {
     kunci: 'opportunity_score',
     label: 'Opportunity Score',
+    labelEn: 'Opportunity Score',
     bantuan: 'ringkasan semuanya, 0-100',
+    bantuanEn: 'everything summed up, 0-100',
     ambil: (b) => b.opportunity_score,
     format: (v) => angka(v, 0),
     arah: 'tinggi',
@@ -346,7 +559,9 @@ const METRIK: {
   {
     kunci: 'harga_sewa_per_m2',
     label: 'Sewa per m²',
+    labelEn: 'Rent per m²',
     bantuan: 'makin murah makin baik',
+    bantuanEn: 'the cheaper the better',
     ambil: (b) => b.harga_sewa_per_m2,
     format: (v) => rupiah(v),
     arah: 'rendah',
@@ -355,7 +570,9 @@ const METRIK: {
   {
     kunci: 'belanja_per_jam',
     label: 'Uang berpindah per jam',
+    labelEn: 'Money moving per hour',
     bantuan: 'seberapa deras uang mengalir',
+    bantuanEn: 'how fast the money flows',
     ambil: (b) => b.belanja_per_jam,
     format: (v) => rupiah(v),
     arah: 'tinggi',
@@ -364,25 +581,31 @@ const METRIK: {
   {
     kunci: 'n_kompetitor_langsung',
     label: 'Pesaing sejenis',
+    labelEn: 'Direct rivals',
     bantuan: 'makin sedikit makin lapang',
+    bantuanEn: 'fewer means more room',
     ambil: (b) => b.n_kompetitor_langsung,
-    format: (v) => (v === null ? null : `${angka(v, 0)} tempat`),
+    format: (v, en) => (v === null ? null : `${angka(v, 0)} ${en ? 'places' : 'tempat'}`),
     arah: 'rendah',
     utama: true,
   },
   {
     kunci: 'waktu_jalan_menit',
     label: 'Jalan kaki ke stasiun',
+    labelEn: 'Walk to the station',
     bantuan: 'makin dekat makin ramai dilewati',
+    bantuanEn: 'closer means more passers-by',
     ambil: (b) => b.waktu_jalan_menit,
-    format: (v) => (v === null ? null : `${angka(v, 0)} menit`),
+    format: (v, en) => (v === null ? null : `${angka(v, 0)} ${en ? 'min' : 'menit'}`),
     arah: 'rendah',
     utama: true,
   },
   {
     kunci: 'puncak_sore',
     label: 'Keramaian sore',
+    labelEn: 'Afternoon busyness',
     bantuan: 'seberapa ramai pukul 16-20',
+    bantuanEn: 'how busy it is from 16 to 20',
     ambil: (b) => b.puncak_sore,
     format: (v) => angka(v, 2),
     arah: 'tinggi',
@@ -391,23 +614,29 @@ const METRIK: {
   {
     kunci: 'pop_100m',
     label: 'Penduduk sekitar',
+    labelEn: 'Residents nearby',
     bantuan: 'orang yang tinggal di petak ini',
+    bantuanEn: 'people living in this cell',
     ambil: (b) => b.pop_100m,
-    format: (v) => (v === null ? null : `${angka(v, 0)} orang`),
+    format: (v, en) => (v === null ? null : `${angka(v, 0)} ${en ? 'people' : 'orang'}`),
     arah: 'tinggi',
   },
   {
     kunci: 'kepadatan_poi_total',
     label: 'Keramaian usaha',
+    labelEn: 'Business density',
     bantuan: 'semua tempat usaha, bukan cuma pesaing',
+    bantuanEn: 'every business, not just the rivals',
     ambil: (b) => b.kepadatan_poi_total,
-    format: (v) => (v === null ? null : `${angka(v, 0)} tempat`),
+    format: (v, en) => (v === null ? null : `${angka(v, 0)} ${en ? 'places' : 'tempat'}`),
     arah: 'tinggi',
   },
   {
     kunci: 'keragaman_usaha',
     label: 'Keragaman usaha',
+    labelEn: 'Variety of businesses',
     bantuan: 'makin beragam, makin banyak alasan orang datang',
+    bantuanEn: 'the more variety, the more reasons to come',
     ambil: (b) => b.keragaman_usaha,
     format: (v) => angka(v, 2),
     arah: 'tinggi',
@@ -415,7 +644,9 @@ const METRIK: {
   {
     kunci: 'indeks_churn',
     label: 'Pergantian usaha',
+    labelEn: 'Business turnover',
     bantuan: 'makin sering berganti, makin berisiko',
+    bantuanEn: 'the more often it changes hands, the riskier',
     ambil: (b) => b.indeks_churn,
     format: (v) => angka(v, 2),
     arah: 'rendah',
@@ -423,7 +654,9 @@ const METRIK: {
   {
     kunci: 'harga_sewa_median',
     label: 'Sewa per bulan',
+    labelEn: 'Rent per month',
     bantuan: 'yang benar-benar dibayar tiap bulan',
+    bantuanEn: 'what is actually paid each month',
     ambil: (b) => b.harga_sewa_median,
     format: (v) => rupiah(v),
     arah: 'rendah',
@@ -431,7 +664,9 @@ const METRIK: {
   {
     kunci: 'hidden_gem_score',
     label: 'Skor hidden gem',
+    labelEn: 'Hidden Gem score',
     bantuan: 'bagus tapi belum dilirik',
+    bantuanEn: 'good but still overlooked',
     ambil: (b) => b.hidden_gem_score,
     format: (v) => angka(v, 2),
     arah: 'tinggi',
@@ -439,7 +674,9 @@ const METRIK: {
   {
     kunci: 'ipt',
     label: 'Akses ke stasiun',
+    labelEn: 'Access to the station',
     bantuan: 'indeks IPT',
+    bantuanEn: 'the IPT index',
     ambil: (b) => b.indeks.ipt,
     format: (v) => angka(v, 2),
     arah: 'tinggi',
@@ -447,7 +684,9 @@ const METRIK: {
   {
     kunci: 'iae',
     label: 'Perputaran uang',
+    labelEn: 'Money in circulation',
     bantuan: 'indeks IAE',
+    bantuanEn: 'the IAE index',
     ambil: (b) => b.indeks.iae,
     format: (v) => angka(v, 2),
     arah: 'tinggi',
@@ -455,7 +694,9 @@ const METRIK: {
   {
     kunci: 'ikp',
     label: 'Ketatnya persaingan',
+    labelEn: 'How tight the competition is',
     bantuan: 'indeks IKP',
+    bantuanEn: 'the IKP index',
     ambil: (b) => b.indeks.ikp,
     format: (v) => angka(v, 2),
     arah: 'rendah',
@@ -463,7 +704,9 @@ const METRIK: {
   {
     kunci: 'ibr',
     label: 'Biaya dan risiko',
+    labelEn: 'Cost and risk',
     bantuan: 'indeks IBR',
+    bantuanEn: 'the IBR index',
     ambil: (b) => b.indeks.ibr,
     format: (v) => angka(v, 2),
     arah: 'rendah',
@@ -486,6 +729,8 @@ function BarisMetrik({
   data: Komparasi
   besar?: boolean
 }) {
+  const { bahasa } = useBahasa()
+  const en = bahasa === 'en'
   const nilai = data.baris.map((b) => m.ambil(b))
   const ada = nilai.filter((v): v is number => v !== null)
   const maks = ada.length ? Math.max(...ada) : 0
@@ -496,9 +741,11 @@ function BarisMetrik({
     <div className="border-t border-line/70 px-5 py-3">
       <div className="mb-2 flex items-baseline gap-2">
         <span className={`font-semibold text-ink ${besar ? 'text-[13.5px]' : 'text-[12.5px]'}`}>
-          {m.label}
+          {en ? m.labelEn : m.label}
         </span>
-        <span className="min-w-0 truncate text-[11px] text-ink-3">{m.bantuan}</span>
+        <span className="min-w-0 truncate text-[11px] text-ink-3">
+          {en ? m.bantuanEn : m.bantuan}
+        </span>
       </div>
       <div
         className="grid gap-3"
@@ -536,7 +783,7 @@ function BarisMetrik({
                     menang ? 'font-bold text-ink' : 'font-medium text-ink-2'
                   }`}
                 >
-                  {m.format(v) ?? '—'}
+                  {m.format(v, en) ?? '—'}
                 </span>
                 {menang && (
                   <svg
@@ -589,6 +836,8 @@ export function DialogKomparasi({
   onTutup: () => void
   onPilih: (h3: string) => void
 }) {
+  const t = useTeks(K)
+  const namaZona = useNamaZona()
   const [data, setData] = useState<Komparasi | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
   const [sibuk, setSibuk] = useState(false)
@@ -602,11 +851,14 @@ export function DialogKomparasi({
       .komparasi(h3)
       .then((d) => !batal && setData(d))
       .catch(
-        (e) => !batal && setGalat(e instanceof GalatAPI ? e.message : 'Gagal memuat komparasi.'),
+        (e) => !batal && setGalat(e instanceof GalatAPI ? e.message : t.gagalKomparasi),
       )
     return () => {
       batal = true
     }
+    // `t` sengaja TIDAK jadi dependensi: kalimat cadangan itu hanya terbaca
+    // kalau permintaannya gagal, dan menambahkannya berarti seluruh komparasi
+    // diminta ulang tiap kali bahasa ditukar.
   }, [h3])
 
   /**
@@ -627,14 +879,14 @@ export function DialogKomparasi({
   const unduh = async () => {
     if (!premium) {
       return akun
-        ? mintaLangganan('Ekspor PDF perbandingan bagian dari Loconomics Premium.')
-        : mintaMasuk('Buat akun dulu untuk mengunduh perbandingan.')
+        ? mintaLangganan(t.pdfPremium)
+        : mintaMasuk(t.pdfMasuk)
     }
     setSibuk(true)
     try {
       await api.unduhKomparasi(h3)
     } catch (e) {
-      setGalat(e instanceof GalatAPI ? e.message : 'Gagal mengunduh PDF.')
+      setGalat(e instanceof GalatAPI ? e.message : t.gagalPdf)
     } finally {
       setSibuk(false)
     }
@@ -644,8 +896,8 @@ export function DialogKomparasi({
 
   return (
     <Lembar
-      judul={`Membandingkan ${h3.length} lokasi`}
-      keterangan="Bar paling panjang berarti paling baik di baris itu — arahnya sudah diperhitungkan, jadi sewa termurah dan pesaing tersedikit juga tampil sebagai bar terpanjang."
+      judul={t.judulBanding(h3.length)}
+      keterangan={t.ketBanding}
       onTutup={onTutup}
       aksi={
         <button
@@ -663,14 +915,14 @@ export function DialogKomparasi({
               strokeLinejoin="round"
             />
           </svg>
-          {sibuk ? 'Menyiapkan…' : 'Unduh PDF'}
+          {sibuk ? t.menyiapkan : t.unduhPdf}
         </button>
       }
     >
       {galat ? (
         <p className="p-6 text-[13.5px] text-bahaya">{galat}</p>
       ) : !data ? (
-        <MemuatNama teks="sedang menyusun perbandingan…" />
+        <MemuatNama teks={t.menyusunBanding} />
       ) : (
         <>
           {/* --- Kepala: satu kartu per lokasi, bernomor SAMA dengan peta --- */}
@@ -688,7 +940,7 @@ export function DialogKomparasi({
                 <button
                   key={b.h3_index}
                   onClick={() => onPilih(b.h3_index)}
-                  title="Buka di peta"
+                  title={t.bukaDiPeta}
                   className={`cursor-pointer rounded-lg border p-3.5 text-left transition-all duration-300 ease-jelly hover:-translate-y-0.5 ${
                     dilarang
                       ? 'border-bahaya bg-bahaya-soft/40'
@@ -724,7 +976,7 @@ export function DialogKomparasi({
                       className="mt-1 block text-[11.5px] font-semibold leading-tight"
                       style={{ color: q.warna }}
                     >
-                      {q.nama}
+                      {namaZona(b.kuadran as string)}
                     </span>
                   )}
 
@@ -736,7 +988,7 @@ export function DialogKomparasi({
                         pasang batang. */}
                     {dilarang ? (
                       <span className="block text-[11.5px] font-semibold leading-snug text-bahaya">
-                        Zona melarang usaha — berapa pun skornya
+                        {t.zonaLarangKartu}
                       </span>
                     ) : (
                       <span
@@ -745,7 +997,7 @@ export function DialogKomparasi({
                         }`}
                       >
                         {unggul && '★ '}
-                        Unggul di {menang} dari {METRIK.length} hal
+                        {t.unggulDi(menang, METRIK.length)}
                       </span>
                     )}
                     <span className="mt-1.5 block">
@@ -764,7 +1016,7 @@ export function DialogKomparasi({
 
           <details className="border-t border-line/70">
             <summary className="cursor-pointer list-none px-5 py-3 text-[12.5px] font-medium text-ink-2 transition-colors hover:text-ink">
-              Lihat empat indeks pembentuk skor
+              {t.lihatIndeks}
             </summary>
             {METRIK.filter((m) => !m.utama).map((m) => (
               <BarisMetrik key={m.kunci} m={m} data={data} />
@@ -773,7 +1025,7 @@ export function DialogKomparasi({
 
           {/* --- Status: tidak punya pemenang, jadi tidak diberi bar --- */}
           <div className="border-t border-line/70 p-5">
-            <p className="eyebrow mb-2.5">Izin dan risiko</p>
+            <p className="eyebrow mb-2.5">{t.izinRisiko}</p>
             <div
               className="grid gap-2.5"
               style={{ gridTemplateColumns: `repeat(${data.baris.length}, minmax(0,1fr))` }}
@@ -802,10 +1054,10 @@ export function DialogKomparasi({
                       }`}
                     />
                     {b.zoneguard.status === 'DIIZINKAN'
-                      ? 'Boleh dipakai usaha'
+                      ? t.bolehUsaha
                       : b.zoneguard.status === 'DILARANG'
-                        ? 'Zona melarang usaha'
-                        : 'Izin belum bisa dipastikan'}
+                        ? t.zonaLarang
+                        : t.izinTakPasti}
                   </p>
                   <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">{b.risiko.label}</p>
                 </div>
@@ -814,9 +1066,7 @@ export function DialogKomparasi({
           </div>
 
           <p className="border-t border-line/70 px-5 py-3.5 text-[11.5px] leading-snug text-ink-3">
-            Lokasi berzona terlarang sengaja ikut ditampilkan — ini alat perbandingan,
-            bukan rekomendasi, dan alasan terkuat untuk tidak memilih sebuah lokasi tidak
-            boleh disembunyikan.
+            {t.kakiBanding}
           </p>
         </>
       )}
@@ -841,6 +1091,7 @@ export function DialogPantauan({
   /** Kirim 2-4 lokasi tersimpan langsung ke baki komparasi. */
   onBandingkanSemua?: (h3: string[]) => void
 }) {
+  const t = useTeks(K)
   const namaZona = useNamaZona()
   const [butir, setButir] = useState<ButirPantauan[] | null>(null)
   const [dinamika, setDinamika] = useState<DinamikaKawasan | null>(null)
@@ -857,7 +1108,8 @@ export function DialogPantauan({
     api
       .pantauan()
       .then(setButir)
-      .catch((e) => setGalat(e instanceof GalatAPI ? e.message : 'Gagal memuat pantauan.'))
+      .catch((e) => setGalat(e instanceof GalatAPI ? e.message : t.gagalPantauan))
+    // Tanpa `t` di dependensi - lihat alasan yang sama di DialogKomparasi.
   }, [])
 
   useEffect(() => {
@@ -888,8 +1140,8 @@ export function DialogPantauan({
 
   return (
     <Lembar
-      judul="Lokasi tersimpan"
-      keterangan="Selisih dihitung terhadap skor yang dibekukan saat Anda menyimpan lokasinya — bukan terhadap angka yang dihitung ulang sekarang."
+      judul={t.judulSimpan}
+      keterangan={t.ketSimpan}
       onTutup={onTutup}
       lebar="54rem"
     >
@@ -897,27 +1149,25 @@ export function DialogPantauan({
         {/* --- Daftar pantauan ------------------------------------------- */}
         <div className="min-w-0">
           <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h3 className="eyebrow">Lokasi yang Anda simpan</h3>
+            <h3 className="eyebrow">{t.yangDisimpan}</h3>
             {onBandingkanSemua && butir && butir.length >= 2 && (
               <button
                 onClick={() => onBandingkanSemua(butir.slice(0, 4).map((b) => b.h3_index))}
                 className="cursor-pointer rounded-full border border-line px-3 py-1 text-[11.5px] font-medium text-ink-2 transition-colors hover:border-ink hover:text-ink"
               >
-                Bandingkan {Math.min(butir.length, 4)} teratas
+                {t.bandingkanTeratas(Math.min(butir.length, 4))}
               </button>
             )}
           </div>
           {galat ? (
             <p className="text-[13px] text-bahaya">{galat}</p>
           ) : !butir ? (
-            <Memuat baris={3} teks="Memuat pantauan…" />
+            <Memuat baris={3} teks={t.memuatPantauan} />
           ) : butir.length === 0 ? (
             <div className="rounded-md border border-dashed border-line-2 px-5 py-8 text-center">
-              <p className="text-[13.5px] font-medium text-ink-2">Belum ada lokasi tersimpan</p>
+              <p className="text-[13.5px] font-medium text-ink-2">{t.belumAdaSimpan}</p>
               <p className="mx-auto mt-1 max-w-[34ch] text-[12.5px] leading-snug text-ink-3">
-                Buka satu heksagon di peta lalu tekan “Simpan lokasi”. Ia muncul
-                sebagai pin di peta, skornya dibekukan saat itu juga, dan
-                perubahannya dilaporkan di sini.
+                {t.belumAdaSimpanIsi}
               </p>
             </div>
           ) : (
@@ -952,7 +1202,7 @@ export function DialogPantauan({
                     onClick={() => setBuka((v) => (v === b.h3_index ? null : b.h3_index))}
                     aria-expanded={buka === b.h3_index}
                     className="min-w-0 flex-1 cursor-pointer text-left"
-                    title="Lihat rincian lokasi ini"
+                    title={t.lihatRinci}
                   >
                     <span className="papan block truncate text-[14px]">
                       {kodeLokasi(b.h3_index, b.kawasan ?? '')}
@@ -968,8 +1218,8 @@ export function DialogPantauan({
                         </span>
                       )}
                       <span className="text-[11px] text-ink-3">
-                        disimpan{' '}
-                        {new Date(b.dibuat_pada).toLocaleDateString('id-ID', {
+                        {t.disimpan}{' '}
+                        {new Date(b.dibuat_pada).toLocaleDateString(t.locale, {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
@@ -989,7 +1239,7 @@ export function DialogPantauan({
                         dihitungkan untuknya. */}
                     {b.skor_saat_dipantau !== null && b.selisih !== null && b.selisih !== 0 && (
                       <span className="tabular mt-0.5 block text-[10.5px] text-ink-3">
-                        dari {angka(b.skor_saat_dipantau, 1)}
+                        {t.dariSkor(angka(b.skor_saat_dipantau, 1) ?? '—')}
                       </span>
                     )}
                   </div>
@@ -1010,19 +1260,21 @@ export function DialogPantauan({
                 {buka === b.h3_index && (
                   <div className="border-t border-line/70 bg-surface-2/50 px-3.5 py-3">
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      <BarisRinci label="Kawasan" nilai={b.kawasan ?? '—'} />
+                      <BarisRinci label={t.rKawasan} nilai={b.kawasan ?? '—'} />
                       <BarisRinci
-                        label="Skor saat disimpan"
-                        nilai={angka(b.skor_saat_dipantau, 1) ?? 'belum tercatat'}
+                        label={t.rSkorSimpan}
+                        nilai={angka(b.skor_saat_dipantau, 1) ?? t.belumTercatat}
                       />
-                      <BarisRinci label="Skor sekarang" nilai={angka(b.skor_sekarang, 1) ?? '—'} />
+                      <BarisRinci label={t.rSkorSekarang} nilai={angka(b.skor_sekarang, 1) ?? '—'} />
                       <BarisRinci
-                        label="Risiko pergantian usaha"
-                        nilai={b.risiko ? b.risiko.toLowerCase() : 'belum dinilai'}
+                        label={t.rRisiko}
+                        nilai={
+                          b.risiko ? (t.tingkat[b.risiko] ?? b.risiko.toLowerCase()) : t.belumDinilai
+                        }
                       />
-                      <BarisRinci label="Indeks H3" nilai={b.h3_index} mono />
+                      <BarisRinci label={t.rH3} nilai={b.h3_index} mono />
                       <BarisRinci
-                        label="Versi skor"
+                        label={t.rVersi}
                         nilai={
                           b.versi_saat_dipantau === b.versi_sekarang
                             ? (b.versi_sekarang ?? '—')
@@ -1042,8 +1294,7 @@ export function DialogPantauan({
                         angka nol terbaca sebagai fitur yang tidak bekerja. */}
                     {b.versi_saat_dipantau === b.versi_sekarang && (
                       <p className="mt-2 text-[11.5px] leading-snug text-ink-3">
-                        Selisihnya nol karena skornya belum pernah diterbitkan ulang sejak
-                        Anda menyimpan lokasi ini — bukan karena tidak ada yang berubah.
+                        {t.selisihNol}
                       </p>
                     )}
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -1051,14 +1302,14 @@ export function DialogPantauan({
                         onClick={() => onPilih(b.h3_index)}
                         className="cursor-pointer rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-surface transition-transform duration-200 ease-jelly hover:scale-[1.03]"
                       >
-                        Fokus ke peta
+                        {t.fokusPeta}
                       </button>
                       <button
                         onClick={() => lepas(b.h3_index)}
-                        aria-label={`Berhenti memantau ${b.h3_index}`}
+                        aria-label={t.berhentiPantau(b.h3_index)}
                         className="cursor-pointer rounded-full border border-line px-3.5 py-1.5 text-[12px] text-ink-3 transition-colors hover:border-bahaya hover:text-bahaya"
                       >
-                        Lepas dari pantauan
+                        {t.lepasPantauan}
                       </button>
                     </div>
                   </div>
@@ -1071,82 +1322,74 @@ export function DialogPantauan({
 
         {/* --- Dinamika kawasan ------------------------------------------ */}
         <div className="min-w-0">
-          <h3 className="eyebrow mb-1.5">Dinamika kawasan</h3>
+          <h3 className="eyebrow mb-1.5">{t.dinamikaJudul}</h3>
           {/* Ditambahkan 11 Sep 2026: pemilik repo membaca seluruh panel ini
               lalu bertanya "nah itu untuk apa?". Pertanyaan yang wajar - ia
               menampilkan tujuh angka tanpa satu kalimat pun yang menyebut untuk
               apa angka-angka itu dibaca. Panel yang harus ditebak gunanya
               adalah panel yang tidak dipakai. */}
-          <p className="mb-3 text-[12px] leading-snug text-ink-3">
-            Latar untuk lokasi yang Anda simpan: seberapa sering usaha berganti
-            tangan di kawasan ini, dan berapa banyak lokasinya yang sudah lewat
-            batas wajar. Lokasi berskor bagus di kawasan yang pergantiannya
-            tinggi menuntut pertimbangan yang berbeda.
-          </p>
+          <p className="mb-3 text-[12px] leading-snug text-ink-3">{t.dinamikaIsi}</p>
           {!kawasanTunggal ? (
             <p className="rounded-md bg-surface-2 px-4 py-3.5 text-[12.5px] leading-snug text-ink-2">
-              Pilih satu kawasan di bilah atas untuk melihat sebaran churn-nya.
-              Menggabungkan beberapa kawasan membuat persentilnya bercampur dan
-              berhenti berarti.
+              {t.pilihSatuKawasan}
             </p>
           ) : !dinamika ? (
-            <Memuat baris={3} teks="Menghitung sebaran…" />
+            <Memuat baris={3} teks={t.menghitungSebaran} />
           ) : (
             <div className="rounded-md border border-line bg-surface p-4">
               <p className="papan text-[15px]">{dinamika.kawasan}</p>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                {dinamika.n_heksagon.toLocaleString('id-ID')} heksagon dihitung
+                {t.nHeksagon(dinamika.n_heksagon.toLocaleString(t.locale))}
               </p>
 
               {dinamika.churn_p50 === null &&
               dinamika.churn_p75 === null &&
               dinamika.churn_p90 === null ? (
                 <p className="mt-3.5 rounded-sm border border-line/70 bg-surface-2 px-3 py-2.5 text-[12px] leading-snug text-ink-3">
-                  <span className="font-medium text-ink-2">Pergantian usaha belum terukur.</span>{' '}
-                  Ketiga ambangnya — tengah, waspada, bahaya — dihitung dari data yang belum ada
-                  sumbernya, jadi kawasan ini belum bisa dinilai risikonya.
+                  <span className="font-medium text-ink-2">{t.churnBelum}</span>{' '}
+                  {t.churnBelumIsi}
                 </p>
               ) : (
                 <dl className="mt-3.5 space-y-2 border-t border-line/70 pt-3">
                   <BarisAngka
-                    label="Pergantian usaha, lokasi tengah"
+                    label={t.churnTengah}
                     nilai={angka(dinamika.churn_p50, 3)}
                   />
                   <BarisAngka
-                    label="Batas mulai waspada"
+                    label={t.batasWaspada}
                     nilai={angka(dinamika.churn_p75, 3)}
                   />
-                  <BarisAngka label="Batas bahaya" nilai={angka(dinamika.churn_p90, 3)} />
+                  <BarisAngka label={t.batasBahaya} nilai={angka(dinamika.churn_p90, 3)} />
                 </dl>
               )}
 
               <dl className="mt-3.5 space-y-2 border-t border-line/70 pt-3">
                 <BarisAngka
-                  label="Lokasi yang sudah lewat batas waspada"
-                  nilai={`${dinamika.n_waspada} lokasi`}
+                  label={t.lewatWaspada}
+                  nilai={t.nLokasi(dinamika.n_waspada)}
                   tekan={dinamika.n_waspada > 0}
                 />
                 <BarisAngka
-                  label="Lokasi yang sudah lewat batas bahaya"
-                  nilai={`${dinamika.n_bahaya} lokasi`}
+                  label={t.lewatBahaya}
+                  nilai={t.nLokasi(dinamika.n_bahaya)}
                   tekan={dinamika.n_bahaya > 0}
                 />
                 <BarisAngka
-                  label="Opportunity Score rata-rata"
+                  label={t.rataOS}
                   nilai={angka(dinamika.rata_opportunity, 1)}
                 />
                 <BarisAngka
-                  label="Sudah disurvei langsung"
+                  label={t.sudahSurvei}
                   nilai={
                     dinamika.cakupan_survei === null
                       ? null
-                      : `${Math.round(dinamika.cakupan_survei * 100)}% lokasi`
+                      : t.persenLokasi(Math.round(dinamika.cakupan_survei * 100))
                   }
                 />
               </dl>
 
               <div className="mt-3.5 border-t border-line/70 pt-3">
-                <p className="eyebrow mb-2">Komposisi kuadran</p>
+                <p className="eyebrow mb-2">{t.komposisi}</p>
                 {/* Satu pita bersusun DI ATAS daftarnya.
 
                     Daftar angka menjawab "berapa banyak"; yang sebenarnya
@@ -1246,9 +1489,10 @@ function BarisAngka({
 }
 
 function Selisih({ nilai }: { nilai: number | null }) {
-  if (nilai === null) return <span className="text-[11px] text-ink-3">belum ada acuan</span>
+  const t = useTeks(K)
+  if (nilai === null) return <span className="text-[11px] text-ink-3">{t.belumAcuan}</span>
   if (Math.abs(nilai) < 0.05)
-    return <span className="text-[11px] text-ink-3">belum berubah</span>
+    return <span className="text-[11px] text-ink-3">{t.belumBerubah}</span>
   const naik = nilai > 0
   return (
     <span
@@ -1264,6 +1508,7 @@ function Selisih({ nilai }: { nilai: number | null }) {
 // ---------------------------------------------------------------------------
 
 export function BagianRiwayat({ h3 }: { h3: string }) {
+  const t = useTeks(K)
   const { premium, akun, mintaLangganan, mintaMasuk } = useSesi()
   const [data, setData] = useState<RiwayatSkor | null>(null)
   const [galat, setGalat] = useState(false)
@@ -1285,33 +1530,29 @@ export function BagianRiwayat({ h3 }: { h3: string }) {
   if (!premium)
     return (
       <Terkunci
-        judul="Riwayat perubahan skor"
-        kalimat="Lihat bagaimana skor lokasi ini bergerak setiap kali pipeline menerbitkan versi baru."
-        labelAksi={akun ? 'Buka dengan Premium' : 'Sign Up untuk membuka'}
+        judul={t.riwayatJudul}
+        kalimat={t.riwayatIsi}
+        labelAksi={akun ? t.bukaPremium : t.daftarBuka}
         baris={3}
-        onBuka={() =>
-          akun
-            ? mintaLangganan('Riwayat skor bagian dari Loconomics Premium.')
-            : mintaMasuk('Buat akun dulu untuk membuka riwayat skor.')
-        }
+        onBuka={() => (akun ? mintaLangganan(t.riwayatPremium) : mintaMasuk(t.riwayatMasuk))}
       />
     )
 
-  if (galat) return <p className="text-[13px] text-ink-3">Riwayat tidak bisa dimuat.</p>
-  if (!data) return <p className="text-[13px] text-ink-3">Memuat riwayat…</p>
+  if (galat) return <p className="text-[13px] text-ink-3">{t.riwayatGagal}</p>
+  if (!data) return <p className="text-[13px] text-ink-3">{t.memuatRiwayat}</p>
 
   return (
     <>
       {data.titik.length > 0 && (
         <ul className="mb-2.5 space-y-1.5">
-          {data.titik.map((t) => (
-            <li key={t.versi} className="flex items-baseline gap-2 text-[13px]">
+          {data.titik.map((v) => (
+            <li key={v.versi} className="flex items-baseline gap-2 text-[13px]">
               <span className="font-mono text-[11.5px] text-ink-3">
-                {t.versi === 'baseline' ? 'awal' : t.versi}
+                {v.versi === 'baseline' ? t.awal : v.versi}
               </span>
               <span className="min-w-0 flex-1 truncate text-ink-3">
-                {t.dihitung_pada
-                  ? new Date(t.dihitung_pada).toLocaleDateString('id-ID', {
+                {v.dihitung_pada
+                  ? new Date(v.dihitung_pada).toLocaleDateString(t.locale, {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric',
@@ -1319,7 +1560,7 @@ export function BagianRiwayat({ h3 }: { h3: string }) {
                   : '—'}
               </span>
               <span className="tabular font-semibold text-ink">
-                {angka(t.opportunity_score, 1) ?? '—'}
+                {angka(v.opportunity_score, 1) ?? '—'}
               </span>
             </li>
           ))}

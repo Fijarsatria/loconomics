@@ -36,6 +36,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from 'react'
 
 import {
@@ -72,7 +73,7 @@ import PanelInsight from './components/PanelInsight'
 // bundel awal; peta mendapat utas utamanya lebih cepat.
 const Gerbang = lazy(() => import('./components/Gerbang'))
 import { TombolAkun, useSesi } from './components/Akun'
-import { SakelarTema, useTema, useTeks, type Bahasa } from './lib/bahasa'
+import { SakelarTema, useBahasa, useTema, useTeks, type Bahasa } from './lib/bahasa'
 import { MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
 // Kedua dialog ini besar dan jarang dibuka. MenuKawasan tetap statis - ia
@@ -304,6 +305,34 @@ const K_APP: Record<
     bandingkan: (n: number) => string
     tersimpan: string
     tersimpanPanjang: string
+    simpanMasuk: string
+    simpanPremium: string
+    takCocok: string
+    simulasiDiSini: string
+    premium: string
+    lepasPilihan: string
+    lepasPilihanPanjang: string
+    heksagon: (n: string) => string
+    kosongJudul: (k: string) => string
+    kosongIsi: string
+    locale: string
+    tutup: string
+    diagramKuadran: string
+    diagramJudul: (k: string) => string
+    diagramIsi: string
+    caraBaca: string
+    caraBaca1: ReactNode
+    caraBaca2: string
+    sumbuDatarApa: string
+    diagramKaki: (n: string) => string
+    memuatTitik: string
+    ajakanJudul: string
+    ajakanIsi: string
+    nanti: string
+    jadiPremium: string
+    daftarSekarang: string
+    ajakanLangganan: string
+    ajakanMasuk: string
     basemap: Record<string, string>
   }
 > = {
@@ -324,6 +353,47 @@ const K_APP: Record<
     bandingkan: (n) => `Bandingkan ${n}`,
     tersimpan: 'Lokasi tersimpan',
     tersimpanPanjang: 'Lokasi tersimpan dan dinamika kawasan',
+    simpanMasuk: 'Buat akun dulu untuk menyimpan lokasi.',
+    simpanPremium: 'Menyimpan dan memantau lokasi bagian dari Loconomics Premium.',
+    takCocok:
+      'Tidak ada yang cocok. Pencarian hanya mengenali kawasan pilot, simpul transit, dan indeks H3.',
+    simulasiDiSini: 'Simulasi usaha di lokasi ini',
+    premium: 'Premium',
+    lepasPilihan: 'Lepas pilihan (Esc)',
+    lepasPilihanPanjang: 'Lepas pilihan heksagon',
+    heksagon: (n: string) => `${n} heksagon`,
+    kosongJudul: (k: string) => `Belum ada heksagon di ${k}`,
+    kosongIsi:
+      'Basis datanya sudah tersambung, tetapi kawasan ini belum berisi. Jalankan pipeline sampai tahap terbit untuk mengisinya.',
+    locale: 'id-ID',
+    tutup: 'Tutup',
+    diagramKuadran: 'Diagram kuadran',
+    diagramJudul: (k: string) => `Diagram kuadran · ${k}`,
+    diagramIsi:
+      'Sumbu datar: bagaimana lokasi terlihat. Sumbu tegak: apa kata datanya. Gunanya produk ini ada di dua sudut tempat keduanya tidak sejalan.',
+    caraBaca: 'Cara membacanya',
+    caraBaca1: (
+      <>
+        Kuadran <strong className="font-semibold text-ink">tidak</strong> ditentukan oleh
+        Opportunity Score saja. Sumbu tegak Opportunity Score, sumbu datar prestise visual,
+        dan batas keduanya adalah <strong className="font-semibold text-ink">median</strong>{' '}
+        seluruh heksagon — bukan angka bulat.
+      </>
+    ),
+    caraBaca2:
+      'Karena itu skor 58 bisa jatuh di Hidden Gem sementara 50 jatuh di Aman tapi Mahal: keduanya di atas median, dan yang membedakan prestise visualnya.',
+    sumbuDatarApa: 'Sumbu datar berdiri di atas apa',
+    diagramKaki: (n: string) =>
+      `${n} heksagon. Klik satu titik untuk membukanya. Area berzona terlarang sengaja ikut ditampilkan — ini alat analisis, bukan rekomendasi.`,
+    memuatTitik: 'Memuat titik…',
+    ajakanJudul: 'Simpan & pantau lokasi',
+    ajakanIsi:
+      'Simpan lokasi pilihan Anda sebagai pin di peta, bekukan skornya hari ini, lalu lihat pergerakannya setiap kali pipeline menerbitkan versi baru — lengkap dengan sebaran churn kawasannya.',
+    nanti: 'Nanti saja',
+    jadiPremium: 'Jadi Premium',
+    daftarSekarang: 'Sign Up sekarang',
+    ajakanLangganan: 'Pemantauan bagian dari Loconomics Premium.',
+    ajakanMasuk: 'Buat akun dulu untuk mulai memantau lokasi.',
     basemap: { terang: 'Terang', dasar: 'Dasar', jalan: 'Jalan', gelap: 'Gelap' },
   },
   en: {
@@ -343,6 +413,48 @@ const K_APP: Record<
     bandingkan: (n) => `Compare ${n}`,
     tersimpan: 'Saved locations',
     tersimpanPanjang: 'Saved locations and area dynamics',
+    simpanMasuk: 'Create an account first to save locations.',
+    simpanPremium: 'Saving and watching locations is part of Loconomics Premium.',
+    takCocok:
+      'Nothing matches. The search only knows the pilot areas, the transit nodes, and H3 indexes.',
+    simulasiDiSini: 'Simulate a business here',
+    premium: 'Premium',
+    lepasPilihan: 'Clear the selection (Esc)',
+    lepasPilihanPanjang: 'Clear the selected hexagon',
+    heksagon: (n: string) => `${n} hexagons`,
+    kosongJudul: (k: string) => `No hexagons in ${k} yet`,
+    kosongIsi:
+      'The database is connected, but this area has nothing in it yet. Run the pipeline through the publish stage to fill it.',
+    locale: 'en-GB',
+    tutup: 'Close',
+    diagramKuadran: 'Quadrant diagram',
+    diagramJudul: (k: string) => `Quadrant diagram · ${k}`,
+    diagramIsi:
+      'Horizontal axis: how a location looks. Vertical axis: what its data says. This product earns its keep in the two corners where the two disagree.',
+    caraBaca: 'How to read it',
+    caraBaca1: (
+      <>
+        The quadrant is <strong className="font-semibold text-ink">not</strong> decided by the
+        Opportunity Score alone. The vertical axis is the Opportunity Score, the horizontal axis
+        is visual prestige, and the boundary on both is the{' '}
+        <strong className="font-semibold text-ink">median</strong> across every hexagon —
+        not a round number.
+      </>
+    ),
+    caraBaca2:
+      'That is why a score of 58 can land in Hidden Gem while 50 lands in Prestige Trap: both are above the median, and what separates them is visual prestige.',
+    sumbuDatarApa: 'What the horizontal axis stands on',
+    diagramKaki: (n: string) =>
+      `${n} hexagons. Click a point to open it. Locations in prohibited zones are shown on purpose — this is an analysis tool, not a recommendation.`,
+    memuatTitik: 'Loading points…',
+    ajakanJudul: 'Save & watch locations',
+    ajakanIsi:
+      'Save the locations you choose as pins on the map, freeze their score today, then watch them move every time the pipeline publishes a new version — area churn spread included.',
+    nanti: 'Not now',
+    jadiPremium: 'Go Premium',
+    daftarSekarang: 'Sign up now',
+    ajakanLangganan: 'Watching locations is part of Loconomics Premium.',
+    ajakanMasuk: 'Create an account first to start watching locations.',
     basemap: { terang: 'Light', dasar: 'Basic', jalan: 'Street', gelap: 'Dark' },
   },
 }
@@ -444,10 +556,7 @@ function Cari({
       {buka && q.trim() && (
         <ul className="kaca-tebal pop absolute left-0 top-[calc(100%+8px)] z-50 w-full min-w-[17rem] overflow-hidden rounded-md p-1.5">
           {hasil.length === 0 && (
-            <li className="px-3 py-2.5 text-[13px] text-ink-3">
-              Tidak ada yang cocok. Pencarian hanya mengenali kawasan pilot,
-              simpul transit, dan indeks H3.
-            </li>
+            <li className="px-3 py-2.5 text-[13px] text-ink-3">{t.takCocok}</li>
           )}
           {hasil.map((h, i) => (
             <li key={`${h.jenis}-${i}`}>
@@ -600,6 +709,7 @@ function BarKomparasi({
 
 export default function App() {
   const t = useTeks(K_APP)
+  const { bahasa } = useBahasa()
   /**
    * Kawasan yang sedang disaring. SEMUA_KAWASAN ('') = tidak disaring.
    *
@@ -830,9 +940,9 @@ export default function App() {
    */
   const simpanCepat = useCallback(
     async (h3: string) => {
-      if (!akun) return mintaMasuk('Buat akun dulu untuk menyimpan lokasi.')
+      if (!akun) return mintaMasuk(t.simpanMasuk)
       if (!premium)
-        return mintaLangganan('Menyimpan dan memantau lokasi bagian dari Loconomics Premium.')
+        return mintaLangganan(t.simpanPremium)
       try {
         await api.pantau(h3)
         catatSimpan()
@@ -1323,8 +1433,8 @@ export default function App() {
    * bahannya terukur dan tidak ada yang perlu dinyatakan.
    */
   const frasaSumbuX = useMemo(
-    () => frasaPrestise(diagram?.cakupan_prestise, 'wilayah'),
-    [diagram],
+    () => frasaPrestise(diagram?.cakupan_prestise, 'wilayah', bahasa),
+    [diagram, bahasa],
   )
 
   /**
@@ -1631,11 +1741,11 @@ export default function App() {
                         <path d="M12.8 5h4.2v4.2" stroke="currentColor" strokeWidth="1.9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                       <span className="truncate text-[13.5px] font-semibold">
-                        Simulasi usaha di lokasi ini
+                        {t.simulasiDiSini}
                       </span>
                       {!premium && (
                         <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-                          Premium
+                          {t.premium}
                         </span>
                       )}
                       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
@@ -1644,8 +1754,8 @@ export default function App() {
                     </button>
                     <button
                       onClick={lepasPilihan}
-                      title="Lepas pilihan (Esc)"
-                      aria-label="Lepas pilihan heksagon"
+                      title={t.lepasPilihan}
+                      aria-label={t.lepasPilihanPanjang}
                       className="kaca grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full text-ink-2 transition-colors duration-200 hover:bg-surface-2 hover:text-ink"
                     >
                       <svg width="15" height="15" viewBox="0 0 14 14" aria-hidden>
@@ -1661,11 +1771,11 @@ export default function App() {
                   ) : (
                   <div className="kaca pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-full px-4 py-2">
                     <span className="truncate text-[13.5px] text-ink-2">
-                      {LAYER[layer].pertanyaan}
+                      {bahasa === 'en' ? LAYER[layer].pertanyaanEn : LAYER[layer].pertanyaan}
                     </span>
                     {nHeksagon !== null && (
                       <span className="tabular shrink-0 border-l border-line pl-3 text-[12.5px] text-ink-3">
-                        {nHeksagon.toLocaleString('id-ID')} heksagon
+                        {t.heksagon(nHeksagon.toLocaleString(t.locale))}
                       </span>
                     )}
                   </div>
@@ -2061,13 +2171,8 @@ export default function App() {
           {nHeksagon === 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 lg:right-[27rem]">
               <div className="kaca-tebal pointer-events-auto melayang max-w-md rounded-lg p-6">
-                <p className="papan text-[19px]">
-                  Belum ada heksagon di {frasaKawasan(kawasan)}
-                </p>
-                <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">
-                  Basis datanya sudah tersambung, tetapi kawasan ini belum berisi.
-                  Jalankan pipeline sampai tahap terbit untuk mengisinya.
-                </p>
+                <p className="papan text-[19px]">{t.kosongJudul(frasaKawasan(kawasan))}</p>
+                <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">{t.kosongIsi}</p>
                 <code className="mt-3.5 block rounded-sm bg-surface-2 px-3.5 py-3 font-mono text-[13px] leading-relaxed text-ink-2">
                   cd pipeline
                   <br />
@@ -2085,7 +2190,7 @@ export default function App() {
             onClick={() => setKuadranPenuh(false)}
             role="dialog"
             aria-modal="true"
-            aria-label="Diagram kuadran"
+            aria-label={t.diagramKuadran}
           >
             {/* `overflow-auto` DICABUT. Diagram yang harus digulir untuk
                 dilihat utuh sudah berhenti jadi diagram - separuh gunanya
@@ -2098,18 +2203,16 @@ export default function App() {
             >
               <div className="flex items-baseline justify-between gap-6 border-b border-line/70 px-6 py-5">
                 <div>
-                  <h2 className="papan text-[19px]">Diagram kuadran · {kawasan}</h2>
+                  <h2 className="papan text-[19px]">{t.diagramJudul(kawasan)}</h2>
                   <p className="mt-1 max-w-[42ch] text-[13.5px] leading-snug text-ink-2">
-                    Sumbu datar: bagaimana lokasi terlihat. Sumbu tegak: apa kata
-                    datanya. Gunanya produk ini ada di dua sudut tempat keduanya
-                    tidak sejalan.
+                    {t.diagramIsi}
                   </p>
                 </div>
                 <button
                   onClick={() => setKuadranPenuh(false)}
                   className="shrink-0 cursor-pointer rounded-full border border-line px-4 py-1.5 text-[13.5px] font-medium transition-colors hover:bg-surface-2"
                 >
-                  Tutup
+                  {t.tutup}
                 </button>
               </div>
 
@@ -2130,17 +2233,9 @@ export default function App() {
                     layar dan memaksa scroll. */}
                 <div className="min-w-0 flex-1 lg:max-w-[19rem]">
                   <div className="rounded-md border border-line/70 bg-surface-2/60 p-4">
-                    <h3 className="eyebrow mb-2">Cara membacanya</h3>
-                    <p className="text-[13px] leading-relaxed text-ink-2">
-                      Kuadran <strong className="font-semibold text-ink">tidak</strong> ditentukan
-                      oleh Opportunity Score saja. Sumbu tegak Opportunity Score, sumbu datar prestise
-                      visual, dan batas keduanya adalah <strong className="font-semibold text-ink">median</strong>{' '}
-                      seluruh heksagon — bukan angka bulat.
-                    </p>
-                    <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">
-                      Karena itu skor 58 bisa jatuh di Hidden Gem sementara 50 jatuh di Aman tapi
-                      Mahal: keduanya di atas median, dan yang membedakan prestise visualnya.
-                    </p>
+                    <h3 className="eyebrow mb-2">{t.caraBaca}</h3>
+                    <p className="text-[13px] leading-relaxed text-ink-2">{t.caraBaca1}</p>
+                    <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">{t.caraBaca2}</p>
                     {/* Sumbu datar itu SETENGAH tesis produk ini, dan sampai hari
                         ini dua dari lima bahannya kosong — termasuk keduanya yang
                         menilai tampilan secara langsung. Panel ini satu-satunya
@@ -2150,7 +2245,7 @@ export default function App() {
                         legenda jadi paragraf. */}
                     {frasaSumbuX.length > 0 && (
                       <div className="mt-3 space-y-1.5 border-t border-line/60 pt-2.5">
-                        <p className="eyebrow">Sumbu datar berdiri di atas apa</p>
+                        <p className="eyebrow">{t.sumbuDatarApa}</p>
                         {frasaSumbuX.map((k) => (
                           <p key={k} className="text-[12.5px] leading-snug text-ink-3">
                             {k}
@@ -2161,8 +2256,8 @@ export default function App() {
                   </div>
                   <p className="mt-3.5 text-[12.5px] leading-snug text-ink-3">
                     {diagram
-                      ? `${diagram.titik.length.toLocaleString('id-ID')} heksagon. Klik satu titik untuk membukanya. Area berzona terlarang sengaja ikut ditampilkan — ini alat analisis, bukan rekomendasi.`
-                      : 'Memuat titik…'}
+                      ? t.diagramKaki(diagram.titik.length.toLocaleString(t.locale))
+                      : t.memuatTitik}
                   </p>
                 </div>
               </div>
@@ -2221,6 +2316,7 @@ export default function App() {
  * permintaan yang sudah pasti gagal di setiap pembukaan.
  */
 function AjakanPantauan({ onTutup }: { onTutup: () => void }) {
+  const t = useTeks(K_APP)
   const { akun, mintaLangganan, mintaMasuk } = useSesi()
   return (
     <div
@@ -2228,7 +2324,7 @@ function AjakanPantauan({ onTutup }: { onTutup: () => void }) {
       onClick={onTutup}
       role="dialog"
       aria-modal="true"
-      aria-label="Lokasi tersimpan"
+      aria-label={t.tersimpan}
     >
       <div
         className="kaca-tebal melayang w-[28rem] max-w-full overflow-hidden rounded-xl p-7 text-center"
@@ -2240,28 +2336,26 @@ function AjakanPantauan({ onTutup }: { onTutup: () => void }) {
             <rect x="4.5" y="9" width="11" height="7.5" rx="2" fill="currentColor" />
           </svg>
         </span>
-        <h2 className="papan text-[19px]">Simpan &amp; pantau lokasi</h2>
+        <h2 className="papan text-[19px]">{t.ajakanJudul}</h2>
         <p className="mx-auto mt-2 max-w-[36ch] text-[13.5px] leading-relaxed text-ink-2">
-          Simpan lokasi pilihan Anda sebagai pin di peta, bekukan skornya hari ini,
-          lalu lihat pergerakannya setiap kali pipeline menerbitkan versi baru —
-          lengkap dengan sebaran churn kawasannya.
+          {t.ajakanIsi}
         </p>
         <div className="mt-5 flex justify-center gap-2">
           <button
             onClick={onTutup}
             className="cursor-pointer rounded-full border border-line px-4 py-2 text-[13px] font-medium text-ink-2 transition-colors hover:bg-surface-2"
           >
-            Nanti saja
+            {t.nanti}
           </button>
           <button
             onClick={() => {
               onTutup()
-              if (akun) mintaLangganan('Pemantauan bagian dari Loconomics Premium.')
-              else mintaMasuk('Buat akun dulu untuk mulai memantau lokasi.')
+              if (akun) mintaLangganan(t.ajakanLangganan)
+              else mintaMasuk(t.ajakanMasuk)
             }}
             className="cursor-pointer rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.03]"
           >
-            {akun ? 'Jadi Premium' : 'Sign Up sekarang'}
+            {akun ? t.jadiPremium : t.daftarSekarang}
           </button>
         </div>
       </div>

@@ -77,7 +77,9 @@ export const SELUBUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
  * kuadran terisi untuk seluruh heksagon yang punya skor. Layer yang tidak
  * pernah bisa kosong tidak perlu dijaga terhadap kekosongan.
  */
-export const BIDANG_LAYER: Partial<Record<NamaLayer, { kunci: string; benda: string }>> = {
+export const BIDANG_LAYER: Partial<
+  Record<NamaLayer, { kunci: string; benda: string; bendaEn: string }>
+> = {
   // `hidden_gem` SENGAJA tidak ada di sini, dan itu bukan kelalaian.
   //
   // Kekosongan di keempat layer lain berarti "belum diukur". Kekosongan di
@@ -85,9 +87,17 @@ export const BIDANG_LAYER: Partial<Record<NamaLayer, { kunci: string; benda: str
   // GemFinder adalah SARINGAN, bukan pengukuran. Memberitahu "101 dari 708
   // punya skor Hidden Gem" akan membacakannya sebagai kekurangan data, padahal
   // 101 itu justru JAWABANNYA. Legendanya sudah menerangkan yang abu.
-  risk_radar: { kunci: 'indeks_churn', benda: 'data pergantian usaha' },
-  pricelens: { kunci: 'harga_sewa_per_m2', benda: 'data harga sewa' },
-  zoneguard: { kunci: 'zona_izin_komersial', benda: 'zonasi RDTR digital' },
+  risk_radar: {
+    kunci: 'indeks_churn',
+    benda: 'data pergantian usaha',
+    bendaEn: 'business turnover data',
+  },
+  pricelens: { kunci: 'harga_sewa_per_m2', benda: 'data harga sewa', bendaEn: 'rent data' },
+  zoneguard: {
+    kunci: 'zona_izin_komersial',
+    benda: 'zonasi RDTR digital',
+    bendaEn: 'digital RDTR zoning',
+  },
 }
 
 /**
@@ -106,7 +116,7 @@ export const BIDANG_LAYER: Partial<Record<NamaLayer, { kunci: string; benda: str
 export function cakupanLayer(
   layer: NamaLayer,
   fitur: { properties?: Record<string, unknown> | null }[] | null,
-): { terisi: number; total: number; benda: string } | null {
+): { terisi: number; total: number; benda: string; bendaEn: string } | null {
   const bidang = BIDANG_LAYER[layer]
   if (!bidang || !fitur) return null
   let terisi = 0
@@ -114,7 +124,7 @@ export function cakupanLayer(
     const v = f.properties?.[bidang.kunci]
     if (v !== null && v !== undefined) terisi++
   }
-  return { terisi, total: fitur.length, benda: bidang.benda }
+  return { terisi, total: fitur.length, benda: bidang.benda, bendaEn: bidang.bendaEn }
 }
 
 /** Garis batas heksagon harus melawan basemap, bukan menyatu dengannya. */

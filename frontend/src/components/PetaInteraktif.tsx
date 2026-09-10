@@ -73,7 +73,7 @@ import { api } from '../lib/api'
 import { jarakSingkat } from '../lib/format'
 import { profilUntukModa } from '../types'
 import type { KonteksSimpul, PropertiHeksagon, RuteJalan, SimpulTransit, ModaTampil } from '../types'
-import { useNamaZona, useTeks } from '../lib/bahasa'
+import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 
 const SUMBER = 'heksagon'
 const L_ISI = 'hex-isi'
@@ -805,8 +805,52 @@ interface Props {
 
 /** Satu kalimat yang muncul di kartu sorot peta. */
 const K_PETA = {
-  id: { belum: 'belum berkuadran' },
-  en: { belum: 'no zone yet' },
+  id: {
+    belum: 'belum berkuadran',
+    layerKosong: (benda: string) => `Layer ini belum punya ${benda}`,
+    layerSebagian: (a: number, b: number, benda: string) =>
+      `${a} dari ${b} heksagon punya ${benda}`,
+    nolDari: (b: number) =>
+      `Nol dari ${b} heksagon. Heksagon yang tergambar abu semuanya karena memang belum ada yang diukur — bukan karena nilainya rendah.`,
+    ubinRingkas: 'Ubin MAPID menolak',
+    ubinSisa: (n: number) => `· mencoba lagi ${n}x`,
+    ubinHabis: '· percobaan habis',
+    ubinJudul: 'Server ubin MAPID sedang menolak',
+    basemapJudul: 'Basemap gagal dimuat',
+    ubinIsi:
+      'Gaya basemap-nya sendiri termuat — ia berkas statis di server ini. Yang ditolak permintaan ubinnya, di sisi MAPID.',
+    ubinLanjut:
+      'Keempat gaya memakai server ubin yang sama, jadi berganti gaya tidak menolong. Heksagon, skor, dan seluruh analisisnya tidak terpengaruh.',
+    basemapLanjut:
+      'Pilih basemap lain lewat menu di kanan atas; heksagon dan skornya tidak terpengaruh.',
+    cobaLagi: 'Coba muat ulang basemap',
+    otomatis: (n: number) =>
+      `Peta juga mencoba sendiri tiap menit, ${n} kali lagi. Pemadaman seperti ini biasanya pulih dalam belasan menit.`,
+    otomatisHabis: 'Percobaan otomatis sudah habis. Tekan tombol di atas kalau ingin mencoba lagi.',
+  },
+  en: {
+    belum: 'no zone yet',
+    layerKosong: (benda: string) => `This layer has no ${benda} yet`,
+    layerSebagian: (a: number, b: number, benda: string) =>
+      `${a} of ${b} hexagons have ${benda}`,
+    nolDari: (b: number) =>
+      `Zero of ${b} hexagons. Every hexagon is drawn grey because nothing has been measured yet — not because the values are low.`,
+    ubinRingkas: 'MAPID tiles refusing',
+    ubinSisa: (n: number) => `· ${n} more tries`,
+    ubinHabis: '· out of tries',
+    ubinJudul: 'The MAPID tile server is refusing',
+    basemapJudul: 'The basemap failed to load',
+    ubinIsi:
+      'The basemap style itself loaded — it is a static file on this server. What is being refused are the tile requests, on the MAPID side.',
+    ubinLanjut:
+      'All four styles use the same tile server, so switching style does not help. The hexagons, the scores, and every analysis are unaffected.',
+    basemapLanjut:
+      'Pick another basemap from the menu at the top right; hexagons and scores are unaffected.',
+    cobaLagi: 'Try reloading the basemap',
+    otomatis: (n: number) =>
+      `The map also retries by itself every minute, ${n} more times. Outages like this usually clear within a quarter of an hour.`,
+    otomatisHabis: 'Automatic retries are used up. Press the button above to try again.',
+  },
 }
 
 const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
@@ -866,6 +910,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
    *  layernya ada. Nilainya harus dibaca DI TITIK PEMBUATAN. */
   const namaZona = useNamaZona()
   const teksZona = useTeks(K_PETA)
+  const { bahasa } = useBahasa()
   const nyalaKini = useRef(layerNyala)
   nyalaKini.current = layerNyala
   // Dibaca DI DALAM pemuatan gaya, yang berjalan di luar render - jadi ref,
@@ -1034,6 +1079,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     terisi: number
     total: number
     benda: string
+    bendaEn: string
   } | null>(null)
 
   const [sorot, setSorot] = useState<PropertiHeksagon | null>(null)
@@ -2711,7 +2757,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
                 {sorot.kuadran ? namaZona(sorot.kuadran) : teksZona.belum}
               </span>
               {sorot.kuadran && (
-                <span className="text-[11.5px] text-ink-3">{KUADRAN[sorot.kuadran].ringkas}</span>
+                <span className="text-[11.5px] text-ink-3">
+                  {bahasa === 'en' ? KUADRAN[sorot.kuadran].ringkasEn : KUADRAN[sorot.kuadran].ringkas}
+                </span>
               )}
             </span>
             {sorot.data_source === 'predicted' && (
@@ -2759,12 +2807,16 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           >
             <p className="text-[12.5px] font-semibold text-ink">
               {cakupan.terisi === 0
-                ? `Layer ini belum punya ${cakupan.benda}`
-                : `${cakupan.terisi} dari ${cakupan.total} heksagon punya ${cakupan.benda}`}
+                ? teksZona.layerKosong(bahasa === 'en' ? cakupan.bendaEn : cakupan.benda)
+                : teksZona.layerSebagian(
+                    cakupan.terisi,
+                    cakupan.total,
+                    bahasa === 'en' ? cakupan.bendaEn : cakupan.benda,
+                  )}
             </p>
             <p className="mt-0.5 text-[11.5px] leading-snug text-ink-2">
               {cakupan.terisi === 0
-                ? `Nol dari ${cakupan.total} heksagon. Heksagon yang tergambar abu semuanya karena memang belum ada yang diukur — bukan karena nilainya rendah.`
+                ? teksZona.nolDari(cakupan.total)
                 : 'Sisanya digambar abu: belum terukur, bukan bernilai rendah.'}
             </p>
           </div>
@@ -2784,9 +2836,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           className="kaca pop pointer-events-auto flex w-fit cursor-pointer items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-ink-2 transition-transform duration-200 ease-jelly hover:scale-[1.04]"
         >
           <span className="denyut h-1.5 w-1.5 shrink-0 rounded-full bg-bahaya" aria-hidden />
-          Ubin MAPID menolak
+          {teksZona.ubinRingkas}
           <span className="text-ink-3">
-            {percobaanUbin > 0 ? `· mencoba lagi ${percobaanUbin}x` : '· percobaan habis'}
+            {percobaanUbin > 0 ? teksZona.ubinSisa(percobaanUbin) : teksZona.ubinHabis}
           </span>
         </button>
       )}
@@ -2824,17 +2876,17 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               kunci yang sama dan `fonts/*` 200 tanpa kunci. Jadi kuncinya sah
               dan yang padam sisi MAPID. */}
           <p className="pr-7 text-[13.5px] font-semibold text-bahaya">
-            {galatPeta.ubin ? 'Server ubin MAPID sedang menolak' : 'Basemap gagal dimuat'}
+            {galatPeta.ubin ? teksZona.ubinJudul : teksZona.basemapJudul}
           </p>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
             {galatPeta.ubin
-              ? 'Gaya basemap-nya sendiri termuat — ia berkas statis di server ini. Yang ditolak permintaan ubinnya, di sisi MAPID.'
+              ? teksZona.ubinIsi
               : galatPeta.pesan}
           </p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
             {galatPeta.ubin
-              ? 'Keempat gaya memakai server ubin yang sama, jadi berganti gaya tidak menolong. Heksagon, skor, dan seluruh analisisnya tidak terpengaruh.'
-              : 'Pilih basemap lain lewat menu di kanan atas; heksagon dan skornya tidak terpengaruh.'}
+              ? teksZona.ubinLanjut
+              : teksZona.basemapLanjut}
           </p>
           {galatPeta.ubin && (
             <>
@@ -2848,7 +2900,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
                 }}
                 className="mt-2 cursor-pointer rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-surface transition-transform duration-200 ease-jelly hover:scale-[1.04]"
               >
-                Coba muat ulang basemap
+                {teksZona.cobaLagi}
               </button>
               {/* Menyebutkan bahwa petanya SEDANG mencoba sendiri.
                   Sebelumnya di sini tercetak galat MapLibre mentah, dan
@@ -2858,8 +2910,8 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
                   tombolnya - tidak disebutkan sama sekali. */}
               <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
                 {percobaanUbin > 0
-                  ? `Peta juga mencoba sendiri tiap menit, ${percobaanUbin} kali lagi. Pemadaman seperti ini biasanya pulih dalam belasan menit.`
-                  : 'Percobaan otomatis sudah habis. Tekan tombol di atas kalau ingin mencoba lagi.'}
+                  ? teksZona.otomatis(percobaanUbin)
+                  : teksZona.otomatisHabis}
               </p>
             </>
           )}

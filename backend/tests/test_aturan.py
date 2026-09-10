@@ -342,6 +342,21 @@ def test_arti_variabel_lengkap_dan_sama_dengan_frontend():
         baris = f"{kolom}: {{ kode: '{kode}', nama: '{nama}', satuan: '{satuan}' }}"
         assert baris in ts, f"frontend/src/config.ts tidak memuat: {baris}"
 
+    # Sisi Inggrisnya, dan sengaja dijaga DARI SINI - bukan lewat tipe di TS.
+    #
+    # `ARTI_VARIABEL_EN` dipisah dari `ARTI_VARIABEL` justru supaya baris di
+    # atas tetap bisa dicocokkan huruf per huruf; harganya, kelengkapannya
+    # tidak lagi dijamin bentuk objeknya sendiri. Tanpa asersi ini satu kolom
+    # yang lupa diterjemahkan tidak gagal di mana pun - ia cuma memunculkan
+    # "n_kompetitor_langsung" di layar berbahasa Inggris.
+    awal = ts.index("export const ARTI_VARIABEL_EN")
+    blok_en = ts[awal : ts.index("\n}", awal)]
+    for kolom in ARTI_VARIABEL:
+        assert f"{kolom}: {{ nama: '" in blok_en, f"nama Inggris hilang untuk: {kolom}"
+    assert blok_en.count("nama: '") == 43, (
+        f"ARTI_VARIABEL_EN harus 43 entri, terbaca {blok_en.count('nama: ')}"
+    )
+
 
 def test_kode_lokasi_terbaca_dan_tidak_bentrok():
     """Nama heksagon harus stabil, dan rumusnya harus sama dengan frontend.

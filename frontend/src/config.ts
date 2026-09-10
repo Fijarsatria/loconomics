@@ -105,6 +105,10 @@ export interface Kuadran {
    * tersimpan di basis data - tapi ia tidak pernah lagi berdiri sendirian.
    */
   ringkas: string
+  /** `ringkas` dan `arti` dalam bahasa Inggris. Keduanya kalimat, bukan nama -
+   *  jadi keduanya berpasangan; `nama` tidak (lihat `namaEn`). */
+  ringkasEn: string
+  artiEn: string
   /**
    * Warna untuk DOM. Sengaja `var(...)`, bukan hex.
    *
@@ -169,12 +173,14 @@ export const KUADRAN: Record<string, Kuadran> = {
     // istilah yang dipakai apa adanya oleh pelaku usaha di Indonesia.
     namaEn: 'Hidden Gem',
     ringkas: 'bagus, belum mahal',
+    ringkasEn: 'good, and not expensive yet',
     warna: 'var(--q-gem)',
     warnaPeta: '#4C93F7',
     lembut: 'var(--q-gem-lembut)',
     lembutPeta: '#DCEAFD',
     glif: 'M8 1.6 14.4 8 8 14.4 1.6 8Z', // belah ketupat — sesuatu yang ditemukan
     arti: 'Datanya bagus, tampilannya biasa saja. Sewanya biasanya jauh lebih murah.',
+    artiEn: 'The data is good, the looks are ordinary. The rent is usually far cheaper.',
     sel: [0, 0],
   },
   PEMENANG_JELAS: {
@@ -186,12 +192,14 @@ export const KUADRAN: Record<string, Kuadran> = {
     nama: 'Aman',
     namaEn: 'Safe Bet',
     ringkas: 'bagus, dan Anda membayar gengsinya',
+    ringkasEn: 'good, and you pay for the prestige',
     warna: 'var(--q-menang)',
     warnaPeta: '#15803D',
     lembut: 'var(--q-menang-lembut)',
     lembutPeta: '#D7ECDF',
     glif: 'M8 1.5A6.5 6.5 0 1 1 8 14.5 6.5 6.5 0 0 1 8 1.5Z', // lingkaran penuh
     arti: 'Datanya bagus dan tampilannya mahal. Aman, tetapi Anda ikut membayar gengsinya.',
+    artiEn: 'The data is good and it looks expensive. Safe, but you pay for the prestige too.',
     sel: [1, 0],
   },
   JEBAKAN_GENGSI: {
@@ -199,12 +207,14 @@ export const KUADRAN: Record<string, Kuadran> = {
     nama: 'Jebakan Gengsi',
     namaEn: 'Prestige Trap',
     ringkas: 'terlihat mahal, datanya lemah',
+    ringkasEn: 'looks expensive, the data is weak',
     warna: 'var(--q-jebakan)',
     warnaPeta: '#E58A00',
     lembut: 'var(--q-jebakan-lembut)',
     lembutPeta: '#FCECD4',
     glif: 'M8 1.4 15 14.2H1Z', // segitiga — rambu peringatan
     arti: 'Tampilannya mahal tetapi ekonominya tidak mendukung. Kuadran yang paling sering menjebak.',
+    artiEn: 'It looks expensive but the economics do not back it up. The quadrant that traps people most often.',
     sel: [1, 1],
   },
   HINDARI: {
@@ -212,12 +222,14 @@ export const KUADRAN: Record<string, Kuadran> = {
     nama: 'Hindari',
     namaEn: 'Avoid',
     ringkas: 'sepi, dan tidak menonjol juga',
+    ringkasEn: 'quiet, and not striking either',
     warna: 'var(--q-hindari)',
     warnaPeta: '#B01B1B',
     lembut: 'var(--q-hindari-lembut)',
     lembutPeta: '#F8DCDC',
     glif: 'M2.5 2.5h11v11h-11Z', // kotak kosong — tidak ada apa-apa
     arti: 'Potensi ekonomi dan daya tarik visualnya sama-sama rendah.',
+    artiEn: 'Both the economic potential and the visual pull are low.',
     sel: [0, 1],
   },
 }
@@ -396,14 +408,37 @@ export const FITUR: FiturProduk[] = [
 export interface Layer {
   nama: string
   pertanyaan: string
+  /** Pertanyaan yang sama dalam bahasa Inggris. `nama` TIDAK punya pasangan:
+   *  PriceLens, GemFinder, ZoneGuard adalah nama, bukan kata. */
+  pertanyaanEn: string
 }
 
 export const LAYER: Record<string, Layer> = {
-  opportunity: { nama: 'Opportunity Score', pertanyaan: 'Di mana yang paling menjanjikan?' },
-  pricelens: { nama: 'PriceLens', pertanyaan: 'Berapa harga sewa yang wajar di sini?' },
-  hidden_gem: { nama: 'GemFinder', pertanyaan: 'Mana yang bagus tapi belum dilirik?' },
-  risk_radar: { nama: 'RiskRadar', pertanyaan: 'Mana yang berisiko menjebak?' },
-  zoneguard: { nama: 'ZoneGuard', pertanyaan: 'Boleh buka usaha di sini?' },
+  opportunity: {
+    nama: 'Opportunity Score',
+    pertanyaan: 'Di mana yang paling menjanjikan?',
+    pertanyaanEn: 'Where is the most promising place?',
+  },
+  pricelens: {
+    nama: 'PriceLens',
+    pertanyaan: 'Berapa harga sewa yang wajar di sini?',
+    pertanyaanEn: 'What is a fair rent around here?',
+  },
+  hidden_gem: {
+    nama: 'GemFinder',
+    pertanyaan: 'Mana yang bagus tapi belum dilirik?',
+    pertanyaanEn: 'Which places are good but still overlooked?',
+  },
+  risk_radar: {
+    nama: 'RiskRadar',
+    pertanyaan: 'Mana yang berisiko menjebak?',
+    pertanyaanEn: 'Which places risk becoming a trap?',
+  },
+  zoneguard: {
+    nama: 'ZoneGuard',
+    pertanyaan: 'Boleh buka usaha di sini?',
+    pertanyaanEn: 'Is business allowed here?',
+  },
 }
 
 export type NamaLayer = keyof typeof LAYER
@@ -600,9 +635,82 @@ export const ARTI_VARIABEL: Record<string, { kode: string; nama: string; satuan:
   skor_prestise_visual: { kode: 'M03', nama: 'Kesan mewah dari foto', satuan: 'dari 5' },
 }
 
+/**
+ * Keempat puluh tiga nama itu dalam bahasa Inggris.
+ *
+ * DIPISAH dari `ARTI_VARIABEL`, bukan disisipkan ke dalamnya sebagai bidang
+ * `namaEn`, dan sebabnya bukan gaya: `backend/tests/test_aturan.py`
+ * mencocokkan tiap BARIS `ARTI_VARIABEL` huruf per huruf dengan kembarannya di
+ * `app/core/aturan.py` - satu-satunya hal yang menjaga Laporan PDF dan layar
+ * tidak menyebut variabel yang sama dengan dua nama berbeda. Menyisipkan bidang
+ * baru ke dalam baris itu memaksa uji tersebut dilonggarkan, dan penjaga yang
+ * dilonggarkan supaya satu perubahan lewat adalah penjaga yang berhenti
+ * menjaga.
+ *
+ * Kelengkapannya dijaga uji yang sama, dari sisi sebaliknya: satu kolom yang
+ * lupa diterjemahkan membuat uji itu gagal, bukan memunculkan nama kolom mentah
+ * di layar berbahasa Inggris.
+ *
+ * `satuan` ikut karena sebagiannya memang kata: jiwa, orang, menit, tempat,
+ * unit. Sisanya (%, x, Rp, m2) sudah sama di kedua bahasa.
+ */
+export const ARTI_VARIABEL_EN: Record<string, { nama: string; satuan: string }> = {
+  pop_100m: { nama: 'Residents nearby', satuan: 'people' },
+  pop_usia_produktif: { nama: 'Working-age residents', satuan: 'people' },
+  jarak_simpul_m: { nama: 'Distance to the station', satuan: 'm' },
+  waktu_jalan_menit: { nama: 'Walk to the station', satuan: 'min' },
+  skor_simpul: { nama: 'How important the station is', satuan: '' },
+  ridership_proksi: { nama: 'Station riders per day', satuan: 'people' },
+  kepadatan_kos: { nama: 'Boarding houses around', satuan: '' },
+  kepadatan_kantor: { nama: 'Offices around', satuan: '' },
+  generator_keramaian: { nama: 'Schools, markets, hospitals', satuan: 'places' },
+  skor_ramai_terkoreksi: { nama: 'How busy it gets', satuan: '' },
+  intensitas_transaksi: { nama: 'Transaction density', satuan: '' },
+  aktivitas_komunitas: { nama: 'Community activity', satuan: '' },
+  puncak_pagi: { nama: 'Morning spending (05-09)', satuan: '%' },
+  puncak_siang: { nama: 'Midday spending (11-14)', satuan: '%' },
+  puncak_sore: { nama: 'Afternoon spending (16-19)', satuan: '%' },
+  puncak_malam: { nama: 'Night spending (19-23)', satuan: '%' },
+  rasio_weekend: { nama: 'Weekend vs weekday', satuan: 'x' },
+  pangsa_digital: { nama: 'Cashless payment', satuan: '%' },
+  harga_median_porsi: { nama: 'Food price per serving', satuan: 'Rp' },
+  spread_harga: { nama: 'Price gap between places', satuan: '' },
+  nominal_median_struk: { nama: 'Spend per receipt', satuan: 'Rp' },
+  belanja_per_jam: { nama: 'Money moving per hour', satuan: 'Rp' },
+  n_kompetitor_langsung: { nama: 'Direct rivals', satuan: 'places' },
+  kepadatan_poi_total: { nama: 'Businesses in total', satuan: 'places' },
+  keragaman_usaha: { nama: 'Variety of business types', satuan: '' },
+  keragaman_kuliner: { nama: 'Variety of food types', satuan: '' },
+  pangsa_waralaba: { nama: 'Share of franchise brands', satuan: '%' },
+  rasio_kompetitor_per_kapita: { nama: 'Rivals per resident', satuan: '' },
+  rasio_keliling: { nama: 'Share of street vendors', satuan: '%' },
+  n_menetap_kuliner: { nama: 'Permanent food stalls', satuan: 'places' },
+  njop_m2: { nama: 'NJOP land value', satuan: 'Rp/m2' },
+  njop_persentil: { nama: 'NJOP rank within the area', satuan: '%' },
+  pasokan_sewa_komersial: { nama: 'Commercial space available', satuan: 'units' },
+  rasio_sewa_jual: { nama: 'Yearly rent over sale price', satuan: '' },
+  harga_sewa_median: { nama: 'Rent per month', satuan: 'Rp' },
+  indeks_churn: { nama: 'How often businesses change hands', satuan: '' },
+  harga_sewa_per_m2: { nama: 'Rent per m2', satuan: 'Rp/m2' },
+  zona_izin_komersial: { nama: 'Business is allowed', satuan: '' },
+  kelas_zona: { nama: 'Zone class under the spatial plan', satuan: '' },
+  risiko_banjir: { nama: 'Flood risk', satuan: '' },
+  rasio_tutupan_bangunan: { nama: 'How built-up it is', satuan: '%' },
+  luas_bangunan_median: { nama: 'Typical building footprint', satuan: 'm2' },
+  skor_prestise_visual: { nama: 'Upmarket look from photos', satuan: 'of 5' },
+}
+
 /** kode → nama awam. Daftar faktor pembentuk skor berkunci KODE, bukan kolom. */
 export const ARTI_KODE: Record<string, string> = Object.fromEntries(
   Object.values(ARTI_VARIABEL).map((v) => [v.kode, v.nama]),
+)
+
+/** Kembarannya dalam bahasa Inggris, dirakit dari pasangan kunci yang sama. */
+export const ARTI_KODE_EN: Record<string, string> = Object.fromEntries(
+  Object.entries(ARTI_VARIABEL).map(([kolom, v]) => [
+    v.kode,
+    ARTI_VARIABEL_EN[kolom]?.nama ?? v.nama,
+  ]),
 )
 
 /** Keempat indeks dalam bahasa biasa. */
@@ -611,6 +719,13 @@ export const ARTI_INDEKS: Record<string, string> = {
   IAE: 'perputaran uang',
   IKP: 'ketatnya persaingan',
   IBR: 'biaya dan risiko',
+}
+
+export const ARTI_INDEKS_EN: Record<string, string> = {
+  IPT: 'access to the station',
+  IAE: 'money in circulation',
+  IKP: 'how tight the competition is',
+  IBR: 'cost and risk',
 }
 
 /**
@@ -625,6 +740,19 @@ export const TANYA_INDEKS: Record<string, string> = {
   IAE: 'Ada tidak uang berputar di sini?',
   IKP: 'Sudah ramai pesaing atau belum?',
   IBR: 'Mahal dan berisiko tidak?',
+}
+
+/**
+ * Bukan terjemahan harfiah, melainkan pertanyaan yang SAMA dalam mulut orang
+ * yang berbahasa Inggris. "Gampang tidak orang sampai ke sini?" dialihbahasakan
+ * kata per kata berbunyi seperti soal ujian; yang ditulis di sini kalimat yang
+ * benar-benar dipakai orang saat menimbang sebuah ruko.
+ */
+export const TANYA_INDEKS_EN: Record<string, string> = {
+  IPT: 'Can people get here easily?',
+  IAE: 'Is money actually moving here?',
+  IKP: 'Is it already crowded with rivals?',
+  IBR: 'Is it expensive and risky?',
 }
 
 /**
@@ -647,6 +775,13 @@ const KATA_INDEKS: Record<string, readonly [string, string, string, string]> = {
   IAE: ['Sangat ramai', 'Ramai', 'Sedang', 'Sepi'],
   IKP: ['Sangat ketat', 'Ketat', 'Sedang', 'Masih longgar'],
   IBR: ['Mahal', 'Agak mahal', 'Sedang', 'Murah'],
+}
+
+const KATA_INDEKS_EN: Record<string, readonly [string, string, string, string]> = {
+  IPT: ['Very easy', 'Easy', 'Fair', 'Hard'],
+  IAE: ['Very busy', 'Busy', 'Moderate', 'Quiet'],
+  IKP: ['Very tight', 'Tight', 'Moderate', 'Still roomy'],
+  IBR: ['Expensive', 'Somewhat expensive', 'Moderate', 'Cheap'],
 }
 
 /**
@@ -677,9 +812,9 @@ export function keKalimat(teks: string): string {
 }
 
 /** "a", "a dan b", "a, b, dan c". Daftar yang disambung koma saja terbaca putus. */
-function rangkai(bagian: string[]): string {
+function rangkai(bagian: string[], sambung: string): string {
   if (bagian.length <= 1) return bagian[0] ?? ''
-  return `${bagian.slice(0, -1).join(', ')} dan ${bagian[bagian.length - 1]}`
+  return `${bagian.slice(0, -1).join(', ')} ${sambung} ${bagian[bagian.length - 1]}`
 }
 
 /**
@@ -711,6 +846,7 @@ function rangkai(bagian: string[]): string {
 export function frasaPrestise(
   cakupan: { terisi: string[]; kosong: string[]; diukur_langsung: boolean } | null | undefined,
   lingkup: 'lokasi' | 'wilayah',
+  bahasa: 'id' | 'en' = 'id',
 ): string[] {
   if (!cakupan) return []
   const { terisi, kosong, diukur_langsung } = cakupan
@@ -718,16 +854,31 @@ export function frasaPrestise(
   // yang isinya "semuanya lengkap" cuma menambah teks tanpa menambah kejujuran.
   if (kosong.length === 0) return []
 
-  const di = lingkup === 'lokasi' ? 'di lokasi ini' : 'di satu pun lokasi'
-  const nama = (kode: string) => keKalimat(ARTI_KODE[kode] ?? kode)
+  const en = bahasa === 'en'
+  const di = en
+    ? lingkup === 'lokasi'
+      ? 'at this location'
+      : 'at any location'
+    : lingkup === 'lokasi'
+      ? 'di lokasi ini'
+      : 'di satu pun lokasi'
+  const nama = (kode: string) => keKalimat((en ? ARTI_KODE_EN[kode] : ARTI_KODE[kode]) ?? kode)
+  const daftar = (kode: string[]) => rangkai(kode.map(nama), en ? 'and' : 'dan')
 
   if (terisi.length === 0) {
-    return [`Belum ada satu pun bahan sumbu ini yang terukur ${di}.`]
+    return [
+      en
+        ? `Not one ingredient of this axis has been measured ${di}.`
+        : `Belum ada satu pun bahan sumbu ini yang terukur ${di}.`,
+    ]
   }
 
   const kalimat = [
-    `Diperkirakan dari ${terisi.length} dari ${terisi.length + kosong.length} bahan: ` +
-      `${rangkai(terisi.map(nama))}.`,
+    en
+      ? `Estimated from ${terisi.length} of ${terisi.length + kosong.length} ingredients: ` +
+        `${daftar(terisi)}.`
+      : `Diperkirakan dari ${terisi.length} dari ${terisi.length + kosong.length} bahan: ` +
+        `${daftar(terisi)}.`,
   ]
   if (!diukur_langsung) {
     // DUA pernyataan, dipisah titik koma, dan pemisahan itu bukan gaya bahasa.
@@ -738,16 +889,24 @@ export function frasaPrestise(
     // menyalin BAHAN_PRESTISE_LANGSUNG dari backend: daftar yang dipelihara di
     // dua tempat akan berpisah, dan `diukur_langsung` sudah menjawabnya.
     kalimat.push(
-      `Belum ada satu pun bahan yang menilai tampilannya secara langsung; ` +
-        `yang belum terukur ${di}: ${rangkai(kosong.map(nama))}.`,
+      en
+        ? `No ingredient judges its appearance directly; ` +
+          `not yet measured ${di}: ${daftar(kosong)}.`
+        : `Belum ada satu pun bahan yang menilai tampilannya secara langsung; ` +
+          `yang belum terukur ${di}: ${daftar(kosong)}.`,
     )
   }
   return kalimat
 }
 
-export function kataIndeks(kode: string, nilai: number | null): string | null {
-  if (nilai === null || !KATA_INDEKS[kode]) return null
-  const kata = KATA_INDEKS[kode]
+export function kataIndeks(
+  kode: string,
+  nilai: number | null,
+  bahasa: 'id' | 'en' = 'id',
+): string | null {
+  const daftar = bahasa === 'en' ? KATA_INDEKS_EN : KATA_INDEKS
+  if (nilai === null || !daftar[kode]) return null
+  const kata = daftar[kode]
   if (nilai >= AMBANG_KATA[0]) return kata[0]
   if (nilai >= AMBANG_KATA[1]) return kata[1]
   if (nilai >= AMBANG_KATA[2]) return kata[2]
@@ -776,10 +935,31 @@ export function kataIndeks(kode: string, nilai: number | null): string | null {
 // perlu di-hover.
 //
 // `label` yang tampil di layar; `teks` tetap jadi kalimat panjangnya.
-export const KEYAKINAN: Record<string, { balok: number; teks: string; label: string }> = {
-  TINGGI: { balok: 3, teks: 'Didukung survei yang rapat', label: 'Data kuat' },
-  SEDANG: { balok: 2, teks: 'Didukung survei secukupnya', label: 'Data sedang' },
-  RENDAH: { balok: 1, teks: 'Datanya masih tipis, perlu verifikasi lapangan', label: 'Data tipis' },
+export const KEYAKINAN: Record<
+  string,
+  { balok: number; teks: string; label: string; teksEn: string; labelEn: string }
+> = {
+  TINGGI: {
+    balok: 3,
+    teks: 'Didukung survei yang rapat',
+    label: 'Data kuat',
+    teksEn: 'Backed by a dense survey',
+    labelEn: 'Strong data',
+  },
+  SEDANG: {
+    balok: 2,
+    teks: 'Didukung survei secukupnya',
+    label: 'Data sedang',
+    teksEn: 'Backed by a fair amount of survey',
+    labelEn: 'Fair data',
+  },
+  RENDAH: {
+    balok: 1,
+    teks: 'Datanya masih tipis, perlu verifikasi lapangan',
+    label: 'Data tipis',
+    teksEn: 'The data is still thin; it needs checking on the ground',
+    labelEn: 'Thin data',
+  },
 }
 
 // --- Commuter Clock --------------------------------------------------------

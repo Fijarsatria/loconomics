@@ -22,18 +22,7 @@
 
 import { useEffect, useState } from 'react'
 
-import {
-  ARTI_INDEKS,
-  KUADRAN,
-  ARTI_KODE,
-  ARTI_VARIABEL,
-  TANYA_INDEKS,
-  TINGGI_BAIK,
-  frasaPrestise,
-  kataIndeks,
-  keKalimat,
-  kodeLokasi,
-} from '../config'
+import { KUADRAN, TINGGI_BAIK, frasaPrestise, keKalimat, kodeLokasi } from '../config'
 import { api, GalatAPI } from '../lib/api'
 import { angka, jarakSingkat, rupiah } from '../lib/format'
 import { profilUntukModa } from '../types'
@@ -61,6 +50,331 @@ import {
   Terkunci,
   Memuat,
 } from './primitif'
+
+import { useIstilah, useTeks } from '../lib/bahasa'
+
+/**
+ * Kalimat panel ini, dua bahasa.
+ *
+ * Yang TIDAK ada di sini, dan itu disengaja: `zoneguard.penjelasan`,
+ * `jam.catatan`, `risiko.label`, `detail.kuadran_penjelasan`, dan tiap pesan
+ * galat backend. Semuanya dirakit backend dari angka heksagon itu sendiri;
+ * menyalinnya ke sini berarti membuat versi kedua yang cepat atau lambat
+ * berselisih dengan yang dicetak Laporan PDF dan diucapkan Konsultan AI.
+ *
+ * Nama produk - Loconomics, PriceLens, ZoneGuard, RiskRadar, Commuter Clock,
+ * Opportunity Score, NJOP, RDTR - sama di kedua bahasa. Ia nama, bukan kata.
+ */
+const K = {
+  id: {
+    pilihJudul: 'Pilih satu heksagon',
+    pilihIsi:
+      'Klik heksagon mana pun di peta untuk melihat skornya, harga sewanya, dan kapan lokasi itu ramai.',
+    gagalHeks: 'Gagal memuat heksagon',
+    gagalMuat: 'Gagal memuat.',
+    ajakanPremium: 'Bagian ini terbuka untuk pelanggan Loconomics Premium.',
+    ajakanMasuk: 'Buat akun dulu, lalu buka seluruh kedalaman datanya.',
+    gabung: 'Gabung Loconomics Premium',
+    atauToken: 'atau buka lokasi ini saja dengan 1 token',
+    peringkat: (n: number) => ` · peringkat ${n}`,
+    lihatKuadran: 'Lihat posisinya di diagram kuadran',
+
+    menujuJudul: 'Cara menuju ke sini',
+    sembunyiRute: 'Sembunyikan rute & jangkauan',
+    tampilRute: 'Tampilkan rute & jangkauan',
+    moda: { kaki: 'Jalan kaki', mobil: 'Mobil', motor: 'Motor' },
+    belumDitarik: 'belum ditarik',
+    mnt: 'mnt',
+
+    bandingPremium: 'Komparasi berdampingan bagian dari Loconomics Premium.',
+    bandingMasuk: 'Buat akun dulu untuk membandingkan beberapa lokasi.',
+    diBaki: 'Ada di baki banding',
+    bandingkan: 'Bandingkan lokasi ini',
+    sudahSimpan: 'Lokasi tersimpan',
+    simpan: 'Simpan lokasi',
+    simpanMasuk: 'Buat akun dulu untuk menyimpan lokasi.',
+    simpanPremium: 'Menyimpan dan memantau lokasi bagian dari Loconomics Premium.',
+    simpanOke:
+      'Lokasi tersimpan dan skornya dibekukan — perubahan berikutnya dilaporkan di menu Tersimpan.',
+    simpanGagal: 'Gagal menambahkan pantauan.',
+    unduhLaporan: 'Unduh Laporan Kelayakan (PDF)',
+    laporanMasuk: 'Buat akun dulu untuk mengunduh Laporan Kelayakan.',
+    laporanOke: 'Laporan Kelayakan terunduh.',
+    laporanGagal: 'Gagal mengunduh laporan.',
+    bukaOke: 'Lokasi ini terbuka permanen untuk akun Anda.',
+    bukaGagal: 'Gagal membuka lokasi.',
+    membuka: 'Membuka…',
+    bukaToken: (sisa: number) => `Buka lokasi ini saja — 1 token (${sisa} tersisa)`,
+    simulasiJudul: 'Simulasi usaha di sini',
+    simulasiIsi: 'Omzet, sewa, dan titik impas dari angka heksagon ini',
+
+    menit: 'menit',
+    berkendara: 'berkendara',
+    jalanKaki: 'jalan kaki',
+    keArah: 'ke',
+    lewatJalan: 'lewat jalan yang ada',
+    memutar: (x: string) => `${x}x lebih jauh dari kelihatannya di peta`,
+    memutarEkor: '. Ada yang menghalangi jalan langsungnya.',
+    alternatif: (n: number) => ` ${n} jalur alternatif tergambar di peta.`,
+    // Bahasa Indonesia tidak menjamakkan bendanya, bahasa Inggris menjamakkan.
+    // Menyalin kalimat yang sama apa adanya menghasilkan "1 alternative routes",
+    // dan satu huruf s yang salah membuat seluruh panel terbaca hasil mesin.
+
+    zonaBoleh: 'ZoneGuard — zona mengizinkan usaha',
+    kelasZona: (k: string) => ` · kelas ${k}`,
+    zonaLarang: 'ZoneGuard — tidak boleh dipakai usaha',
+    zonaKosong: 'Belum ada RDTR digital',
+    zonaKosongIsi: 'Status izinnya belum bisa dipastikan. Skor tetap dihitung.',
+    artinyaApa: 'Apa artinya buat saya?',
+
+    hargaJudul: 'PriceLens — harga sewa',
+    hargaKunciJudul: 'Rincian harga lokasi ini',
+    hargaKunciIsi:
+      'Sewa per m² dan posisinya di rentang wajar kawasan, sewa per bulan, belanja per jam, dan NJOP.',
+    hb: {
+      sewa: 'Sewa per bulan',
+      sewaB: 'P05 — angka yang tertulis di spanduk sewa',
+      jam: 'Uang berpindah per jam',
+      jamB: 'B10 — total nominal struk dibagi jam operasional',
+      porsi: 'Harga makanan per porsi',
+      porsiB: 'B07 — dari daftar menu yang disurvei',
+      njop: 'NJOP',
+      njopB: 'P01 — pembanding independen',
+    },
+    hargaKosong: (semua: boolean, daftar: string) =>
+      `${semua ? 'Belum ada' : 'Belum ada juga'} ${daftar} di lokasi ini.`,
+    kenapaBelum: 'Kenapa belum ada?',
+    kenapaNjop:
+      'NJOP tidak diterbitkan terbuka oleh Bapenda; sisanya menunggu survei lapangan — ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.',
+    kenapaSurvei: 'Ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.',
+    hargaTakAda: 'Data harga belum tersedia untuk heksagon ini',
+
+    jamJudul: 'Commuter Clock — kapan uang berpindah',
+    captive: 'Didominasi captive',
+    choice: 'Didominasi choice',
+    seimbang: 'Seimbang',
+    jamKunciJudul: 'Pola jam lokasi ini',
+    jamKunciIsi:
+      'Grafik 18 jam: kapan uangnya berpindah, jam puncaknya, dan pembagian captive vs choice rider.',
+    palingRamai: 'Paling ramai pukul',
+    jamCaptive:
+      'Arusnya menumpuk dua kali sehari dan sepi di antaranya — cocok untuk usaha yang cepat melayani.',
+    jamChoice:
+      'Arusnya lebih rata sepanjang hari — cocok untuk usaha yang butuh orang berlama-lama.',
+    jamSeimbang: 'Arusnya tidak condong ke salah satu jenis penumpang.',
+    jamTakAda: 'Belum ada jam transaksi yang tercatat.',
+    jamNolJudul: 'Belum ada satu pun jam transaksi tercatat.',
+    jamNolIsi:
+      'Pola jam dibaca dari waktu yang tercetak di struk. Struk survei MAPID tidak membawa kolom waktu — jamnya ada di dalam foto struknya, dan pembacaan otomatis foto belum dijalankan. Sampai itu ada, tidak ada satu pun lokasi yang punya profil jam.',
+
+    risikoJudul: 'RiskRadar — pergantian usaha',
+    risikoKosong: 'Data pergantian usaha belum ada — lokasi ini belum bisa dinilai risikonya',
+    risikoIsi:
+      'Usaha di sini lebih sering berganti daripada kebanyakan area lain di kawasan yang sama. Itu tanda lokasi yang terus-menerus membuat penyewanya menyerah.',
+
+    empatJudul: 'Empat hal yang dinilai',
+    empatKunciIsi:
+      'Akses ke stasiun, perputaran uang, ketatnya persaingan, dan biaya & risiko — masing-masing dengan kata, angka pendukungnya, dan berapa bahannya yang benar-benar terukur.',
+    empatPembuka: 'Empat hal ini yang menyusun skornya.',
+    belumTerukur: 'Belum terukur',
+    faktaJalan: (n: number, nama: string) => `${n} menit jalan kaki ke ${nama}`,
+    bahanTerukur: (a: number, b: number) => `${a} dari ${b} bahannya sudah terukur`,
+    belumAda: (daftar: string) => `Belum ada: ${daftar}.`,
+    butuhSurvei: 'Butuh survei lapangan dulu.',
+    tanpaData: 'Datanya belum ada untuk lokasi ini.',
+    apaSaja: 'Yang belum ada apa saja?',
+
+    faktorJudul: 'Kenapa skornya segitu',
+    faktorKunciJudul: 'Pembongkaran skor',
+    faktorKunciIsi:
+      'Lihat angka mana yang menaikkan dan menurunkan skor lokasi ini, dan seberapa jauh posisinya dibanding lokasi lain.',
+    takTerukur: 'belum terukur',
+    makinBeban: ' · makin tinggi makin membebani',
+    makinBaik: ' · makin tinggi makin baik',
+
+    tabelJudul: 'Seluruh 43 angka lokasi ini',
+    tabelKunciIsi:
+      'Semua angka yang dipakai menilai lokasi ini — orang di sekitarnya, kebiasaan belanjanya, pesaingnya, biayanya, risikonya, dan bentuk bangunannya.',
+    tabelBuka: 'Tampilkan tabel lengkap',
+    ya: 'ya',
+    tidak: 'tidak',
+
+    riwayatJudul: 'Riwayat perubahan skor',
+
+    kuadranJudul: 'Kenapa masuk kuadran ini',
+    kuadranKunciIsi:
+      'Dua batang yang menunjukkan seberapa bagus datanya dan seberapa mahal kelihatannya, masing-masing terhadap titik tengah seluruh lokasi di enam kawasan.',
+    sumbuY: 'Seberapa bagus datanya',
+    sumbuYAtas: 'Lebih bagus daripada separuh lokasi lain.',
+    sumbuYBawah: 'Lebih rendah daripada separuh lokasi lain.',
+    dari100: (n: string) => `${n} dari 100`,
+    sumbuX: 'Seberapa mahal kelihatannya',
+    sumbuXAtas:
+      'Diperkirakan tampak lebih mahal daripada separuh lokasi lain — sewanya biasanya ikut naik.',
+    sumbuXBawah:
+      'Diperkirakan tampak lebih biasa daripada separuh lokasi lain — dan justru di situ sewanya masih murah.',
+    diAtasRata: 'Di atas rata-rata',
+    diBawahRata: 'Di bawah rata-rata',
+    garisTegak: 'Apa arti garis tegaknya?',
+    garisTegakIsi:
+      'Garis tegak pada kedua batang = titik tengah seluruh lokasi di enam kawasan. Sisi mana batangnya berhenti terhadap garis itulah yang menentukan kuadrannya.',
+
+    kaki: 'Angka di kartu ini dihitung sekali oleh pipeline dan dibaca apa adanya. Informasi untuk pertimbangan, bukan nasihat investasi.',
+  },
+  en: {
+    pilihJudul: 'Pick one hexagon',
+    pilihIsi:
+      'Click any hexagon on the map to see its score, its rent, and when the place gets busy.',
+    gagalHeks: 'Could not load this hexagon',
+    gagalMuat: 'Could not load.',
+    ajakanPremium: 'This section is open to Loconomics Premium subscribers.',
+    ajakanMasuk: 'Create an account first, then open the full depth of the data.',
+    gabung: 'Join Loconomics Premium',
+    atauToken: 'or open just this location with 1 token',
+    peringkat: (n: number) => ` · rank ${n}`,
+    lihatKuadran: 'See where it sits on the quadrant diagram',
+
+    menujuJudul: 'Getting here',
+    sembunyiRute: 'Hide route & reach',
+    tampilRute: 'Show route & reach',
+    moda: { kaki: 'On foot', mobil: 'Car', motor: 'Motorbike' },
+    belumDitarik: 'not fetched yet',
+    mnt: 'min',
+
+    bandingPremium: 'Side-by-side comparison is part of Loconomics Premium.',
+    bandingMasuk: 'Create an account first to compare several locations.',
+    diBaki: 'In the comparison tray',
+    bandingkan: 'Compare this location',
+    sudahSimpan: 'Location saved',
+    simpan: 'Save location',
+    simpanMasuk: 'Create an account first to save locations.',
+    simpanPremium: 'Saving and watching locations is part of Loconomics Premium.',
+    simpanOke:
+      'Location saved and its score frozen — the next change is reported under Saved.',
+    simpanGagal: 'Could not add it to your watchlist.',
+    unduhLaporan: 'Download the Feasibility Report (PDF)',
+    laporanMasuk: 'Create an account first to download the Feasibility Report.',
+    laporanOke: 'Feasibility Report downloaded.',
+    laporanGagal: 'Could not download the report.',
+    bukaOke: 'This location is now permanently open for your account.',
+    bukaGagal: 'Could not open the location.',
+    membuka: 'Opening…',
+    bukaToken: (sisa: number) => `Open just this location — 1 token (${sisa} left)`,
+    simulasiJudul: 'Simulate a business here',
+    simulasiIsi: "Revenue, rent, and break-even from this hexagon's numbers",
+
+    menit: 'minutes',
+    berkendara: 'by car',
+    jalanKaki: 'on foot',
+    keArah: 'to',
+    lewatJalan: 'along the streets that exist',
+    memutar: (x: string) => `${x}x farther than it looks on the map`,
+    memutarEkor: '. Something is blocking the direct way.',
+    alternatif: (n: number) =>
+      ` ${n} alternative ${n === 1 ? 'route is' : 'routes are'} drawn on the map.`,
+
+    zonaBoleh: 'ZoneGuard — zoning allows business',
+    kelasZona: (k: string) => ` · class ${k}`,
+    zonaLarang: 'ZoneGuard — business is not allowed',
+    zonaKosong: 'No digital RDTR yet',
+    zonaKosongIsi: 'Its permission status cannot be confirmed. The score is still computed.',
+    artinyaApa: 'What does that mean for me?',
+
+    hargaJudul: 'PriceLens — rent',
+    hargaKunciJudul: 'The price detail for this location',
+    hargaKunciIsi:
+      "Rent per m² and where it sits in the area's fair range, rent per month, spending per hour, and the NJOP land value.",
+    hb: {
+      sewa: 'Rent per month',
+      sewaB: 'P05 — the figure written on the rental banner',
+      jam: 'Money moving per hour',
+      jamB: 'B10 — total receipt value divided by opening hours',
+      porsi: 'Food price per serving',
+      porsiB: 'B07 — from the surveyed menus',
+      njop: 'NJOP',
+      njopB: 'P01 — an independent benchmark',
+    },
+    hargaKosong: (semua: boolean, daftar: string) =>
+      `${semua ? 'Not recorded here yet:' : 'Also not recorded here yet:'} ${daftar}.`,
+    kenapaBelum: 'Why is it missing?',
+    kenapaNjop:
+      'NJOP is not published openly by Bapenda; the rest waits on a field survey — all three can only be written down by someone standing at the location.',
+    kenapaSurvei: 'All three can only be written down by someone standing at the location.',
+    hargaTakAda: 'No price data for this hexagon yet',
+
+    jamJudul: 'Commuter Clock — when money moves',
+    captive: 'Captive-dominated',
+    choice: 'Choice-dominated',
+    seimbang: 'Balanced',
+    jamKunciJudul: 'The hourly pattern here',
+    jamKunciIsi:
+      'An 18-hour chart: when the money moves, the peak hour, and the split between captive and choice riders.',
+    palingRamai: 'Busiest at',
+    jamCaptive:
+      'The flow piles up twice a day and goes quiet in between — suited to a business that serves fast.',
+    jamChoice:
+      'The flow is steadier through the day — suited to a business that needs people to linger.',
+    jamSeimbang: 'The flow does not lean toward either kind of passenger.',
+    jamTakAda: 'No transaction hours recorded yet.',
+    jamNolJudul: 'Not one transaction hour has been recorded.',
+    jamNolIsi:
+      'Hourly patterns are read from the time printed on receipts. MAPID survey receipts carry no time column — the hour sits inside the photo of the receipt, and automatic reading of those photos has not been run. Until it is, no location has an hourly profile.',
+
+    risikoJudul: 'RiskRadar — business turnover',
+    risikoKosong: 'No turnover data yet — the risk here cannot be judged',
+    risikoIsi:
+      'Businesses here change hands more often than in most other parts of the same area. That is the mark of a location that keeps wearing its tenants down.',
+
+    empatJudul: 'Four things being judged',
+    empatKunciIsi:
+      'Access to the station, money in circulation, how tight the competition is, and cost & risk — each with a word, its supporting figure, and how many of its ingredients are actually measured.',
+    empatPembuka: 'These four are what make up the score.',
+    belumTerukur: 'Not measured yet',
+    faktaJalan: (n: number, nama: string) => `${n} minutes on foot to ${nama}`,
+    bahanTerukur: (a: number, b: number) => `${a} of ${b} ingredients measured`,
+    belumAda: (daftar: string) => `Missing: ${daftar}.`,
+    butuhSurvei: 'Needs a field survey first.',
+    tanpaData: 'No data for this location yet.',
+    apaSaja: 'What is missing?',
+
+    faktorJudul: 'Why the score is what it is',
+    faktorKunciJudul: 'The score taken apart',
+    faktorKunciIsi:
+      "See which numbers push this location's score up and which pull it down, and how far it sits from the rest.",
+    takTerukur: 'not measured',
+    makinBeban: ' · the higher, the heavier',
+    makinBaik: ' · the higher, the better',
+
+    tabelJudul: 'All 43 numbers for this location',
+    tabelKunciIsi:
+      'Every number used to judge this location — the people around it, how they spend, its rivals, its costs, its risks, and the shape of its buildings.',
+    tabelBuka: 'Show the full table',
+    ya: 'yes',
+    tidak: 'no',
+
+    riwayatJudul: 'How the score has changed',
+
+    kuadranJudul: 'Why it lands in this quadrant',
+    kuadranKunciIsi:
+      'Two bars showing how good the data is and how expensive it looks, each against the midpoint of every location across the six areas.',
+    sumbuY: 'How good the data is',
+    sumbuYAtas: 'Better than half of the other locations.',
+    sumbuYBawah: 'Lower than half of the other locations.',
+    dari100: (n: string) => `${n} of 100`,
+    sumbuX: 'How expensive it looks',
+    sumbuXAtas:
+      'Estimated to look more expensive than half of the other locations — rent usually follows.',
+    sumbuXBawah:
+      'Estimated to look more ordinary than half of the other locations — and that is exactly where rent is still cheap.',
+    diAtasRata: 'Above the middle',
+    diBawahRata: 'Below the middle',
+    garisTegak: 'What does the vertical line mean?',
+    garisTegakIsi:
+      'The vertical line on both bars = the midpoint of every location across the six areas. Which side the bar stops on is what decides the quadrant.',
+
+    kaki: 'The numbers on this card are computed once by the pipeline and read back as they are. Information to weigh, not investment advice.',
+  },
+}
 
 /**
  * Satu sumbu kuadran sebagai batang, dengan titik tengah sebagai garis tegak.
@@ -185,6 +499,8 @@ export default function PanelInsight({
   rutaTampil?: boolean
   onUbahRutaTampil?: (v: boolean) => void
 }) {
+  const t = useTeks(K)
+  const ist = useIstilah()
   const {
     premium,
     mintaLangganan,
@@ -265,7 +581,11 @@ export default function PanelInsight({
       .then(([d, p, c, sk, sm]) => {
         if (batal) return
         if (d.status === 'fulfilled') setDetail(d.value)
-        else setGalat(d.reason instanceof Error ? d.reason.message : 'gagal memuat')
+        // String KOSONG, bukan kalimat: efek ini tidak boleh bergantung pada
+        // kamus, kalau tidak ia memuat ulang seluruh panel tiap kali bahasa
+        // ditukar. Yang membedakan "tidak ada galat" dari "galat tanpa pesan"
+        // adalah null vs '', dan penerjemahannya terjadi saat digambar.
+        else setGalat(d.reason instanceof Error ? d.reason.message : '')
         setHarga(p.status === 'fulfilled' ? p.value : null)
         setJam(c.status === 'fulfilled' ? c.value : null)
         const kaki = sk.status === 'fulfilled' ? sk.value : undefined
@@ -286,19 +606,13 @@ export default function PanelInsight({
     // frontend - isinya memang tidak pernah dikirim.
   }, [h3, premium, terbuka, profilRute])
 
-  if (!h3)
-    return (
-      <Ajakan
-        judul="Pilih satu heksagon"
-        anak="Klik heksagon mana pun di peta untuk melihat skornya, harga sewanya, dan kapan lokasi itu ramai."
-      />
-    )
+  if (!h3) return <Ajakan judul={t.pilihJudul} anak={t.pilihIsi} />
   if (memuat) return <Memuat baris={5} />
-  if (galat)
+  if (galat !== null)
     return (
       <Ajakan
-        judul="Gagal memuat heksagon"
-        anak={galat}
+        judul={t.gagalHeks}
+        anak={galat || t.gagalMuat}
         aksi={
           <code className="mt-1 rounded-xs bg-ground-2 px-1.5 py-0.5 font-mono text-[12.5px] text-ink-2">
             {h3}
@@ -322,8 +636,8 @@ export default function PanelInsight({
 
   const ajakanBuka = () =>
     akun
-      ? mintaLangganan('Bagian ini terbuka untuk pelanggan Loconomics Premium.')
-      : mintaMasuk('Buat akun dulu, lalu buka seluruh kedalaman datanya.')
+      ? mintaLangganan(t.ajakanPremium)
+      : mintaMasuk(t.ajakanMasuk)
 
   const terlarang = zoneguard.filter_mutlak
   const tanpaRdtr = zoneguard.status === 'TIDAK_DIKETAHUI'
@@ -379,13 +693,13 @@ export default function PanelInsight({
             </div>
             <p className="eyebrow mt-1">
               Opportunity Score
-              {skor.peringkat !== null && ` · peringkat ${skor.peringkat}`}
+              {skor.peringkat !== null && t.peringkat(skor.peringkat)}
             </p>
           </div>
           <button
             onClick={onBukaKuadran}
             className="cursor-pointer transition-opacity hover:opacity-70"
-            title="Lihat posisinya di diagram kuadran"
+            title={t.lihatKuadran}
           >
             <ChipKuadran kuadran={skor.kuadran} />
           </button>
@@ -416,7 +730,7 @@ export default function PanelInsight({
             menuntut orang menggulir dulu untuk menemukannya. */}
         {onGantiProfil && konteks?.simpul && (
           <Bagian
-            judul="Cara menuju ke sini"
+            judul={t.menujuJudul}
             nada="gem"
             ikon={<><path d="M8 1.8 3 8h3v6.2h4V8h3Z"/></>}
           >
@@ -452,7 +766,7 @@ export default function PanelInsight({
                   />
                   {!rutaTampil && <circle cx="8" cy="8" r="1.6" fill="currentColor" />}
                 </svg>
-                {rutaTampil ? 'Sembunyikan rute & jangkauan' : 'Tampilkan rute & jangkauan'}
+                {rutaTampil ? t.sembunyiRute : t.tampilRute}
               </button>
             )}
 
@@ -461,17 +775,17 @@ export default function PanelInsight({
                 [
                   [
                     'foot-walking',
-                    'Jalan kaki',
+                    t.moda.kaki,
                     'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8',
                   ],
                   [
                     'driving-car',
-                    'Mobil',
+                    t.moda.mobil,
                     'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1',
                   ],
                   [
                     'motorcycle',
-                    'Motor',
+                    t.moda.motor,
                     'M3.6 11.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm8.8 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM5.6 9.6h4.8L9 6.4H6.8M10.4 9.6 12 6.4h1.6',
                   ],
                 ] as const
@@ -524,7 +838,7 @@ export default function PanelInsight({
                         mobil, dan waktu tempuhnya tidak pernah diukur. */}
                     <span className="text-center text-[10.5px] leading-tight text-ink-3">
                       {!ada ? (
-                        'belum ditarik'
+                        t.belumDitarik
                       ) : (
                         <>
                           {perProfil[profilNilai]?.jarak_m != null
@@ -532,7 +846,7 @@ export default function PanelInsight({
                             : '—'}
                           {nilai !== 'motorcycle' &&
                             perProfil[profilNilai]?.menit_jalan != null &&
-                            ` · ${Math.round(perProfil[profilNilai]!.menit_jalan!)} mnt`}
+                            ` · ${Math.round(perProfil[profilNilai]!.menit_jalan!)} ${t.mnt}`}
                         </>
                       )}
                     </span>
@@ -571,8 +885,8 @@ export default function PanelInsight({
             premium
               ? onBandingkan?.(h3)
               : akun
-                ? mintaLangganan('Komparasi berdampingan bagian dari Loconomics Premium.')
-                : mintaMasuk('Buat akun dulu untuk membandingkan beberapa lokasi.')
+                ? mintaLangganan(t.bandingPremium)
+                : mintaMasuk(t.bandingMasuk)
           }
           className={`flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold transition-all duration-300 ease-jelly hover:scale-[1.02] ${
             sedangDibandingkan
@@ -583,30 +897,27 @@ export default function PanelInsight({
           <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden className="shrink-0">
             <path d="M4 15V8M10 15V4M16 15v-5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
           </svg>
-          {sedangDibandingkan ? 'Ada di baki banding' : 'Bandingkan lokasi ini'}
+          {sedangDibandingkan ? t.diBaki : t.bandingkan}
           {!premium && <Gembok />}
         </button>
 
         {/* Bulat, ikon saja - bentuk yang sama dengan tombol Tersimpan di bilah
             atas, karena keduanya mengurus benda yang sama. */}
         <TombolBulat
-          label={dipantau ? 'Lokasi tersimpan' : 'Simpan lokasi'}
+          label={dipantau ? t.sudahSimpan : t.simpan}
           aktif={dipantau}
           sibuk={aksiSibuk === 'pantau'}
           gembok={!premium}
           onClick={async () => {
-            if (!akun) return mintaMasuk('Buat akun dulu untuk menyimpan lokasi.')
-            if (!premium)
-              return mintaLangganan('Menyimpan dan memantau lokasi bagian dari Loconomics Premium.')
+            if (!akun) return mintaMasuk(t.simpanMasuk)
+            if (!premium) return mintaLangganan(t.simpanPremium)
             setAksiSibuk('pantau')
             try {
               await api.pantau(h3)
               catatSimpan()
-              setAksiPesan(
-                'Lokasi tersimpan dan skornya dibekukan — perubahan berikutnya dilaporkan di menu Tersimpan.',
-              )
+              setAksiPesan(t.simpanOke)
             } catch (e) {
-              setAksiPesan(e instanceof GalatAPI ? e.message : 'Gagal menambahkan pantauan.')
+              setAksiPesan(e instanceof GalatAPI ? e.message : t.simpanGagal)
             } finally {
               setAksiSibuk(null)
             }
@@ -616,20 +927,20 @@ export default function PanelInsight({
         </TombolBulat>
 
         <TombolBulat
-          label="Unduh Laporan Kelayakan (PDF)"
+          label={t.unduhLaporan}
           sibuk={aksiSibuk === 'laporan'}
           gembok={!premium}
           onClick={async () => {
-            if (!akun) return mintaMasuk('Buat akun dulu untuk mengunduh Laporan Kelayakan.')
+            if (!akun) return mintaMasuk(t.laporanMasuk)
             setAksiSibuk('laporan')
             try {
               await api.unduhLaporan(h3, skor.kawasan)
-              setAksiPesan('Laporan Kelayakan terunduh.')
+              setAksiPesan(t.laporanOke)
               await segarkan()
             } catch (e) {
               if (e instanceof GalatAPI && (e.kode === 'BUTUH_PREMIUM' || e.kode === 'TOKEN_TIDAK_CUKUP'))
                 mintaLangganan(e.message)
-              else setAksiPesan(e instanceof GalatAPI ? e.message : 'Gagal mengunduh laporan.')
+              else setAksiPesan(e instanceof GalatAPI ? e.message : t.laporanGagal)
             } finally {
               setAksiSibuk(null)
             }
@@ -656,19 +967,17 @@ export default function PanelInsight({
               tandaiTerbuka(h3)
               await segarkan()
               setDetail(await api.detailHeksagon(h3))
-              setAksiPesan('Lokasi ini terbuka permanen untuk akun Anda.')
+              setAksiPesan(t.bukaOke)
             } catch (e) {
               if (e instanceof GalatAPI && e.kode === 'TOKEN_TIDAK_CUKUP') mintaLangganan(e.message)
-              else setAksiPesan(e instanceof GalatAPI ? e.message : 'Gagal membuka lokasi.')
+              else setAksiPesan(e instanceof GalatAPI ? e.message : t.bukaGagal)
             } finally {
               setAksiSibuk(null)
             }
           }}
           className="flex w-full cursor-pointer items-center justify-center gap-1.5 border-b border-line bg-surface-2/60 px-4 py-2 text-[11.5px] font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
         >
-          {aksiSibuk === 'token'
-            ? 'Membuka…'
-            : `Buka lokasi ini saja — 1 token (${akun.saldo_token} tersisa)`}
+          {aksiSibuk === 'token' ? t.membuka : t.bukaToken(akun.saldo_token)}
         </button>
       )}
 
@@ -701,10 +1010,10 @@ export default function PanelInsight({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[14px] font-semibold leading-tight">
-              Simulasi usaha di sini
+              {t.simulasiJudul}
             </span>
             <span className="block text-[12px] leading-snug text-surface/70">
-              Omzet, sewa, dan titik impas dari angka heksagon ini
+              {t.simulasiIsi}
             </span>
           </span>
           <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
@@ -730,7 +1039,7 @@ export default function PanelInsight({
               {Math.round(konteks.menit_jalan ?? 0)}
             </span>
             <span className="text-[12px] text-ink-2">
-              menit {profilRute === 'driving-car' ? 'berkendara' : 'jalan kaki'} ke{' '}
+              {t.menit} {profilRute === 'driving-car' ? t.berkendara : t.jalanKaki} {t.keArah}{' '}
               <strong className="font-semibold text-ink">{konteks.simpul.nama}</strong>
             </span>
           </div>
@@ -738,21 +1047,22 @@ export default function PanelInsight({
             {konteks.jarak_m >= 1000
               ? `${(konteks.jarak_m / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} km`
               : `${Math.round(konteks.jarak_m)} m`}{' '}
-            lewat jalan yang ada
+            {t.lewatJalan}
             {konteks.faktor_memutar && konteks.faktor_memutar >= 1.4 ? (
               <>
                 {' '}
                 &mdash;{' '}
                 <strong className="font-semibold text-hati">
-                  {konteks.faktor_memutar.toLocaleString('id-ID', { maximumFractionDigits: 1 })}x
-                  lebih jauh dari kelihatannya di peta
+                  {t.memutar(
+                    konteks.faktor_memutar.toLocaleString('id-ID', { maximumFractionDigits: 1 }),
+                  )}
                 </strong>
-                . Ada yang menghalangi jalan langsungnya.
+                {t.memutarEkor}
               </>
             ) : (
               '.'
             )}
-            {konteks.rute.length > 1 && ` ${konteks.rute.length - 1} jalur alternatif tergambar di peta.`}
+            {konteks.rute.length > 1 && t.alternatif(konteks.rute.length - 1)}
           </p>
         </div>
       )}
@@ -782,9 +1092,9 @@ export default function PanelInsight({
             </svg>
           </span>
           <span className="text-[12.5px] leading-snug text-ink-2">
-            <strong className="font-semibold text-ink">ZoneGuard — zona mengizinkan usaha</strong>
+            <strong className="font-semibold text-ink">{t.zonaBoleh}</strong>
             {zoneguard.kelas_zona && (
-              <span className="text-ink-3"> · kelas {zoneguard.kelas_zona}</span>
+              <span className="text-ink-3">{t.kelasZona(zoneguard.kelas_zona)}</span>
             )}
           </span>
         </div>
@@ -810,7 +1120,7 @@ export default function PanelInsight({
               <p
                 className={`text-[14px] font-semibold ${terlarang ? 'text-bahaya' : 'text-ink'}`}
               >
-                {terlarang ? 'ZoneGuard — tidak boleh dipakai usaha' : 'Belum ada RDTR digital'}
+                {terlarang ? t.zonaLarang : t.zonaKosong}
               </p>
               {terlarang ? (
                 <p className="mt-0.5 text-[13.5px] leading-snug text-ink-2">
@@ -819,9 +1129,9 @@ export default function PanelInsight({
               ) : (
                 <>
                   <p className="mt-0.5 text-[13px] leading-snug text-ink-2">
-                    Status izinnya belum bisa dipastikan. Skor tetap dihitung.
+                    {t.zonaKosongIsi}
                   </p>
-                  <Rinci ringkas="Apa artinya buat saya?">{zoneguard.penjelasan}</Rinci>
+                  <Rinci ringkas={t.artinyaApa}>{zoneguard.penjelasan}</Rinci>
                 </>
               )}
               {zoneguard.kelas_zona && (
@@ -838,12 +1148,12 @@ export default function PanelInsight({
           BERBAYAR sejak 23 Agustus 2026 - keputusan pemilik repo. Peta harga
           (layer PriceLens) tetap gratis; yang berbayar kartu rinciannya:
           sewa/bulan, NJOP, dan posisi terhadap rentang wajar kawasan. */}
-      <Bagian judul="PriceLens — harga sewa" nada="jebakan" ikon={<><path d="M2 5.2A1.7 1.7 0 0 1 3.7 3.5h8.6A1.7 1.7 0 0 1 14 5.2v6.1a1.7 1.7 0 0 1-1.7 1.7H3.7A1.7 1.7 0 0 1 2 11.3z"/><path d="M11 8.25h1.6"/></>}>
+      <Bagian judul={t.hargaJudul} nada="jebakan" ikon={<><path d="M2 5.2A1.7 1.7 0 0 1 3.7 3.5h8.6A1.7 1.7 0 0 1 14 5.2v6.1a1.7 1.7 0 0 1-1.7 1.7H3.7A1.7 1.7 0 0 1 2 11.3z"/><path d="M11 8.25h1.6"/></>}>
         {terkunci ? (
           <Terkunci
-            judul="Rincian harga lokasi ini"
-            kalimat="Sewa per m² dan posisinya di rentang wajar kawasan, sewa per bulan, belanja per jam, dan NJOP."
-            labelAksi="Gabung Loconomics Premium"
+            judul={t.hargaKunciJudul}
+            kalimat={t.hargaKunciIsi}
+            labelAksi={t.gabung}
             baris={4}
             onBuka={ajakanBuka}
             aksiKedua={
@@ -852,7 +1162,7 @@ export default function PanelInsight({
                   onClick={ajakanBuka}
                   className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
                 >
-                  atau buka lokasi ini saja dengan 1 token
+                  {t.atauToken}
                 </button>
               ) : undefined
             }
@@ -878,34 +1188,39 @@ export default function PanelInsight({
                 satu pernyataan yang benar lebih jujur daripada empat baris
                 yang membuat kekosongan terlihat seperti kerusakan. */}
             {(() => {
+              // Berkunci KODE, bukan label. Versi lama menanyakan
+              // `l === 'NJOP'` untuk memilih keterangannya - cocok selama
+              // labelnya cuma pernah punya satu bentuk, dan diam-diam salah
+              // begitu label yang sama punya bentuk Inggris.
               const baris = [
-                ['Sewa per bulan', 'P05 — angka yang tertulis di spanduk sewa',
-                  rupiah(harga.harga_sewa_median), undefined],
-                ['Uang berpindah per jam', 'B10 — total nominal struk dibagi jam operasional',
-                  rupiah(harga.belanja_per_jam), undefined],
-                ['Harga makanan per porsi', 'B07 — dari daftar menu yang disurvei',
-                  rupiah(harga.harga_median_porsi), undefined],
-                ['NJOP', 'P01 — pembanding independen', rupiah(harga.njop_m2), '/m²'],
-              ] as const
-              const ada = baris.filter(([, , nilai]) => nilai !== null)
-              const kosong = baris.filter(([, , nilai]) => nilai === null)
+                { kode: 'P05', label: t.hb.sewa, bantuan: t.hb.sewaB,
+                  nilai: rupiah(harga.harga_sewa_median), satuan: undefined },
+                { kode: 'B10', label: t.hb.jam, bantuan: t.hb.jamB,
+                  nilai: rupiah(harga.belanja_per_jam), satuan: undefined },
+                { kode: 'B07', label: t.hb.porsi, bantuan: t.hb.porsiB,
+                  nilai: rupiah(harga.harga_median_porsi), satuan: undefined },
+                { kode: 'P01', label: t.hb.njop, bantuan: t.hb.njopB,
+                  nilai: rupiah(harga.njop_m2), satuan: '/m²' },
+              ]
+              const ada = baris.filter((b) => b.nilai !== null)
+              const kosong = baris.filter((b) => b.nilai === null)
               return (
                 <div className="mt-3 border-t border-line pt-2">
-                  {ada.map(([label, bantuan, nilai, satuan]) => (
-                    <Baris key={label} label={label} bantuan={bantuan}>
-                      <Angka nilai={nilai} satuan={satuan} />
+                  {ada.map((b) => (
+                    <Baris key={b.kode} label={b.label} bantuan={b.bantuan}>
+                      <Angka nilai={b.nilai} satuan={b.satuan} />
                     </Baris>
                   ))}
                   {kosong.length > 0 && (
                     <div className="pt-1">
                       <p className="text-[12.5px] leading-snug text-ink-3">
-                        {kosong.length === baris.length ? 'Belum ada' : 'Belum ada juga'}{' '}
-                        {kosong.map(([l]) => keKalimat(l)).join(', ')} di lokasi ini.
+                        {t.hargaKosong(
+                          kosong.length === baris.length,
+                          kosong.map((b) => keKalimat(b.label)).join(', '),
+                        )}
                       </p>
-                      <Rinci ringkas="Kenapa belum ada?">
-                        {kosong.some(([l]) => l === 'NJOP')
-                          ? 'NJOP tidak diterbitkan terbuka oleh Bapenda; sisanya menunggu survei lapangan — ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'
-                          : 'Ketiganya hanya bisa dicatat orang yang berdiri di lokasinya.'}
+                      <Rinci ringkas={t.kenapaBelum}>
+                        {kosong.some((b) => b.kode === 'P01') ? t.kenapaNjop : t.kenapaSurvei}
                       </Rinci>
                     </div>
                   )}
@@ -914,7 +1229,7 @@ export default function PanelInsight({
             })()}
           </>
         ) : (
-          <Kosong teks="Data harga belum tersedia untuk heksagon ini" />
+          <Kosong teks={t.hargaTakAda} />
         )}
       </Bagian>
 
@@ -922,24 +1237,24 @@ export default function PanelInsight({
       <Bagian
         nada="jebakan"
         ikon={<><circle cx="8" cy="8" r="5.8"/><path d="M8 4.9V8l2.1 1.5"/></>}
-        judul="Commuter Clock — kapan uang berpindah"
+        judul={t.jamJudul}
         aksi={
           jam?.dominasi && (
             <span className="rounded-xs bg-surface-2 px-1.5 py-0.5 text-[12px] font-semibold text-ink-2">
               {jam.dominasi === 'captive'
-                ? 'Didominasi captive'
+                ? t.captive
                 : jam.dominasi === 'choice'
-                  ? 'Didominasi choice'
-                  : 'Seimbang'}
+                  ? t.choice
+                  : t.seimbang}
             </span>
           )
         }
       >
         {terkunci ? (
           <Terkunci
-            judul="Pola jam lokasi ini"
-            kalimat="Grafik 18 jam: kapan uangnya berpindah, jam puncaknya, dan pembagian captive vs choice rider."
-            labelAksi="Gabung Loconomics Premium"
+            judul={t.jamKunciJudul}
+            kalimat={t.jamKunciIsi}
+            labelAksi={t.gabung}
             baris={4}
             onBuka={ajakanBuka}
           />
@@ -949,19 +1264,19 @@ export default function PanelInsight({
             <p className="mt-2 text-[13.5px] leading-snug text-ink-2">
               {jam.jam_puncak !== null ? (
                 <>
-                  Paling ramai pukul{' '}
+                  {t.palingRamai}{' '}
                   <span className="tabular font-semibold">
                     {String(jam.jam_puncak).padStart(2, '0')}:00
                   </span>
                   .{' '}
                   {jam.dominasi === 'captive'
-                    ? 'Arusnya menumpuk dua kali sehari dan sepi di antaranya — cocok untuk usaha yang cepat melayani.'
+                    ? t.jamCaptive
                     : jam.dominasi === 'choice'
-                      ? 'Arusnya lebih rata sepanjang hari — cocok untuk usaha yang butuh orang berlama-lama.'
-                      : 'Arusnya tidak condong ke salah satu jenis penumpang.'}
+                      ? t.jamChoice
+                      : t.jamSeimbang}
                 </>
               ) : (
-                'Belum ada jam transaksi yang tercatat.'
+                t.jamTakAda
               )}
             </p>
             {jam.catatan && (
@@ -981,13 +1296,8 @@ export default function PanelInsight({
              ini bukan keadaan sesekali melainkan keadaan satu-satunya, dan
              pelanggan berhak tahu bahwa yang kurang bukan koneksinya. */
           <div className="text-[13px] leading-relaxed text-ink-2">
-            <p className="font-medium text-ink">Belum ada satu pun jam transaksi tercatat.</p>
-            <Rinci ringkas="Kenapa belum ada?">
-              Pola jam dibaca dari waktu yang tercetak di struk. Struk survei MAPID
-              tidak membawa kolom waktu — jamnya ada di dalam foto struknya, dan
-              pembacaan otomatis foto belum dijalankan. Sampai itu ada, tidak ada
-              satu pun lokasi yang punya profil jam.
-            </Rinci>
+            <p className="font-medium text-ink">{t.jamNolJudul}</p>
+            <Rinci ringkas={t.kenapaBelum}>{t.jamNolIsi}</Rinci>
           </div>
         )}
       </Bagian>
@@ -999,13 +1309,13 @@ export default function PanelInsight({
           dari sesuatu yang tidak pernah diperiksa. Ia dapat satu baris tenang,
           persis seperti zona RDTR yang diizinkan. */}
       {risiko.tingkat === 'TIDAK_DIKETAHUI' && (
-        <Bagian judul="RiskRadar — pergantian usaha" nada="bahaya" ikon={<path d="M1.8 8h3l1.6-4 2.6 8 1.6-4h3.6"/>}>
-          <Kosong teks="Data pergantian usaha belum ada — lokasi ini belum bisa dinilai risikonya" />
+        <Bagian judul={t.risikoJudul} nada="bahaya" ikon={<path d="M1.8 8h3l1.6-4 2.6 8 1.6-4h3.6"/>}>
+          <Kosong teks={t.risikoKosong} />
         </Bagian>
       )}
 
       {(risiko.tingkat === 'WASPADA' || risiko.tingkat === 'BAHAYA') && (
-        <Bagian judul="RiskRadar — pergantian usaha" nada="bahaya" ikon={<path d="M1.8 8h3l1.6-4 2.6 8 1.6-4h3.6"/>}>
+        <Bagian judul={t.risikoJudul} nada="bahaya" ikon={<path d="M1.8 8h3l1.6-4 2.6 8 1.6-4h3.6"/>}>
           <div className="flex gap-2.5 rounded-sm border border-bahaya/25 bg-bahaya-soft p-2.5">
             <span
               aria-hidden
@@ -1015,11 +1325,7 @@ export default function PanelInsight({
             />
             <div>
               <p className="text-[14px] font-semibold text-bahaya">{risiko.label}</p>
-              <p className="mt-0.5 text-[13.5px] leading-snug text-ink-2">
-                Usaha di sini lebih sering berganti daripada kebanyakan area lain di
-                kawasan yang sama. Itu tanda lokasi yang terus-menerus membuat
-                penyewanya menyerah.
-              </p>
+              <p className="mt-0.5 text-[13.5px] leading-snug text-ink-2">{t.risikoIsi}</p>
             </div>
           </div>
         </Bagian>
@@ -1048,16 +1354,16 @@ export default function PanelInsight({
 
           Sekarang: kata, bukan desimal; angka sungguhan kalau ada; dan indeks
           yang bahannya belum terukur MENGATAKANNYA. */}
-      <Bagian judul="Empat hal yang dinilai" nada="gem" ikon={<><rect x="2.2" y="2.2" width="5" height="5" rx="1.2"/><rect x="8.8" y="2.2" width="5" height="5" rx="1.2"/><rect x="2.2" y="8.8" width="5" height="5" rx="1.2"/><rect x="8.8" y="8.8" width="5" height="5" rx="1.2"/></>}>
+      <Bagian judul={t.empatJudul} nada="gem" ikon={<><rect x="2.2" y="2.2" width="5" height="5" rx="1.2"/><rect x="8.8" y="2.2" width="5" height="5" rx="1.2"/><rect x="2.2" y="8.8" width="5" height="5" rx="1.2"/><rect x="8.8" y="8.8" width="5" height="5" rx="1.2"/></>}>
         {/* BERBAYAR sejak 11 Sep 2026, keputusan pemilik repo. Nilainya ditahan
             DI SERVER - `detail.indeks.*` benar-benar null untuk yang belum
             membayar, bukan dikirim lalu diburamkan. Tirainya digambar dari
             `terkunci`, yaitu dari keadaan backend, bukan dari tebakan di sini. */}
         {detail.terkunci.includes('indeks') ? (
           <Terkunci
-            judul="Empat hal yang dinilai"
-            kalimat="Akses ke stasiun, perputaran uang, ketatnya persaingan, dan biaya & risiko — masing-masing dengan kata, angka pendukungnya, dan berapa bahannya yang benar-benar terukur."
-            labelAksi="Gabung Loconomics Premium"
+            judul={t.empatJudul}
+            kalimat={t.empatKunciIsi}
+            labelAksi={t.gabung}
             baris={4}
             onBuka={ajakanBuka}
             aksiKedua={
@@ -1066,7 +1372,7 @@ export default function PanelInsight({
                   onClick={ajakanBuka}
                   className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
                 >
-                  atau buka lokasi ini saja dengan 1 token
+                  {t.atauToken}
                 </button>
               ) : undefined
             }
@@ -1077,9 +1383,7 @@ export default function PanelInsight({
             pengulangan: "dihitung di luar aplikasi, sekali" sudah dinyatakan
             lagi di kaki panel, dan pembacanya belum tahu apa itu "pipeline"
             saat membaca baris pertama. */}
-        <p className="mb-3 text-[13px] leading-snug text-ink-2">
-          Empat hal ini yang menyusun skornya.
-        </p>
+        <p className="mb-3 text-[13px] leading-snug text-ink-2">{t.empatPembuka}</p>
         {(
           [
             ['IPT', indeks.ipt],
@@ -1092,29 +1396,27 @@ export default function PanelInsight({
           // Belum layak tampil = bahannya nyaris seluruhnya kosong. Angkanya
           // ADA (0,487) tetapi ia nilai tengah, bukan temuan.
           const terukur = cakupan ? cakupan.layak_tampil : nilai !== null
-          const kata = terukur ? kataIndeks(kode, nilai) : null
+          const kata = terukur ? ist.kata(kode, nilai) : null
           const baik = TINGGI_BAIK[kode]
           // Angka sungguhan yang sudah kita punya, gratis, untuk baris ini.
           const fakta =
             kode === 'IPT' && konteks?.simpul && konteks.menit_jalan !== null
-              ? `${Math.round(konteks.menit_jalan)} menit jalan kaki ke ${konteks.simpul.nama}`
+              ? t.faktaJalan(Math.round(konteks.menit_jalan), konteks.simpul.nama)
               : null
 
           return (
             <div key={kode} className="border-t border-line-2 py-2.5 first:border-t-0 first:pt-0">
               <div className="mb-1 flex items-baseline justify-between gap-3">
                 <span className="text-[14px] font-medium text-ink first-letter:uppercase">
-                  {ARTI_INDEKS[kode]}
+                  {ist.indeks(kode)}
                 </span>
                 {kata ? (
                   <span className="shrink-0 text-[14px] font-semibold text-ink">{kata}</span>
                 ) : (
-                  <span className="shrink-0 text-[13px] text-ink-3">Belum terukur</span>
+                  <span className="shrink-0 text-[13px] text-ink-3">{t.belumTerukur}</span>
                 )}
               </div>
-              <p className="mb-1.5 text-[11.5px] leading-snug text-ink-3">
-                {TANYA_INDEKS[kode]}
-              </p>
+              <p className="mb-1.5 text-[11.5px] leading-snug text-ink-3">{ist.tanya(kode)}</p>
               {terukur ? (
                 <>
                   <div className="h-1.5 overflow-hidden rounded-full bg-ground-2">
@@ -1129,21 +1431,19 @@ export default function PanelInsight({
                     </p>
                   )}
                   {cakupan && cakupan.terukur < cakupan.total && (
-                    <Rinci
-                      ringkas={`${cakupan.terukur} dari ${cakupan.total} bahannya sudah terukur`}
-                    >
-                      Belum ada: {cakupan.kosong.map((k) => keKalimat(ARTI_KODE[k] ?? k)).join(', ')}.
+                    <Rinci ringkas={t.bahanTerukur(cakupan.terukur, cakupan.total)}>
+                      {t.belumAda(cakupan.kosong.map((k) => keKalimat(ist.kode(k))).join(', '))}
                     </Rinci>
                   )}
                 </>
               ) : (
                 <div>
                   <p className="text-[12.5px] leading-snug text-ink-3">
-                    {cakupan ? 'Butuh survei lapangan dulu.' : 'Datanya belum ada untuk lokasi ini.'}
+                    {cakupan ? t.butuhSurvei : t.tanpaData}
                   </p>
                   {cakupan && (
-                    <Rinci ringkas="Yang belum ada apa saja?">
-                      {cakupan.kosong.map((k) => keKalimat(ARTI_KODE[k] ?? k)).join(', ')}.
+                    <Rinci ringkas={t.apaSaja}>
+                      {cakupan.kosong.map((k) => keKalimat(ist.kode(k))).join(', ')}.
                     </Rinci>
                   )}
                 </div>
@@ -1161,11 +1461,11 @@ export default function PanelInsight({
           di kolom berbayar; ringkasan di atas - skor, kuadran, Commuter Clock,
           RiskRadar, ZoneGuard - tetap gratis dan tidak pernah tertutup tirai. */}
       {terkunci ? (
-        <Bagian judul="Kenapa skornya segitu" nada="gem" ikon={<path d="M3 13V9.4M8 13V3.4M13 13V6.6"/>}>
+        <Bagian judul={t.faktorJudul} nada="gem" ikon={<path d="M3 13V9.4M8 13V3.4M13 13V6.6"/>}>
           <Terkunci
-            judul="Pembongkaran skor"
-            kalimat="Lihat angka mana yang menaikkan dan menurunkan skor lokasi ini, dan seberapa jauh posisinya dibanding lokasi lain."
-            labelAksi="Gabung Loconomics Premium"
+            judul={t.faktorKunciJudul}
+            kalimat={t.faktorKunciIsi}
+            labelAksi={t.gabung}
             baris={4}
             onBuka={ajakanBuka}
             aksiKedua={
@@ -1173,14 +1473,14 @@ export default function PanelInsight({
                 onClick={ajakanBuka}
                 className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
               >
-                atau buka lokasi ini saja dengan 1 token
+                {t.atauToken}
               </button>
             }
           />
         </Bagian>
       ) : (
         faktor.length > 0 && (
-        <Bagian judul="Kenapa skornya segitu" nada="gem" ikon={<path d="M3 13V9.4M8 13V3.4M13 13V6.6"/>}>
+        <Bagian judul={t.faktorJudul} nada="gem" ikon={<path d="M3 13V9.4M8 13V3.4M13 13V6.6"/>}>
           {/* Batang persentil, bukan kalimat. (3 Sep 2026.)
 
               Bentuk lama menulis "Keragaman jenis usaha — lebih tinggi
@@ -1206,13 +1506,13 @@ export default function PanelInsight({
                   <div className="flex items-baseline justify-between gap-2">
                     <span
                       className="min-w-0 flex-1 truncate text-[13px] text-ink-2"
-                      title={`${f.kode_variabel} · ${ARTI_INDEKS[f.indeks]}`}
+                      title={`${f.kode_variabel} · ${ist.indeks(f.indeks)}`}
                     >
-                      {ARTI_KODE[f.kode_variabel] ?? f.kode_variabel}
+                      {ist.kode(f.kode_variabel)}
                     </span>
                     {p === null ? (
                       <span className="shrink-0 text-[11.5px] italic text-ink-3">
-                        belum terukur
+                        {t.takTerukur}
                       </span>
                     ) : (
                       <span className="tabular shrink-0 text-[12.5px] font-semibold text-ink">
@@ -1233,8 +1533,8 @@ export default function PanelInsight({
                     )}
                   </div>
                   <p className="mt-1 text-[11px] leading-none text-ink-3">
-                    {ARTI_INDEKS[f.indeks]}
-                    {p !== null && (kurang ? ' · makin tinggi makin membebani' : ' · makin tinggi makin baik')}
+                    {ist.indeks(f.indeks)}
+                    {p !== null && (kurang ? t.makinBeban : t.makinBaik)}
                   </p>
                 </li>
               )
@@ -1246,20 +1546,20 @@ export default function PanelInsight({
 
       {/* --- 7. Variabel lengkap -------------------------------------------- */}
       {terkunci ? (
-        <Bagian judul="Seluruh 43 angka lokasi ini" nada="netral" ikon={<><rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6"/><path d="M2.2 6.4h11.6M6.6 6.4v6.8"/></>}>
+        <Bagian judul={t.tabelJudul} nada="netral" ikon={<><rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6"/><path d="M2.2 6.4h11.6M6.6 6.4v6.8"/></>}>
           <Terkunci
-            judul="Seluruh 43 angka lokasi ini"
-            kalimat="Semua angka yang dipakai menilai lokasi ini — orang di sekitarnya, kebiasaan belanjanya, pesaingnya, biayanya, risikonya, dan bentuk bangunannya."
-            labelAksi="Gabung Loconomics Premium"
+            judul={t.tabelJudul}
+            kalimat={t.tabelKunciIsi}
+            labelAksi={t.gabung}
             baris={6}
             onBuka={ajakanBuka}
           />
         </Bagian>
       ) : (
-      <Bagian judul="Seluruh 43 angka lokasi ini" nada="netral" ikon={<><rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6"/><path d="M2.2 6.4h11.6M6.6 6.4v6.8"/></>}>
+      <Bagian judul={t.tabelJudul} nada="netral" ikon={<><rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6"/><path d="M2.2 6.4h11.6M6.6 6.4v6.8"/></>}>
         <details className="group">
           <summary className="cursor-pointer list-none text-[14px] text-ink-2 underline decoration-line-2 underline-offset-2 hover:text-ink">
-            Tampilkan tabel lengkap
+            {t.tabelBuka}
           </summary>
           {/* Tabel data adalah jalur alternatif untuk grafik di atas — pembaca
               layar dan pengguna yang tidak membedakan warna tetap bisa membaca
@@ -1272,7 +1572,7 @@ export default function PanelInsight({
                   // pun bagi calon pemilik warung; "Penduduk di sekitar"
                   // berarti. Kodenya tetap ada sebagai judul tooltip untuk yang
                   // perlu menelusuri ke Kamus Data.
-                  const arti = ARTI_VARIABEL[nama]
+                  const arti = ist.variabel(nama)
                   return (
                     <tr key={nama} className={i % 2 ? 'bg-surface-2' : ''}>
                       <td className="px-2 py-1 text-ink-2" title={arti?.kode ?? nama}>
@@ -1282,7 +1582,7 @@ export default function PanelInsight({
                         {nilai === null || nilai === undefined ? (
                           <Kosong teks="—" />
                         ) : typeof nilai === 'boolean' ? (
-                          nilai ? 'ya' : 'tidak'
+                          nilai ? t.ya : t.tidak
                         ) : typeof nilai === 'number' ? (
                           <>
                             {angka(nilai, nilai < 10 ? 2 : 0)}
@@ -1307,7 +1607,7 @@ export default function PanelInsight({
       )}
 
       {/* --- 8. Riwayat skor (berbayar) ------------------------------------ */}
-      <Bagian judul="Riwayat perubahan skor" nada="netral" ikon={<><path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9"/><path d="M2.3 2.8v3.4h3.4"/></>}>
+      <Bagian judul={t.riwayatJudul} nada="netral" ikon={<><path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9"/><path d="M2.3 2.8v3.4h3.4"/></>}>
         <BagianRiwayat h3={h3} />
       </Bagian>
 
@@ -1346,11 +1646,11 @@ export default function PanelInsight({
              sendiri sudah tergambar gratis di peta; menagih keterangan mutunya
              berarti menjual kuadran tanpa peringatannya. */
           <div className="mt-3">
-            <Bagian judul="Kenapa masuk kuadran ini" nada="gem" ikon={<path d="M8 2v12M2 8h12"/>}>
+            <Bagian judul={t.kuadranJudul} nada="gem" ikon={<path d="M8 2v12M2 8h12"/>}>
               <Terkunci
-                judul="Kenapa masuk kuadran ini"
-                kalimat="Dua batang yang menunjukkan seberapa bagus datanya dan seberapa mahal kelihatannya, masing-masing terhadap titik tengah seluruh lokasi di enam kawasan."
-                labelAksi="Gabung Loconomics Premium"
+                judul={t.kuadranJudul}
+                kalimat={t.kuadranKunciIsi}
+                labelAksi={t.gabung}
                 baris={3}
                 onBuka={ajakanBuka}
                 aksiKedua={
@@ -1359,32 +1659,28 @@ export default function PanelInsight({
                       onClick={ajakanBuka}
                       className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
                     >
-                      atau buka lokasi ini saja dengan 1 token
+                      {t.atauToken}
                     </button>
                   ) : undefined
                 }
               />
-              {frasaPrestise(detail.cakupan_prestise, 'lokasi') && (
+              {frasaPrestise(detail.cakupan_prestise, 'lokasi', ist.bahasa) && (
                 <p className="mt-2.5 border-t border-line/60 pt-2 text-[11.5px] leading-snug text-ink-3">
-                  {frasaPrestise(detail.cakupan_prestise, 'lokasi')}
+                  {frasaPrestise(detail.cakupan_prestise, 'lokasi', ist.bahasa)}
                 </p>
               )}
             </Bagian>
           </div>
         ) : (
         <div className="mt-3 rounded-sm border border-line/70 bg-surface-2/60 px-3 py-2.5">
-          <p className="eyebrow mb-2.5">Kenapa masuk kuadran ini</p>
+          <p className="eyebrow mb-2.5">{t.kuadranJudul}</p>
           <SumbuKuadran
-            label="Seberapa bagus datanya"
-            kalimat={
-              posisi.y >= batas.y
-                ? 'Lebih bagus daripada separuh lokasi lain.'
-                : 'Lebih rendah daripada separuh lokasi lain.'
-            }
+            label={t.sumbuY}
+            kalimat={posisi.y >= batas.y ? t.sumbuYAtas : t.sumbuYBawah}
             nilai={posisi.y}
             batas={batas.y}
             maks={100}
-            tampilNilai={`${posisi.y.toFixed(0)} dari 100`}
+            tampilNilai={t.dari100(posisi.y.toFixed(0))}
             tinggiBaik
           />
           {/* "Diperkirakan tampak", bukan "terlihat".
@@ -1399,33 +1695,23 @@ export default function PanelInsight({
               dan hilang sendiri begitu kelimanya terisi. */}
           <div className="mt-2.5">
             <SumbuKuadran
-              label="Seberapa mahal kelihatannya"
-              kalimat={
-                posisi.x >= batas.x
-                  ? 'Diperkirakan tampak lebih mahal daripada separuh lokasi lain — sewanya biasanya ikut naik.'
-                  : 'Diperkirakan tampak lebih biasa daripada separuh lokasi lain — dan justru di situ sewanya masih murah.'
-              }
-              catatan={frasaPrestise(detail.cakupan_prestise, 'lokasi')}
+              label={t.sumbuX}
+              kalimat={posisi.x >= batas.x ? t.sumbuXAtas : t.sumbuXBawah}
+              catatan={frasaPrestise(detail.cakupan_prestise, 'lokasi', ist.bahasa)}
               nilai={posisi.x}
               batas={batas.x}
               maks={1}
-              tampilNilai={posisi.x >= batas.x ? 'Di atas rata-rata' : 'Di bawah rata-rata'}
+              tampilNilai={posisi.x >= batas.x ? t.diAtasRata : t.diBawahRata}
             />
           </div>
           <div className="mt-2 border-t border-line/60 pt-1.5">
-            <Rinci ringkas="Apa arti garis tegaknya?">
-              Garis tegak pada kedua batang = titik tengah seluruh lokasi di enam kawasan.
-              Sisi mana batangnya berhenti terhadap garis itulah yang menentukan kuadrannya.
-            </Rinci>
+            <Rinci ringkas={t.garisTegak}>{t.garisTegakIsi}</Rinci>
           </div>
         </div>
         )
       )}
 
-      <p className="px-4 pb-6 pt-1 text-[12.5px] leading-snug text-ink-3">
-        Angka di kartu ini dihitung sekali oleh pipeline dan dibaca apa adanya.
-        Informasi untuk pertimbangan, bukan nasihat investasi.
-      </p>
+      <p className="px-4 pb-6 pt-1 text-[12.5px] leading-snug text-ink-3">{t.kaki}</p>
     </div>
   )
 }

@@ -24,12 +24,47 @@ import {
 import { createPortal } from 'react-dom'
 
 import { IDENTITAS, KEYAKINAN, KUADRAN, RODA_WARNA } from '../config'
-import { SakelarBahasa, useBahasa, useTeks } from '../lib/bahasa'
+import { SakelarBahasa, useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 import type { BadgeKeyakinan, Kuadran as NamaKuadran } from '../types'
 
+/**
+ * Kalimat kedua potongan terkecil di berkas ini, dua bahasa.
+ *
+ * `en` ikut jadi kunci - bukan gaya, melainkan karena `KEYAKINAN` menyimpan
+ * pasangan Inggrisnya sendiri (`teksEn`, `labelEn`) di `config.ts`, dan yang
+ * dibutuhkan di sini cuma tahu cabang mana yang sedang berlaku.
+ */
+const K_KECIL = {
+  id: {
+    en: false,
+    kosong: 'belum ada data',
+    titik: (n: number) => `${n} titik`,
+    judul: (teks: string, n: number, ekor: string) =>
+      `${teks} · ${n} titik survei lapangan · ${ekor}`,
+    prediksi:
+      'heksagon ini belum disurvei langsung — angkanya dari sumber terukur (OSM, rute, penduduk, zonasi)',
+    disurvei: 'sebagian angkanya dari survei lapangan',
+    belumDisurvei: 'Heksagon ini belum pernah disurvei langsung',
+    tanpaKuadran: 'kuadran belum dihitung',
+  },
+  en: {
+    en: true,
+    kosong: 'no data yet',
+    titik: (n: number) => `${n} points`,
+    judul: (teks: string, n: number, ekor: string) =>
+      `${teks} · ${n} field survey points · ${ekor}`,
+    prediksi:
+      'this hexagon has not been surveyed on the ground — its numbers come from measured sources (OSM, routes, population, zoning)',
+    disurvei: 'some of its numbers come from a field survey',
+    belumDisurvei: 'This hexagon has never been surveyed on the ground',
+    tanpaKuadran: 'quadrant not computed yet',
+  },
+}
+
 /** Nilai yang belum ada. Selalu terlihat berbeda dari nol. */
-export function Kosong({ teks = 'belum ada data' }: { teks?: string }) {
-  return <span className="text-ink-3 italic text-[14px]">{teks}</span>
+export function Kosong({ teks }: { teks?: string }) {
+  const t = useTeks(K_KECIL)
+  return <span className="text-ink-3 italic text-[14px]">{teks ?? t.kosong}</span>
 }
 
 export function Angka({
@@ -63,6 +98,7 @@ export function Angka({
  * Sumber `predicted` mendapat arsir, mengikuti aturan tekstur = belum tahu.
  */
 export function Badge({ badge, ringkas }: { badge: BadgeKeyakinan; ringkas?: boolean }) {
+  const t = useTeks(K_KECIL)
   const k = KEYAKINAN[badge.tingkat]
   const prediksi = badge.sumber === 'predicted'
   // "hasil imputasi model" SALAH sejak 29 Agu 2026, dan salahnya ke arah yang
@@ -73,11 +109,11 @@ export function Badge({ badge, ringkas }: { badge: BadgeKeyakinan; ringkas?: boo
   //
   // `predicted` di basis data ini berarti satu hal saja: heksagon itu belum
   // pernah dikunjungi surveyor. Bukan pernyataan tentang mutu angkanya.
-  const judul = `${k.teks} · ${badge.n_titik_misi} titik survei lapangan · ${
-    prediksi
-      ? 'heksagon ini belum disurvei langsung — angkanya dari sumber terukur (OSM, rute, penduduk, zonasi)'
-      : 'sebagian angkanya dari survei lapangan'
-  }`
+  const judul = t.judul(
+    t.en ? k.teksEn : k.teks,
+    badge.n_titik_misi,
+    prediksi ? t.prediksi : t.disurvei,
+  )
 
   return (
     <span
@@ -97,16 +133,16 @@ export function Badge({ badge, ringkas }: { badge: BadgeKeyakinan; ringkas?: boo
           sebelah skor 47 terbaca sebagai "lokasinya jelek"; "Data tipis"
           tidak bisa disalahartikan begitu. */}
       <span className="whitespace-nowrap text-[12px] font-semibold text-ink-2">
-        {k.label}
+        {t.en ? k.labelEn : k.label}
       </span>
       {!ringkas && (
-        <span className="tabular text-[12px] text-ink-3">{badge.n_titik_misi} titik</span>
+        <span className="tabular text-[12px] text-ink-3">{t.titik(badge.n_titik_misi)}</span>
       )}
       {prediksi && (
         <span
           className="arsir text-ink-3 h-3 w-3 rounded-[2px] border border-line-2"
-          title="Heksagon ini belum pernah disurvei langsung"
-          aria-label="hasil imputasi model"
+          title={t.belumDisurvei}
+          aria-label={t.belumDisurvei}
         />
       )}
       <span className="sr-only">{judul}</span>
@@ -133,8 +169,10 @@ export function Glif({ kuadran, ukuran = 12 }: { kuadran: string; ukuran?: numbe
 
 /** Nama kuadran + glifnya. Warna tidak pernah sendirian. */
 export function ChipKuadran({ kuadran }: { kuadran: NamaKuadran | null }) {
-  if (!kuadran) return <Kosong teks="kuadran belum dihitung" />
-  const q = KUADRAN[kuadran]
+  const t = useTeks(K_KECIL)
+  const namaZona = useNamaZona()
+  const q = kuadran ? KUADRAN[kuadran] : null
+  if (!kuadran || !q) return <Kosong teks={t.tanpaKuadran} />
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-xs px-1.5 py-[3px] text-[13px] font-semibold"
@@ -145,7 +183,7 @@ export function ChipKuadran({ kuadran }: { kuadran: NamaKuadran | null }) {
       }}
     >
       <Glif kuadran={kuadran} />
-      {q.nama}
+      {namaZona(kuadran)}
     </span>
   )
 }
@@ -1173,46 +1211,75 @@ export function PilihBasemap<T extends string>({
 
 /** Baris data yang jujur: yang kosong ditulis kosong, bukan disembunyikan. */
 function BarisIdentitas({ label, nilai }: { label: string; nilai: string }) {
+  const t = useTeks(K_PENGATURAN)
   return (
     <div className="flex gap-3 py-1.5">
       <span className="w-[6.5rem] shrink-0 text-[12.5px] text-ink-3">{label}</span>
       {nilai ? (
         <span className="text-[13px] leading-snug text-ink">{nilai}</span>
       ) : (
-        <span className="text-[13px] italic text-ink-3">belum diisi</span>
+        <span className="text-[13px] italic text-ink-3">{t.belumDiisi}</span>
       )}
     </div>
   )
 }
 
-const ISI_PENGATURAN = {
-  tentang: {
-    judul: 'Tentang kami',
-    baris: [
-      ['Produk', IDENTITAS.produk],
-      ['Judul resmi', IDENTITAS.judulResmi],
-      ['Lomba', IDENTITAS.lomba],
-      ['Tema', IDENTITAS.tema],
-      ['Tim', IDENTITAS.tim],
-      ['Institusi', IDENTITAS.institusi],
-      ['Ketua tim', IDENTITAS.ketua],
-    ] as [string, string][],
-    catatan:
-      'Loconomics membantu calon pelaku UMKM memilih lokasi usaha di sekitar simpul transportasi massal Jabodetabek — dengan menunjukkan lokasi yang terlihat biasa tetapi datanya bagus, dan memperingatkan yang sebaliknya.',
+/**
+ * Dua layar menu pengaturan, dua bahasa.
+ *
+ * Yang diterjemahkan hanya LABEL-nya. Nilainya - nama produk, judul resmi
+ * lomba, nama tim, nama institusi - identitas, dan identitas tidak
+ * dialihbahasakan: "Telkom University" tetap "Telkom University" di layar
+ * mana pun.
+ */
+const K_PENGATURAN = {
+  id: {
+    tutup: 'Tutup',
+    belumDiisi: 'belum diisi',
+    tentang: {
+      judul: 'Tentang kami',
+      label: ['Produk', 'Judul resmi', 'Lomba', 'Tema', 'Tim', 'Institusi', 'Ketua tim'],
+      catatan:
+        'Loconomics membantu calon pelaku UMKM memilih lokasi usaha di sekitar simpul transportasi massal Jabodetabek — dengan menunjukkan lokasi yang terlihat biasa tetapi datanya bagus, dan memperingatkan yang sebaliknya.',
+    },
+    kontak: {
+      judul: 'Kontak',
+      label: ['Surel', 'Instagram', 'Situs', 'Repositori'],
+      catatan: 'Isi nilainya di IDENTITAS pada frontend/src/config.ts.',
+    },
   },
-  kontak: {
-    judul: 'Kontak',
-    baris: [
-      ['Surel', IDENTITAS.email],
-      ['Instagram', IDENTITAS.instagram],
-      ['Situs', IDENTITAS.situs],
-      ['Repositori', IDENTITAS.repositori],
-    ] as [string, string][],
-    catatan: 'Isi nilainya di IDENTITAS pada frontend/src/config.ts.',
+  en: {
+    tutup: 'Close',
+    belumDiisi: 'not filled in',
+    tentang: {
+      judul: 'About us',
+      label: ['Product', 'Official title', 'Competition', 'Theme', 'Team', 'Institution', 'Team lead'],
+      catatan:
+        'Loconomics helps would-be small business owners pick a location near Jabodetabek mass transit nodes — by pointing out places that look ordinary but whose data is good, and warning about the opposite.',
+    },
+    kontak: {
+      judul: 'Contact',
+      label: ['Email', 'Instagram', 'Website', 'Repository'],
+      catatan: 'Fill these in at IDENTITAS in frontend/src/config.ts.',
+    },
   },
 }
 
-type KunciPengaturan = keyof typeof ISI_PENGATURAN
+/** Nilainya, berurutan sama dengan `label` di atas. */
+const NILAI_PENGATURAN = {
+  tentang: [
+    IDENTITAS.produk,
+    IDENTITAS.judulResmi,
+    IDENTITAS.lomba,
+    IDENTITAS.tema,
+    IDENTITAS.tim,
+    IDENTITAS.institusi,
+    IDENTITAS.ketua,
+  ],
+  kontak: [IDENTITAS.email, IDENTITAS.instagram, IDENTITAS.situs, IDENTITAS.repositori],
+}
+
+type KunciPengaturan = keyof typeof NILAI_PENGATURAN
 
 /**
  * Gerigi di ujung kanan bilah atas: Tentang kami dan Kontak.
@@ -1277,7 +1344,16 @@ export function MenuPengaturan({
     return () => document.removeEventListener('keydown', kunci)
   }, [layar])
 
-  const isi = layar ? ISI_PENGATURAN[layar] : null
+  const tp = useTeks(K_PENGATURAN)
+  const isi = layar
+    ? {
+        judul: tp[layar].judul,
+        catatan: tp[layar].catatan,
+        baris: tp[layar].label.map(
+          (l, i) => [l, NILAI_PENGATURAN[layar][i] ?? ''] as [string, string],
+        ),
+      }
+    : null
 
   return (
     <>
@@ -1369,7 +1445,7 @@ export function MenuPengaturan({
                 </div>
               </div>
             )}
-            {(Object.keys(ISI_PENGATURAN) as KunciPengaturan[]).map((k, i) => (
+            {(Object.keys(NILAI_PENGATURAN) as KunciPengaturan[]).map((k, i) => (
               <button
                 key={k}
                 role="menuitem"
@@ -1402,7 +1478,7 @@ export function MenuPengaturan({
                     )}
                   </svg>
                 </span>
-                {ISI_PENGATURAN[k].judul}
+                {tp[k].judul}
               </button>
             ))}
           </div>
@@ -1437,7 +1513,7 @@ export function MenuPengaturan({
                 onClick={() => setLayar(null)}
                 className="shrink-0 cursor-pointer rounded-full border border-line px-4 py-1.5 text-[13.5px] font-medium transition-colors hover:bg-surface-2"
               >
-                Tutup
+                {tp.tutup}
               </button>
             </div>
             <div className="p-6">

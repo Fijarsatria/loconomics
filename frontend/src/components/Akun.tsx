@@ -722,7 +722,156 @@ function DialogAkun({
 // Dialog langganan
 // ---------------------------------------------------------------------------
 
-const rp = (n: number) => `Rp${n.toLocaleString('id-ID')}`
+
+/**
+ * Dialog langganan dan onboarding, dua bahasa.
+ *
+ * `p.nama`, `p.rincian`, dan `katalog.catatan_pembayaran` datang dari
+ * `/akun/paket` dan dibiarkan apa adanya - katalog harga hidup di backend
+ * supaya harganya bisa berubah tanpa menerbitkan ulang frontend, dan menyalin
+ * namanya ke sini berarti dua daftar harga yang cepat atau lambat berselisih.
+ */
+const K_BAYAR = {
+  id: {
+    locale: 'id-ID',
+    gagalPaket: 'Gagal memuat daftar paket.',
+    premiumAktif: 'Loconomics Premium aktif. Seluruh fitur terbuka.',
+    tokenMasuk: (n: number) => `Token masuk. Saldo Anda sekarang ${n}.`,
+    gagalAktivasi: 'Aktivasi gagal. Coba lagi.',
+    selamatDatang: 'Selamat datang di Premium',
+    judulDialog: 'Loconomics Premium',
+    sudahAktif: 'Akun Anda sudah aktif',
+    satuLangkah: 'Satu langkah lagi sebelum mulai',
+    bukaKedalaman: 'Buka seluruh kedalaman datanya',
+    alasanRayakan:
+      'Akun gratis sudah bisa melihat peta, skor, dan zonasi. Premium yang membuka 43 variabel, komparasi, pemantauan, dan Laporan Kelayakan.',
+    alasanBiasa: 'Satu langganan membuka semuanya. Tanpa ikatan — berhenti kapan saja.',
+    tabLangganan: 'Langganan',
+    tabToken: 'Token satuan',
+    memuatPaket: 'Memuat paket…',
+    gratis: 'Gratis',
+    gratisCatatan: 'Sudah aktif di akun Anda. Tanpa batas waktu.',
+    gratisRincian: [
+      'Seluruh grid heksagon di enam kawasan',
+      'Opportunity Score, Hidden Gem, dan keempat kuadrannya',
+      'Status zonasi ZoneGuard dan peringatan RiskRadar',
+      'Daftar lokasi, pencarian, dan Loconomics AI',
+    ],
+    berlakuHari: (n: number) =>
+      `Berlaku ${n} hari, otomatis berakhir — tidak ada tagihan berulang.`,
+    tokenPembuka: (n: number) => (
+      <>
+        Untuk yang butuh satu-dua lokasi saja. 1 token membuka seluruh variabel satu heksagon{' '}
+        <strong className="font-semibold text-ink">selamanya</strong>; {n} token untuk satu
+        Laporan Kelayakan.
+      </>
+    ),
+    perLokasi: (rp: string) => `≈ ${rp} per lokasi`,
+    lebihMurah: (rp: string) =>
+      `Berlangganan ${rp} sebulan membuka semuanya tanpa hitungan token — lebih murah begitu Anda melihat lebih dari sepuluh lokasi.`,
+    pembayaran: 'Pembayaran',
+    kodeQris: 'Kode pembayaran tampil di sini',
+    paket: 'Paket',
+    total: 'Total',
+    mengaktifkan: 'Mengaktifkan…',
+    aktifkan: 'Aktifkan sekarang',
+    pilihDulu: 'Pilih paket dulu',
+    belumTerpasang: 'Gerbang pembayaran belum terpasang di lingkungan ini.',
+    masukSebagai: 'Masuk sebagai',
+    palingHemat: 'Paling hemat',
+
+    premiumAktifJudul: 'Premium aktif',
+    disetelUntuk: 'Sebentar — Loconomics mau disetel untuk siapa?',
+    disetelIsi:
+      'Jawabannya menyetel bawaan simulasi dan kawasan yang dibuka lebih dulu. Tidak ada skor yang berubah, dan semuanya bisa diganti kapan saja.',
+    rencanaUsaha: 'Rencana usaha',
+    kawasanIncaran: 'Kawasan yang diincar',
+    anggaran: 'Anggaran sewa per bulan (opsional)',
+    contohAnggaran: 'mis. 15.000.000',
+    lewati: 'Lewati',
+    menyimpan: 'Menyimpan…',
+    simpanBuka: 'Simpan & buka peta',
+    preferensi: 'Preferensi usaha',
+    preferensiPesan:
+      'Kriteria ini menyaring rekomendasi dan menyetel bawaan simulasi. Tidak ada skor yang berubah karenanya.',
+    jenis: [
+      { label: 'Kopi & jajanan', contoh: 'kedai kopi, roti bakar' },
+      { label: 'Warung makan', contoh: 'nasi, mi ayam, soto' },
+      { label: 'Kelontong & ATK', contoh: 'sembako, fotokopi' },
+      { label: 'Jasa', contoh: 'barbershop, laundry' },
+    ],
+  },
+  en: {
+    locale: 'en-GB',
+    gagalPaket: 'Could not load the plans.',
+    premiumAktif: 'Loconomics Premium is active. Everything is open.',
+    tokenMasuk: (n: number) => `Tokens added. Your balance is now ${n}.`,
+    gagalAktivasi: 'Activation failed. Try again.',
+    selamatDatang: 'Welcome to Premium',
+    judulDialog: 'Loconomics Premium',
+    sudahAktif: 'Your account is active',
+    satuLangkah: 'One step left before you start',
+    bukaKedalaman: 'Open the full depth of the data',
+    alasanRayakan:
+      'A free account already sees the map, the scores, and the zoning. Premium is what opens the 43 variables, comparison, watching, and the Feasibility Report.',
+    alasanBiasa: 'One subscription opens everything. No lock-in — stop whenever you like.',
+    tabLangganan: 'Subscription',
+    tabToken: 'Single tokens',
+    memuatPaket: 'Loading plans…',
+    gratis: 'Free',
+    gratisCatatan: 'Already active on your account. No time limit.',
+    gratisRincian: [
+      'The whole hexagon grid across six areas',
+      'Opportunity Score, Hidden Gem, and all four quadrants',
+      'ZoneGuard permission status and RiskRadar warnings',
+      'The location list, search, and Loconomics AI',
+    ],
+    berlakuHari: (n: number) => `Valid for ${n} days, then it simply ends — no recurring charge.`,
+    tokenPembuka: (n: number) => (
+      <>
+        For anyone who needs only one or two locations. 1 token opens every variable of one
+        hexagon <strong className="font-semibold text-ink">forever</strong>; {n} tokens for one
+        Feasibility Report.
+      </>
+    ),
+    perLokasi: (rp: string) => `≈ ${rp} per location`,
+    lebihMurah: (rp: string) =>
+      `A ${rp} monthly subscription opens everything without counting tokens — cheaper the moment you look at more than ten locations.`,
+    pembayaran: 'Payment',
+    kodeQris: 'The payment code appears here',
+    paket: 'Plan',
+    total: 'Total',
+    mengaktifkan: 'Activating…',
+    aktifkan: 'Activate now',
+    pilihDulu: 'Pick a plan first',
+    belumTerpasang: 'No payment gateway is wired up in this environment.',
+    masukSebagai: 'Signed in as',
+    palingHemat: 'Best value',
+
+    premiumAktifJudul: 'Premium is active',
+    disetelUntuk: 'One moment — who should Loconomics be set up for?',
+    disetelIsi:
+      'Your answers set the simulation defaults and which area opens first. No score changes, and everything can be changed later.',
+    rencanaUsaha: 'The business you plan',
+    kawasanIncaran: 'The areas you are after',
+    anggaran: 'Monthly rent budget (optional)',
+    contohAnggaran: 'e.g. 15,000,000',
+    lewati: 'Skip',
+    menyimpan: 'Saving…',
+    simpanBuka: 'Save & open the map',
+    preferensi: 'Business preferences',
+    preferensiPesan:
+      'These criteria filter the recommendations and set the simulation defaults. No score changes because of them.',
+    jenis: [
+      { label: 'Coffee & snacks', contoh: 'coffee shop, toast' },
+      { label: 'Rice & noodle stall', contoh: 'rice, chicken noodles, soto' },
+      { label: 'Grocery & stationery', contoh: 'staples, photocopying' },
+      { label: 'Services', contoh: 'barbershop, laundry' },
+    ],
+  },
+}
+
+const rp = (n: number, locale = 'id-ID') => `Rp${n.toLocaleString(locale)}`
 
 function DialogLangganan({
   alasan,
@@ -734,6 +883,7 @@ function DialogLangganan({
   rayakan: boolean
   onTutup: () => void
 }) {
+  const t = useTeks(K_BAYAR)
   const { akun, segarkan } = useSesi()
   const [katalog, setKatalog] = useState<KatalogPaket | null>(null)
   const [tab, setTab] = useState<'langganan' | 'token'>('langganan')
@@ -746,7 +896,10 @@ function DialogLangganan({
     api
       .katalogPaket()
       .then(setKatalog)
-      .catch(() => setGalat('Gagal memuat daftar paket.'))
+      .catch(() => setGalat(t.gagalPaket))
+    // Tanpa `t` di dependensi: kalimat cadangan itu cuma terbaca kalau
+    // permintaannya gagal, dan menambahkannya berarti katalog diminta ulang
+    // tiap kali bahasa ditukar.
   }, [])
 
   const bayar = async () => {
@@ -756,14 +909,14 @@ function DialogLangganan({
     try {
       if (tab === 'langganan') {
         await api.berlangganan(pilih)
-        setSukses('Loconomics Premium aktif. Seluruh fitur terbuka.')
+        setSukses(t.premiumAktif)
       } else {
         const a = await api.beliToken(pilih)
-        setSukses(`Token masuk. Saldo Anda sekarang ${a.saldo_token}.`)
+        setSukses(t.tokenMasuk(a.saldo_token))
       }
       await segarkan()
     } catch (err) {
-      setGalat(err instanceof GalatAPI ? err.message : 'Aktivasi gagal. Coba lagi.')
+      setGalat(err instanceof GalatAPI ? err.message : t.gagalAktivasi)
     } finally {
       setSibuk(false)
     }
@@ -775,7 +928,7 @@ function DialogLangganan({
     // di sini karena inilah satu-satunya saat orangnya sudah pasti berhenti
     // dan membaca - sesudah ini ia akan langsung menuju petanya.
     return (
-      <Tirai judul="Selamat datang di Premium" onTutup={onTutup} lebar="34rem">
+      <Tirai judul={t.selamatDatang} onTutup={onTutup} lebar="34rem">
         <OnboardingUsaha pesan={sukses} onSelesai={onTutup} />
       </Tirai>
     )
@@ -788,20 +941,17 @@ function DialogLangganan({
   const harga = paketTerpilih?.harga_rp ?? null
 
   return (
-    <Tirai judul="Loconomics Premium" onTutup={onTutup} lebar="56rem">
+    <Tirai judul={t.judulDialog} onTutup={onTutup} lebar="56rem">
       <div className="flex max-h-[86vh] flex-col">
         {/* --- Kepala ------------------------------------------------------ */}
         <div className="flex items-start justify-between gap-5 border-b border-line/70 px-6 py-5 sm:px-7">
           <div className="min-w-0">
-            <p className="eyebrow">{rayakan ? 'Akun Anda sudah aktif' : 'Loconomics Premium'}</p>
+            <p className="eyebrow">{rayakan ? t.sudahAktif : t.judulDialog}</p>
             <h2 className="papan mt-1 text-[21px] leading-tight">
-              {rayakan ? 'Satu langkah lagi sebelum mulai' : 'Buka seluruh kedalaman datanya'}
+              {rayakan ? t.satuLangkah : t.bukaKedalaman}
             </h2>
             <p className="mt-1.5 max-w-[34rem] text-[13.5px] leading-snug text-ink-2">
-              {alasan ??
-                (rayakan
-                  ? 'Akun gratis sudah bisa melihat peta, skor, dan zonasi. Premium yang membuka 43 variabel, komparasi, pemantauan, dan Laporan Kelayakan.'
-                  : 'Satu langganan membuka semuanya. Tanpa ikatan — berhenti kapan saja.')}
+              {alasan ?? (rayakan ? t.alasanRayakan : t.alasanBiasa)}
             </p>
           </div>
           <TombolTutup onTutup={onTutup} />
@@ -812,24 +962,27 @@ function DialogLangganan({
             {/* --- Kiri: pilihan paket ---------------------------------- */}
             <div className="min-w-0 flex-1">
               <div className="mb-4 inline-flex rounded-full bg-surface-2 p-1">
-                {(['langganan', 'token'] as const).map((t) => (
+                {/* `k`, bukan `t`: `t` sudah dipakai cabang kamus komponen ini,
+                    dan nama yang sama untuk dua benda adalah cara paling
+                    pendek membuat satu kalimat diam-diam hilang. */}
+                {(['langganan', 'token'] as const).map((k) => (
                   <button
-                    key={t}
+                    key={k}
                     onClick={() => {
-                      setTab(t)
+                      setTab(k)
                       setPilih(null)
                     }}
                     className={`cursor-pointer rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors ${
-                      tab === t ? 'bg-ink text-surface' : 'text-ink-2 hover:text-ink'
+                      tab === k ? 'bg-ink text-surface' : 'text-ink-2 hover:text-ink'
                     }`}
                   >
-                    {t === 'langganan' ? 'Langganan' : 'Token satuan'}
+                    {k === 'langganan' ? t.tabLangganan : t.tabToken}
                   </button>
                 ))}
               </div>
 
               {!katalog ? (
-                <p className="text-[13.5px] text-ink-3">Memuat paket…</p>
+                <p className="text-[13.5px] text-ink-3">{t.memuatPaket}</p>
               ) : tab === 'langganan' ? (
                 <div className="space-y-3">
                   {/* Tingkat GRATIS ditulis sebagai kartu, bukan disembunyikan.
@@ -840,9 +993,9 @@ function DialogLangganan({
                   <div className="rounded-md border border-line bg-surface p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <span className="papan text-[15px]">Gratis</span>
+                        <span className="papan text-[15px]">{t.gratis}</span>
                         <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
-                          Sudah aktif di akun Anda. Tanpa batas waktu.
+                          {t.gratisCatatan}
                         </p>
                       </div>
                       <span className="tabular shrink-0 text-[15px] font-semibold text-ink">
@@ -850,12 +1003,7 @@ function DialogLangganan({
                       </span>
                     </div>
                     <ul className="mt-3 space-y-1.5 border-t border-line/60 pt-3">
-                      {[
-                        'Seluruh grid heksagon di enam kawasan',
-                        'Opportunity Score, Hidden Gem, dan keempat kuadrannya',
-                        'Status zonasi ZoneGuard dan peringatan RiskRadar',
-                        'Daftar lokasi, pencarian, dan Loconomics AI',
-                      ].map((r) => (
+                      {t.gratisRincian.map((r) => (
                         <li key={r} className="flex gap-2 text-[12.5px] leading-snug text-ink-2">
                           <Centang kecil />
                           {r}
@@ -870,8 +1018,8 @@ function DialogLangganan({
                       dipilih={pilih === p.kode}
                       onPilih={() => setPilih(p.kode)}
                       judul={p.nama}
-                      harga={`${rp(p.harga_rp)} / ${p.satuan}`}
-                      catatan={`Berlaku ${p.hari} hari, otomatis berakhir — tidak ada tagihan berulang.`}
+                      harga={`${rp(p.harga_rp, t.locale)} / ${p.satuan}`}
+                      catatan={t.berlakuHari(p.hari)}
                       unggulan={p.unggulan}
                       rincian={p.rincian}
                     />
@@ -880,9 +1028,7 @@ function DialogLangganan({
               ) : (
                 <>
                   <p className="mb-3 text-[13px] leading-snug text-ink-2">
-                    Untuk yang butuh satu-dua lokasi saja. 1 token membuka seluruh
-                    variabel satu heksagon <strong className="font-semibold text-ink">selamanya</strong>;{' '}
-                    {katalog.biaya_token.laporan ?? 2} token untuk satu Laporan Kelayakan.
+                    {t.tokenPembuka(katalog.biaya_token.laporan ?? 2)}
                   </p>
                   <div className="space-y-3">
                     {katalog.token.map((p) => (
@@ -891,15 +1037,13 @@ function DialogLangganan({
                         dipilih={pilih === p.kode}
                         onPilih={() => setPilih(p.kode)}
                         judul={`${p.nama} — ${p.token} token`}
-                        harga={rp(p.harga_rp)}
-                        catatan={`≈ ${rp(Math.round(p.harga_rp / p.token))} per lokasi`}
+                        harga={rp(p.harga_rp, t.locale)}
+                        catatan={t.perLokasi(rp(Math.round(p.harga_rp / p.token), t.locale))}
                       />
                     ))}
                   </div>
                   <p className="mt-3.5 rounded-sm bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-2">
-                    Berlangganan {rp(katalog.langganan[0]?.harga_rp ?? 25000)} sebulan membuka
-                    semuanya tanpa hitungan token — lebih murah begitu Anda melihat lebih dari
-                    sepuluh lokasi.
+                    {t.lebihMurah(rp(katalog.langganan[0]?.harga_rp ?? 25000, t.locale))}
                   </p>
                 </>
               )}
@@ -908,7 +1052,7 @@ function DialogLangganan({
             {/* --- Kanan: pembayaran ------------------------------------ */}
             <div className="w-full shrink-0 lg:w-[19rem]">
               <div className="rounded-md border border-line bg-surface-2/60 p-5">
-                <h3 className="eyebrow mb-3">Pembayaran</h3>
+                <h3 className="eyebrow mb-3">{t.pembayaran}</h3>
 
                 {/* Tempat QRIS. Sengaja kosong dan sengaja MENGATAKAN dirinya
                     kosong. Menaruh QR contoh yang tidak bisa dibayar jauh lebih
@@ -926,22 +1070,22 @@ function DialogLangganan({
                     </svg>
                     <p className="mt-2.5 text-[12.5px] font-semibold text-ink-2">QRIS</p>
                     <p className="mt-0.5 text-[11.5px] leading-snug text-ink-3">
-                      Kode pembayaran tampil di sini
+                      {t.kodeQris}
                     </p>
                   </div>
                 </div>
 
                 <dl className="mt-4 space-y-1.5 border-t border-line/70 pt-3.5 text-[13px]">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-ink-3">Paket</dt>
+                    <dt className="text-ink-3">{t.paket}</dt>
                     <dd className="truncate text-right font-medium text-ink">
                       {paketTerpilih?.nama ?? '—'}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-ink-3">Total</dt>
+                    <dt className="text-ink-3">{t.total}</dt>
                     <dd className="tabular text-right font-semibold text-ink">
-                      {harga === null ? '—' : rp(harga)}
+                      {harga === null ? '—' : rp(harga, t.locale)}
                     </dd>
                   </div>
                 </dl>
@@ -958,20 +1102,20 @@ function DialogLangganan({
                   className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[14px] font-semibold text-surface transition-all duration-300 ease-jelly hover:scale-[1.015] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
                 >
                   {sibuk && <Pusaran />}
-                  {sibuk ? 'Mengaktifkan…' : pilih ? 'Aktifkan sekarang' : 'Pilih paket dulu'}
+                  {sibuk ? t.mengaktifkan : pilih ? t.aktifkan : t.pilihDulu}
                 </button>
 
                 {/* Keadaan pembayaran dikatakan apa adanya. Ini yang membedakan
                     layar berbayar yang jujur dari layar berbayar palsu. */}
                 <p className="mt-3 text-[11.5px] leading-snug text-ink-3">
-                  {katalog?.catatan_pembayaran ??
-                    'Gerbang pembayaran belum terpasang di lingkungan ini.'}
+                  {katalog?.catatan_pembayaran ?? t.belumTerpasang}
                 </p>
               </div>
 
               {akun && (
                 <p className="mt-3 text-center text-[12px] text-ink-3">
-                  Masuk sebagai <strong className="font-semibold text-ink-2">{akun.nama_pengguna}</strong>
+                  {t.masukSebagai}{' '}
+                  <strong className="font-semibold text-ink-2">{akun.nama_pengguna}</strong>
                   {akun.saldo_token > 0 && ` · ${akun.saldo_token} token`}
                 </p>
               )}
@@ -1000,6 +1144,7 @@ function KartuPaket({
   unggulan?: boolean
   rincian?: string[]
 }) {
+  const tp = useTeks(K_BAYAR)
   return (
     <button
       onClick={onPilih}
@@ -1016,7 +1161,7 @@ function KartuPaket({
             <span className="papan text-[15px]">{judul}</span>
             {unggulan && (
               <span className="rounded-full bg-gem px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white">
-                Paling hemat
+                {tp.palingHemat}
               </span>
             )}
           </div>
@@ -1392,13 +1537,9 @@ function SarangKecil({ pudar }: { pudar?: boolean } = {}) {
 // Onboarding usaha
 // ---------------------------------------------------------------------------
 
-/** Sama dengan JENIS_USAHA di backend. Dijaga manual - lihat Simulasi.tsx. */
-const JENIS_ONBOARDING = [
-  { nilai: 'kuliner_ringan', label: 'Kopi & jajanan', contoh: 'kedai kopi, roti bakar' },
-  { nilai: 'warung_makan', label: 'Warung makan', contoh: 'nasi, mi ayam, soto' },
-  { nilai: 'retail_kecil', label: 'Kelontong & ATK', contoh: 'sembako, fotokopi' },
-  { nilai: 'jasa', label: 'Jasa', contoh: 'barbershop, laundry' },
-]
+/** Sama dengan JENIS_USAHA di backend. Dijaga manual - lihat Simulasi.tsx.
+ *  Labelnya tinggal di `K_BAYAR.jenis`, berurutan sama dengan larik ini. */
+const JENIS_ONBOARDING = ['kuliner_ringan', 'warung_makan', 'retail_kecil', 'jasa']
 
 /**
  * Tiga pertanyaan, seluruhnya boleh dilewati.
@@ -1411,13 +1552,14 @@ const JENIS_ONBOARDING = [
 function OnboardingUsaha({
   pesan,
   onSelesai,
-  judul = 'Premium aktif',
+  judul,
 }: {
   pesan: string
   onSelesai: () => void
   /** Berbeda saat dibuka sebagai preferensi biasa, bukan sesudah berlangganan. */
   judul?: string
 }) {
+  const t = useTeks(K_BAYAR)
   const { akun, segarkan } = useSesi()
   const [jenis, setJenis] = useState<string | null>(akun?.preferensi?.jenis_usaha ?? null)
   const [kawasan, setKawasan] = useState<string | null>(akun?.preferensi?.kawasan ?? null)
@@ -1454,39 +1596,32 @@ function OnboardingUsaha({
           </svg>
         </span>
         <div className="min-w-0">
-          <h2 className="papan text-[19px] leading-tight">{judul}</h2>
+          <h2 className="papan text-[19px] leading-tight">{judul ?? t.premiumAktifJudul}</h2>
           <p className="mt-1 text-[13px] leading-snug text-ink-2">{pesan}</p>
         </div>
       </div>
 
       <div className="mt-6 border-t border-line/70 pt-5">
-        <p className="text-[14.5px] font-semibold text-ink">
-          Sebentar — Loconomics mau disetel untuk siapa?
-        </p>
-        <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
-          Jawabannya menyetel bawaan simulasi dan kawasan yang dibuka lebih dulu.
-          Tidak ada skor yang berubah, dan semuanya bisa diganti kapan saja.
-        </p>
+        <p className="text-[14.5px] font-semibold text-ink">{t.disetelUntuk}</p>
+        <p className="mt-1 text-[12.5px] leading-snug text-ink-3">{t.disetelIsi}</p>
 
-        <p className="eyebrow mt-5 mb-2">Rencana usaha</p>
+        <p className="eyebrow mt-5 mb-2">{t.rencanaUsaha}</p>
         <div className="grid grid-cols-2 gap-2">
-          {JENIS_ONBOARDING.map((j) => (
+          {JENIS_ONBOARDING.map((nilai, i) => (
             <button
-              key={j.nilai}
-              onClick={() => setJenis(jenis === j.nilai ? null : j.nilai)}
+              key={nilai}
+              onClick={() => setJenis(jenis === nilai ? null : nilai)}
               className={`cursor-pointer rounded-sm border p-2.5 text-left transition-colors ${
-                jenis === j.nilai
-                  ? 'border-gem bg-gem-soft/40'
-                  : 'border-line hover:border-line-2'
+                jenis === nilai ? 'border-gem bg-gem-soft/40' : 'border-line hover:border-line-2'
               }`}
             >
-              <span className="block text-[13px] font-semibold text-ink">{j.label}</span>
-              <span className="block text-[11px] leading-snug text-ink-3">{j.contoh}</span>
+              <span className="block text-[13px] font-semibold text-ink">{t.jenis[i].label}</span>
+              <span className="block text-[11px] leading-snug text-ink-3">{t.jenis[i].contoh}</span>
             </button>
           ))}
         </div>
 
-        <p className="eyebrow mt-5 mb-2">Kawasan yang diincar</p>
+        <p className="eyebrow mt-5 mb-2">{t.kawasanIncaran}</p>
         <div className="flex flex-wrap gap-1.5">
           {KAWASAN_PILOT.map((k) => (
             <button
@@ -1503,16 +1638,16 @@ function OnboardingUsaha({
           ))}
         </div>
 
-        <p className="eyebrow mt-5 mb-2">Anggaran sewa per bulan (opsional)</p>
+        <p className="eyebrow mt-5 mb-2">{t.anggaran}</p>
         <div className="relative">
           <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] text-ink-3">
             Rp
           </span>
           <input
             inputMode="numeric"
-            value={budget ? Number(budget.replace(/\D/g, '') || 0).toLocaleString('id-ID') : ''}
+            value={budget ? Number(budget.replace(/\D/g, '') || 0).toLocaleString(t.locale) : ''}
             onChange={(e) => setBudget(e.target.value)}
-            placeholder="mis. 15.000.000"
+            placeholder={t.contohAnggaran}
             className={`${KELAS_INPUT} pl-9`}
           />
         </div>
@@ -1523,7 +1658,7 @@ function OnboardingUsaha({
           onClick={onSelesai}
           className="cursor-pointer rounded-full border border-line px-4 py-2.5 text-[13.5px] font-medium text-ink-2 transition-colors hover:bg-surface-2"
         >
-          Lewati
+          {t.lewati}
         </button>
         <button
           onClick={simpan}
@@ -1531,7 +1666,7 @@ function OnboardingUsaha({
           className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-6 py-2.5 text-[14px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.015] disabled:opacity-60"
         >
           {sibuk && <Pusaran />}
-          {sibuk ? 'Menyimpan…' : 'Simpan & buka peta'}
+          {sibuk ? t.menyimpan : t.simpanBuka}
         </button>
       </div>
     </div>
@@ -1546,13 +1681,10 @@ function OnboardingUsaha({
  * tidak disengaja.
  */
 export function DialogPreferensi({ onTutup }: { onTutup: () => void }) {
+  const t = useTeks(K_BAYAR)
   return (
-    <Tirai judul="Preferensi usaha" onTutup={onTutup} lebar="34rem">
-      <OnboardingUsaha
-        judul="Preferensi usaha"
-        pesan="Kriteria ini menyaring rekomendasi dan menyetel bawaan simulasi. Tidak ada skor yang berubah karenanya."
-        onSelesai={onTutup}
-      />
+    <Tirai judul={t.preferensi} onTutup={onTutup} lebar="34rem">
+      <OnboardingUsaha judul={t.preferensi} pesan={t.preferensiPesan} onSelesai={onTutup} />
     </Tirai>
   )
 }

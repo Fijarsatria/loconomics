@@ -35,6 +35,231 @@ import { angka, rupiah } from '../lib/format'
 import type { Simulasi as HasilSimulasi } from '../types'
 import { Badge, Memuat } from './primitif'
 
+import { useIstilah, useTeks } from '../lib/bahasa'
+
+/**
+ * Kalimat lembar ini, dua bahasa.
+ *
+ * Label dan contoh keenam belas jenis usaha TIDAK ada di sini: keduanya sudah
+ * duduk di `JENIS` bersama `nilai` dan `glif`-nya, dan memindahkan setengahnya
+ * ke kamus berarti satu jenis usaha dijelaskan di dua tempat. Yang di sini
+ * hanya nama kelompoknya, yang memang tidak punya rumah lain.
+ *
+ * Nama variabel lingkungan juga tidak ada: keduapuluh tiga label "Penduduk di
+ * sekitar", "Pesaing sejenis", ... datang dari `ARTI_VARIABEL` lewat
+ * `useIstilah()`, sumber yang sama dengan panel detail dan Laporan PDF. Baris
+ * yang sama tidak boleh punya dua nama di dua layar.
+ *
+ * `peringatan[].pesan` dan `masukan.label_usaha` datang dari backend dan
+ * dibiarkan apa adanya - kecuali label usaha, yang justru DIPULIHKAN dari
+ * `JENIS` di sini supaya tombolnya ikut berbahasa Inggris.
+ */
+const K = {
+  id: {
+    kelompok: { 'Makanan & minuman': 'Makanan & minuman', Ritel: 'Ritel', Jasa: 'Jasa' } as Record<string, string>,
+    dariAnda: 'dari Anda',
+    belumDiisi: 'belum diisi',
+    belumAda: 'belum ada',
+    belumAdaData: 'belum ada data',
+
+    jamKosong: 'Belum ada profil jam untuk heksagon ini.',
+    teramai: 'teramai',
+    rongga: (n: number) =>
+      `${n} jam tanpa transaksi tercatat digambar sebagai rongga — bukan berarti sepi, berarti belum ada yang mensurvei jam itu.`,
+    terbagi: 'Ramainya terbagi begini',
+    bagianHari: { Pagi: 'Pagi', Siang: 'Siang', Sore: 'Sore', Malam: 'Malam' } as Record<string, string>,
+    takAdaTransaksi: 'belum ada transaksi tercatat',
+    jamKosongJudul: (jam: string) => `${jam}.00 — belum ada transaksi tercatat`,
+    persenTersibuk: (n: number) => `${n}% dari jam tersibuk`,
+    palingRamai1: 'Paling ramai di',
+    palingRamai2: (jam: string) =>
+      ` (${jam}). Kalau jam bukanya harus dipilih, itu jam yang paling sedikit terbuang.`,
+
+    detailLokasi: 'Detail lokasi',
+    simulasiUsaha: 'Simulasi usaha',
+    lepasBanding: 'Lepas pembanding',
+    klikLain: 'Klik heksagon lain di peta untuk membandingkan',
+    tutup: 'Tutup simulasi',
+    mauBuka: 'Mau buka usaha apa di sini?',
+    pilihSatu: 'Pilih satu, lalu kami hitungkan untung ruginya pakai angka lokasi ini.',
+    menghitung: 'Menghitung skenario…',
+    geser: 'geser untuk melihat semuanya',
+    slide: {
+      hasil: 'Untung atau rugi?',
+      peka: 'Kalau ramainya beda',
+      jam: 'Ramai jam berapa',
+      sekitar: 'Sekitar sini',
+    },
+
+    sisaUang: 'Perkiraan sisa uang tiap bulan',
+    kekurangan: 'Perkiraan kekurangan tiap bulan',
+    pembeliImpas: 'Pembeli per hari agar sewa tertutup',
+    belumBisa: 'Belum bisa dihitung',
+    orangHari: 'orang / hari',
+    untungIsi: 'Sudah dikurangi sewa. Belum dikurangi gaji, listrik, dan bahan.',
+    rugiIsi: 'Dengan asumsi sekarang, omzetnya belum menutup sewa.',
+    impasIsi:
+      'Sekadar menutup sewa — belum untung. Dihitung dari sewa dan harga jual yang Anda isi, tanpa satu pun tebakan kami.',
+    kosongIsi:
+      'Isi sewa yang ditawarkan dan harga rata-rata per pembeli di bawah. Keduanya ada di tangan Anda, bukan di peta.',
+    sewaLabel: 'Sewa',
+    omzetLabel: 'Omzet',
+    pembanding: 'Pembanding',
+    andaLebihBaik: 'Lokasi yang Anda buka lebih baik.',
+    pembandingLebihBaik: 'Pembandingnya lebih baik untuk skenario ini.',
+    supayaTertutup: 'Supaya sewanya tertutup, Anda harus menangkap',
+    dariSeluruh: 'dari seluruh uang belanja yang berputar di sini.',
+    porsiBesar: 'Itu porsi yang sangat besar untuk pendatang baru.',
+    perkiraanSekarang: (n: string) => `Perkiraan Anda sekarang ${n}%.`,
+    omzetHari: 'Omzet tiap hari',
+    pembeliHari: 'Pembeli / hari agar impas',
+    dariHargaAnda: (r: string) => `dari harga rata-rata ${r} yang Anda isi`,
+    dariBelanja: (r: string) => `dari belanja rata-rata ${r} di lokasi ini`,
+    isiHarga: 'isi harga rata-rata per pembeli untuk menghitungnya',
+    sewaSetara: 'Sewa yang Anda isi setara',
+    sewaTerukur: (r: string) => ` — sewa terukur di heksagon ini ${r}.`,
+    sewaTakTerukur: ' — belum ada sewa terukur di heksagon ini untuk dibandingkan.',
+    sewaTahun1: 'Sewa tahun pertama',
+    sewaTahun1Ekor: ' — ruko lazim ditagih setahun di muka.',
+
+    pekaJudul: 'Kalau Anda dapat lebih ramai — atau lebih sepi',
+    pekaIsi:
+      'Rumus yang sama, hanya perkiraan ramainya yang diganti. Bandingkan dengan perasaan Anda sendiri soal berapa yang realistis.',
+    menangkap: 'Menangkap',
+    perkiraanAnda: 'perkiraan Anda',
+    sisa: 'sisa ',
+    kurang: 'kurang ',
+
+    jamJudul: 'Kapan uangnya berpindah',
+    jamIsi:
+      'Dibaca dari jam yang tercetak di struk — kapan orang benar-benar membayar, bukan kapan tokonya buka.',
+    bJam: 'Jumlah rupiah yang berpindah tangan di petak ini tiap jam, dari struk yang tercatat.',
+    bStruk:
+      'Nilai tengah satu transaksi. Menentukan berapa pembeli yang dibutuhkan untuk omzet tertentu.',
+    bPorsi:
+      'Harga tengah satu porsi di warung sekitar — pembanding sebelum menentukan harga Anda sendiri.',
+    bWeekend:
+      '1,0 berarti akhir pekan sama ramai dengan hari kerja. Di atas 1 berarti lebih bergantung pada Sabtu-Minggu.',
+    bRidership: 'Perkiraan orang yang melewati simpul terdekat tiap hari.',
+    bJalan: 'Lewat jalan yang benar-benar ada, bukan garis lurus.',
+
+    sekitarJudul: 'Keadaan di sekitar lokasi',
+    sekitarIsi: 'Seluruhnya terukur. Yang belum ada datanya ditulis apa adanya — tidak ditebak.',
+
+    rencanaAnda: 'Rencana Anda',
+    sewaBulan: 'Sewa per bulan',
+    bSewa: 'Angka dari pemiliknya, bukan dari peta',
+    hargaRata: 'Harga rata-rata',
+    bHarga: 'Rencana harga jual Anda sendiri',
+    jamBuka: 'Jam buka',
+    satuanJam: 'jam',
+    luasTempat: 'Luas tempat',
+    perkiraanRamai: 'Perkiraan ramai',
+    untungPer: 'Untung per penjualan',
+  },
+  en: {
+    kelompok: { 'Makanan & minuman': 'Food & drink', Ritel: 'Retail', Jasa: 'Services' } as Record<string, string>,
+    dariAnda: 'from you',
+    belumDiisi: 'not filled in',
+    belumAda: 'none yet',
+    belumAdaData: 'no data yet',
+
+    jamKosong: 'No hourly profile for this hexagon yet.',
+    teramai: 'busiest',
+    rongga: (n: number) =>
+      `${n} hours with no recorded transaction are drawn as gaps — that does not mean quiet, it means nobody has surveyed those hours.`,
+    terbagi: 'How the busyness splits',
+    bagianHari: { Pagi: 'Morning', Siang: 'Midday', Sore: 'Afternoon', Malam: 'Evening' } as Record<string, string>,
+    takAdaTransaksi: 'no transactions recorded yet',
+    jamKosongJudul: (jam: string) => `${jam}:00 — no transactions recorded`,
+    persenTersibuk: (n: number) => `${n}% of the busiest hour`,
+    palingRamai1: 'Busiest in the',
+    palingRamai2: (jam: string) =>
+      ` (${jam}). If you have to pick opening hours, those are the least wasted.`,
+
+    detailLokasi: 'Location detail',
+    simulasiUsaha: 'Business simulation',
+    lepasBanding: 'Drop the comparison',
+    klikLain: 'Click another hexagon on the map to compare',
+    tutup: 'Close the simulation',
+    mauBuka: 'What would you open here?',
+    pilihSatu: "Pick one, and we will work out the profit and loss from this location's numbers.",
+    menghitung: 'Working out the scenario…',
+    geser: 'swipe to see them all',
+    slide: {
+      hasil: 'Profit or loss?',
+      peka: 'If it were busier',
+      jam: 'When it gets busy',
+      sekitar: 'Around here',
+    },
+
+    sisaUang: 'Estimated money left each month',
+    kekurangan: 'Estimated shortfall each month',
+    pembeliImpas: 'Buyers a day to cover the rent',
+    belumBisa: 'Cannot be worked out yet',
+    orangHari: 'people / day',
+    untungIsi: 'Rent is already deducted. Wages, electricity, and stock are not.',
+    rugiIsi: 'On the current assumptions, the revenue does not cover the rent.',
+    impasIsi:
+      'Just covering the rent — not a profit yet. Worked out from the rent and selling price you entered, with no guess of ours.',
+    kosongIsi:
+      'Fill in the rent on offer and the average spend per buyer below. Both are in your hands, not on the map.',
+    sewaLabel: 'Rent',
+    omzetLabel: 'Revenue',
+    pembanding: 'Comparison',
+    andaLebihBaik: 'The location you opened is the better one.',
+    pembandingLebihBaik: 'The comparison is better for this scenario.',
+    supayaTertutup: 'To cover the rent you would have to capture',
+    dariSeluruh: 'of all the spending money that circulates here.',
+    porsiBesar: 'That is a very large share for a newcomer.',
+    perkiraanSekarang: (n: string) => `Your estimate right now is ${n}%.`,
+    omzetHari: 'Revenue each day',
+    pembeliHari: 'Buyers / day to break even',
+    dariHargaAnda: (r: string) => `from the ${r} average price you entered`,
+    dariBelanja: (r: string) => `from the ${r} average spend at this location`,
+    isiHarga: 'enter an average spend per buyer to work it out',
+    sewaSetara: 'The rent you entered works out to',
+    sewaTerukur: (r: string) => ` — measured rent in this hexagon is ${r}.`,
+    sewaTakTerukur: ' — no measured rent in this hexagon to compare against yet.',
+    sewaTahun1: 'First-year rent',
+    sewaTahun1Ekor: ' — shophouses are usually billed a year up front.',
+
+    pekaJudul: 'If you got busier — or quieter',
+    pekaIsi:
+      'The same formula, only the busyness estimate changes. Weigh it against your own sense of what is realistic.',
+    menangkap: 'Capturing',
+    perkiraanAnda: 'your estimate',
+    sisa: 'left ',
+    kurang: 'short ',
+
+    jamJudul: 'When the money moves',
+    jamIsi:
+      'Read from the time printed on receipts — when people actually pay, not when the shop opens.',
+    bJam: 'How many rupiah change hands in this cell each hour, from recorded receipts.',
+    bStruk: 'The median transaction. It sets how many buyers a given revenue needs.',
+    bPorsi:
+      'The median price of one serving at nearby stalls — a benchmark before you set your own price.',
+    bWeekend:
+      '1.0 means the weekend is as busy as a weekday. Above 1 means it leans on Saturday and Sunday.',
+    bRidership: 'An estimate of how many people pass the nearest node each day.',
+    bJalan: 'Along streets that actually exist, not a straight line.',
+
+    sekitarJudul: 'What is around the location',
+    sekitarIsi: 'All of it measured. What has no data says so plainly — it is not guessed.',
+
+    rencanaAnda: 'Your plan',
+    sewaBulan: 'Rent per month',
+    bSewa: 'The figure from the owner, not from the map',
+    hargaRata: 'Average price',
+    bHarga: 'Your own planned selling price',
+    jamBuka: 'Opening hours',
+    satuanJam: 'h',
+    luasTempat: 'Floor area',
+    perkiraanRamai: 'Busyness estimate',
+    untungPer: 'Margin per sale',
+  },
+}
+
 /**
  * Enam belas jenis usaha, dikelompokkan.
  *
@@ -57,28 +282,36 @@ const JENIS = [
     nilai: 'kuliner_ringan',
     kelompok: 'Makanan & minuman',
     label: 'Kopi & jajanan',
+    labelEn: 'Coffee & snacks',
     contoh: 'kedai kopi, roti bakar, es teh',
+    contohEn: 'coffee shop, toast, iced tea',
     glif: 'M5 7h9v5a4.5 4.5 0 0 1-9 0Zm9 1h1.6a1.9 1.9 0 0 1 0 3.8H14M4 17.5h11',
   },
   {
     nilai: 'warung_makan',
     kelompok: 'Makanan & minuman',
     label: 'Warung makan',
+    labelEn: 'Rice & noodle stall',
     contoh: 'nasi, mi ayam, soto',
+    contohEn: 'rice, chicken noodles, soto',
     glif: 'M5 4v6a2 2 0 0 0 4 0V4M7 10v9M13.5 4c-1 2-1.5 4-1.5 6a2 2 0 0 0 2 2v7',
   },
   {
     nilai: 'restoran',
     kelompok: 'Makanan & minuman',
     label: 'Restoran & kafe',
+    labelEn: 'Restaurant & cafe',
     contoh: 'tempat duduk, pelayan, dapur',
+    contohEn: 'seating, waiters, a kitchen',
     glif: 'M3 5.5h14v3H3ZM4.5 8.5v8a1.5 1.5 0 0 0 1.5 1.5h8a1.5 1.5 0 0 0 1.5-1.5v-8M8 12h4',
   },
   {
     nilai: 'bakery',
     kelompok: 'Makanan & minuman',
     label: 'Roti & kue',
+    labelEn: 'Bakery & cakes',
     contoh: 'bakery, toko kue, donat',
+    contohEn: 'bakery, cake shop, donuts',
     glif: 'M3 12.5c0-3 3.1-5.5 7-5.5s7 2.5 7 5.5v2.5H3ZM6.5 7.2 7.6 4.5M10 6.8V4M13.5 7.2 12.4 4.5',
   },
   // --- Ritel ---------------------------------------------------------------
@@ -86,35 +319,45 @@ const JENIS = [
     nilai: 'retail_kecil',
     kelompok: 'Ritel',
     label: 'Kelontong & ATK',
+    labelEn: 'Grocery & stationery',
     contoh: 'sembako, fotokopi, pulsa',
+    contohEn: 'staples, photocopying, phone credit',
     glif: 'M3.5 7h13l-1 10h-11ZM7 7V5.5a3 3 0 0 1 6 0V7',
   },
   {
     nilai: 'minimarket',
     kelompok: 'Ritel',
     label: 'Minimarket',
+    labelEn: 'Minimarket',
     contoh: 'swalayan, 24 jam',
+    contohEn: 'self-service, open 24 hours',
     glif: 'M2.5 7.5 4 4h12l1.5 3.5ZM3.5 7.5V16h13V7.5M7.5 16v-4.5h5V16',
   },
   {
     nilai: 'fesyen',
     kelompok: 'Ritel',
     label: 'Fesyen & aksesoris',
+    labelEn: 'Fashion & accessories',
     contoh: 'distro, butik, tas, sepatu',
+    contohEn: 'streetwear, boutique, bags, shoes',
     glif: 'M7.5 3.5 10 5.5l2.5-2 4 2.5-1.5 3-1.5-.8V17h-7V8.2l-1.5.8-1.5-3Z',
   },
   {
     nilai: 'elektronik',
     kelompok: 'Ritel',
     label: 'Gawai & elektronik',
+    labelEn: 'Phones & electronics',
     contoh: 'konter HP, servis, aksesori',
+    contohEn: 'phone counter, repairs, accessories',
     glif: 'M6.5 2.5h7a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 5 16V4a1.5 1.5 0 0 1 1.5-1.5ZM8.8 14.8h2.4',
   },
   {
     nilai: 'bangunan',
     kelompok: 'Ritel',
     label: 'Bahan bangunan',
+    labelEn: 'Building materials',
     contoh: 'material, cat, perkakas',
+    contohEn: 'materials, paint, tools',
     glif: 'M12.5 3.5a3.5 3.5 0 0 0-4.6 4.4L3 12.8 5.2 15l4.9-4.9a3.5 3.5 0 0 0 4.4-4.6l-2 2-1.9-1.9Z',
   },
   // --- Jasa ----------------------------------------------------------------
@@ -122,49 +365,63 @@ const JENIS = [
     nilai: 'jasa',
     kelompok: 'Jasa',
     label: 'Jasa harian',
+    labelEn: 'Everyday services',
     contoh: 'barbershop, laundry, servis',
+    contohEn: 'barbershop, laundry, repairs',
     glif: 'M6 4.5 14 15M14 4.5 6 15M4 16.5a2 2 0 1 0 4 0 2 2 0 0 0-4 0Zm8 0a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z',
   },
   {
     nilai: 'kecantikan',
     kelompok: 'Jasa',
     label: 'Salon & perawatan',
+    labelEn: 'Salon & beauty',
     contoh: 'salon, spa, nail art',
+    contohEn: 'salon, spa, nail art',
     glif: 'M10 2.5c2.2 2.6 3.3 4.8 3.3 6.6a3.3 3.3 0 0 1-6.6 0c0-1.8 1.1-4 3.3-6.6ZM6 17.5h8',
   },
   {
     nilai: 'kesehatan',
     kelompok: 'Jasa',
     label: 'Apotek & klinik',
+    labelEn: 'Pharmacy & clinic',
     contoh: 'apotek, praktik dokter, lab',
+    contohEn: 'pharmacy, GP practice, lab',
     glif: 'M10 5.5v9M5.5 10h9M4 5.2A1.2 1.2 0 0 1 5.2 4h9.6A1.2 1.2 0 0 1 16 5.2v9.6a1.2 1.2 0 0 1-1.2 1.2H5.2A1.2 1.2 0 0 1 4 14.8Z',
   },
   {
     nilai: 'pendidikan',
     kelompok: 'Jasa',
     label: 'Bimbel & kursus',
+    labelEn: 'Tutoring & courses',
     contoh: 'les, kursus bahasa, komputer',
+    contohEn: 'tutoring, language courses, computing',
     glif: 'M2.5 7 10 3.5 17.5 7 10 10.5ZM5.5 8.6V13c0 1.4 2 2.5 4.5 2.5s4.5-1.1 4.5-2.5V8.6',
   },
   {
     nilai: 'otomotif',
     kelompok: 'Jasa',
     label: 'Bengkel & cuci',
+    labelEn: 'Workshop & car wash',
     contoh: 'servis motor, cuci mobil, ban',
+    contohEn: 'bike service, car wash, tyres',
     glif: 'M3 12.5h14M4.5 12.5 6 7.5h8l1.5 5M5 12.5V15M15 12.5V15M6.5 15h1M12.5 15h1',
   },
   {
     nilai: 'hiburan',
     kelompok: 'Jasa',
     label: 'Gim, gym & hiburan',
+    labelEn: 'Games, gym & leisure',
     contoh: 'warnet, biliar, fitness',
+    contohEn: 'internet cafe, billiards, fitness',
     glif: 'M3 10.5a3.5 3.5 0 0 1 3.5-3.5h7a3.5 3.5 0 0 1 0 7h-7A3.5 3.5 0 0 1 3 10.5ZM6 9v3M4.5 10.5h3M13 9.5h.01M14.8 11.3h.01',
   },
   {
     nilai: 'logistik',
     kelompok: 'Jasa',
     label: 'Agen paket',
+    labelEn: 'Parcel agent',
     contoh: 'ekspedisi, titik ambil, kurir',
+    contohEn: 'couriers, pickup point, delivery',
     glif: 'M3 6.5 10 3.5l7 3v7l-7 3-7-3ZM3 6.5l7 3 7-3M10 9.5V16.5',
   },
 ] as const
@@ -245,12 +502,13 @@ function IsianRupiah({
   bantuan?: string
   onUbah: (v: number | null) => void
 }) {
+  const t = useTeks(K)
   return (
     <label className="block">
       <span className="flex items-baseline justify-between gap-2">
         <span className="truncate text-[12px] text-ink-2">{label}</span>
         {nilai !== null && (
-          <span className="text-[10px] font-medium text-aksen">dari Anda</span>
+          <span className="text-[10px] font-medium text-aksen">{t.dariAnda}</span>
         )}
       </span>
       <div className="mt-1 flex items-center gap-1 rounded-sm border border-line bg-surface px-2 py-1 focus-within:border-ink-3">
@@ -259,7 +517,7 @@ function IsianRupiah({
           type="text"
           inputMode="numeric"
           value={nilai === null ? '' : nilai.toLocaleString('id-ID')}
-          placeholder="belum diisi"
+          placeholder={t.belumDiisi}
           onChange={(e) => {
             const angka = e.target.value.replace(/[^0-9]/g, '')
             onUbah(angka === '' ? null : Number(angka))
@@ -338,6 +596,7 @@ function Fakta({
   bagus?: boolean
   bantuan?: string
 }) {
+  const t = useTeks(K)
   const ada = nilai !== null && nilai !== undefined
   return (
     <div title={bantuan}>
@@ -350,7 +609,7 @@ function Fakta({
               {satuan && <span className="ml-0.5 text-[10.5px] font-normal text-ink-3">{satuan}</span>}
             </>
           ) : (
-            <span className="text-[11px] font-normal italic text-ink-3">belum ada</span>
+            <span className="text-[11px] font-normal italic text-ink-3">{t.belumAda}</span>
           )}
         </span>
       </div>
@@ -371,12 +630,9 @@ function Fakta({
 
 /** Grafik batang 05.00–22.00. Tumbuh dari bawah, berurutan dari kiri. */
 function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; teramai: number[] }) {
+  const t = useTeks(K)
   if (!profil.length) {
-    return (
-      <p className="text-[12px] italic leading-snug text-ink-3">
-        Belum ada profil jam untuk heksagon ini.
-      </p>
-    )
+    return <p className="text-[12px] italic leading-snug text-ink-3">{t.jamKosong}</p>
   }
   // Sumbu SELALU 05.00-22.00 penuh, jam yang tak berdata digambar sebagai
   // rongga - bukan dimampatkan.
@@ -418,7 +674,7 @@ function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; t
               <div
                 key={jam}
                 className="flex h-full min-w-0 flex-1 flex-col justify-end"
-                title={`${String(jam).padStart(2, '0')}.00 — belum ada transaksi tercatat`}
+                title={t.jamKosongJudul(String(jam).padStart(2, '0'))}
               >
                 {/* Garis rambut di dasar: menempati ruangnya, tetapi tidak
                     pernah bisa disalahbaca sebagai batang pendek. */}
@@ -449,15 +705,12 @@ function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; t
       <div className="mt-1 flex justify-between text-[10px] text-ink-3">
         <span>05.00</span>
         <span className="font-semibold text-ink-2">
-          teramai {teramai.map((j) => `${String(j).padStart(2, '0')}`).join(' · ')}
+          {t.teramai} {teramai.map((j) => `${String(j).padStart(2, '0')}`).join(' · ')}
         </span>
         <span>22.00</span>
       </div>
       {nKosong > 0 && (
-        <p className="mt-1 text-[10px] leading-snug text-ink-3">
-          {nKosong} jam tanpa transaksi tercatat digambar sebagai rongga — bukan
-          berarti sepi, berarti belum ada yang mensurvei jam itu.
-        </p>
+        <p className="mt-1 text-[10px] leading-snug text-ink-3">{t.rongga(nKosong)}</p>
       )}
     </div>
   )
@@ -483,6 +736,7 @@ const BAGIAN_HARI: { nama: string; jam: string; dari: number; sampai: number }[]
 ]
 
 function BagianHari({ profil }: { profil: HasilSimulasi['profil_jam'] }) {
+  const t = useTeks(K)
   if (!profil.length) return null
   const menurutJam = new Map(profil.map((j) => [j.jam, j]))
   const bagian = BAGIAN_HARI.map((b) => {
@@ -501,7 +755,7 @@ function BagianHari({ profil }: { profil: HasilSimulasi['profil_jam'] }) {
   return (
     <div className="mt-5">
       <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-3">
-        Ramainya terbagi begini
+        {t.terbagi}
       </p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {bagian.map((b) => {
@@ -520,7 +774,7 @@ function BagianHari({ profil }: { profil: HasilSimulasi['profil_jam'] }) {
                   className="text-[13px] font-semibold"
                   style={{ color: utama ? 'var(--q-menang)' : 'var(--color-ink)' }}
                 >
-                  {b.nama}
+                  {t.bagianHari[b.nama] ?? b.nama}
                 </span>
                 <span className="tabular text-[10.5px] text-ink-3">{b.jam}</span>
               </p>
@@ -535,8 +789,8 @@ function BagianHari({ profil }: { profil: HasilSimulasi['profil_jam'] }) {
               </div>
               <p className="mt-1 text-[10.5px] leading-snug text-ink-3">
                 {b.rata === null
-                  ? 'belum ada transaksi tercatat'
-                  : `${Math.round(b.rata * 100)}% dari jam tersibuk`}
+                  ? t.takAdaTransaksi
+                  : t.persenTersibuk(Math.round(b.rata * 100))}
               </p>
             </div>
           )
@@ -544,8 +798,11 @@ function BagianHari({ profil }: { profil: HasilSimulasi['profil_jam'] }) {
       </div>
       {puncak?.rata !== null && puncak && (
         <p className="mt-2 text-[12px] leading-snug text-ink-2">
-          Paling ramai di <strong className="font-semibold text-ink">{puncak.nama.toLowerCase()}</strong>{' '}
-          ({puncak.jam}). Kalau jam bukanya harus dipilih, itu jam yang paling sedikit terbuang.
+          {t.palingRamai1}{' '}
+          <strong className="font-semibold text-ink">
+            {(t.bagianHari[puncak.nama] ?? puncak.nama).toLowerCase()}
+          </strong>
+          {t.palingRamai2(puncak.jam)}
         </p>
       )}
     </div>
@@ -568,6 +825,7 @@ function Turunan({
   raksasa?: boolean
   warna?: string
 }) {
+  const t = useTeks(K)
   const berjalan = useAngkaBerjalan(nilai)
   return (
     <div>
@@ -579,7 +837,7 @@ function Turunan({
         style={{ color: warna }}
       >
         {berjalan === null ? (
-          <span className="text-[13px] font-normal italic text-ink-3">belum ada data</span>
+          <span className="text-[13px] font-normal italic text-ink-3">{t.belumAdaData}</span>
         ) : (
           rupiah(Math.round(berjalan))
         )}
@@ -607,6 +865,8 @@ export default function Simulasi({
   // menjawab "kopi & jajanan", lembar ini langsung membuka skenarionya alih-alih
   // menanyakan hal yang sama untuk kesekian kalinya. Tetap bisa diganti lewat
   // tombol "Ganti jenis usaha".
+  const t = useTeks(K)
+  const ist = useIstilah()
   const { akun } = useSesi()
   const [jenis, setJenis] = useState<string | null>(
     akun?.preferensi?.jenis_usaha ?? null,
@@ -703,6 +963,14 @@ export default function Simulasi({
    */
   const [slide, setSlide] = useState(0)
   const rel = useRef<HTMLDivElement>(null)
+  // `fak()` menarik nama DAN satuan sebuah kolom dari kosakata bersama, jadi
+  // "Pesaing sejenis" di sini dan di panel detail tidak bisa berpisah.
+  const fak = (kolom: string) => {
+    const v = ist.variabel(kolom)
+    return { label: v?.nama ?? kolom, satuan: v?.satuan || undefined }
+  }
+  const jenisTerpilih = JENIS.find((j) => j.nilai === jenis)
+  const ing = ist.bahasa === 'en'
 
   const keSlide = (i: number) => {
     const n = rel.current
@@ -727,25 +995,25 @@ export default function Simulasi({
   const SLIDE = [
     {
       kunci: 'hasil',
-      judul: 'Untung atau rugi?',
+      judul: t.slide.hasil,
       aktif: 'bg-gem text-white shadow-[0_5px_14px_-6px_var(--color-gem)]',
       glif: 'M3 13V9.4M8 13V3.4M13 13V6.6',
     },
     {
       kunci: 'peka',
-      judul: 'Kalau ramainya beda',
+      judul: t.slide.peka,
       aktif: 'bg-jebakan text-white shadow-[0_5px_14px_-6px_var(--color-jebakan)]',
       glif: 'M2 11.5c2.5 0 3-6 5.5-6s3 6 5.5 6M2 5.5h.01',
     },
     {
       kunci: 'jam',
-      judul: 'Ramai jam berapa',
+      judul: t.slide.jam,
       aktif: 'bg-pemenang text-white shadow-[0_5px_14px_-6px_var(--color-pemenang)]',
       glif: 'M8 4.9V8l2.1 1.5M13.8 8A5.8 5.8 0 1 1 2.2 8a5.8 5.8 0 0 1 11.6 0Z',
     },
     {
       kunci: 'sekitar',
-      judul: 'Sekitar sini',
+      judul: t.slide.sekitar,
       aktif: 'bg-ink text-surface shadow-[0_5px_14px_-6px_rgb(22_33_28/0.7)]',
       glif: 'M8 1.8 14 5v6l-6 3.2L2 11V5ZM8 8l6-3M8 8v6.2M8 8 2 5',
     },
@@ -754,7 +1022,7 @@ export default function Simulasi({
   return (
     <section
       className="kaca-tebal lembar-naik pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex max-h-[64vh] min-h-[19rem] flex-col overflow-hidden rounded-t-xl border-b-0"
-      aria-label="Simulasi usaha"
+      aria-label={t.simulasiUsaha}
     >
       {/* --- Bilah lembar ---------------------------------------------------- */}
       <div className="flex shrink-0 items-center gap-3 border-b border-line/70 px-4 py-2.5">
@@ -772,11 +1040,11 @@ export default function Simulasi({
               strokeLinejoin="round"
             />
           </svg>
-          Detail lokasi
+          {t.detailLokasi}
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="eyebrow">Simulasi usaha</p>
+          <p className="eyebrow">{t.simulasiUsaha}</p>
           <p className="truncate text-[12px] font-medium text-ink-2">
             {hasil ? kodeLokasi(h3, hasil.kawasan) : nomorLokasi(h3)}
             {h3Banding && hasilBanding ? ` vs ${kodeLokasi(h3Banding, hasilBanding.kawasan)}` : ''}
@@ -788,19 +1056,19 @@ export default function Simulasi({
             onClick={onLepasBanding}
             className="shrink-0 cursor-pointer rounded-full border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-2 transition-colors hover:border-line-2 hover:text-ink"
           >
-            Lepas pembanding
+            {t.lepasBanding}
           </button>
         ) : (
           jenis && (
             <span className="hidden shrink-0 rounded-full bg-surface-2 px-2.5 py-1 text-[11.5px] text-ink-3 lg:inline">
-              Klik heksagon lain di peta untuk membandingkan
+              {t.klikLain}
             </span>
           )
         )}
         {hasil && <Badge badge={hasil.keyakinan} />}
         <button
           onClick={onTutup}
-          aria-label="Tutup simulasi"
+          aria-label={t.tutup}
           className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden>
@@ -815,10 +1083,10 @@ export default function Simulasi({
         // orang menutup lembar ini sebelum membacanya. Satu pertanyaan dulu.
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
           <p className="mb-1 text-center text-[19px] font-semibold text-ink">
-            Mau buka usaha apa di sini?
+            {t.mauBuka}
           </p>
           <p className="mb-5 text-center text-[13px] text-ink-2">
-            Pilih satu, lalu kami hitungkan untung ruginya pakai angka lokasi ini.
+            {t.pilihSatu}
           </p>
           {/* Dikelompokkan, dan kartunya dikecilkan.
 
@@ -834,7 +1102,7 @@ export default function Simulasi({
           <div className="mx-auto max-w-[52rem] space-y-5">
             {KELOMPOK_JENIS.map((kel) => (
               <div key={kel}>
-                <p className="eyebrow mb-2">{kel}</p>
+                <p className="eyebrow mb-2">{t.kelompok[kel] ?? kel}</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {JENIS.filter((j) => j.kelompok === kel).map((j) => (
                     <button
@@ -856,10 +1124,10 @@ export default function Simulasi({
                       </span>
                       <span className="min-w-0">
                         <span className="block text-[13.5px] font-semibold leading-tight">
-                          {j.label}
+                          {ing ? j.labelEn : j.label}
                         </span>
                         <span className="mt-0.5 block truncate text-[11.5px] leading-snug text-ink-3">
-                          {j.contoh}
+                          {ing ? j.contohEn : j.contoh}
                         </span>
                       </span>
                     </button>
@@ -872,7 +1140,7 @@ export default function Simulasi({
       ) : galat ? (
         <p className="px-5 py-8 text-center text-[13.5px] leading-snug text-ink-2">{galat}</p>
       ) : !hasil ? (
-        <Memuat baris={3} teks="Menghitung skenario…" />
+        <Memuat baris={3} teks={t.menghitung} />
       ) : (
         <>
           {/* --- Navigasi slide ---------------------------------------------- */}
@@ -900,7 +1168,7 @@ export default function Simulasi({
               </button>
             ))}
             <span className="ml-auto hidden text-[11px] text-ink-3 lg:inline">
-              geser untuk melihat semuanya
+              {t.geser}
             </span>
           </div>
 
@@ -935,11 +1203,11 @@ export default function Simulasi({
                     <p className="text-[13px] font-medium text-ink-2">
                       {bisaLaba
                         ? untung
-                          ? 'Perkiraan sisa uang tiap bulan'
-                          : 'Perkiraan kekurangan tiap bulan'
+                          ? t.sisaUang
+                          : t.kekurangan
                         : bisaImpas
-                          ? 'Pembeli per hari agar sewa tertutup'
-                          : 'Belum bisa dihitung'}
+                          ? t.pembeliImpas
+                          : t.belumBisa}
                     </p>
 
                     {bisaLaba ? (
@@ -953,7 +1221,7 @@ export default function Simulasi({
                       <p className="papan tabular mt-1 text-[44px] leading-none text-ink">
                         {Math.ceil(impasPembeli as number)}
                         <span className="ml-1.5 text-[15px] font-normal text-ink-2">
-                          orang / hari
+                          {t.orangHari}
                         </span>
                       </p>
                     ) : (
@@ -963,11 +1231,11 @@ export default function Simulasi({
                     <p className="mt-1 text-[12px] leading-snug text-ink-2">
                       {bisaLaba
                         ? untung
-                          ? 'Sudah dikurangi sewa. Belum dikurangi gaji, listrik, dan bahan.'
-                          : 'Dengan asumsi sekarang, omzetnya belum menutup sewa.'
+                          ? t.untungIsi
+                          : t.rugiIsi
                         : bisaImpas
-                          ? 'Sekadar menutup sewa — belum untung. Dihitung dari sewa dan harga jual yang Anda isi, tanpa satu pun tebakan kami.'
-                          : 'Isi sewa yang ditawarkan dan harga rata-rata per pembeli di bawah. Keduanya ada di tangan Anda, bukan di peta.'}
+                          ? t.impasIsi
+                          : t.kosongIsi}
                     </p>
 
                     {hasil.hasil.omzet_bulanan !== null && hasil.hasil.sewa_bulanan !== null && (
@@ -981,8 +1249,12 @@ export default function Simulasi({
                           />
                         </div>
                         <p className="mt-1.5 flex items-baseline justify-between gap-2 text-[12px] text-ink-2">
-                          <span>Sewa {rupiah(hasil.hasil.sewa_bulanan)}</span>
-                          <span>Omzet {rupiah(hasil.hasil.omzet_bulanan)}</span>
+                          <span>
+                            {t.sewaLabel} {rupiah(hasil.hasil.sewa_bulanan)}
+                          </span>
+                          <span>
+                            {t.omzetLabel} {rupiah(hasil.hasil.omzet_bulanan)}
+                          </span>
                         </p>
                       </div>
                     )}
@@ -990,7 +1262,7 @@ export default function Simulasi({
 
                   {banding && (
                     <div className="masuk mt-3 rounded-lg border border-line bg-surface-2/60 px-4 py-3">
-                      <p className="eyebrow mb-1">Pembanding</p>
+                      <p className="eyebrow mb-1">{t.pembanding}</p>
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-[12px] text-ink-3">
                           {kodeLokasi(banding.h3_index, banding.kawasan)}
@@ -1012,8 +1284,8 @@ export default function Simulasi({
                       {laba !== null && banding.hasil.laba_kotor_bulanan !== null && (
                         <p className="mt-1 text-[12px] leading-snug text-ink-2">
                           {laba >= banding.hasil.laba_kotor_bulanan
-                            ? 'Lokasi yang Anda buka lebih baik.'
-                            : 'Pembandingnya lebih baik untuk skenario ini.'}
+                            ? t.andaLebihBaik
+                            : t.pembandingLebihBaik}
                         </p>
                       )}
                     </div>
@@ -1039,23 +1311,21 @@ export default function Simulasi({
                       }}
                     >
                       <p className="text-[12px] font-medium text-ink-2">
-                        Supaya sewanya tertutup, Anda harus menangkap
+                        {t.supayaTertutup}
                       </p>
                       <p className="papan tabular mt-1 text-[34px] leading-none">
                         {angka(impas, 1)}%
                       </p>
                       <p className="mt-1 text-[12px] leading-snug text-ink-2">
-                        dari seluruh uang belanja yang berputar di sini.{' '}
-                        {impas > 25
-                          ? 'Itu porsi yang sangat besar untuk pendatang baru.'
-                          : `Perkiraan Anda sekarang ${angka(pangsa, 1)}%.`}
+                        {t.dariSeluruh}{' '}
+                        {impas > 25 ? t.porsiBesar : t.perkiraanSekarang(angka(pangsa, 1) ?? '—')}
                       </p>
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-line p-3.5">
-                      <p className="eyebrow text-[9.5px]">Omzet tiap hari</p>
+                      <p className="eyebrow text-[9.5px]">{t.omzetHari}</p>
                       <p className="papan tabular mt-1 text-[19px] leading-none">
                         {hasil.hasil.omzet_harian === null
                           ? '—'
@@ -1063,7 +1333,7 @@ export default function Simulasi({
                       </p>
                     </div>
                     <div className="rounded-lg border border-line p-3.5">
-                      <p className="eyebrow text-[9.5px]">Pembeli / hari agar impas</p>
+                      <p className="eyebrow text-[9.5px]">{t.pembeliHari}</p>
                       <p className="papan tabular mt-1 text-[19px] leading-none">
                         {hasil.hasil.pembeli_impas_per_hari === null
                           ? '—'
@@ -1071,38 +1341,39 @@ export default function Simulasi({
                       </p>
                       <p className="mt-1 text-[10.5px] leading-snug text-ink-3">
                         {hasil.sumber.harga_rata_rata === 'pengguna'
-                          ? `dari harga rata-rata ${rupiah(hasil.masukan.harga_rata_rata)} yang Anda isi`
+                          ? t.dariHargaAnda(rupiah(hasil.masukan.harga_rata_rata) ?? '—')
                           : hasil.sumber.harga_rata_rata === 'data'
-                            ? `dari belanja rata-rata ${rupiah(hasil.terukur.nominal_median_struk)} di lokasi ini`
-                            : 'isi harga rata-rata per pembeli untuk menghitungnya'}
+                            ? t.dariBelanja(rupiah(hasil.terukur.nominal_median_struk) ?? '—')
+                            : t.isiHarga}
                       </p>
                     </div>
                   </div>
 
                   {hasil.hasil.sewa_per_m2_tersirat !== null && (
                     <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-[12px] leading-snug text-ink-2">
-                      Sewa yang Anda isi setara{' '}
+                      {t.sewaSetara}{' '}
                       <strong className="font-semibold text-ink">
                         {rupiah(Math.round(hasil.hasil.sewa_per_m2_tersirat))}/m²
                       </strong>
                       {hasil.terukur.harga_sewa_per_m2 !== null ? (
                         <>
-                          {' '}— sewa terukur di heksagon ini{' '}
-                          {rupiah(Math.round(hasil.terukur.harga_sewa_per_m2))}/m².
+                          {t.sewaTerukur(
+                            `${rupiah(Math.round(hasil.terukur.harga_sewa_per_m2))}/m²`,
+                          )}
                         </>
                       ) : (
-                        <> — belum ada sewa terukur di heksagon ini untuk dibandingkan.</>
+                        <>{t.sewaTakTerukur}</>
                       )}
                     </p>
                   )}
 
                   {hasil.hasil.sewa_tahun_pertama !== null && (
                     <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-[12px] leading-snug text-ink-2">
-                      Sewa tahun pertama{' '}
+                      {t.sewaTahun1}{' '}
                       <strong className="font-semibold text-ink">
                         {rupiah(hasil.hasil.sewa_tahun_pertama)}
-                      </strong>{' '}
-                      — ruko lazim ditagih setahun di muka.
+                      </strong>
+                      {t.sewaTahun1Ekor}
                     </p>
                   )}
                 </div>
@@ -1113,41 +1384,42 @@ export default function Simulasi({
             <div className="min-w-full shrink-0 snap-center overflow-y-auto px-5 py-4">
               <div className="mx-auto max-w-[46rem]">
                 <p className="text-[14.5px] font-semibold text-ink">
-                  Kalau Anda dapat lebih ramai — atau lebih sepi
+                  {t.pekaJudul}
                 </p>
                 <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
-                  Rumus yang sama, hanya perkiraan ramainya yang diganti. Bandingkan
-                  dengan perasaan Anda sendiri soal berapa yang realistis.
+                  {t.pekaIsi}
                 </p>
                 <div className="mt-4 space-y-2.5">
-                  {hasil.sensitivitas.map((t) => {
-                    const positif = (t.laba_kotor_bulanan ?? 0) > 0
-                    const kini = Math.abs(t.pangsa_persen - pangsa) < 0.05
+                  {hasil.sensitivitas.map((sn) => {
+                    const positif = (sn.laba_kotor_bulanan ?? 0) > 0
+                    const kini = Math.abs(sn.pangsa_persen - pangsa) < 0.05
                     const puncak = Math.max(
                       ...hasil.sensitivitas.map((x) => Math.abs(x.laba_kotor_bulanan ?? 0)),
                       1,
                     )
-                    const lebar = ((Math.abs(t.laba_kotor_bulanan ?? 0) / puncak) * 50).toFixed(1)
+                    const lebar = ((Math.abs(sn.laba_kotor_bulanan ?? 0) / puncak) * 50).toFixed(1)
                     return (
                       <div
-                        key={t.pangsa_persen}
+                        key={sn.pangsa_persen}
                         className={`rounded-lg px-3.5 py-2.5 ${kini ? 'bg-surface-2' : ''}`}
                       >
                         <div className="flex items-baseline justify-between gap-3">
                           <span className="tabular text-[13px] text-ink-2">
-                            Menangkap{' '}
+                            {t.menangkap}{' '}
                             <strong className="font-semibold text-ink">
-                              {angka(t.pangsa_persen, 1)}%
+                              {angka(sn.pangsa_persen, 1)}%
                             </strong>
-                            {kini && <span className="ml-1.5 text-[11px] text-ink-3">perkiraan Anda</span>}
+                            {kini && (
+                              <span className="ml-1.5 text-[11px] text-ink-3">{t.perkiraanAnda}</span>
+                            )}
                           </span>
                           <span
                             className="tabular text-[14px] font-semibold"
                             style={{ color: positif ? 'var(--q-menang)' : 'var(--q-jebakan)' }}
                           >
-                            {t.laba_kotor_bulanan === null
+                            {sn.laba_kotor_bulanan === null
                               ? '—'
-                              : `${positif ? 'sisa ' : 'kurang '}${rupiah(Math.abs(t.laba_kotor_bulanan))}`}
+                              : `${positif ? t.sisa : t.kurang}${rupiah(Math.abs(sn.laba_kotor_bulanan))}`}
                           </span>
                         </div>
                         {/* Batang dua arah dari tengah: rugi ke kiri, untung ke
@@ -1173,11 +1445,8 @@ export default function Simulasi({
             {/* ================= 3. Jam ===================================== */}
             <div className="min-w-full shrink-0 snap-center overflow-y-auto px-5 py-4">
               <div className="mx-auto max-w-[46rem]">
-                <p className="text-[14.5px] font-semibold text-ink">Kapan uangnya berpindah</p>
-                <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
-                  Dibaca dari jam yang tercetak di struk — kapan orang benar-benar
-                  membayar, bukan kapan tokonya buka.
-                </p>
+                <p className="text-[14.5px] font-semibold text-ink">{t.jamJudul}</p>
+                <p className="mt-1 text-[12.5px] leading-snug text-ink-2">{t.jamIsi}</p>
                 <div className="mt-4">
                   <GrafikJam profil={hasil.profil_jam} teramai={hasil.jam_teramai} />
                 </div>
@@ -1198,49 +1467,46 @@ export default function Simulasi({
 
                 <div className="mt-5 grid gap-x-8 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3">
                   <Fakta
-                    label="Uang berpindah per jam"
+                    {...fak('belanja_per_jam')}
+                    satuan="Rp"
                     nilai={hasil.terukur.belanja_per_jam}
-                    satuan="Rp"
                     bagian={null}
-                    bantuan="Jumlah rupiah yang berpindah tangan di petak ini tiap jam, dari struk yang tercatat."
+                    bantuan={t.bJam}
                   />
                   <Fakta
-                    label="Belanja per struk"
+                    {...fak('nominal_median_struk')}
+                    satuan="Rp"
                     nilai={hasil.terukur.nominal_median_struk}
-                    satuan="Rp"
                     bagian={null}
-                    bantuan="Nilai tengah satu transaksi. Menentukan berapa pembeli yang dibutuhkan untuk omzet tertentu."
+                    bantuan={t.bStruk}
                   />
                   <Fakta
-                    label="Harga per porsi di sekitar"
-                    nilai={hasil.terukur.harga_median_porsi}
+                    {...fak('harga_median_porsi')}
                     satuan="Rp"
+                    nilai={hasil.terukur.harga_median_porsi}
                     bagian={null}
-                    bantuan="Harga tengah satu porsi di warung sekitar - pembanding sebelum menentukan harga Anda sendiri."
+                    bantuan={t.bPorsi}
                   />
                   {L?.rasio_weekend !== null && L?.rasio_weekend !== undefined && (
                     <Fakta
-                      label="Akhir pekan vs hari kerja"
+                      {...fak('rasio_weekend')}
                       nilai={L.rasio_weekend}
-                      satuan="x"
                       bagian={L.rasio_weekend / 2}
-                      bantuan="1,0 berarti akhir pekan sama ramai dengan hari kerja. Di atas 1 berarti lebih bergantung pada Sabtu-Minggu."
+                      bantuan={t.bWeekend}
                     />
                   )}
                   <Fakta
-                    label="Penumpang stasiun / hari"
+                    {...fak('ridership_proksi')}
                     nilai={L?.ridership_proksi}
-                    satuan="orang"
                     bagian={null}
-                    bantuan="Perkiraan orang yang melewati simpul terdekat tiap hari."
+                    bantuan={t.bRidership}
                   />
                   <Fakta
-                    label="Jalan kaki ke stasiun"
+                    {...fak('waktu_jalan_menit')}
                     nilai={L?.waktu_jalan_menit}
-                    satuan="menit"
                     bagian={null}
                     bagus={false}
-                    bantuan="Lewat jalan yang benar-benar ada, bukan garis lurus."
+                    bantuan={t.bJalan}
                   />
                 </div>
               </div>
@@ -1249,21 +1515,18 @@ export default function Simulasi({
             {/* ================= 4. Sekitar sini ============================ */}
             <div className="min-w-full shrink-0 snap-center overflow-y-auto px-5 py-4">
               <div className="mx-auto max-w-[52rem]">
-                <p className="text-[14.5px] font-semibold text-ink">Keadaan di sekitar lokasi</p>
-                <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
-                  Seluruhnya terukur. Yang belum ada datanya ditulis apa adanya — tidak
-                  ditebak.
-                </p>
+                <p className="text-[14.5px] font-semibold text-ink">{t.sekitarJudul}</p>
+                <p className="mt-1 text-[12.5px] leading-snug text-ink-2">{t.sekitarIsi}</p>
                 <div className="mt-4 grid gap-x-8 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3">
-                  <Fakta label="Penduduk di sekitar" nilai={L?.populasi_100m} satuan="jiwa" bagian={null} />
-                  <Fakta label="Penduduk usia kerja" nilai={L?.populasi_usia_produktif} satuan="jiwa" bagian={null} />
-                  <Fakta label="Jalan kaki ke stasiun" nilai={L?.waktu_jalan_menit} satuan="menit" bagian={null} />
-                  <Fakta label="Pesaing sejenis" nilai={L?.n_kompetitor_langsung} satuan="tempat" bagian={null} bagus={false} />
-                  <Fakta label="Warung makan menetap" nilai={L?.n_menetap_kuliner} satuan="tempat" bagian={null} />
-                  <Fakta label="Total tempat usaha" nilai={L?.kepadatan_poi_total} satuan="tempat" bagian={null} />
-                  <Fakta label="Penumpang stasiun / hari" nilai={L?.ridership_proksi} satuan="orang" bagian={null} />
-                  <Fakta label="Banyaknya kantor" nilai={L?.kepadatan_kantor} bagian={null} />
-                  <Fakta label="Banyaknya kos" nilai={L?.kepadatan_kos} bagian={null} />
+                  <Fakta {...fak('pop_100m')} nilai={L?.populasi_100m} bagian={null} />
+                  <Fakta {...fak('pop_usia_produktif')} nilai={L?.populasi_usia_produktif} bagian={null} />
+                  <Fakta {...fak('waktu_jalan_menit')} nilai={L?.waktu_jalan_menit} bagian={null} />
+                  <Fakta {...fak('n_kompetitor_langsung')} nilai={L?.n_kompetitor_langsung} bagian={null} bagus={false} />
+                  <Fakta {...fak('n_menetap_kuliner')} nilai={L?.n_menetap_kuliner} bagian={null} />
+                  <Fakta {...fak('kepadatan_poi_total')} nilai={L?.kepadatan_poi_total} bagian={null} />
+                  <Fakta {...fak('ridership_proksi')} nilai={L?.ridership_proksi} bagian={null} />
+                  <Fakta {...fak('kepadatan_kantor')} nilai={L?.kepadatan_kantor} bagian={null} />
+                  <Fakta {...fak('kepadatan_kos')} nilai={L?.kepadatan_kos} bagian={null} />
                 </div>
 
                 {hasil.peringatan.length > 0 && (
@@ -1300,39 +1563,47 @@ export default function Simulasi({
           <div className="shrink-0 border-t border-line/70 bg-surface-2/50 px-5 py-3">
             <div className="mx-auto flex max-w-[60rem] flex-wrap items-end gap-x-6 gap-y-3">
               <div className="shrink-0">
-                <p className="eyebrow text-[9.5px]">Rencana Anda</p>
+                <p className="eyebrow text-[9.5px]">{t.rencanaAnda}</p>
                 <button
                   onClick={() => setJenis(null)}
                   className="mt-0.5 cursor-pointer text-[13px] font-semibold text-ink underline decoration-line-2 underline-offset-2 hover:decoration-ink"
                 >
-                  {hasil.masukan.label_usaha}
+                  {/* Label dari `JENIS`, bukan dari respons. Backend
+                      mengirimkan namanya dalam bahasa Indonesia, dan tombol ini
+                      satu-satunya tempat nama itu tampil - jadi ia diambil dari
+                      daftar yang sama yang barusan diklik orangnya. */}
+                  {jenisTerpilih
+                    ? ing
+                      ? jenisTerpilih.labelEn
+                      : jenisTerpilih.label
+                    : hasil.masukan.label_usaha}
                 </button>
               </div>
               <div className="min-w-[9rem] flex-1">
                 <IsianRupiah
-                  label="Sewa per bulan"
+                  label={t.sewaBulan}
                   nilai={sewaDiisi}
-                  bantuan="Angka dari pemiliknya, bukan dari peta"
+                  bantuan={t.bSewa}
                   onUbah={setSewaDiisi}
                 />
               </div>
               <div className="min-w-[9rem] flex-1">
                 <IsianRupiah
-                  label="Harga rata-rata"
+                  label={t.hargaRata}
                   nilai={hargaDiisi}
-                  bantuan="Rencana harga jual Anda sendiri"
+                  bantuan={t.bHarga}
                   onUbah={setHargaDiisi}
                 />
               </div>
               <div className="min-w-[7rem] flex-1">
-                <Penggeser label="Jam buka" nilai={jam} min={4} maks={24} satuan="jam" onUbah={setJam} />
+                <Penggeser label={t.jamBuka} nilai={jam} min={4} maks={24} satuan={t.satuanJam} onUbah={setJam} />
               </div>
               <div className="min-w-[8rem] flex-1">
-                <Penggeser label="Luas tempat" nilai={luas} min={4} maks={120} satuan="m2" onUbah={setLuas} />
+                <Penggeser label={t.luasTempat} nilai={luas} min={4} maks={120} satuan="m2" onUbah={setLuas} />
               </div>
               <div className="min-w-[8rem] flex-1">
                 <Penggeser
-                  label="Perkiraan ramai"
+                  label={t.perkiraanRamai}
                   nilai={pangsa}
                   min={1}
                   maks={40}
@@ -1342,7 +1613,7 @@ export default function Simulasi({
               </div>
               <div className="min-w-[8rem] flex-1">
                 <Penggeser
-                  label="Untung per penjualan"
+                  label={t.untungPer}
                   nilai={margin}
                   min={5}
                   maks={80}

@@ -35,7 +35,7 @@ import { api } from '../lib/api'
 import { rupiah } from '../lib/format'
 import type { HiddenGem, SkorHeksagon, TitikKuadran } from '../types'
 import { Ajakan, Badge, Glif, Kosong, MemuatNama } from './primitif'
-import { useNamaZona, useTeks } from '../lib/bahasa'
+import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 
 type Isi =
   | { jenis: 'skor'; baris: SkorHeksagon[] }
@@ -95,6 +95,14 @@ const K = {
       WASPADA: 'Pergantian usaha lebih sering daripada 75% area lain',
       AMAN: 'Pergantian usaha wajar',
     } as Record<string, string>,
+    hargaKosong: 'Belum ada heksagon berharga di kawasan mana pun',
+    cakupanHarga: (persen: string, n: string) => ` · cakupan data ${persen}% dari ${n} heksagon`,
+    zonaKosong: 'Belum ada heksagon berzona',
+    terdata: (persen: string) => `aturan tata ruangnya sudah terdata di ${persen}% lokasi`,
+    izinkan: (n: number) => `${n} mengizinkan`,
+    larang: (n: number) => `${n} melarang`,
+    takTahu: (n: number) => `${n} belum diketahui`,
+    takAdaRdtr: (n: number) => `${n} belum ada RDTR digital`,
     kosong: {
       risikoJudul: 'Tidak ada peringatan di sini',
       gemJudul: 'Belum ada hidden gem',
@@ -129,6 +137,14 @@ const K = {
       WASPADA: 'Businesses change hands more often than in 75% of other areas',
       AMAN: 'Business turnover is normal',
     } as Record<string, string>,
+    hargaKosong: 'No priced hexagon in any area yet',
+    cakupanHarga: (persen: string, n: string) => ` · data coverage ${persen}% of ${n} hexagons`,
+    zonaKosong: 'No zoned hexagon yet',
+    terdata: (persen: string) => `zoning rules recorded for ${persen}% of locations`,
+    izinkan: (n: number) => `${n} allow`,
+    larang: (n: number) => `${n} prohibit`,
+    takTahu: (n: number) => `${n} unknown`,
+    takAdaRdtr: (n: number) => `${n} without digital RDTR`,
     kosong: {
       risikoJudul: 'No warnings here',
       gemJudul: 'No hidden gems yet',
@@ -155,6 +171,7 @@ export default function DaftarLokasi({
 }) {
   const namaZona = useNamaZona()
   const t = useTeks(K)
+  const { bahasa } = useBahasa()
   /**
    * Kuadran yang sedang disaring di dalam daftar. null = semuanya.
    *
@@ -460,7 +477,7 @@ export default function DaftarLokasi({
                     <p
                       className="mt-1 text-[13px] font-semibold leading-snug"
                       style={{ color: KUADRAN[s.kuadran].warna ?? 'var(--color-ink-3)' }}
-                      title={KUADRAN[s.kuadran].arti}
+                      title={bahasa === 'en' ? KUADRAN[s.kuadran].artiEn : KUADRAN[s.kuadran].arti}
                     >
                       {namaZona(s.kuadran)}
                     </p>
@@ -510,6 +527,7 @@ function SaringZona({
   t: (typeof K)['id']
 }) {
   const namaZona = useNamaZona()
+  const { bahasa } = useBahasa()
   const [buka, setBuka] = useState(false)
   const wadah = useRef<HTMLDivElement>(null)
 
@@ -600,7 +618,7 @@ function SaringZona({
                   onUbah(nilai === b.kunci ? null : b.kunci)
                   setBuka(false)
                 }}
-                title={KUADRAN[b.kunci].ringkas}
+                title={bahasa === 'en' ? KUADRAN[b.kunci].ringkasEn : KUADRAN[b.kunci].ringkas}
                 className={`flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-surface-2 ${
                   nilai === b.kunci ? 'text-ink' : 'text-ink-2'
                 }`}
@@ -705,12 +723,12 @@ function RentangKawasan({
   baris: Record<string, unknown>[]
   kawasanAktif: string
 }) {
+  const t = useTeks(K)
   const berisi = baris.filter((r) => {
     const w = r.sewa_per_m2 as Record<string, number | null> | undefined
     return w?.p50 != null
   })
-  if (berisi.length === 0)
-    return <Kosong teks="Belum ada heksagon berharga di kawasan mana pun" />
+  if (berisi.length === 0) return <Kosong teks={t.hargaKosong} />
 
   const semua = berisi.flatMap((r) => {
     const w = r.sewa_per_m2 as Record<string, number>
@@ -748,8 +766,8 @@ function RentangKawasan({
                 />
               </div>
               <p className="tabular mt-1 text-[12.5px] text-ink-3">
-                {rupiah(w.p25)} – {rupiah(w.p75)} · cakupan data{' '}
-                {(cakupan * 100).toFixed(0)}% dari {String(r.total_heksagon)} heksagon
+                {rupiah(w.p25)} – {rupiah(w.p75)}
+                {t.cakupanHarga((cakupan * 100).toFixed(0), String(r.total_heksagon))}
               </p>
             </li>
           )
@@ -773,7 +791,8 @@ function Cakupan({
   baris: Record<string, unknown>[]
   kawasanAktif: string
 }) {
-  if (baris.length === 0) return <Kosong teks="Belum ada heksagon berzona" />
+  const t = useTeks(K)
+  if (baris.length === 0) return <Kosong teks={t.zonaKosong} />
 
   return (
     <div className="p-4">
@@ -791,28 +810,28 @@ function Cakupan({
               <div className="mb-1 flex items-baseline justify-between gap-2">
                 <span className="text-[14.5px] font-medium">{nama}</span>
                 <span className="tabular text-[13px] text-ink-3">
-                  aturan tata ruangnya sudah terdata di {(cakupan * 100).toFixed(0)}% lokasi
+                  {t.terdata((cakupan * 100).toFixed(0))}
                 </span>
               </div>
               <div className="flex h-2.5 overflow-hidden rounded-xs bg-ground-2">
                 <span
                   className="bg-[#c9dbd4]"
                   style={{ width: `${(diizinkan / total) * 100}%` }}
-                  title={`${diizinkan} mengizinkan`}
+                  title={t.izinkan(diizinkan)}
                 />
                 <span
                   className="bg-bahaya"
                   style={{ width: `${(dilarang / total) * 100}%` }}
-                  title={`${dilarang} melarang`}
+                  title={t.larang(dilarang)}
                 />
                 <span
                   className="arsir bg-line-2 text-ink-3"
                   style={{ width: `${(takTahu / total) * 100}%` }}
-                  title={`${takTahu} belum ada RDTR digital`}
+                  title={t.takAdaRdtr(takTahu)}
                 />
               </div>
               <p className="tabular mt-1 text-[12.5px] text-ink-3">
-                {diizinkan} mengizinkan · {dilarang} melarang · {takTahu} belum diketahui
+                {t.izinkan(diizinkan)} · {t.larang(dilarang)} · {t.takTahu(takTahu)}
               </p>
             </li>
           )

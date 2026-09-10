@@ -38,7 +38,18 @@ import {
   type ReactNode,
 } from 'react'
 
-import { KUADRAN } from '../config'
+import {
+  ARTI_INDEKS,
+  ARTI_INDEKS_EN,
+  ARTI_KODE,
+  ARTI_KODE_EN,
+  ARTI_VARIABEL,
+  ARTI_VARIABEL_EN,
+  KUADRAN,
+  TANYA_INDEKS,
+  TANYA_INDEKS_EN,
+  kataIndeks,
+} from '../config'
 
 export type Bahasa = 'id' | 'en'
 
@@ -113,6 +124,48 @@ export function useNamaZona(): (kunci: string) => string {
 export function useTeks<T>(kamus: Record<Bahasa, T>): T {
   const { bahasa } = useContext(Konteks)
   return kamus[bahasa]
+}
+
+/**
+ * Kosakata BERSAMA - 43 nama variabel, keempat indeks, dan kata-kata yang
+ * menerjemahkan angka 0-1 - dalam bahasa yang sedang berlaku.
+ *
+ * Kenapa satu kait, bukan enam: yang memakainya cuma panel detail, simulasi,
+ * dan komparasi, dan ketiganya memakai SELURUHNYA sekaligus. Enam kait berarti
+ * enam baris `useX()` di kepala tiap komponen dan enam kesempatan salah satu
+ * lupa ditulis - dan yang lupa itu tidak gagal, ia menampilkan bahasa
+ * Indonesia di layar berbahasa Inggris.
+ *
+ * Yang TIDAK ada di sini: `TINGGI_BAIK`. Ia menentukan warna bilah, bukan kata
+ * - dan arah "tinggi itu kabar baik" sama di kedua bahasa.
+ */
+export function useIstilah() {
+  const { bahasa } = useContext(Konteks)
+  return useMemo(() => {
+    const en = bahasa === 'en'
+    return {
+      bahasa,
+      /** Nama awam sebuah KOLOM basis data, berikut satuannya. */
+      variabel: (kolom: string) => {
+        const dasar = ARTI_VARIABEL[kolom]
+        if (!dasar) return null
+        const alih = en ? ARTI_VARIABEL_EN[kolom] : null
+        return {
+          kode: dasar.kode,
+          nama: alih?.nama ?? dasar.nama,
+          satuan: alih?.satuan ?? dasar.satuan,
+        }
+      },
+      /** Nama awam sebuah KODE variabel (D01, B07, ...). */
+      kode: (kode: string) => (en ? ARTI_KODE_EN[kode] : ARTI_KODE[kode]) ?? kode,
+      /** Arti singkat sebuah indeks, untuk dipakai di tengah kalimat. */
+      indeks: (kode: string) => (en ? ARTI_INDEKS_EN[kode] : ARTI_INDEKS[kode]) ?? kode,
+      /** Pertanyaan yang sebenarnya dijawab indeks itu. */
+      tanya: (kode: string) => (en ? TANYA_INDEKS_EN[kode] : TANYA_INDEKS[kode]) ?? '',
+      /** Angka 0-1 jadi kata, sesuai kosakata indeksnya. */
+      kata: (kode: string, nilai: number | null) => kataIndeks(kode, nilai, bahasa),
+    }
+  }, [bahasa])
 }
 
 /**
