@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 231 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 239 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -58,9 +58,12 @@ frontend/    React + Vite + MapLibre GL. Sengaja ramping; berkas baru butuh alas
              components/Premium.tsx — filter multi-kawasan, komparasi, pemantauan, riwayat
              components/Gerbang.tsx — halaman pertama, enam bagian, tiap bagian punya
                                       transisi masuknya sendiri (lihat kepala berkasnya)
-             lib/bahasa.tsx        — dua bahasa (id/en). Tiap komponen memegang kamusnya
-                                      SENDIRI lewat `useTeks(K)`; kalimat tanpa pasangan
-                                      Inggrisnya gagal di tsc, bukan tampil sebagai kunci
+             lib/bahasa.tsx        — dua pilihan yang MILIK PEMBACA: bahasa (id/en) dan
+                                      tema (terang/gelap, bawaan gelap). Tiap komponen
+                                      memegang kamusnya SENDIRI lewat `useTeks(K)`;
+                                      kalimat tanpa pasangan Inggrisnya gagal di tsc,
+                                      bukan tampil sebagai kunci. Tema TIDAK diturunkan
+                                      dari gaya basemap — lihat catatan di App.tsx
              components/GerbangPeta.tsx — enam kartu Solusi. Yang bergerak di atas tiap
                                       potret adalah heksagon SUNGGUHAN kartu itu, pada
                                       posisi piksel yang sama dengan di dalam WebP-nya,
@@ -128,8 +131,9 @@ Frontend menggambar tirainya DARI daftar itu, bukan dari tebakannya sendiri.
 | Kartu harga per heksagon (`/pricelens/{h3}`) | Layer harga di PETA |
 | Commuter Clock per jam (`/hex/{h3}/commuter-clock`) | Ember 4-slot di respons detail |
 | Simulasi usaha (`/hex/{h3}/simulasi`) | — |
-| 43 variabel + faktor skor | Skor, kuadran, ZoneGuard, RiskRadar, keempat indeks |
+| 43 variabel + faktor skor | Skor, kuadran, ZoneGuard, RiskRadar |
 | Komparasi, riwayat, dinamika, pemantauan, PDF | Grid heksagon, daftar lokasi, pencarian, Konsultan AI |
+| **Nilai keempat indeks + penjelasan kuadran** (11 Sep 2026) | **Cakupan indeks & cakupan prestise** — keduanya keterangan MUTU, tidak memuat satu pun nilai |
 
 Seluruhnya dijaga `wajib_akses_penuh()`, yang meloloskan DUA jalan: langganan
 aktif, atau token yang pernah dibelanjakan untuk heksagon itu. Satu fungsi untuk
@@ -392,7 +396,7 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 231 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 239 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit
