@@ -690,7 +690,7 @@ export default function PanelAI({
                     />
                   </svg>
                   <PapanNama teks="Loconomics" sebagai="div" kelas="text-[34px] leading-none text-ink" />
-                  <span className="g-ai-sapuan pointer-events-none absolute inset-y-[-6px] inset-x-[-14px]" aria-hidden />
+                  <span className="g-ai-sapuan pointer-events-none absolute inset-y-[-22px] inset-x-[-18px]" aria-hidden />
                 </span>
 
                 <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-3">

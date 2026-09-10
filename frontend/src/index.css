@@ -1949,10 +1949,17 @@ input:focus-visible {
 .g-ai-sapuan {
   background: linear-gradient(
     104deg,
-    transparent 38%,
-    rgb(255 255 255 / 0.42) 50%,
-    transparent 62%
+    transparent 40%,
+    rgb(255 255 255 / 0.5) 50%,
+    transparent 60%
   );
+  /* DIREDAM di tepi atas dan bawahnya. Tanpa masker ini yang melintas bukan
+     kilau melainkan PELAT abu-abu: pitanya memudar ke samping mengikuti
+     gradiennya, tetapi tepi atas dan bawahnya berhenti mendadak di batas
+     kotaknya sendiri - dan dua garis lurus mendatar itulah yang membuatnya
+     terbaca sebagai benda persegi. Terlihat begitu di potret. */
+  mask-image: linear-gradient(to bottom, transparent, #000 34%, #000 66%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 34%, #000 66%, transparent);
   mix-blend-mode: plus-lighter;
   animation: g-ai-sapuan 7s cubic-bezier(0.5, 0, 0.2, 1) infinite;
 }
