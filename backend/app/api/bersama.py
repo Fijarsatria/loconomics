@@ -12,6 +12,11 @@ from sqlalchemy import Float, func, select
 from sqlalchemy.orm import Session
 
 from app.core.aturan import (
+    BAHASA_BAWAAN,
+    Bahasa,
+    LABEL_RISIKO_EN,
+    PENJELASAN_ZONA_EN,
+    pilih,
     CHURN_PERSENTIL_BAHAYA,
     CHURN_PERSENTIL_WASPADA,
     KAWASAN_PILOT,
@@ -78,7 +83,7 @@ def badge(hx: HexFeature) -> BadgeKeyakinan:
 # ---------------------------------------------------------------------------
 
 
-def zoneguard(hx: HexFeature) -> StatusZoneGuard:
+def zoneguard(hx: HexFeature, bahasa: Bahasa = BAHASA_BAWAAN) -> StatusZoneGuard:
     """Status zonasi satu heksagon.
 
     `filter_mutlak` benar hanya untuk DILARANG. TIDAK_DIKETAHUI tidak pernah
@@ -90,7 +95,7 @@ def zoneguard(hx: HexFeature) -> StatusZoneGuard:
         status=st,
         kelas_zona=hx.kelas_zona,
         filter_mutlak=st == "DILARANG",
-        penjelasan=PENJELASAN_ZONA[st],
+        penjelasan=pilih(PENJELASAN_ZONA, PENJELASAN_ZONA_EN, bahasa)[st],
     )
 
 
@@ -134,12 +139,15 @@ def persentil_churn(db: Session, kawasan: str) -> tuple[float | None, float | No
 
 
 def peringatan_risiko(
-    hx: HexFeature, p75: float | None = None, p90: float | None = None
+    hx: HexFeature,
+    p75: float | None = None,
+    p90: float | None = None,
+    bahasa: Bahasa = BAHASA_BAWAAN,
 ) -> PeringatanRisiko:
     tingkat = tingkat_risiko_churn(hx.indeks_churn, p75, p90)
     return PeringatanRisiko(
         tingkat=tingkat,
-        label=LABEL_RISIKO[tingkat],
+        label=pilih(LABEL_RISIKO, LABEL_RISIKO_EN, bahasa)[tingkat],
         indeks_churn=hx.indeks_churn,
         ambang_waspada=p75,
         ambang_bahaya=p90,

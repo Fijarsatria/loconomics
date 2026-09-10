@@ -1270,14 +1270,20 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
   // ajukan. Kalimatnya yang mengajukan pertanyaan itu untuknya.
   if (!akun) {
     const digerbang = varian === 'gerbang'
-    // Di GERBANG tombol ini pil biasa. Yang berpendar di sana "Masuk ke peta"
-    // - atas permintaan pemilik repo, 9 Sep 2026 - dan kalau dua benda
-    // sama-sama berpendar, tidak ada yang berpendar. Di bilah peta tidak ada
-    // "Masuk ke peta", jadi tombol ini yang mendapat pendarnya.
+    // DIBALIK 11 Sep 2026, membatalkan keputusan 9 Sep.
+    //
+    // Dulu: di gerbang tombol ini pil biasa dan yang berpendar "Masuk ke peta".
+    // Sekarang: selama BELUM ada akun, yang berpendar justru tombol ini - di
+    // kedua tempatnya. Permintaan pemilik repo, dan alasannya kuat: peta bisa
+    // dibuka siapa pun tanpa mendaftar, jadi mengarahkan mata ke sana lebih
+    // dulu menunda satu-satunya langkah yang mengubah apa yang akan ia lihat
+    // di sana. Begitu akunnya ada, cabang ini tidak dirender sama sekali dan
+    // pendarnya kembali ke "Masuk ke peta" - lihat `tombolMasuk` di
+    // Gerbang.tsx.
     const kelas = digerbang
-      ? 'g-pil inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold text-[color:var(--g-ink)]'
+      ? 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold'
       : 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-3.5 py-2 text-[12.5px] font-semibold'
-    const kelasTeks = digerbang ? '' : 'g-catalyst-teks'
+    const kelasTeks = 'g-catalyst-teks'
     return (
       <div ref={wadah} className="relative shrink-0">
         <button

@@ -304,6 +304,9 @@ export default function Rekomendasi({
       .rekomendasi()
       .then(setData)
       .catch((e) => setGalat(e instanceof GalatAPI ? e.message : t.gagalMuat))
+    // `t` di sini bukan cuma kalimat cadangan: `alasan[].teks`, `ringkasan`,
+    // dan `catatan` seluruhnya dirakit backend, jadi menukar bahasa memang
+    // harus meminta ulang.
   }, [akun, t])
 
   // Dimuat ulang saat akun ATAU preferensinya berubah — kriteria yang baru

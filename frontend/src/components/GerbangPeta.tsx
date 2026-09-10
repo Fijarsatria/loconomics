@@ -184,6 +184,17 @@ const LABEL: Record<Bahasa, { buka: (k: string, l: string) => string; peta: (l: 
    ========================================================================== */
 
 /** Berapa cincin jarak dipakai mengundak kisi. Tujuh sudah terbaca sebagai gelombang. */
+/**
+ * Perbesaran kedua peta di kartu komparasi.
+ *
+ * Kamera potretnya membingkai SELURUH heksagon satu kawasan, dan pada kartu
+ * selebar 300 px itu membuat rute jalan kakinya - yang justru jadi alasan
+ * kartu ini ada - tinggal beberapa piksel. 1,55 cukup untuk membuat garis
+ * bertitiknya terbaca sebagai jalur, dan masih di bawah ambang tempat WebP
+ * 620 px mulai terlihat lunak.
+ */
+const PERBESAR_BANDING = 1.55
+
 const N_CINCIN = 7
 
 /** Poligon dari satu pusat dan simpangan enam simpulnya. */
@@ -347,10 +358,44 @@ function LapisanHeks({
 }
 
 /** Potret layer + heksagonnya + atribusi. */
-function Potret({ d, jeda = 0, rute }: { d: KartuGerbang; jeda?: number; rute?: 'A' | 'B' }) {
+function Potret({
+  d,
+  jeda = 0,
+  rute,
+  perbesar = 1,
+}: {
+  d: KartuGerbang
+  jeda?: number
+  rute?: 'A' | 'B'
+  /**
+   * Perbesaran optis kartu, dipakai kartu komparasi.
+   *
+   * GAMBAR DAN HEKSAGONNYA DISKALA BERSAMA, dalam satu pembungkus - bukan
+   * masing-masing. Keduanya menempati kotak yang sama persis (`inset-0`) dan
+   * `LapisanHeks` memakai viewBox seukuran WebP-nya, jadi satu `transform` di
+   * atas keduanya menjaga heksagon tetap duduk di petak yang benar. Menskala
+   * salah satunya saja akan menggeser seluruh kisi terhadap petanya, dan
+   * itu tidak akan pernah memunculkan galat - cuma heksagon yang meleset.
+   *
+   * Titik pusatnya BUKAN tengah gambar melainkan tengah RUTE-nya, kalau ada.
+   * Yang diminta pemilik repo justru rutenya terlihat, dan rute berangkat dari
+   * heksagon menuju stasiun - sering di tepi bingkai, tempat pembesaran dari
+   * tengah justru membuangnya keluar layar.
+   */
+  perbesar?: number
+}) {
   const label = useTeks(LABEL)
+  const r = d.sorot.rute
+  const pusat =
+    perbesar === 1 || !r
+      ? undefined
+      : `${(((r.ax + r.bx) / 2) / d.sorot.w) * 100}% ${(((r.ay + r.by) / 2) / d.sorot.h) * 100}%`
   return (
     <>
+      <div
+        className="absolute inset-0"
+        style={perbesar === 1 ? undefined : { transform: `scale(${perbesar})`, transformOrigin: pusat }}
+      >
       <img
         // `BASE_URL`, BUKAN garis miring di depan. Terbitan GitHub Pages
         // disajikan di /loconomics/, jadi jalur berakar seperti `/kartu/...`
@@ -371,8 +416,11 @@ function Potret({ d, jeda = 0, rute }: { d: KartuGerbang; jeda?: number; rute?: 
         className="g-bento-gambar absolute inset-0 h-full w-full object-cover"
       />
       <LapisanHeks d={d} jeda={jeda} rute={rute} />
+      </div>
       {/* Atribusi ditulis sendiri: kontrol MapLibre tidak ikut terpotret, dan
-          ketentuan A.3 tidak gugur cuma karena gambarnya statis. */}
+          ketentuan A.3 tidak gugur cuma karena gambarnya statis. DI LUAR
+          pembungkus berskala: atribusi yang ikut diperbesar bisa terdorong
+          keluar bingkai, dan A.3 tidak mengenal alasan itu. */}
       <span className="pointer-events-none absolute bottom-1.5 right-2.5 max-w-[70%] truncate text-[8.5px] text-white/40">
         {ATRIBUSI}
       </span>
@@ -443,11 +491,11 @@ function KartuKeputusan({
   const mediaBanding = pembanding && (
     <div className="relative flex min-h-[150px] flex-1 self-stretch overflow-hidden">
       <div className="g-bento-media g-bento-media-samping relative min-w-0 flex-1 overflow-hidden">
-        <Potret d={d} rute="A" />
+        <Potret d={d} rute="A" perbesar={PERBESAR_BANDING} />
       </div>
       <span className="w-px shrink-0 bg-[color:var(--g-kartu-tepi)]" aria-hidden />
       <div className="g-bento-media g-bento-media-samping relative min-w-0 flex-1 overflow-hidden">
-        <Potret d={pembanding} jeda={2.1} rute="B" />
+        <Potret d={pembanding} jeda={2.1} rute="B" perbesar={PERBESAR_BANDING} />
       </div>
     </div>
   )
@@ -531,8 +579,18 @@ export default function BentoKeputusan({ onBuka }: { onBuka: (p: PilihanKawasan)
     return () => pengamat.disconnect()
   }, [])
 
-  /** Pembanding kartu komparasi: potret kedua yang BUKAN dirinya sendiri. */
-  const pembanding = KARTU_GERBANG.find((k) => k.berkas === 'dukuh-atas') ?? KARTU_GERBANG[0]
+  /**
+   * Pembanding kartu komparasi: potret kedua yang BUKAN dirinya sendiri.
+   *
+   * `manggarai`, bukan `dukuh-atas`, dan sebabnya bukan selera. Dukuh Atas
+   * dipotret di atas basemap GELAP; Harjamukti di atas basemap terang. Di
+   * halaman hitam keduanya menyatu, di halaman PUTIH kartu itu jadi separuh
+   * peta terang bertemu separuh lubang hitam dengan sambungan tegas di
+   * tengahnya - persis yang dilaporkan pemilik repo. Manggarai dipotret dengan
+   * gaya `terang` yang sama, jadi keduanya terbaca sebagai dua peta yang
+   * sedang dibandingkan, bukan sebagai satu kartu yang rusak.
+   */
+  const pembanding = KARTU_GERBANG.find((k) => k.berkas === 'manggarai') ?? KARTU_GERBANG[0]
 
   return (
     // ENAM kolom, bukan tiga: kartu selebar setengah baris butuh 3, kolom

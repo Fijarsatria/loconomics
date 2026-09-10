@@ -349,70 +349,92 @@ export function useTema() {
 }
 
 const K_TEMA = {
-  id: { keTerang: 'Ganti ke tampilan terang', keGelap: 'Ganti ke tampilan gelap' },
-  en: { keTerang: 'Switch to light appearance', keGelap: 'Switch to dark appearance' },
+  id: { label: 'Terang', gelap: 'Gelap', ganti: 'Ganti tampilan terang atau gelap' },
+  en: { label: 'Light', gelap: 'Dark', ganti: 'Switch between light and dark appearance' },
 }
 
 /**
- * Sakelar tema. Satu tombol untuk kedua tempatnya - bilah gerbang dan bilah
- * peta - supaya keduanya tidak pernah berbeda bentuk maupun perilaku.
+ * Sakelar tema. Satu komponen untuk kedua tempatnya - hero gerbang dan menu
+ * pengaturan peta - supaya keduanya tidak pernah berbeda bentuk maupun arti.
  *
- * Glifnya BERPUTAR saat ditekan, dan yang berputar bukan ikonnya melainkan
- * topeng di dalamnya: bulan adalah matahari yang tergigit lingkaran kedua, dan
- * menggeser lingkaran itu mengubah yang satu jadi yang lain tanpa dua gambar.
+ * BENTUKNYA pil, bukan tombol bundar, dan itu permintaan pemilik repo dengan
+ * dua gambar rujukan: kenop meluncur di dalam pil beku, matahari di kiri saat
+ * terang dan bulan di kanan saat gelap, dengan katanya di sisi yang tersisa.
+ *
+ * IKONNYA MENYATAKAN KEADAAN, bukan tujuan. Versi bundar sebelumnya memasang
+ * matahari saat halaman GELAP dengan alasan "tekan untuk terang" - dan dibaca
+ * pemilik repo sebagai terbalik. Ia benar, dan bentuk barunya yang
+ * menyelesaikan perdebatannya: begitu ada KATA di sebelah ikonnya, keduanya
+ * harus berbicara tentang hal yang sama. "Dark" di sebelah matahari adalah
+ * kalimat yang bertengkar dengan dirinya sendiri.
  */
-export function SakelarTema({ gelap, kelas = '' }: { gelap?: boolean; kelas?: string }) {
+export function SakelarTema({ kelas = '' }: { kelas?: string }) {
   const { tema, gantiTema } = useTema()
   const t = useTeks(K_TEMA)
-  const keTerang = tema === 'gelap'
+  const terang = tema === 'terang'
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={!terang}
+      data-tema={tema}
       onClick={(e) => {
-        const r = e.currentTarget.getBoundingClientRect()
+        // Titik asal tirainya PUSAT KENOP, bukan pusat tombol. Kenopnya berdiri
+        // di ujung yang berbeda pada tiap tema, dan lingkaran yang mekar dari
+        // tengah pil saat kenopnya di tepi terbaca sebagai dua gerakan yang
+        // tidak berhubungan.
+        const k = e.currentTarget.querySelector('.st-kenop')
+        const r = (k ?? e.currentTarget).getBoundingClientRect()
         gantiTema({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
       }}
-      title={keTerang ? t.keTerang : t.keGelap}
-      aria-label={keTerang ? t.keTerang : t.keGelap}
-      className={`sakelar-tema grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full transition-colors ${
-        gelap
-          ? 'text-white/70 hover:bg-white/10 hover:text-white'
-          : 'text-[color:var(--sb-redup,rgb(127_127_127))] hover:bg-[color:var(--sb-rel,rgb(127_127_127/0.16))] hover:text-[color:var(--sb-hover,#06100e)]'
-      } ${kelas}`}
+      title={t.ganti}
+      aria-label={t.ganti}
+      className={`sakelar-tema ${kelas}`}
     >
-      {/* Glifnya menyatakan yang AKAN DIDAPAT, bukan yang sedang berlaku.
-          Matahari saat gelap ("tekan untuk terang"), bulan saat terang. Dua
-          konvensi sama-sama hidup di produk lain, dan yang menentukan di sini
-          `aria-label`-nya sendiri: ia berbunyi "Ganti ke tampilan terang", jadi
-          gambarnya harus menggambarkan tujuan itu, bukan tempat berangkatnya.
+      {/* KEDUA kata selalu dirender. Yang tidak berlaku dipudarkan sambil
+          digeser, dan itu yang membuat pergantiannya jadi satu gerakan. */}
+      <span className="st-kata" data-sisi="kanan" data-aktif={terang ? '1' : '0'}>
+        {t.label}
+      </span>
+      <span className="st-kata" data-sisi="kiri" data-aktif={terang ? '0' : '1'}>
+        {t.gelap}
+      </span>
 
-          Bulan itu MATAHARI yang tergigit lingkaran kedua - satu bentuk, bukan
-          dua gambar, jadi pergantiannya bisa jadi gerakan kalau kelak
-          diinginkan. */}
-      <svg width="17" height="17" viewBox="0 0 20 20" aria-hidden>
-        <defs>
-          <mask id="sakelar-tema-topeng">
-            <rect width="20" height="20" fill="white" />
-            <circle cx={keTerang ? 26 : 15.2} cy={keTerang ? 0 : 5.4} r="7.2" fill="black" />
-          </mask>
-        </defs>
-        <circle
-          cx="10"
-          cy="10"
-          r={keTerang ? 4.7 : 7.2}
-          fill="currentColor"
-          mask="url(#sakelar-tema-topeng)"
-        />
-        {/* Sinar hanya menyertai matahari. Bulan tidak bersinar ke luar. */}
-        <g
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          style={{ opacity: keTerang ? 1 : 0 }}
+      <span className="st-kenop">
+        {/* Dua glif yang bersilangan, bukan satu bentuk bertopeng.
+            Versi bertopeng lebih pintar - bulan adalah matahari yang tergigit
+            lingkaran kedua - tetapi `cx`/`r` sebuah <circle> tidak bisa
+            ditransisikan dengan andal di setiap peramban, jadi yang "pintar"
+            itu berpindah dengan cara mematah. Dua glif selalu bisa. */}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 20 20"
+          className="st-glif"
+          data-jenis="surya"
+          data-aktif={terang ? '1' : '0'}
+          aria-hidden
         >
-          <path d="M10 1.4v1.8M10 16.8v1.8M18.6 10h-1.8M3.2 10H1.4M16.1 3.9l-1.3 1.3M5.2 14.8l-1.3 1.3M16.1 16.1l-1.3-1.3M5.2 5.2 3.9 3.9" />
-        </g>
-      </svg>
+          <circle cx="10" cy="10" r="4.4" fill="currentColor" />
+          <g stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+            <path d="M10 1.5v2M10 16.5v2M18.5 10h-2M3.5 10h-2M16 4l-1.4 1.4M5.4 14.6 4 16M16 16l-1.4-1.4M5.4 5.4 4 4" />
+          </g>
+        </svg>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 20 20"
+          className="st-glif"
+          data-jenis="bulan"
+          data-aktif={terang ? '0' : '1'}
+          aria-hidden
+        >
+          <path
+            d="M16.2 12.6A7.2 7.2 0 0 1 7.4 3.8a7.2 7.2 0 1 0 8.8 8.8Z"
+            fill="currentColor"
+          />
+        </svg>
+      </span>
     </button>
   )
 }

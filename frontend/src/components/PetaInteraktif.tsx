@@ -292,7 +292,20 @@ const ZOOM_POI: Record<string, number> = {
 const RE_NAMA_TEMPAT = /^(poi|place|water_name)/
 
 function terapkanNamaTempat(m: MapLibreMap, kerapatan: string) {
-  const geser = KERAPATAN_NAMA[kerapatan]?.geser ?? 0
+  // `?? 0` DI SINI adalah bug yang bertahan sejak setelan ini dipasang, dan
+  // ia memakan justru satu-satunya nilai yang punya arti khusus.
+  //
+  // `KERAPATAN_NAMA.mati.geser` memang `null`, dan `null` di situ berarti
+  // "sembunyikan seluruh lapisannya" - bukan "tidak ada geseran". Bentuk
+  // lamanya `KERAPATAN_NAMA[k]?.geser ?? 0` menyamakan dua hal yang berbeda:
+  // kunci yang TIDAK DIKENAL (yang memang pantas jatuh ke 0) dan kunci yang
+  // nilainya SENGAJA null. Akibatnya "Mati" berperilaku persis seperti
+  // "Normal", tanpa satu pun galat - setelannya bergerak, tulisannya berganti,
+  // dan labelnya tetap di layar. Dilaporkan pemilik repo dua kali.
+  //
+  // Yang benar: jatuhkan KUNCI-nya, bukan nilainya.
+  const aturan = KERAPATAN_NAMA[kerapatan] ?? KERAPATAN_NAMA.normal
+  const geser = aturan.geser
   for (const l of m.getStyle().layers ?? []) {
     if (!RE_NAMA_TEMPAT.test(l.id) || l.type !== 'symbol') continue
     if (geser === null) {

@@ -24,7 +24,7 @@ import {
 import { createPortal } from 'react-dom'
 
 import { IDENTITAS, KEYAKINAN, KUADRAN, RODA_WARNA } from '../config'
-import { SakelarBahasa, useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
+import { SakelarBahasa, SakelarTema, useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 import type { BadgeKeyakinan, Kuadran as NamaKuadran } from '../types'
 
 /**
@@ -1412,6 +1412,15 @@ export function MenuPengaturan({
             <div className="ungkap flex items-center justify-between gap-3 rounded-sm px-3 py-2.5 text-[13.5px]">
               <span className="text-ink-2">{bahasa === 'id' ? 'Bahasa' : 'Language'}</span>
               <SakelarBahasa kelas="app-sakelar-bahasa" />
+            </div>
+
+            {/* Tema, tepat di bawah bahasa. Keduanya preferensi MILIK PEMBACA
+                dan bukan setelan peta - `lib/bahasa.tsx` sudah menyatukan
+                keduanya di satu berkas dengan alasan yang sama, dan menaruhnya
+                bersebelahan di sini membuat alasan itu terlihat. */}
+            <div className="ungkap flex items-center justify-between gap-3 rounded-sm px-3 py-2.5 text-[13.5px]">
+              <span className="text-ink-2">{bahasa === 'id' ? 'Tampilan' : 'Appearance'}</span>
+              <SakelarTema />
             </div>
 
             {/* Kerapatan nama tempat. Dipasang di sini, bukan sebagai layar

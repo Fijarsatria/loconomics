@@ -604,7 +604,12 @@ export default function PanelInsight({
     // ULANG supaya 43 variabelnya benar-benar datang. Respons yang sudah ada di
     // state dibuat untuk tingkat yang lama, dan tidak ada cara menambalnya di
     // frontend - isinya memang tidak pernah dikirim.
-  }, [h3, premium, terbuka, profilRute])
+    // `bahasa` ikut jadi dependensi, dan itu bukan kelebihan.
+    // Belasan kalimat di respons ini DIRAKIT BACKEND dari angka heksagon -
+    // penjelasan kuadran, catatan pola jam, peringatan simulasi. Menukar
+    // bahasa tanpa meminta ulang meninggalkan kalimat lama di layar yang
+    // seluruh sisanya sudah berganti.
+  }, [h3, premium, terbuka, profilRute, ist.bahasa])
 
   if (!h3) return <Ajakan judul={t.pilihJudul} anak={t.pilihIsi} />
   if (memuat) return <Memuat baris={5} />

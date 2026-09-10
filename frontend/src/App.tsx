@@ -73,7 +73,7 @@ import PanelInsight from './components/PanelInsight'
 // bundel awal; peta mendapat utas utamanya lebih cepat.
 const Gerbang = lazy(() => import('./components/Gerbang'))
 import { TombolAkun, useSesi } from './components/Akun'
-import { SakelarTema, useBahasa, useTema, useTeks, type Bahasa } from './lib/bahasa'
+import { useBahasa, useTema, useTeks, type Bahasa } from './lib/bahasa'
 import { MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
 // Kedua dialog ini besar dan jarang dibuka. MenuKawasan tetap statis - ia
@@ -1625,7 +1625,11 @@ export default function App() {
                   Ia satu-satunya setelan yang diubah orang berkali-kali dalam
                   satu sesi - siang di kereta, malam di rumah - dan setelan
                   sesering itu tidak boleh butuh dua ketukan. */}
-              <SakelarTema />
+              {/* Sakelar tema PINDAH ke dalam menu pengaturan (11 Sep 2026,
+                  permintaan pemilik repo). Bilah ini sudah memuat pencarian,
+                  kawasan, layer, pengaturan, dan akun; preferensi tampilan
+                  bukan benda yang ditekan orang tiap menit, dan ia berdiri di
+                  sebelah sakelar bahasa yang sifatnya sama persis. */}
               <MenuPengaturan namaTempat={namaTempat} onNamaTempat={setNamaTempat} />
               {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
                   visual keduanya terbaca sebagai satu kelompok tombol. */}

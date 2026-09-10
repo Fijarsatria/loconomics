@@ -1236,15 +1236,27 @@ input:focus-visible {
   inset: 0;
   pointer-events: none;
 }
-/* Teks di ATAS gambar: tepinya hilang di sisi atas. Ini juga bawaan untuk
-   SELURUH kartu di bawah 640px, karena di sana semuanya bertumpuk. */
+/* Perhentian TENGAHNYA dulu `rgb(20 26 24 / 0.5)` - warna gelap yang dipatok
+   tetap - sementara perhentian pertamanya `var(--g-kartu-isi)` yang ikut tema.
+   Di halaman hitam keduanya sewarna dan scrimnya tidak terlihat. Di halaman
+   PUTIH, gradiennya berangkat dari putih, mampir ke abu tua 50%, lalu hilang:
+   satu pita abu melintang di tengah tiap gambar, dan di kartu komparasi ia
+   melebar sampai separuh peta. Dilaporkan pemilik repo sebagai "di mode light
+   itu di solution jadi jelek".
+   Sekarang SELURUH perhentiannya diturunkan dari `--g-kartu-isi` yang sama -
+   satu warna memudar jadi tembus pandang, bukan dua warna bertemu di tengah.
+   Perhentiannya juga dilengkungkan (empat, bukan dua) supaya peralihannya
+   tidak memperlihatkan pita. Aturan umumnya sudah tercatat di jebakan.md:
+   nilai yang bergantung TEMA tidak boleh dipatok tetap. */
 .g-bento-media-atas::after,
 .g-bento-media-samping::after {
   background: linear-gradient(
     180deg,
     var(--g-kartu-isi) 0%,
-    rgb(20 26 24 / 0.5) 20%,
-    rgb(20 26 24 / 0) 58%
+    color-mix(in srgb, var(--g-kartu-isi) 84%, transparent) 12%,
+    color-mix(in srgb, var(--g-kartu-isi) 46%, transparent) 28%,
+    color-mix(in srgb, var(--g-kartu-isi) 15%, transparent) 45%,
+    transparent 62%
   );
 }
 /* Gambar di ATAS, teks di bawah: tepinya hilang di sisi bawah. */
@@ -1252,8 +1264,10 @@ input:focus-visible {
   background: linear-gradient(
     0deg,
     var(--g-kartu-isi) 0%,
-    rgb(20 26 24 / 0.5) 20%,
-    rgb(20 26 24 / 0) 58%
+    color-mix(in srgb, var(--g-kartu-isi) 84%, transparent) 12%,
+    color-mix(in srgb, var(--g-kartu-isi) 46%, transparent) 28%,
+    color-mix(in srgb, var(--g-kartu-isi) 15%, transparent) 45%,
+    transparent 62%
   );
 }
 /* Baru sejak 640px kartu `belah` benar-benar berdampingan, dan barulah tepi
@@ -1263,8 +1277,10 @@ input:focus-visible {
     background: linear-gradient(
       90deg,
       var(--g-kartu-isi) 0%,
-      rgb(20 26 24 / 0.55) 24%,
-      rgb(20 26 24 / 0) 66%
+      color-mix(in srgb, var(--g-kartu-isi) 80%, transparent) 14%,
+      color-mix(in srgb, var(--g-kartu-isi) 40%, transparent) 32%,
+      color-mix(in srgb, var(--g-kartu-isi) 12%, transparent) 50%,
+      transparent 68%
     );
   }
 }
@@ -2911,6 +2927,194 @@ input:focus-visible {
    Warnanya diberi TEPI LEMBUT lewat radial-gradient, bukan potongan tegas.
    Itu satu-satunya hal yang membedakan "cairan yang menyebar" dari "lingkaran
    yang membesar". */
+/* --- Sakelar tema: pil kaca ----------------------------------------------
+
+   BENTUKNYA diminta pemilik repo dengan dua gambar rujukan: pil beku dengan
+   kenop bundar yang meluncur, matahari di kiri saat terang dan bulan di kanan
+   saat gelap, berikut kata "Light"/"Dark" di sisi yang tersisa.
+
+   IKONNYA MENYATAKAN KEADAAN, bukan tujuan - dan itu pembalikan yang disengaja
+   dari versi tombol bundar sebelumnya. Versi lama memasang matahari saat
+   halaman GELAP ("tekan untuk terang"), dan dibaca pemilik repo sebagai
+   terbalik: "masa kalau terang itu dia bentuknya bulan". Ia benar, dan
+   sebabnya bentuk barunya sendiri: begitu sakelarnya punya KATA di sebelah
+   ikonnya, keduanya wajib berbicara tentang hal yang sama. "Dark" di sebelah
+   matahari adalah kalimat yang bertengkar dengan dirinya sendiri.
+
+   Warnanya diturunkan dari `data-tema` MILIK TOMBOLNYA, bukan dari tempat ia
+   dipasang. Ia berdiri di dua tempat yang paletnya berbeda - hero gerbang dan
+   menu pengaturan peta - dan tombol yang mewarisi palet tempatnya akan tampil
+   sebagai dua benda berbeda. */
+
+.sakelar-tema {
+  --st-tinggi: 2.5rem;
+  --st-kenop: 2.05rem;
+  --st-sela: 0.225rem;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 7.75rem;
+  height: var(--st-tinggi);
+  border-radius: 999px;
+  cursor: pointer;
+  isolation: isolate;
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  transition:
+    background-color 620ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 620ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sakelar-tema[data-tema='terang'] {
+  background: rgb(255 255 255 / 0.5);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.85),
+    inset 0 0 0 1px rgb(20 40 34 / 0.09),
+    0 10px 26px -14px rgb(20 40 34 / 0.5);
+}
+.sakelar-tema[data-tema='gelap'] {
+  background: rgb(255 255 255 / 0.07);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.13),
+    inset 0 0 0 1px rgb(255 255 255 / 0.1),
+    0 12px 30px -16px rgb(0 0 0 / 0.85);
+}
+
+/* Kata di sisi yang TIDAK ditempati kenop. Ia tidak berpindah, ia berganti
+   sisi - dua tulisan yang saling menyilang, jadi tidak ada satu pun bingkai
+   tempat pilnya terlihat kosong. */
+.st-kata {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: calc(100% - var(--st-kenop) - var(--st-sela) * 2);
+  display: grid;
+  place-items: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition:
+    opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 620ms cubic-bezier(0.5, 0, 0.15, 1);
+  pointer-events: none;
+}
+.st-kata[data-sisi='kanan'] {
+  right: var(--st-sela);
+}
+.st-kata[data-sisi='kiri'] {
+  left: var(--st-sela);
+}
+.sakelar-tema[data-tema='terang'] .st-kata {
+  color: #17322a;
+}
+.sakelar-tema[data-tema='gelap'] .st-kata {
+  color: rgb(255 255 255 / 0.72);
+}
+/* Yang tidak berlaku digeser SEDIKIT ke arah kenop lalu dipudarkan - bukan
+   sekadar hilang. Geserannya yang membuat pergantiannya terbaca sebagai satu
+   gerakan, bukan dua kedipan. */
+.st-kata[data-aktif='0'] {
+  opacity: 0;
+  transform: translateX(var(--st-arah, 0));
+}
+.st-kata[data-sisi='kanan'][data-aktif='0'] {
+  --st-arah: -0.55rem;
+}
+.st-kata[data-sisi='kiri'][data-aktif='0'] {
+  --st-arah: 0.55rem;
+}
+
+/* Kenop. Melar sedikit di tengah lintasannya - itu satu-satunya bagian yang
+   membuat geserannya terasa CAIR alih-alih meluncur di atas rel. */
+.st-kenop {
+  position: absolute;
+  top: var(--st-sela);
+  left: var(--st-sela);
+  width: var(--st-kenop);
+  height: var(--st-kenop);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  transition:
+    transform 620ms cubic-bezier(0.5, -0.06, 0.16, 1.14),
+    background-color 620ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 620ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sakelar-tema[data-tema='gelap'] .st-kenop {
+  transform: translateX(calc(100% + (7.75rem - var(--st-kenop) * 2 - var(--st-sela) * 2)));
+}
+.sakelar-tema[data-tema='terang'] .st-kenop {
+  background: #ffffff;
+  color: #b8791f;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    inset 0 0 0 1px rgb(20 40 34 / 0.07),
+    0 6px 14px -6px rgb(20 40 34 / 0.45);
+}
+.sakelar-tema[data-tema='gelap'] .st-kenop {
+  background: #1d2a30;
+  color: #eaf2f0;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 0 0 1px rgb(255 255 255 / 0.09),
+    0 6px 16px -6px rgb(0 0 0 / 0.9);
+}
+
+/* Pendar di belakang glifnya. Di rujukannya inilah yang membuat kenopnya
+   terlihat MENYALA alih-alih ditempel. */
+.st-kenop::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  border-radius: 999px;
+  z-index: -1;
+  transition: background 620ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sakelar-tema[data-tema='terang'] .st-kenop::before {
+  background: radial-gradient(circle, rgb(255 196 92 / 0.42) 0%, transparent 68%);
+}
+.sakelar-tema[data-tema='gelap'] .st-kenop::before {
+  background: radial-gradient(circle, rgb(190 220 255 / 0.3) 0%, transparent 68%);
+}
+
+/* Matahari dan bulan bersilangan di tempat yang sama: yang satu memudar
+   sambil mengecil dan berputar, yang lain datang dari arah sebaliknya. */
+.st-glif {
+  grid-area: 1 / 1;
+  transition:
+    opacity 400ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 620ms cubic-bezier(0.5, 0, 0.15, 1);
+}
+.st-glif[data-aktif='0'] {
+  opacity: 0;
+}
+.st-glif[data-jenis='surya'][data-aktif='0'] {
+  transform: rotate(-70deg) scale(0.45);
+}
+.st-glif[data-jenis='bulan'][data-aktif='0'] {
+  transform: rotate(70deg) scale(0.45);
+}
+
+.sakelar-tema:hover {
+  filter: brightness(1.04);
+}
+.sakelar-tema:active .st-kenop {
+  transform: translateX(var(--st-geser, 0)) scale(0.94);
+}
+.sakelar-tema[data-tema='gelap']:active .st-kenop {
+  --st-geser: calc(100% + (7.75rem - var(--st-kenop) * 2 - var(--st-sela) * 2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-kenop,
+  .st-kata,
+  .st-glif,
+  .sakelar-tema {
+    transition-duration: 1ms;
+  }
+}
+
 .tirai-tema {
   position: fixed;
   inset: 0;
@@ -2935,27 +3139,45 @@ input:focus-visible {
     transparent 100%
   );
 }
+/* Mekarnya membawa OPACITY-nya sendiri, dan itu yang membedakan tirai yang
+   terasa mahal dari cakram yang membesar. Cakram pekat sejak piksel pertama
+   punya tepi yang tajam sepanjang lintasannya; yang berangkat dari 0,55 lalu
+   memekat sambil melebar terbaca sebagai cahaya yang tumbuh.
+
+   Skalanya juga berhenti di 1,04, bukan 1 - seperempat langkah melewati sudut
+   terjauh layar, supaya tidak pernah ada bingkai tempat sudutnya terlihat
+   belum tertutup pada layar yang rasionya ekstrem. */
 @keyframes tirai-tema-mekar {
   from {
     transform: scale(0);
+    opacity: 0.55;
   }
-  to {
-    transform: scale(1);
-  }
-}
-@keyframes tirai-tema-pudar {
-  from {
+  60% {
     opacity: 1;
   }
   to {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+/* Membukanya TIDAK sekadar memudar. Ia ikut mengembang sedikit lagi sambil
+   hilang - gerakan yang searah dengan yang barusan dilihat mata, jadi
+   peralihannya terbaca sebagai satu tarikan napas, bukan dua kejadian. */
+@keyframes tirai-tema-pudar {
+  from {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  to {
     opacity: 0;
+    transform: scale(1.22);
   }
 }
 .tirai-tema[data-fase='tutup'] .tirai-tema-isi {
-  animation: tirai-tema-mekar 460ms cubic-bezier(0.5, 0, 0.2, 1) both;
+  animation: tirai-tema-mekar 540ms cubic-bezier(0.34, 0.02, 0.2, 1) both;
 }
 .tirai-tema[data-fase='buka'] .tirai-tema-isi {
-  animation: tirai-tema-pudar 420ms ease-out both;
+  animation: tirai-tema-pudar 560ms cubic-bezier(0.32, 0.1, 0.2, 1) both;
 }
 
 /* TANPA transisi warna menyeluruh, dan itu disengaja.
@@ -3544,15 +3766,60 @@ input:focus-visible {
 
    Dipendekkan jadi 15vh, dan penggelapannya dimulai lebih lambat. Yang hilang
    cuma panjang peralihannya; jurangnya sendiri tetap hitam. */
+/* Ambang menuju jurang, versi HALAMAN PUTIH.
+   15vh dengan alfa yang naik lurus menghasilkan satu pita abu setinggi
+   seratus piksel tepat di atas nama besar LOCONOMICS di kaki halaman - putih,
+   abu, lalu hitam pekat dalam satu tarikan pendek. Yang terbaca bukan jurang
+   melainkan noda cetak. Dilaporkan pemilik repo dengan potret.
+   Yang diperbaiki DUA hal sekaligus, dan keduanya perlu:
+   1. TINGGINYA. 15vh -> 52vh, lebih tinggi bahkan daripada 46vh milik
+      halaman hitam: jurang butuh kedalaman untuk terbaca sebagai
+      kedalaman. Halaman hitam tidak memerlukannya karena di sana tidak ada
+      selisih warna yang harus ditempuh; halaman putih menempuh seluruh
+      rentangnya.
+   2. KURVANYA. Alfa ditahan nyaris nol sampai 45% lalu dipercepat di sepertiga
+      terakhir - kurva ease-in, bukan garis lurus. Akibatnya bagian putihnya
+      tetap putih bersih (jadi nama LOCONOMICS di atasnya tidak tercelup abu),
+      dan gelapnya datang cepat di ujung, tempat mata memang mengharapkannya. */
 .gerbang[data-tema='terang'] .g-ambang {
-  height: 15vh;
+  height: 52vh;
   background: linear-gradient(
     to bottom,
     rgb(2 4 3 / 0) 0%,
-    rgb(2 4 3 / 0.12) 52%,
-    rgb(2 4 3 / 0.55) 82%,
+    rgb(2 4 3 / 0.015) 30%,
+    rgb(2 4 3 / 0.06) 48%,
+    rgb(2 4 3 / 0.16) 62%,
+    rgb(2 4 3 / 0.36) 76%,
+    rgb(2 4 3 / 0.68) 88%,
+    rgb(2 4 3 / 0.9) 95%,
     rgb(2 4 3 / 1) 100%
   );
+}
+
+/* Masker `.g-gelap` DICABUT di halaman terang, dan ini perbaikan atas bug yang
+   benar-benar terlihat, bukan penyesuaian selera.
+
+   `.g-gelap` memakai `mask-image: linear-gradient(to bottom, transparent 0%,
+   #000 12%)` supaya tepi atas jurangnya lembut saat MASUK. Elemennya `sticky
+   top-0 h-screen`, jadi begitu ia menempel di puncak layar, 12% teratasnya -
+   114 px pada layar 950 px - jadi tembus pandang SELAMANYA, sepanjang seluruh
+   bagian TIM.
+
+   Di halaman hitam yang menembus lubang itu `--g-latar-pekat` yang memang
+   gelap, jadi maskernya justru bekerja: tepinya melembut. Di halaman PUTIH,
+   `--g-latar-pekat` bernilai rgb(242 248 246) - dan lubang itu jadi pita
+   PUTIH selebar layar yang menggantung di atas bagian paling gelap halaman,
+   persis di belakang bilah atas. Terukur: piksel 0-120 turun lurus dari 241 ke
+   7, kemiringan sempurna sebuah gradien dua perhentian.
+
+   Masker itu juga sudah tidak diperlukan di sini: `.g-ambang` setinggi 52vh
+   tepat di atasnya sudah melakukan pelembutan yang sama, dan melakukannya
+   dengan mengikuti gulir alih-alih menempel di layar. Keluarga jebakan yang
+   sama dengan `mask-image` pada sebuah bagian yang ikut memotong isinya -
+   sudah tercatat di jebakan.md, kali ini lewat elemen yang MENEMPEL. */
+.gerbang[data-tema='terang'] .g-gelap {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .gerbang[data-tema='terang'] .g-eko-bingkai {

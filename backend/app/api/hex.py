@@ -33,7 +33,12 @@ from app.api.bersama import (
 from app.core.aturan import (
     JAM_OPERASIONAL,
     MEMUTAR_MENCOLOK,
+    BAHASA_BAWAAN,
+    Bahasa,
     PENJELASAN_KUADRAN,
+    PENJELASAN_KUADRAN_EN,
+    kalimat,
+    pilih,
     cakupan_indeks,
     cakupan_prestise,
     faktor_memutar,
@@ -224,6 +229,7 @@ def commuter_clock(
     h3_index: str,
     db: Annotated[Session, Depends(get_db)],
     pengguna: PenggunaOpsional = None,
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> CommuterClock:
     """Kapan uang benar-benar berpindah di lokasi ini, jam demi jam.
 
@@ -303,16 +309,9 @@ def commuter_clock(
         # "jalankan pipeline s4_spatial" - instruksi untuk pengembang yang bocor
         # ke layar orang yang tidak punya pipeline untuk dijalankan. Yang
         # dibutuhkan pembacanya bukan perintah melainkan sebab.
-        catatan = (
-            "Pola jam dibaca dari waktu yang tercetak di struk. Struk survei MAPID "
-            "tidak membawa kolom waktu - jamnya ada di dalam foto struknya, dan "
-            "pembacaan otomatis foto itu belum dijalankan."
-        )
+        catatan = kalimat("jam_tanpa_baris", bahasa)
     elif semua_proxy:
-        catatan = (
-            "Seluruh angka di sini hasil estimasi dari konteks heksagon, bukan dari jam "
-            "yang tercetak di struk. Perlakukan sebagai pola kasar, bukan pengukuran."
-        )
+        catatan = kalimat("jam_semua_proxy", bahasa)
 
     return CommuterClock(
         h3_index=h3_index,
@@ -344,6 +343,7 @@ def simpul_terdekat(
         Literal["foot-walking", "driving-car"],
         Query(description="Profil rute. Motor tidak ada di ORS."),
     ] = "foot-walking",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> KonteksSimpul:
     """Stasiun mana yang terdekat, lewat mana jalannya, berapa jauh, berapa menit.
 
@@ -398,10 +398,7 @@ def simpul_terdekat(
             h3_index=h3_index,
             lat=pusat.lat,
             lon=pusat.lon,
-            catatan=(
-                "Belum ada simpul transportasi di basis data, jadi jaraknya belum "
-                "bisa dihitung."
-            ),
+            catatan=kalimat("simpul_kosong", bahasa),
         )
 
     lurus = round(float(baris["jarak"]))
@@ -465,11 +462,14 @@ def simpul_terdekat(
             profil=profil,
             profil_tersedia=tersedia,
             garis_lurus=True,
-            catatan=(
-                f"Garis lurus ke {baris['nama']}. Rute "
-                f"{'mobil' if profil == 'driving-car' else 'jalan kaki'} yang "
-                "sebenarnya lebih panjang karena mengikuti jalan - heksagon ini "
-                "belum dirutekan untuk profil itu."
+            catatan=kalimat(
+                "simpul_lurus",
+                bahasa,
+                nama=baris["nama"],
+                cara=kalimat(
+                    "simpul_cara_mobil" if profil == "driving-car" else "simpul_cara_kaki",
+                    bahasa,
+                ),
             ),
         )
 
@@ -479,15 +479,16 @@ def simpul_terdekat(
     # Kalimatnya menyebut angka yang paling berguna lebih dulu, dan menambahkan
     # peringatan HANYA kalau memang ada yang perlu diperingatkan. Catatan yang
     # selalu berisi peringatan berhenti dibaca sebagai peringatan.
-    cara = "berkendara" if profil == "driving-car" else "jalan kaki"
-    catatan = f"{utama.menit:.0f} menit {cara} ke {baris['nama']}, lewat jalan yang ada."
+    cara = kalimat(
+        "simpul_cara_mobil" if profil == "driving-car" else "simpul_cara_kaki", bahasa
+    )
+    catatan = kalimat(
+        "simpul_rute", bahasa, menit=f"{utama.menit:.0f}", cara=cara, nama=baris["nama"]
+    )
     if memutar and memutar >= MEMUTAR_MENCOLOK:
-        catatan += (
-            f" Jalurnya memutar {memutar:.1f}x dari jarak lurusnya"
-            f" ({lurus} m) - ada yang menghalangi jalan langsungnya."
-        )
+        catatan += kalimat("simpul_memutar", bahasa, faktor=f"{memutar:.1f}", lurus=lurus)
     if len(rute) > 1:
-        catatan += f" {len(rute) - 1} jalur alternatif tersedia."
+        catatan += kalimat("simpul_alternatif", bahasa, n=len(rute) - 1)
 
     return KonteksSimpul(
         h3_index=h3_index,
@@ -527,6 +528,7 @@ def simulasi_heksagon(
     sewa_bulanan_diminta: Annotated[float | None, Query(ge=0, le=5_000_000_000)] = None,
     harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
     versi: str = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> Simulasi:
     """Skenario "kalau saya buka usaha di sini".
 
@@ -567,6 +569,7 @@ def simulasi_heksagon(
         margin_persen=margin_persen,
         sewa_bulanan_diminta=sewa_bulanan_diminta,
         harga_rata_rata=harga_rata_rata,
+        bahasa=bahasa,
     )
 
     # Profil jam penuh: dipakai grafik batang di panel simulasi, DAN dipakai
@@ -630,6 +633,7 @@ def detail_heksagon(
     db: Annotated[Session, Depends(get_db)],
     pengguna: PenggunaOpsional = None,
     versi: str = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> DetailHeksagon:
     """Isi panel insight saat heksagon diklik. Juga sumber jawaban jelaskan_skor().
 
@@ -736,10 +740,10 @@ def detail_heksagon(
             "sore_16_20": hx.puncak_sore,
             "malam_20_24": hx.puncak_malam,
         },
-        zoneguard=zoneguard(hx),
-        risiko=peringatan_risiko(hx, p75, p90),
+        zoneguard=zoneguard(hx, bahasa),
+        risiko=peringatan_risiko(hx, p75, p90, bahasa),
         kuadran_penjelasan=(
-            PENJELASAN_KUADRAN.get(skor.kuadran)
+            pilih(PENJELASAN_KUADRAN, PENJELASAN_KUADRAN_EN, bahasa).get(skor.kuadran)
             if (skor and skor.kuadran and boleh_penuh)
             else None
         ),

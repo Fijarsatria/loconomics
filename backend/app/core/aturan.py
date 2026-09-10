@@ -330,6 +330,391 @@ PENJELASAN_KUADRAN: dict[str, str] = {
 }
 
 
+
+# ---------------------------------------------------------------------------
+# Dua bahasa
+# ---------------------------------------------------------------------------
+#
+# KENAPA DI SINI, dan bukan di frontend.
+#
+# Kalimat di bawah dirakit dari angka heksagon - "Sewa Rp2.250.000/bln, masih
+# Rp750.000 di bawah anggaran Anda". Yang dirakit dari data tidak boleh disalin
+# ke frontend sebagai kamus kedua: salinan itu akan berselisih dengan yang
+# dicetak Laporan PDF dan diucapkan Konsultan AI, dan selisihnya tidak akan
+# pernah memunculkan galat - cuma dua kalimat berbeda untuk lokasi yang sama di
+# dua layar yang berbeda. Sama persis dengan alasan `ARTI_VARIABEL` hidup di
+# satu tempat.
+#
+# BENTUKNYA: satu katalog berkunci, tiap kunci membawa PASANGAN (id, en).
+# Percabangan yang memilih kalimat tetap tinggal di tempatnya - ia logika, bukan
+# teks - dan yang pindah ke sini cuma kalimatnya. Akibatnya dua hal yang
+# keduanya disengaja: seluruh prosa produk ini bisa dibaca dalam satu layar, dan
+# `test_aturan.py` bisa menuntut tiap kunci punya kedua cabangnya DENGAN
+# placeholder yang sama persis.
+#
+# Yang TIDAK ikut: Laporan Kelayakan PDF dan jawaban Konsultan AI. Keduanya
+# masih Indonesia, dan itu keadaan yang dicatat di docs/status.md - bukan yang
+# terlupa.
+
+Bahasa = Literal["id", "en"]
+
+#: Bahasa bawaan. Ditulis sebagai konstanta supaya tiap tanda tangan fungsi
+#: menyebut hal yang sama, dan supaya menggantinya tidak menuntut menyunting
+#: dua puluh tempat.
+BAHASA_BAWAAN: Bahasa = "id"
+
+
+def pilih(kamus_id: dict[str, str], kamus_en: dict[str, str], bahasa: Bahasa) -> dict[str, str]:
+    """Cabang kamus yang berlaku, dengan Indonesia sebagai jaring pengaman.
+
+    `or kamus_id[k]` di dalam pemahaman-dict bukan kerapian: kunci yang lupa
+    diterjemahkan lebih baik tampil dalam bahasa Indonesia daripada hilang
+    sebagai KeyError di tengah respons yang sudah separuh jadi. Kelengkapannya
+    dijaga uji, bukan oleh runtime.
+    """
+    if bahasa != "en":
+        return kamus_id
+    return {k: kamus_en.get(k) or v for k, v in kamus_id.items()}
+
+
+LABEL_RISIKO_EN: dict[str, str] = {
+    "AMAN": "Business turnover here is normal for the area",
+    "WASPADA": "Businesses change hands more often than in 75% of this area",
+    "BAHAYA": "Business turnover is among the top 10% in this area",
+    "TIDAK_DIKETAHUI": "No business turnover data for this location yet",
+}
+
+PENJELASAN_ZONA_EN: dict[str, str] = {
+    "DIIZINKAN": "The RDTR zoning at this location allows business activity.",
+    "DILARANG": (
+        "The RDTR zoning at this location does not allow business activity. "
+        "The Opportunity Score is zeroed and this location is never recommended, "
+        "whatever its other variables say."
+    ),
+    "TIDAK_DIKETAHUI": (
+        "This area has no digital RDTR yet, so its permission status cannot be "
+        "confirmed. The score is still computed, but you should verify with the "
+        "local planning office before signing a lease."
+    ),
+}
+
+PENJELASAN_KUADRAN_EN: dict[str, str] = {
+    "HIDDEN_GEM": "The data is good but it looks ordinary - the rent is usually far cheaper.",
+    "PEMENANG_JELAS": "The data is good and it looks expensive - safe, but you pay for the prestige.",
+    "JEBAKAN_GENGSI": "It looks expensive but the economics do not back it up - the quadrant that traps people most often.",
+    "HINDARI": "Both the economic potential and the visual pull are low.",
+}
+
+LABEL_KUADRAN_EN: dict[str, str] = {
+    "HIDDEN_GEM": "Hidden Gem",
+    "PEMENANG_JELAS": "Safe Bet",
+    "JEBAKAN_GENGSI": "Prestige Trap",
+    "HINDARI": "Avoid",
+}
+
+ARTI_INDEKS_EN: dict[str, str] = {
+    "IPT": "access to the station",
+    "IAE": "money in circulation",
+    "IKP": "how tight the competition is",
+    "IBR": "cost and risk",
+}
+
+
+#: Tiap kalimat yang KELUAR ke layar dan tidak muat di keempat kamus di atas.
+#:
+#: Nilainya `(indonesia, inggris)` dan keduanya template `str.format`. Angka
+#: sudah diformat oleh pemanggilnya - pemisah ribuan Indonesia dan Inggris
+#: berbeda, dan itu urusan `_rp()`, bukan urusan katalog ini.
+KALIMAT: dict[str, tuple[str, str]] = {
+    # --- GemFinder ---------------------------------------------------------
+    "gem_sewa": (
+        "Sewa median di sini {sewa} per bulan",
+        "The median rent here is {sewa} a month",
+    ),
+    "gem_biaya": ("Biaya di sini", "Costs here"),
+    "gem_residual": (
+        "{sewa} - lebih murah daripada yang seharusnya, mengingat potensi transit "
+        "dan aktivitas ekonominya. Termasuk 25% termurah relatif terhadap "
+        "potensinya di kawasan {kawasan}.",
+        "{sewa} - cheaper than it ought to be, given its transit potential and "
+        "economic activity. Among the cheapest 25% relative to its potential in "
+        "{kawasan}.",
+    ),
+    "gem_kuadran": (
+        "Opportunity Score di atas median kawasan, tetapi prestise visualnya di "
+        "bawah median - persis pola lokasi yang datanya bagus tetapi "
+        "penampilannya membuat orang melewatkannya.",
+        "The Opportunity Score is above the area median but the visual prestige is "
+        "below it - exactly the pattern of a location whose data is good and whose "
+        "looks make people walk past it.",
+    ),
+    "gem_iptt": (
+        "Banyak pedagang keliling dan pembeli ramai, tetapi sedikit usaha menetap. "
+        "Permintaannya sudah terbukti ada, belum ada yang melayaninya secara permanen.",
+        "Plenty of street vendors and plenty of buyers, but few permanent shops. The "
+        "demand is proven; nobody serves it permanently yet.",
+    ),
+    "gem_metode_residual_biaya": ("harga di bawah potensinya", "priced below its potential"),
+    "gem_metode_kuadran": ("bagus di data, biasa di tampilan", "good in the data, ordinary to look at"),
+    "gem_metode_iptt": ("permintaan belum terlayani", "demand nobody serves yet"),
+    "gem_tanpa_skor": (
+        "Heksagon di {kawasan}. Skor hidden gem belum dihitung.",
+        "A hexagon in {kawasan}. Its hidden gem score has not been computed.",
+    ),
+    "gem_lolos": (
+        ", lolos {n} dari 3 metode. ",
+        ", passing {n} of 3 methods. ",
+    ),
+    "gem_skor": ("Skor hidden gem {skor}", "Hidden gem score {skor}"),
+    "gem_tanpa_rincian": (
+        "Rincian metodenya belum bisa direkonstruksi - jalankan ulang pipeline "
+        "s6_score untuk kawasan {kawasan}. {ekor}",
+        "The method breakdown cannot be reconstructed - re-run the s6_score pipeline "
+        "for {kawasan}. {ekor}",
+    ),
+    "gem_selisih": (
+        " (rincian yang bisa ditampilkan di sini {n}, karena ambangnya dihitung "
+        "ulang terhadap kawasan)",
+        " ({n} can be shown here, because the thresholds are recomputed against the area)",
+    ),
+    "gem_ringkas": (
+        "Terpilih lewat {jumlah} dari 3 metode ({dipenuhi}){catatan}. {bukti} {ekor}",
+        "Selected by {jumlah} of 3 methods ({dipenuhi}){catatan}. {bukti} {ekor}",
+    ),
+    "badge_TINGGI": ("Didukung survei yang rapat", "Backed by a dense survey"),
+    "badge_SEDANG": ("Didukung survei secukupnya", "Backed by a fair amount of survey"),
+    "badge_RENDAH": (
+        "Datanya masih tipis, perlu verifikasi lapangan",
+        "The data is still thin; it needs checking on the ground",
+    ),
+    "badge_ekor": ("{badge} - {n} titik misi.", "{badge} - {n} mission points."),
+
+    # --- Riwayat skor ------------------------------------------------------
+    "riwayat_arah_naik": ("naik", "up"),
+    "riwayat_arah_turun": ("turun", "down"),
+    "riwayat_arah_tetap": ("tetap", "unchanged"),
+    "riwayat_tren": (
+        "{n} versi tercatat. Opportunity Score {arah} {selisih} poin dari versi "
+        "pertama ke terakhir.",
+        "{n} versions on record. The Opportunity Score went {arah} by {selisih} "
+        "points from the first version to the last.",
+    ),
+    "riwayat_sebagian": (
+        "{n} versi tercatat, sebagian tanpa skor.",
+        "{n} versions on record, some without a score.",
+    ),
+    "riwayat_satu": (
+        "Baru satu versi skor yang diterbitkan, jadi belum ada perubahan untuk "
+        "ditampilkan. Riwayat ini terisi sendiri begitu pipeline menerbitkan versi "
+        "berikutnya - tidak ada angka yang diperkirakan di sini.",
+        "Only one version of the score has been published, so there is no change to "
+        "show yet. This history fills itself in as soon as the pipeline publishes "
+        "the next version - nothing here is estimated.",
+    ),
+
+    # --- Dinamika kawasan --------------------------------------------------
+    "dinamika_catatan": (
+        "Sebaran ini potret versi skor yang sedang berlaku, bukan deret waktu. "
+        "Basis data baru memuat satu versi penerbitan; sumbu waktunya terisi begitu "
+        "pipeline menerbitkan versi berikutnya.",
+        "This spread is a snapshot of the score version in force, not a time series. "
+        "The database holds only one published version so far; the time axis fills "
+        "in as soon as the pipeline publishes the next one.",
+    ),
+
+    # --- Alasan rekomendasi (berkunci sama dengan `AlasanRekomendasi.kode`) --
+    "rek_MUAT_ANGGARAN": (
+        "Sewa {sewa}/bln — masih {sisa} di bawah anggaran Anda",
+        "Rent {sewa}/mo — still {sisa} under your budget",
+    ),
+    "rek_HIDDEN_GEM": (
+        "Hidden Gem: datanya bagus padahal tampilannya biasa — sewanya belum ikut naik",
+        "Hidden Gem: the data is good even though it looks ordinary — the rent has not caught up",
+    ),
+    "rek_DEKAT_SIMPUL": (
+        "{menit} menit jalan kaki ke simpul transit",
+        "{menit} minutes on foot to the transit node",
+    ),
+    "rek_SEPI_PESAING": (
+        "Baru {n} pesaing sejenis di heksagon ini",
+        "Only {n} direct rivals in this hexagon",
+    ),
+    "rek_UANG_BERPINDAH": (
+        "{rp} berpindah tangan tiap jam di sini",
+        "{rp} changes hands here every hour",
+    ),
+    "rek_CHURN_TINGGI": (
+        "Pergantian usaha di sini termasuk tinggi untuk kawasannya — periksa kenapa",
+        "Business turnover here is high for its area — find out why",
+    ),
+    "rek_RDTR_KOSONG": (
+        "RDTR digitalnya belum ada — izinnya wajib dicek ke dinas sebelum menyewa",
+        "There is no digital RDTR — check the permission with the planning office before leasing",
+    ),
+    "rek_BELUM_DISURVEI": (
+        "Belum disurvei langsung — harga sewa dan pola jam di sini belum terukur",
+        "Not surveyed on the ground — the rent and the hourly pattern here are unmeasured",
+    ),
+    "rek_DATA_TIPIS": (
+        "Baru {n} titik survei — angkanya masih bisa bergeser",
+        "Only {n} survey points — the numbers can still move",
+    ),
+    "rek_ringkas_umum": (
+        "Opportunity Score-nya termasuk tertinggi di antara yang memenuhi kriteria Anda.",
+        "Its Opportunity Score is among the highest of those meeting your criteria.",
+    ),
+    "rek_tanpa_preferensi": (
+        "Belum ada preferensi yang tersimpan, jadi daftar ini masih peringkat umum. "
+        "Isi rencana usaha dan kawasan incaran di menu akun untuk membuatnya "
+        "menjawab keadaan Anda.",
+        "No preferences saved yet, so this list is still the general ranking. Fill in "
+        "your business plan and the areas you are after in the account menu to make "
+        "it answer your own situation.",
+    ),
+    "rek_dipotong": (
+        "{total} lokasi memenuhi kriteria Anda. Tiga teratas ditampilkan; sisanya "
+        "terbuka untuk pelanggan Loconomics Premium.",
+        "{total} locations meet your criteria. The top three are shown; the rest are "
+        "open to Loconomics Premium subscribers.",
+    ),
+    "rek_penuh": (
+        "{total} lokasi memenuhi kriteria Anda, diurutkan menurut Opportunity Score.",
+        "{total} locations meet your criteria, ordered by Opportunity Score.",
+    ),
+    "rek_anggaran": ("sewa di bawah {rp}", "rent under {rp}"),
+
+    # --- Peringatan simulasi (berkunci sama dengan `Peringatan.kode`) -------
+    "sim_ZONA_MELARANG": (
+        "Zona RDTR di sini melarang kegiatan usaha. Simulasi tetap dihitung sebagai "
+        "latihan, tetapi lokasi ini tidak boleh dipakai.",
+        "The RDTR zoning here prohibits business activity. The simulation is still "
+        "computed as an exercise, but this location cannot be used.",
+    ),
+    "sim_ZONA_TIDAK_DIKETAHUI": (
+        "Belum ada RDTR digital untuk lokasi ini - status izinnya belum bisa "
+        "dipastikan. Verifikasi ke dinas terkait sebelum menyewa.",
+        "There is no digital RDTR for this location - its permission status cannot be "
+        "confirmed. Verify with the planning office before leasing.",
+    ),
+    "sim_IMPAS_TIDAK_REALISTIS": (
+        "Untuk sekadar menutup sewa, usaha ini harus menangkap {pangsa}% dari seluruh "
+        "belanja yang berputar di heksagon ini. Itu pangsa yang sangat besar untuk "
+        "pendatang baru - pertimbangkan lokasi dengan sewa lebih rendah.",
+        "Just to cover the rent, this business would have to capture {pangsa}% of all "
+        "the spending circulating in this hexagon. That is a very large share for a "
+        "newcomer - consider a location with lower rent.",
+    ),
+    "sim_BELUM_MENUTUP_SEWA": (
+        "Dengan asumsi ini, laba kotor belum menutup sewa. Naikkan pangsa, perkecil "
+        "luas, atau bandingkan dengan heksagon lain.",
+        "On these assumptions the gross profit does not cover the rent. Raise the "
+        "share, shrink the floor area, or compare with another hexagon.",
+    ),
+    "sim_PERGANTIAN_TINGGI": (
+        "Indeks pergantian usaha di sini {churn} - relatif tinggi. Banyak usaha yang "
+        "datang lalu pergi.",
+        "The business turnover index here is {churn} - relatively high. Many "
+        "businesses come and go.",
+    ),
+    "sim_DATA_TIPIS": (
+        "Data survei di heksagon ini tipis, jadi angka terukurnya pun tipis. "
+        "Perlakukan hasilnya sebagai arah, bukan angka.",
+        "The survey data in this hexagon is thin, so the measured figures are thin "
+        "too. Treat the result as a direction, not a number.",
+    ),
+    "sim_TANPA_DATA_BELANJA": (
+        "Belum ada data belanja per jam di heksagon ini, jadi omzetnya tidak bisa "
+        "dihitung - bukan berarti nol. Yang tetap bisa dijawab: berapa pembeli per "
+        "hari yang dibutuhkan sekadar untuk menutup sewa.",
+        "There is no hourly spending data for this hexagon, so revenue cannot be "
+        "computed - which does not mean it is zero. What can still be answered: how "
+        "many buyers a day it takes just to cover the rent.",
+    ),
+    "sim_SEWA_BELUM_DIISI": (
+        "Isi sewa yang ditawarkan ke Anda supaya kebutuhan pembeli per hari bisa "
+        "dihitung. Angka itu ada di penawaran pemilik, bukan di peta.",
+        "Fill in the rent you have been offered so the buyers-per-day figure can be "
+        "worked out. That number is in the owner's offer, not on the map.",
+    ),
+    "sim_HARGA_BELUM_DIISI": (
+        "Isi harga rata-rata per pembeli - itu rencana harga jual Anda sendiri, dan "
+        "tidak ada data survei yang bisa menggantikannya.",
+        "Fill in the average spend per buyer - that is your own planned selling price, "
+        "and no survey data can stand in for it.",
+    ),
+    "sim_SEWA_DIBANDING_LOKASI": (
+        "Sewa yang Anda isi dibandingkan dengan sewa terukur di heksagon ini - lihat "
+        "sewa per m2 di bagian angka.",
+        "The rent you entered is compared with the measured rent in this hexagon - see "
+        "rent per m2 in the figures.",
+    ),
+
+    # --- Commuter Clock ----------------------------------------------------
+    "jam_tanpa_baris": (
+        "Pola jam dibaca dari waktu yang tercetak di struk. Struk survei MAPID tidak "
+        "membawa kolom waktu - jamnya ada di dalam foto struknya, dan pembacaan "
+        "otomatis foto itu belum dijalankan.",
+        "Hourly patterns are read from the time printed on receipts. MAPID survey "
+        "receipts carry no time column - the hour sits inside the photo of the "
+        "receipt, and automatic reading of those photos has not been run.",
+    ),
+    "jam_semua_proxy": (
+        "Seluruh angka di sini hasil estimasi dari konteks heksagon, bukan dari jam "
+        "yang tercetak di struk. Perlakukan sebagai pola kasar, bukan pengukuran.",
+        "Every figure here is estimated from the hexagon's context, not from the time "
+        "printed on receipts. Treat it as a rough pattern, not a measurement.",
+    ),
+
+    # --- Konteks simpul ----------------------------------------------------
+    "simpul_kosong": (
+        "Belum ada simpul transportasi di basis data, jadi jaraknya belum bisa dihitung.",
+        "There are no transport nodes in the database yet, so the distance cannot be computed.",
+    ),
+    "simpul_cara_kaki": ("jalan kaki", "on foot"),
+    "simpul_cara_mobil": ("berkendara", "by car"),
+    "simpul_lurus": (
+        "Garis lurus ke {nama}. Rute {cara} yang sebenarnya lebih panjang karena "
+        "mengikuti jalan - heksagon ini belum dirutekan untuk profil itu.",
+        "Straight line to {nama}. The real {cara} route is longer because it follows "
+        "the streets - this hexagon has not been routed for that profile yet.",
+    ),
+    "simpul_rute": (
+        "{menit} menit {cara} ke {nama}, lewat jalan yang ada.",
+        "{menit} minutes {cara} to {nama}, along the streets that exist.",
+    ),
+    "simpul_memutar": (
+        " Jalurnya memutar {faktor}x dari jarak lurusnya ({lurus} m) - ada yang "
+        "menghalangi jalan langsungnya.",
+        " The path detours {faktor}x its straight-line distance ({lurus} m) - "
+        "something is blocking the direct way.",
+    ),
+    "simpul_alternatif": (
+        " {n} jalur alternatif tersedia.",
+        " {n} alternative routes are available.",
+    ),
+}
+
+
+def kalimat(kunci: str, bahasa: Bahasa = BAHASA_BAWAAN, **isi: object) -> str:
+    """Satu kalimat dari katalog, sudah diisi.
+
+    KeyError-nya sengaja tidak ditangkap: kunci yang salah ketik adalah bug yang
+    harus berteriak saat uji, bukan kalimat kosong yang lolos ke layar.
+    """
+    id_, en = KALIMAT[kunci]
+    return (en if bahasa == "en" else id_).format(**isi)
+
+
+def rp(n: float, bahasa: Bahasa = BAHASA_BAWAAN) -> str:
+    """Rupiah, dengan pemisah ribuan yang benar untuk bahasanya.
+
+    "Rp1.827" dibaca pembaca Inggris sebagai satu koma delapan - selisih seribu
+    kali pada angka yang dipakai orang menimbang sewa. Kembarannya di frontend
+    `lib/format.ts`, dan keduanya harus sepakat.
+    """
+    utuh = f"{n:,.0f}"
+    return "Rp" + (utuh if bahasa == "en" else utuh.replace(",", "."))
+
 # ---------------------------------------------------------------------------
 # Kejujuran keempat indeks
 # ---------------------------------------------------------------------------

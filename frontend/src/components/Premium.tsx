@@ -837,6 +837,7 @@ export function DialogKomparasi({
   onPilih: (h3: string) => void
 }) {
   const t = useTeks(K)
+  const { bahasa } = useBahasa()
   const namaZona = useNamaZona()
   const [data, setData] = useState<Komparasi | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
@@ -856,10 +857,10 @@ export function DialogKomparasi({
     return () => {
       batal = true
     }
-    // `t` sengaja TIDAK jadi dependensi: kalimat cadangan itu hanya terbaca
-    // kalau permintaannya gagal, dan menambahkannya berarti seluruh komparasi
-    // diminta ulang tiap kali bahasa ditukar.
-  }, [h3])
+    // `t` sengaja TIDAK jadi dependensi - ia cuma kalimat cadangan saat
+    // permintaannya gagal. `bahasa` JUSTRU ikut: `risiko.label` dan
+    // `zoneguard.penjelasan` di respons ini dirakit backend.
+  }, [h3, bahasa])
 
   /**
    * Berapa metrik yang dimenangkan tiap lokasi.
@@ -1092,6 +1093,7 @@ export function DialogPantauan({
   onBandingkanSemua?: (h3: string[]) => void
 }) {
   const t = useTeks(K)
+  const { bahasa } = useBahasa()
   const namaZona = useNamaZona()
   const [butir, setButir] = useState<ButirPantauan[] | null>(null)
   const [dinamika, setDinamika] = useState<DinamikaKawasan | null>(null)
@@ -1129,7 +1131,8 @@ export function DialogPantauan({
     return () => {
       batal = true
     }
-  }, [kawasanTunggal])
+    // Lihat alasan yang sama di DialogKomparasi: `catatan` dirakit backend.
+  }, [kawasanTunggal, bahasa])
 
   const { catatSimpan } = useSesi()
   const lepas = async (h3: string) => {
@@ -1525,7 +1528,8 @@ export function BagianRiwayat({ h3 }: { h3: string }) {
     return () => {
       batal = true
     }
-  }, [h3, premium])
+    // `catatan` riwayat dirakit backend dari jumlah versinya.
+  }, [h3, premium, t])
 
   if (!premium)
     return (

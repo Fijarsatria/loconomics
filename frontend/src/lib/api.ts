@@ -119,11 +119,34 @@ export class GalatAPI extends Error {
  */
 const BATAS_WAKTU_MS = 25_000
 
+/**
+ * Bahasa kalimat yang dirakit BACKEND, ditempelkan ke tiap permintaan.
+ *
+ * Backend merakit belasan kalimat dari angka heksagon - penjelasan kuadran,
+ * peringatan simulasi, alasan rekomendasi - dan kalimat yang dirakit dari data
+ * tidak boleh disalin ke frontend sebagai kamus kedua. Jadi yang dikirim ke
+ * sana adalah bahasanya, dan yang pulang sudah dalam bahasa itu.
+ *
+ * DIBACA dari `documentElement.lang`, sama dengan `lib/format.ts`, dan dengan
+ * alasan yang sama: berkas ini bukan komponen dan tidak boleh memanggil kait.
+ *
+ * Hanya ditempel saat bahasanya INGGRIS. Indonesia adalah bawaan backend, jadi
+ * menempelkannya cuma memanjangkan URL dan menggandakan kunci cache untuk
+ * jawaban yang sama persis.
+ */
+function bahasaKini(): string | null {
+  if (typeof document === 'undefined') return null
+  return document.documentElement.lang === 'en' ? 'en' : null
+}
+
 async function ambil<T>(jalur: string, opsi?: RequestInit): Promise<T> {
   const kepala: Record<string, string> = { 'Content-Type': 'application/json' }
   if (tiketSekarang) kepala.Authorization = `Bearer ${tiketSekarang}`
 
-  const res = await fetch(`${API_BASE}${jalur}`, {
+  const bhs = bahasaKini()
+  const alamat = bhs ? `${jalur}${jalur.includes('?') ? '&' : '?'}bahasa=${bhs}` : jalur
+
+  const res = await fetch(`${API_BASE}${alamat}`, {
     signal: AbortSignal.timeout(BATAS_WAKTU_MS),
     ...opsi,
     headers: { ...kepala, ...(opsi?.headers as Record<string, string> | undefined) },

@@ -68,6 +68,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.core.aturan import BAHASA_BAWAAN, Bahasa, kalimat
+
 # --- Asumsi bawaan ---------------------------------------------------------
 # Sengaja angka bulat. Bulat mengumumkan dirinya sebagai titik awal yang harus
 # diganti; "4,7%" akan terbaca sebagai sesuatu yang dihitung, padahal bukan.
@@ -155,6 +157,7 @@ def hitung_simulasi(
     margin_persen: float,
     sewa_bulanan_diminta: float | None = None,
     harga_rata_rata: float | None = None,
+    bahasa: Bahasa = BAHASA_BAWAAN,
 ) -> dict:
     """Satu skenario, seluruh langkahnya terbuka.
 
@@ -276,20 +279,12 @@ def hitung_simulasi(
     peringatan: list[Peringatan] = []
     if zona_izin is False:
         peringatan.append(
-            Peringatan(
-                "ZONA_MELARANG",
-                "BAHAYA",
-                "Zona RDTR di sini melarang kegiatan usaha. Simulasi tetap dihitung "
-                "sebagai latihan, tetapi lokasi ini tidak boleh dipakai.",
-            )
+            Peringatan("ZONA_MELARANG", "BAHAYA", kalimat("sim_ZONA_MELARANG", bahasa))
         )
     elif zona_izin is None:
         peringatan.append(
             Peringatan(
-                "ZONA_TIDAK_DIKETAHUI",
-                "WASPADA",
-                "Belum ada RDTR digital untuk lokasi ini - status izinnya belum bisa "
-                "dipastikan. Verifikasi ke dinas terkait sebelum menyewa.",
+                "ZONA_TIDAK_DIKETAHUI", "WASPADA", kalimat("sim_ZONA_TIDAK_DIKETAHUI", bahasa)
             )
         )
     if (
@@ -300,77 +295,44 @@ def hitung_simulasi(
             Peringatan(
                 "IMPAS_TIDAK_REALISTIS",
                 "WASPADA",
-                f"Untuk sekadar menutup sewa, usaha ini harus menangkap "
-                f"{pangsa_impas:.0f}% dari seluruh belanja yang berputar di heksagon "
-                f"ini. Itu pangsa yang sangat besar untuk pendatang baru - "
-                f"pertimbangkan lokasi dengan sewa lebih rendah.",
+                kalimat("sim_IMPAS_TIDAK_REALISTIS", bahasa, pangsa=f"{pangsa_impas:.0f}"),
             )
         )
     if laba_kotor is not None and laba_kotor < 0:
         peringatan.append(
-            Peringatan(
-                "BELUM_MENUTUP_SEWA",
-                "WASPADA",
-                "Dengan asumsi ini, laba kotor belum menutup sewa. Naikkan pangsa, "
-                "perkecil luas, atau bandingkan dengan heksagon lain.",
-            )
+            Peringatan("BELUM_MENUTUP_SEWA", "WASPADA", kalimat("sim_BELUM_MENUTUP_SEWA", bahasa))
         )
     if indeks_churn is not None and indeks_churn > 0.45:
         peringatan.append(
             Peringatan(
                 "PERGANTIAN_TINGGI",
                 "WASPADA",
-                f"Indeks pergantian usaha di sini {indeks_churn:.2f} - relatif tinggi. "
-                "Banyak usaha yang datang lalu pergi.",
+                kalimat("sim_PERGANTIAN_TINGGI", bahasa, churn=f"{indeks_churn:.2f}"),
             )
         )
     if keyakinan == "RENDAH":
         peringatan.append(
-            Peringatan(
-                "DATA_TIPIS",
-                "INFO",
-                "Data survei di heksagon ini tipis, jadi angka terukurnya pun tipis. "
-                "Perlakukan hasilnya sebagai arah, bukan angka.",
-            )
+            Peringatan("DATA_TIPIS", "INFO", kalimat("sim_DATA_TIPIS", bahasa))
         )
     if belanja_per_jam is None:
         peringatan.append(
-            Peringatan(
-                "TANPA_DATA_BELANJA",
-                "INFO",
-                "Belum ada data belanja per jam di heksagon ini, jadi omzetnya tidak "
-                "bisa dihitung - bukan berarti nol. Yang tetap bisa dijawab: berapa "
-                "pembeli per hari yang dibutuhkan sekadar untuk menutup sewa.",
-            )
+            Peringatan("TANPA_DATA_BELANJA", "INFO", kalimat("sim_TANPA_DATA_BELANJA", bahasa))
         )
     # Dua peringatan di bawah bukan soal DATA melainkan soal ISIAN. Dipisah
     # karena tindakannya berbeda: yang satu menunggu survei, yang lain cuma
     # menunggu orangnya mengetik angka yang sudah ada di tangannya.
     if sewa_bulanan is None:
         peringatan.append(
-            Peringatan(
-                "SEWA_BELUM_DIISI",
-                "INFO",
-                "Isi sewa yang ditawarkan ke Anda supaya kebutuhan pembeli per hari "
-                "bisa dihitung. Angka itu ada di penawaran pemilik, bukan di peta.",
-            )
+            Peringatan("SEWA_BELUM_DIISI", "INFO", kalimat("sim_SEWA_BELUM_DIISI", bahasa))
         )
     if struk_dipakai is None:
         peringatan.append(
-            Peringatan(
-                "HARGA_BELUM_DIISI",
-                "INFO",
-                "Isi harga rata-rata per pembeli - itu rencana harga jual Anda "
-                "sendiri, dan tidak ada data survei yang bisa menggantikannya.",
-            )
+            Peringatan("HARGA_BELUM_DIISI", "INFO", kalimat("sim_HARGA_BELUM_DIISI", bahasa))
         )
     if sumber_sewa == "pengguna" and sewa_per_m2 is not None and sewa_per_m2 > 0:
         peringatan.append(
             Peringatan(
-                "SEWA_DIBANDING_LOKASI",
-                "INFO",
-                "Sewa yang Anda isi dibandingkan dengan sewa terukur di heksagon ini "
-                "- lihat sewa per m2 di bagian angka.",
+                "SEWA_DIBANDING_LOKASI", "INFO", kalimat("sim_SEWA_DIBANDING_LOKASI", bahasa)
             )
         )
 

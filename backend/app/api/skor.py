@@ -33,8 +33,15 @@ from app.core.aturan import (
     TINGKAT_BERPERINGATAN,
     CHURN_PERSENTIL_BAHAYA,
     CHURN_PERSENTIL_WASPADA,
+    BAHASA_BAWAAN,
+    Bahasa,
     LABEL_KUADRAN,
+    LABEL_KUADRAN_EN,
     PENJELASAN_KUADRAN,
+    PENJELASAN_KUADRAN_EN,
+    kalimat,
+    pilih,
+    rp,
     cakupan_prestise,
 )
 from app.core.database import get_db
@@ -266,7 +273,11 @@ def _ambang_gem(db: Session, kawasan: str) -> tuple[float | None, float | None]:
 
 
 def alasan_gem(
-    hx: HexFeature, sc: LocationScore, residual_p25: float | None, iptt_p75: float | None
+    hx: HexFeature,
+    sc: LocationScore,
+    residual_p25: float | None,
+    iptt_p75: float | None,
+    bahasa: Bahasa = BAHASA_BAWAAN,
 ) -> list[AlasanGem]:
     """Rangkuman alasan sebuah heksagon terpilih - dirakit dari angka basis data.
 
@@ -282,18 +293,14 @@ def alasan_gem(
         and sc.residual_biaya <= residual_p25
     ):
         sewa = (
-            f"Sewa median di sini Rp{hx.harga_sewa_median:,.0f} per bulan"
+            kalimat("gem_sewa", bahasa, sewa=rp(hx.harga_sewa_median, bahasa))
             if hx.harga_sewa_median
-            else "Biaya di sini"
-        ).replace(",", ".")
+            else kalimat("gem_biaya", bahasa)
+        )
         alasan.append(
             AlasanGem(
                 metode="residual_biaya",
-                bukti=(
-                    f"{sewa} - lebih murah daripada yang seharusnya, mengingat potensi "
-                    f"transit dan aktivitas ekonominya. Termasuk 25% termurah relatif "
-                    f"terhadap potensinya di kawasan {hx.kawasan}."
-                ),
+                bukti=kalimat("gem_residual", bahasa, sewa=sewa, kawasan=hx.kawasan),
                 kode_variabel=["P05", "P01", "D05", "D11"],
             )
         )
@@ -302,11 +309,7 @@ def alasan_gem(
         alasan.append(
             AlasanGem(
                 metode="kuadran",
-                bukti=(
-                    "Opportunity Score di atas median kawasan, tetapi prestise visualnya di "
-                    "bawah median - persis pola lokasi yang datanya bagus tetapi "
-                    "penampilannya membuat orang melewatkannya."
-                ),
+                bukti=kalimat("gem_kuadran", bahasa),
                 kode_variabel=["M03", "P02", "C05"],
             )
         )
@@ -315,11 +318,7 @@ def alasan_gem(
         alasan.append(
             AlasanGem(
                 metode="iptt",
-                bukti=(
-                    "Banyak pedagang keliling dan pembeli ramai, tetapi sedikit usaha "
-                    "menetap. Permintaannya sudah terbukti ada, belum ada yang "
-                    "melayaninya secara permanen."
-                ),
+                bukti=kalimat("gem_iptt", bahasa),
                 kode_variabel=["C07", "D10", "C08"],
             )
         )
@@ -327,20 +326,9 @@ def alasan_gem(
     return alasan
 
 
-NAMA_METODE = {
-    "residual_biaya": "harga di bawah potensinya",
-    "kuadran": "bagus di data, biasa di tampilan",
-    "iptt": "permintaan belum terlayani",
-}
-
-BADGE_KALIMAT = {
-    "TINGGI": "Didukung survei yang rapat",
-    "SEDANG": "Didukung survei secukupnya",
-    "RENDAH": "Datanya masih tipis, perlu verifikasi lapangan",
-}
-
-
-def _ringkasan(hx: HexFeature, sc: LocationScore, alasan: list[AlasanGem]) -> str:
+def _ringkasan(
+    hx: HexFeature, sc: LocationScore, alasan: list[AlasanGem], bahasa: Bahasa = BAHASA_BAWAAN
+) -> str:
     """Satu paragraf siap tampil di kartu.
 
     Jumlah metode yang disebut diambil dari `n_metode_lolos` milik pipeline, bukan
@@ -351,32 +339,39 @@ def _ringkasan(hx: HexFeature, sc: LocationScore, alasan: list[AlasanGem]) -> st
     yang kebetulan cocok dengan kalimatnya.
     """
     if sc.hidden_gem_score is None:
-        return f"Heksagon di {hx.kawasan}. Skor hidden gem belum dihitung."
+        return kalimat("gem_tanpa_skor", bahasa, kawasan=hx.kawasan)
 
     resmi = sc.n_metode_lolos
-    badge_txt = BADGE_KALIMAT[hx.tingkat_keyakinan]
-    ekor = f"{badge_txt} - {hx.n_titik_misi} titik misi."
+    ekor = kalimat(
+        "badge_ekor",
+        bahasa,
+        badge=kalimat(f"badge_{hx.tingkat_keyakinan}", bahasa),
+        n=hx.n_titik_misi,
+    )
 
     if not alasan:
         return (
-            f"Skor hidden gem {sc.hidden_gem_score:.2f}"
-            + (f", lolos {resmi} dari 3 metode. " if resmi else ". ")
-            + "Rincian metodenya belum bisa direkonstruksi - jalankan ulang "
-            f"pipeline s6_score untuk kawasan {hx.kawasan}. {ekor}"
+            kalimat("gem_skor", bahasa, skor=f"{sc.hidden_gem_score:.2f}")
+            + (kalimat("gem_lolos", bahasa, n=resmi) if resmi else ". ")
+            + kalimat("gem_tanpa_rincian", bahasa, kawasan=hx.kawasan, ekor=ekor)
         )
 
-    dipenuhi = ", ".join(NAMA_METODE[a.metode] for a in alasan)
+    dipenuhi = ", ".join(kalimat(f"gem_metode_{a.metode}", bahasa) for a in alasan)
     jumlah = resmi if resmi is not None else len(alasan)
     catatan = (
         ""
         if resmi is None or resmi == len(alasan)
-        else f" (rincian yang bisa ditampilkan di sini {len(alasan)}, "
-        f"karena ambangnya dihitung ulang terhadap kawasan)"
+        else kalimat("gem_selisih", bahasa, n=len(alasan))
     )
 
-    return (
-        f"Terpilih lewat {jumlah} dari 3 metode ({dipenuhi}){catatan}. "
-        f"{alasan[0].bukti} {ekor}"
+    return kalimat(
+        "gem_ringkas",
+        bahasa,
+        jumlah=jumlah,
+        dipenuhi=dipenuhi,
+        catatan=catatan,
+        bukti=alasan[0].bukti,
+        ekor=ekor,
     )
 
 
@@ -386,6 +381,7 @@ def hidden_gems(
     kawasan: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=10, le=100, description="Kriteria penerimaan: minimal 10")] = 10,
     versi: str = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> list[HiddenGem]:
     """Heksagon berskor Hidden Gem tertinggi, beserta rangkuman alasan terpilihnya.
 
@@ -416,14 +412,14 @@ def hidden_gems(
             ambang[hx.kawasan] = _ambang_gem(db, hx.kawasan)
         residual_p25, iptt_p75 = ambang[hx.kawasan]
 
-        daftar = alasan_gem(hx, sc, residual_p25, iptt_p75)
+        daftar = alasan_gem(hx, sc, residual_p25, iptt_p75, bahasa)
         hasil.append(
             HiddenGem(
                 skor=skor_heksagon(hx, sc),
                 n_metode_lolos=sc.n_metode_lolos if sc.n_metode_lolos is not None else len(daftar),
                 alasan=daftar,
-                ringkasan=_ringkasan(hx, sc, daftar),
-                zoneguard=zoneguard(hx),
+                ringkasan=_ringkasan(hx, sc, daftar, bahasa),
+                zoneguard=zoneguard(hx, bahasa),
             )
         )
     return hasil
@@ -441,6 +437,7 @@ def risk_radar(
     hanya_berperingatan: Annotated[bool, Query(description="Hanya yang churn-nya melewati ambang wajar kawasan")] = True,
     limit: Annotated[int, Query(le=200)] = 50,
     versi: str = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> list[TitikKuadran]:
     """Kuadran kanan bawah: terlihat mewah, ekonominya tidak jalan.
 
@@ -467,7 +464,7 @@ def risk_radar(
         if hx.kawasan not in ambang:
             ambang[hx.kawasan] = persentil_churn(db, hx.kawasan)
         p75, p90 = ambang[hx.kawasan]
-        risiko = peringatan_risiko(hx, p75, p90)
+        risiko = peringatan_risiko(hx, p75, p90, bahasa)
 
         if hanya_berperingatan and risiko.tingkat not in TINGKAT_BERPERINGATAN:
             continue
@@ -535,6 +532,7 @@ def diagram_kuadran(
     kawasan: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(le=5000)] = 2000,
     versi: str = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> DiagramKuadran:
     """Titik sebar untuk diagram kuadran yang bisa diklik.
 
@@ -578,7 +576,10 @@ def diagram_kuadran(
         titik=titik,
         batas_x=batas[0],
         batas_y=batas[1],
-        keterangan={k: f"{LABEL_KUADRAN[k]} - {v}" for k, v in PENJELASAN_KUADRAN.items()},
+        keterangan={
+            k: f"{pilih(LABEL_KUADRAN, LABEL_KUADRAN_EN, bahasa)[k]} - {v}"
+            for k, v in pilih(PENJELASAN_KUADRAN, PENJELASAN_KUADRAN_EN, bahasa).items()
+        },
         # Dihitung dari baris yang SUDAH dimuat, bukan dari kueri baru: keterangan
         # sumbu harus menerangkan titik yang benar-benar digambar, dan kalau ia
         # bertanya sendiri ke basis data ia bisa menerangkan himpunan lain.
@@ -589,10 +590,14 @@ def diagram_kuadran(
 @router.get(
     "/risiko/{h3_index}", response_model=PeringatanRisiko, summary="Peringatan risiko satu heksagon"
 )
-def risiko_heksagon(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> PeringatanRisiko:
+def risiko_heksagon(
+    h3_index: str,
+    db: Annotated[Session, Depends(get_db)],
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
+) -> PeringatanRisiko:
     hx = ambil_hex(db, h3_index)
     p75, p90 = persentil_churn(db, hx.kawasan)
-    return peringatan_risiko(hx, p75, p90)
+    return peringatan_risiko(hx, p75, p90, bahasa)
 
 
 # ---------------------------------------------------------------------------
@@ -636,9 +641,13 @@ def zoneguard_ringkasan(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
 @router.get(
     "/zoneguard/{h3_index}", response_model=StatusZoneGuard, summary="Status zonasi satu heksagon"
 )
-def zoneguard_heksagon(h3_index: str, db: Annotated[Session, Depends(get_db)]) -> StatusZoneGuard:
+def zoneguard_heksagon(
+    h3_index: str,
+    db: Annotated[Session, Depends(get_db)],
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
+) -> StatusZoneGuard:
     hx = ambil_hex(db, h3_index)
-    return zoneguard(hx)
+    return zoneguard(hx, bahasa)
 
 
 # ===========================================================================
@@ -695,6 +704,7 @@ def komparasi(
         Query(description="Ulangi parameter ini 2-4 kali: ?h3=...&h3=..."),
     ],
     versi: Annotated[str, Query()] = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> Komparasi:
     """Bandingkan 2-4 heksagon berdampingan.
 
@@ -748,8 +758,8 @@ def komparasi(
                     ikp=sc.ikp if sc else None,
                     ibr=sc.ibr if sc else None,
                 ),
-                zoneguard=zoneguard(hx),
-                risiko=peringatan_risiko(hx, p75, p90),
+                zoneguard=zoneguard(hx, bahasa),
+                risiko=peringatan_risiko(hx, p75, p90, bahasa),
                 harga_sewa_per_m2=hx.harga_sewa_per_m2,
                 belanja_per_jam=hx.belanja_per_jam,
                 waktu_jalan_menit=hx.waktu_jalan_menit,
@@ -792,6 +802,7 @@ def riwayat_skor(
     h3_index: str,
     pengguna: PenggunaPremium,
     db: Annotated[Session, Depends(get_db)],
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> RiwayatSkor:
     """Skor heksagon ini di setiap versi yang pernah diterbitkan pipeline.
 
@@ -829,19 +840,18 @@ def riwayat_skor(
         awal = titik[0].opportunity_score
         akhir = titik[-1].opportunity_score
         if awal is not None and akhir is not None:
-            arah = "naik" if akhir > awal else ("turun" if akhir < awal else "tetap")
-            catatan = (
-                f"{len(titik)} versi tercatat. Opportunity Score {arah} "
-                f"{abs(akhir - awal):.1f} poin dari versi pertama ke terakhir."
+            kunci = "naik" if akhir > awal else ("turun" if akhir < awal else "tetap")
+            catatan = kalimat(
+                "riwayat_tren",
+                bahasa,
+                n=len(titik),
+                arah=kalimat(f"riwayat_arah_{kunci}", bahasa),
+                selisih=f"{abs(akhir - awal):.1f}",
             )
         else:
-            catatan = f"{len(titik)} versi tercatat, sebagian tanpa skor."
+            catatan = kalimat("riwayat_sebagian", bahasa, n=len(titik))
     else:
-        catatan = (
-            "Baru satu versi skor yang diterbitkan, jadi belum ada perubahan untuk "
-            "ditampilkan. Riwayat ini terisi sendiri begitu pipeline menerbitkan "
-            "versi berikutnya - tidak ada angka yang diperkirakan di sini."
-        )
+        catatan = kalimat("riwayat_satu", bahasa)
 
     return RiwayatSkor(
         h3_index=h3_index, titik=titik, cukup_untuk_tren=cukup, catatan=catatan
@@ -856,6 +866,7 @@ def dinamika_kawasan(
     db: Annotated[Session, Depends(get_db)],
     kawasan: Annotated[str, Query(description="Salah satu dari 6 kawasan pilot")],
     versi: Annotated[str, Query()] = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> DinamikaKawasan:
     """Sebaran churn dan komposisi kuadran satu kawasan.
 
@@ -942,11 +953,7 @@ def dinamika_kawasan(
         rata_opportunity=round(rata, 2) if rata is not None else None,
         cakupan_survei=round(n_survei / n_hex, 3) if n_hex else None,
         versi=versi,
-        catatan=(
-            "Sebaran ini potret versi skor yang sedang berlaku, bukan deret waktu. "
-            "Basis data baru memuat satu versi penerbitan; sumbu waktunya terisi "
-            "begitu pipeline menerbitkan versi berikutnya."
-        ),
+        catatan=kalimat("dinamika_catatan", bahasa),
     )
 
 
@@ -975,7 +982,9 @@ SEPI_KOMPETITOR = 5.0
 CHURN_TENANG = 0.30
 
 
-def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanRekomendasi]:
+def _alasan_untuk(
+    hx, sc, budget: int | None, p75: float | None, bahasa: Bahasa = BAHASA_BAWAAN
+) -> list[AlasanRekomendasi]:
     """Susun alasan dari angka heksagon ini. Tidak ada kalimat tanpa angka."""
     keluar: list[AlasanRekomendasi] = []
 
@@ -984,7 +993,12 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="MUAT_ANGGARAN",
-                teks=f"Sewa Rp{hx.harga_sewa_median:,.0f}/bln — masih Rp{sisa:,.0f} di bawah anggaran Anda".replace(",", "."),
+                teks=kalimat(
+                    "rek_MUAT_ANGGARAN",
+                    bahasa,
+                    sewa=rp(hx.harga_sewa_median, bahasa),
+                    sisa=rp(sisa, bahasa),
+                ),
                 nilai=hx.harga_sewa_median,
             )
         )
@@ -993,7 +1007,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="HIDDEN_GEM",
-                teks="Hidden Gem: datanya bagus padahal tampilannya biasa — sewanya belum ikut naik",
+                teks=kalimat("rek_HIDDEN_GEM", bahasa),
                 nilai=sc.hidden_gem_score,
             )
         )
@@ -1002,7 +1016,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="DEKAT_SIMPUL",
-                teks=f"{hx.waktu_jalan_menit:.0f} menit jalan kaki ke simpul transit",
+                teks=kalimat("rek_DEKAT_SIMPUL", bahasa, menit=f"{hx.waktu_jalan_menit:.0f}"),
                 nilai=hx.waktu_jalan_menit,
             )
         )
@@ -1027,7 +1041,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="SEPI_PESAING",
-                teks=f"Baru {hx.n_kompetitor_langsung:.0f} pesaing sejenis di heksagon ini",
+                teks=kalimat("rek_SEPI_PESAING", bahasa, n=f"{hx.n_kompetitor_langsung:.0f}"),
                 nilai=hx.n_kompetitor_langsung,
             )
         )
@@ -1036,7 +1050,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="UANG_BERPINDAH",
-                teks=f"Rp{hx.belanja_per_jam:,.0f} berpindah tangan tiap jam di sini".replace(",", "."),
+                teks=kalimat("rek_UANG_BERPINDAH", bahasa, rp=rp(hx.belanja_per_jam, bahasa)),
                 nilai=hx.belanja_per_jam,
             )
         )
@@ -1046,7 +1060,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="CHURN_TINGGI",
-                teks="Pergantian usaha di sini termasuk tinggi untuk kawasannya — periksa kenapa",
+                teks=kalimat("rek_CHURN_TINGGI", bahasa),
                 nilai=hx.indeks_churn,
                 jenis="catatan",
             )
@@ -1055,7 +1069,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="RDTR_KOSONG",
-                teks="RDTR digitalnya belum ada — izinnya wajib dicek ke dinas sebelum menyewa",
+                teks=kalimat("rek_RDTR_KOSONG", bahasa),
                 jenis="catatan",
             )
         )
@@ -1069,7 +1083,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="BELUM_DISURVEI",
-                teks="Belum disurvei langsung — harga sewa dan pola jam di sini belum terukur",
+                teks=kalimat("rek_BELUM_DISURVEI", bahasa),
                 nilai=0.0,
                 jenis="catatan",
             )
@@ -1078,7 +1092,7 @@ def _alasan_untuk(hx, sc, budget: int | None, p75: float | None) -> list[AlasanR
         keluar.append(
             AlasanRekomendasi(
                 kode="DATA_TIPIS",
-                teks=f"Baru {hx.n_titik_misi} titik survei — angkanya masih bisa bergeser",
+                teks=kalimat("rek_DATA_TIPIS", bahasa, n=hx.n_titik_misi),
                 nilai=float(hx.n_titik_misi),
                 jenis="catatan",
             )
@@ -1105,6 +1119,7 @@ def rekomendasi(
     budget: Annotated[int | None, Query(ge=0, description="Timpa anggaran preferensi")] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 12,
     versi: Annotated[str, Query()] = "baseline",
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> HasilRekomendasi:
     """Daftar lokasi yang menjawab keadaan SATU orang.
 
@@ -1155,13 +1170,9 @@ def rekomendasi(
     hasil: list[Rekomendasi] = []
     for hx, sc in baris:
         p75, p90 = persentil_churn(db, hx.kawasan)
-        alasan = _alasan_untuk(hx, sc, anggaran, p75)
+        alasan = _alasan_untuk(hx, sc, anggaran, p75, bahasa)
         cocok = [a for a in alasan if a.jenis == "cocok"]
-        ringkas = (
-            cocok[0].teks
-            if cocok
-            else "Opportunity Score-nya termasuk tertinggi di antara yang memenuhi kriteria Anda."
-        )
+        ringkas = cocok[0].teks if cocok else kalimat("rek_ringkas_umum", bahasa)
         hasil.append(
             Rekomendasi(
                 skor=skor_heksagon(hx, sc),
@@ -1183,8 +1194,8 @@ def rekomendasi(
                 jarak_simpul_m=hx.jarak_simpul_m,
                 n_kompetitor_langsung=hx.n_kompetitor_langsung,
                 indeks_churn=hx.indeks_churn,
-                zoneguard=zoneguard(hx),
-                risiko=peringatan_risiko(hx, p75, p90),
+                zoneguard=zoneguard(hx, bahasa),
+                risiko=peringatan_risiko(hx, p75, p90, bahasa),
                 alasan=alasan,
                 ringkasan=ringkas,
             )
@@ -1196,21 +1207,14 @@ def rekomendasi(
     if kw:
         bagian.append(" + ".join(kw))
     if anggaran:
-        bagian.append(f"sewa di bawah Rp{anggaran:,.0f}".replace(",", "."))
+        bagian.append(kalimat("rek_anggaran", bahasa, rp=rp(anggaran, bahasa)))
 
     if not bagian:
-        catatan = (
-            "Belum ada preferensi yang tersimpan, jadi daftar ini masih peringkat "
-            "umum. Isi rencana usaha dan kawasan incaran di menu akun untuk "
-            "membuatnya menjawab keadaan Anda."
-        )
+        catatan = kalimat("rek_tanpa_preferensi", bahasa)
     elif not premium:
-        catatan = (
-            f"{total} lokasi memenuhi kriteria Anda. Tiga teratas ditampilkan; "
-            f"sisanya terbuka untuk pelanggan Loconomics Premium."
-        )
+        catatan = kalimat("rek_dipotong", bahasa, total=total)
     else:
-        catatan = f"{total} lokasi memenuhi kriteria Anda, diurutkan menurut Opportunity Score."
+        catatan = kalimat("rek_penuh", bahasa, total=total)
 
     return HasilRekomendasi(
         hasil=hasil,

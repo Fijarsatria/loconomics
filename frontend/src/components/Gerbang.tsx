@@ -50,7 +50,7 @@ import { SplitText } from 'gsap/SplitText'
 
 import { IDENTITAS, KUADRAN, PENDIRI, URUTAN_KUADRAN } from '../config'
 import { PapanNama } from './primitif'
-import { TombolAkun } from './Akun'
+import { TombolAkun, useSesi } from './Akun'
 import BentoKeputusan, { type PilihanKawasan } from './GerbangPeta'
 import { KARTU_GERBANG } from '../lib/kartu-gerbang'
 import { SUMBER } from '../lib/ringkasan-data'
@@ -1755,10 +1755,22 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         ease: 'none',
         scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top 40%', end: 'top -18%', scrub: 0.4 },
       })
+      // `top 14%`, bukan `top 34%`.
+      //
+      // Ambangnya setinggi 46vh (52vh di halaman terang) dan berakhir TEPAT di
+      // atas `.g-jurang`, jadi saat puncak jurang berada 34% dari atas layar,
+      // bilah atas masih berdiri di sepertiga pertama gradien itu - tempat
+      // alfanya belum 0,05. Bilahnya tetap berbahan terang di atas latar yang
+      // sudah nyaris hitam, dan tulisan "Loconomics" hilang ke dalamnya.
+      // Terlihat di potret mode terang, dan sudah ada sejak ambangnya
+      // ditinggikan.
+      //
+      // 14% menaruh bilah itu di sekitar 85% gradien - tempat alfanya sudah
+      // melewati 0,7 - dan angka yang sama bekerja untuk kedua tinggi ambang.
       ScrollTrigger.create({
         scroller,
         trigger: '.g-jurang',
-        start: 'top 34%',
+        start: 'top 14%',
         end: 'bottom top',
         onEnter: () => setNavGelap(true),
         onEnterBack: () => setNavGelap(true),
@@ -1807,13 +1819,37 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
     // SplitText harus memecah teks yang baru - bukan memegang baris yang lama.
   }, [gerakMati, bahasa])
 
-  const tombolMasuk = (kelas: string, ukuran: 'kecil' | 'besar') => (
+  /**
+   * `sorot` menentukan tombol ini BERPENDAR atau tidak.
+   *
+   * Di bilah atas ia berpendar hanya untuk yang SUDAH masuk. Sebelum itu yang
+   * berpendar "Daftar" - permintaan pemilik repo, 11 Sep 2026, membalik
+   * keputusan 9 Sep: "saya gamau button itu di highlight kalau belum sign up".
+   * Alasannya masuk akal dan bukan selera: peta bisa dibuka siapa pun, jadi
+   * mengarahkan mata ke sana lebih dulu berarti menunda satu-satunya langkah
+   * yang benar-benar mengubah apa yang akan ia lihat di sana.
+   *
+   * Di HERO tombolnya tetap berpendar apa pun keadaannya - di sana tidak ada
+   * tombol daftar untuk berebut perhatian, dan hero tanpa satu ajakan yang
+   * jelas adalah hero tanpa ajakan.
+   */
+  const { akun } = useSesi()
+
+  const tombolMasuk = (kelas: string, ukuran: 'kecil' | 'besar', sorot = true) => (
     <Magnet
       onClick={() => onMasuk()}
-      kelas={`g-catalyst group inline-flex cursor-pointer items-center gap-3 rounded-full font-semibold ${kelas}`}
+      kelas={
+        sorot
+          ? `g-catalyst group inline-flex cursor-pointer items-center gap-3 rounded-full font-semibold ${kelas}`
+          : `g-pil inline-flex cursor-pointer items-center gap-3 rounded-full font-semibold text-[color:var(--g-ink)] ${kelas}`
+      }
       anak={
         <>
-          <span className={`g-catalyst-teks ${ukuran === 'besar' ? 'text-[15px]' : 'text-[13.5px]'}`}>
+          <span
+            className={`${sorot ? 'g-catalyst-teks' : ''} ${
+              ukuran === 'besar' ? 'text-[15px]' : 'text-[13.5px]'
+            }`}
+          >
             {teks.masuk}
           </span>
           {ukuran === 'besar' && <PanahKanan />}
@@ -1850,10 +1886,14 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
               dibutuhkan di sini - tombol yang sama berdiri dua kali lebih besar
               tepat di bawahnya, di hero. */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <SakelarTema gelap={navGelap} />
+            {/* Sakelar tema TIDAK lagi di sini. Ia pindah ke tengah bawah hero,
+                atas permintaan pemilik repo - dan bilah ini memang sudah
+                memuat empat benda pada 640px. */}
             <SakelarBahasa gelap={navGelap} />
             <TombolAkun varian="gerbang" />
-            <span className="hidden sm:inline-flex">{tombolMasuk('px-4 py-2', 'kecil')}</span>
+            <span className="hidden sm:inline-flex">
+              {tombolMasuk('px-4 py-2', 'kecil', Boolean(akun))}
+            </span>
           </div>
         </nav>
       </div>
@@ -1887,6 +1927,14 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
               kelas="g-pil cursor-pointer rounded-full px-7 py-4 text-[15px] font-semibold text-[color:var(--g-ink)]"
               anak={teks.lihatSolusi}
             />
+          </div>
+
+          {/* Sakelar tema, DI BAWAH kedua ajakan dan di tengah - permintaan
+              pemilik repo. Tempat ini juga yang benar menurut artinya: ia
+              bukan ajakan melainkan preferensi, jadi ia berdiri sesudah dua
+              hal yang benar-benar diminta halaman ini dilakukan orang. */}
+          <div className="g-masuk-awal mt-7 flex justify-center">
+            <SakelarTema />
           </div>
 
           {/* TANPA `transition-opacity`. GSAP menganimasikan opacity tombol ini
@@ -1950,7 +1998,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
             tulang punggung sama sekali, dan gambarnya PELAT ALAT UKUR - siku di
             sudut, garis tipis, label huruf mono. Satu bagian menunjukkan produk;
             yang ini menerangkan keadaan sebelum produknya ada. */}
-        <section id="masalah" className="g-latar-titik relative overflow-hidden px-6 pb-28 pt-14 sm:pb-36 sm:pt-20">
+        <section id="masalah" className="g-latar-titik relative overflow-hidden px-6 pb-40 pt-20 sm:pb-52 sm:pt-28">
           <div className="mx-auto w-full max-w-[74rem]">
             {/* Pembuka EDITORIAL: judul kiri, paragraf kanan. Ekosistem membuka
                 di tengah; dua bagian berurutan yang membuka dengan susunan yang
@@ -2026,7 +2074,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </section>
 
         {/* ================= 3 · SOLUSI ================================== */}
-        <section id="solusi" className="relative px-6 py-28 sm:py-36">
+        <section id="solusi" className="relative px-6 py-40 sm:py-52">
           <div className="mx-auto mb-12 max-w-[48rem] text-center">
             <p className="g-sapu eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.solusi.eyebrow}</p>
             <h2 className="g-sapu judul-bagian text-[clamp(1.5rem,2.8vw,2.35rem)]">{teks.solusi.judul}</h2>
@@ -2043,7 +2091,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </section>
 
         {/* ================= 4 · EKOSISTEM (zig-zag) ===================== */}
-        <section id="ekosistem" className="g-latar-mesh relative px-6 py-28 sm:py-36">
+        <section id="ekosistem" className="g-latar-mesh relative px-6 py-40 sm:py-52">
           <div className="mx-auto mb-16 max-w-[48rem] text-center sm:mb-24">
             <p className="g-tirai eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.ekosistem.eyebrow}</p>
             <h2 className="g-baris judul-bagian text-[clamp(1.5rem,2.8vw,2.35rem)]">{teks.ekosistem.judul}</h2>
@@ -2151,7 +2199,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         </section>
 
         {/* ================= 5 · PENUTUP ================================= */}
-        <section className="g-penutup relative overflow-hidden px-6 pb-14 pt-32">
+        <section className="g-penutup relative overflow-hidden px-6 pb-14 pt-44">
           <div
             className="g-aurora pointer-events-none absolute left-1/2 top-1/2 h-[62vh] w-[86vw] rounded-[50%]"
             aria-hidden

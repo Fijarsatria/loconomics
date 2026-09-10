@@ -924,7 +924,12 @@ export default function Simulasi({
       batal = true
       clearTimeout(t)
     }
-  }, [h3, h3Banding, jenis, jam, luas, pangsa, margin, sewaDiisi, hargaDiisi])
+    // `bahasa` ikut jadi dependensi, dan itu bukan kelebihan.
+    // Belasan kalimat di respons ini DIRAKIT BACKEND dari angka heksagon -
+    // penjelasan kuadran, catatan pola jam, peringatan simulasi. Menukar
+    // bahasa tanpa meminta ulang meninggalkan kalimat lama di layar yang
+    // seluruh sisanya sudah berganti.
+  }, [h3, h3Banding, jenis, jam, luas, pangsa, margin, sewaDiisi, hargaDiisi, ist.bahasa])
 
   // Escape menutup lembarnya, sama dengan setiap dialog lain di aplikasi ini.
   // Tanpa ini ia satu-satunya lapisan menutup layar yang tidak menanggapi

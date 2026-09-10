@@ -977,6 +977,83 @@ def test_klaim_melihat_bangunan_tidak_ada_lagi_di_mana_pun():
     )
 
 
+
+def test_setiap_kalimat_punya_kedua_bahasanya_dengan_placeholder_sama():
+    """Katalog dua bahasa: bentuknya, bukan cuma keberadaannya.
+
+    Yang dijaga di sini BUKAN "apakah ada terjemahannya" - itu terlihat dengan
+    mata. Yang tidak terlihat dengan mata: cabang Inggris yang lupa membawa
+    salah satu placeholder-nya. `"{sewa} - lebih murah"` yang diterjemahkan jadi
+    `"cheaper than it ought to be"` tidak akan pernah memunculkan galat; ia cuma
+    menghilangkan angkanya dari kalimat, dan kalimat tanpa angka persis yang
+    dilarang seluruh berkas ini.
+
+    Kebalikannya lebih buruk lagi: placeholder yang ADA di Inggris tetapi tidak
+    di Indonesia membuat `str.format` melempar KeyError di tengah respons - dan
+    hanya untuk pembaca berbahasa Inggris, jadi ia lolos setiap kali diperiksa
+    dalam bahasa Indonesia.
+    """
+    from string import Formatter
+
+    from app.core.aturan import (
+        ARTI_INDEKS,
+        ARTI_INDEKS_EN,
+        KALIMAT,
+        LABEL_KUADRAN,
+        LABEL_KUADRAN_EN,
+        LABEL_RISIKO,
+        LABEL_RISIKO_EN,
+        PENJELASAN_KUADRAN,
+        PENJELASAN_KUADRAN_EN,
+        PENJELASAN_ZONA,
+        PENJELASAN_ZONA_EN,
+    )
+
+    def medan(t: str) -> set[str]:
+        return {f for _, f, _, _ in Formatter().parse(t) if f}
+
+    assert KALIMAT, "katalog kalimat kosong"
+    for kunci, pasangan in KALIMAT.items():
+        assert isinstance(pasangan, tuple) and len(pasangan) == 2, (
+            f"{kunci}: nilainya harus (indonesia, inggris)"
+        )
+        id_, en = pasangan
+        assert id_.strip(), f"{kunci}: cabang Indonesia kosong"
+        assert en.strip(), f"{kunci}: cabang Inggris kosong"
+        assert id_ != en or not medan(id_), (
+            f"{kunci}: kedua cabangnya identik - kemungkinan besar lupa diterjemahkan"
+        )
+        assert medan(id_) == medan(en), (
+            f"{kunci}: placeholder berbeda - id {sorted(medan(id_))} vs "
+            f"en {sorted(medan(en))}"
+        )
+
+    for nama, a, b in (
+        ("LABEL_RISIKO", LABEL_RISIKO, LABEL_RISIKO_EN),
+        ("PENJELASAN_ZONA", PENJELASAN_ZONA, PENJELASAN_ZONA_EN),
+        ("PENJELASAN_KUADRAN", PENJELASAN_KUADRAN, PENJELASAN_KUADRAN_EN),
+        ("LABEL_KUADRAN", LABEL_KUADRAN, LABEL_KUADRAN_EN),
+        ("ARTI_INDEKS", ARTI_INDEKS, ARTI_INDEKS_EN),
+    ):
+        assert set(a) == set(b), f"{nama}: kunci Inggrisnya tidak sama - {set(a) ^ set(b)}"
+        for k in a:
+            assert b[k].strip(), f"{nama}[{k}]: cabang Inggris kosong"
+
+
+def test_rupiah_memisahkan_ribuan_menurut_bahasanya():
+    """Titik dan koma bertukar arti di perbatasan bahasa.
+
+    "Rp1.827" dibaca pembaca Indonesia sebagai seribu delapan ratus dan pembaca
+    Inggris sebagai satu koma delapan. Selisih seribu kali, pada angka yang
+    dipakai orang menimbang sewa.
+    """
+    from app.core.aturan import rp
+
+    assert rp(2_250_000) == "Rp2.250.000"
+    assert rp(2_250_000, "id") == "Rp2.250.000"
+    assert rp(2_250_000, "en") == "Rp2,250,000"
+    assert rp(0, "en") == "Rp0"
+
 if __name__ == "__main__":
     lolos = gagal = 0
     for nama, fn in sorted(globals().items()):

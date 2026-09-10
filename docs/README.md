@@ -27,7 +27,7 @@ tidak diubah sedikit pun.
 
 | Berkas | Menjawab | Buka kalau |
 |---|---|---|
-| [jebakan.md](jebakan.md) | 245 kesalahan yang benar-benar terjadi di repo ini, sebabnya, dan perbaikannya | **Sebelum menyentuh sebuah bagian** — `grep` nama berkasnya di sana. Sebagian besar jebakannya gagal DIAM |
+| [jebakan.md](jebakan.md) | 250 kesalahan yang benar-benar terjadi di repo ini, sebabnya, dan perbaikannya | **Sebelum menyentuh sebuah bagian** — `grep` nama berkasnya di sana. Sebagian besar jebakannya gagal DIAM |
 | [status.md](status.md) | Apa yang sudah jadi berikut buktinya, dan apa yang menghalangi pekerjaan berikutnya | Anda perlu tahu di mana proyek ini berdiri, atau mau memilih pekerjaan berikutnya |
 
 ## Peta dokumen ke kode
