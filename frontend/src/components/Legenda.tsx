@@ -27,6 +27,80 @@ import type { NamaLayer } from '../config'
 import { api } from '../lib/api'
 import { CHURN_STOP } from '../lib/layer-peta'
 import { rupiah } from '../lib/format'
+import { useTeks } from '../lib/bahasa'
+
+const K = {
+  id: {
+    churnJudul: 'RiskRadar — pergantian usaha',
+    churnSumbu: 'indeks churn — seberapa sering usaha di sini datang lalu pergi',
+    churnKosong: 'Belum ada data churn',
+    churnKosongCatatan: 'bukan berarti stabil',
+    belumSurvei: 'Belum disurvei langsung',
+    belumSurveiCatatan: 'angkanya dari sumber terukur, bukan tebakan',
+    belumSurveiPendek: 'angkanya dari sumber terukur',
+    ambang: (
+      <>
+        Peringatan <strong className="font-semibold text-ink-2">Waspada</strong> dan{' '}
+        <strong className="font-semibold text-ink-2">Bahaya</strong> dibandingkan dengan
+        kawasannya sendiri — seperempat teratas dan sepersepuluh teratas. Keduanya muncul
+        saat satu heksagon dibuka, bukan dari gradasi ini.
+      </>
+    ),
+    hargaJudul: 'PriceLens — sewa per m²',
+    murah: 'murah',
+    mahal: 'mahal',
+    hargaSumbu: 'harga per m²',
+    memuatAngka: 'memuat angka kawasan',
+    bersampel: (n: number) => `${n} heksagon bersampel`,
+    pilihSatu: 'pilih satu kawasan untuk melihat rentang harganya',
+    belumSampel: 'belum ada sampel',
+    hargaKosong: 'Belum ada data harga',
+    hargaKosongCatatan: 'bukan berarti murah',
+    cakupanHarga: 'Heksagon dengan data harga',
+    zonaJudul: 'ZoneGuard — status izin',
+    zonaBoleh: 'Zona mengizinkan usaha',
+    zonaLarang: 'Zona melarang usaha',
+    zonaLarangCatatan: 'skor dinolkan, tidak pernah direkomendasikan',
+    zonaKosong: 'Belum ada RDTR digital',
+    zonaKosongCatatan: 'belum bisa dipastikan, bukan larangan',
+    cakupanRdtr: 'Heksagon dengan RDTR digital',
+  },
+  en: {
+    churnJudul: 'RiskRadar — business turnover',
+    churnSumbu: 'churn index — how often businesses here come and go',
+    churnKosong: 'No churn data yet',
+    churnKosongCatatan: 'which does not mean stable',
+    belumSurvei: 'Not surveyed on the ground',
+    belumSurveiCatatan: 'the number comes from a measured source, not a guess',
+    belumSurveiPendek: 'the number comes from a measured source',
+    ambang: (
+      <>
+        The <strong className="font-semibold text-ink-2">Caution</strong> and{' '}
+        <strong className="font-semibold text-ink-2">Danger</strong> warnings are measured
+        against the area's own distribution — its top quarter and top tenth. Both appear
+        when a hexagon is opened, not from this gradient.
+      </>
+    ),
+    hargaJudul: 'PriceLens — rent per m²',
+    murah: 'cheap',
+    mahal: 'expensive',
+    hargaSumbu: 'price per m²',
+    memuatAngka: 'loading the area figures',
+    bersampel: (n: number) => `${n} hexagons sampled`,
+    pilihSatu: 'pick one area to see its price range',
+    belumSampel: 'no samples yet',
+    hargaKosong: 'No rent data yet',
+    hargaKosongCatatan: 'which does not mean cheap',
+    cakupanHarga: 'Hexagons with rent data',
+    zonaJudul: 'ZoneGuard — permission status',
+    zonaBoleh: 'Zoning allows business',
+    zonaLarang: 'Zoning prohibits business',
+    zonaLarangCatatan: 'score zeroed, never recommended',
+    zonaKosong: 'No digital RDTR yet',
+    zonaKosongCatatan: 'cannot be confirmed — not a prohibition',
+    cakupanRdtr: 'Hexagons with digital RDTR',
+  },
+}
 
 interface RingkasanHarga {
   kawasan: string
@@ -103,6 +177,7 @@ function Cakupan({ nilai, label }: { nilai: number | null; label: string }) {
 }
 
 export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan: string }) {
+  const t = useTeks(K)
   const [semuaHarga, setSemuaHarga] = useState<RingkasanHarga[] | null>(null)
   const [semuaZona, setSemuaZona] = useState<RingkasanZona[] | null>(null)
   /**
@@ -187,7 +262,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
 
   if (layer === 'risk_radar') {
     return (
-      <Bingkai judul="RiskRadar — pergantian usaha" kawasan={labelKawasan(kawasan)}>
+      <Bingkai judul={t.churnJudul} kawasan={labelKawasan(kawasan)}>
         {/* Gradasinya dibangun dari CHURN_STOP, tabel yang sama yang mewarnai
             petanya. Hex harfiah, bukan var(--q-*): yang harus dicocokkan mata
             adalah warna di KANVAS, dan kanvas WebGL memang memakai hex. */}
@@ -205,17 +280,11 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
             </span>
           ))}
         </div>
-        <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
-          indeks churn — seberapa sering usaha di sini datang lalu pergi
-        </p>
+        <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{t.churnSumbu}</p>
 
         <ul className="mt-2.5 space-y-1.5 border-t border-line/70 pt-2.5">
-          <Kunci
-            warna={ABU_HINDARI}
-            label="Belum ada data churn"
-            catatan="bukan berarti stabil"
-          />
-          <Kunci arsir label="Belum disurvei langsung" catatan="angkanya dari sumber terukur, bukan tebakan" />
+          <Kunci warna={ABU_HINDARI} label={t.churnKosong} catatan={t.churnKosongCatatan} />
+          <Kunci arsir label={t.belumSurvei} catatan={t.belumSurveiCatatan} />
         </ul>
 
         {/* Kenapa gradasi ini TIDAK memakai label WASPADA/BAHAYA: ambangnya
@@ -225,10 +294,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
             tinggi. Penilaian ambangnya muncul di panel detail, tempat
             kawasannya sudah diketahui. */}
         <p className="mt-2.5 border-t border-line/70 pt-2.5 text-[11px] leading-snug text-ink-3">
-          Peringatan <strong className="font-semibold text-ink-2">Waspada</strong> dan{' '}
-          <strong className="font-semibold text-ink-2">Bahaya</strong> dibandingkan dengan
-          kawasannya sendiri — seperempat teratas dan sepersepuluh teratas. Keduanya
-          muncul saat satu heksagon dibuka, bukan dari gradasi ini.
+          {t.ambang}
         </p>
       </Bingkai>
     )
@@ -237,7 +303,7 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
   if (layer === 'pricelens') {
     const s = harga?.sewa_per_m2
     return (
-      <Bingkai judul="PriceLens — sewa per m²" kawasan={labelKawasan(kawasan)}>
+      <Bingkai judul={t.hargaJudul} kawasan={labelKawasan(kawasan)}>
         <div
           className="h-2.5 rounded-full"
           style={{ background: 'linear-gradient(90deg,#e4ece9,#7ea79c,#2c4f45)' }}
@@ -255,62 +321,62 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
           </div>
         ) : (
           <div className="mt-1.5 flex justify-between text-[11.5px] text-ink-3">
-            <span>murah</span>
-            <span>mahal</span>
+            <span>{t.murah}</span>
+            <span>{t.mahal}</span>
           </div>
         )}
         <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
-          harga per m² ·{' '}
+          {t.hargaSumbu} ·{' '}
           {memuat ? (
             <span className="text-ink-3">
               <span className="denyut mr-1 inline-block h-1 w-1 rounded-full bg-ink-3 align-middle" />
-              memuat angka kawasan
+              {t.memuatAngka}
             </span>
           ) : s?.n_sampel ? (
-            `${s.n_sampel} heksagon bersampel`
+            t.bersampel(s.n_sampel)
           ) : barisHarga.length > 1 ? (
             // Bukan "belum ada sampel": sampelnya ada, cuma kuartil gabungan
             // beberapa kawasan tidak punya arti. Katakan yang sebenarnya.
-            'pilih satu kawasan untuk melihat rentang harganya'
+            t.pilihSatu
           ) : (
-            'belum ada sampel'
+            t.belumSampel
           )}
         </p>
 
         <ul className="mt-2.5 space-y-1.5 border-t border-line/70 pt-2.5">
-          <Kunci warna={ABU_HINDARI} label="Belum ada data harga" catatan="bukan berarti murah" />
-          <Kunci arsir label="Belum disurvei langsung" catatan="angkanya dari sumber terukur, bukan tebakan" />
+          <Kunci warna={ABU_HINDARI} label={t.hargaKosong} catatan={t.hargaKosongCatatan} />
+          <Kunci arsir label={t.belumSurvei} catatan={t.belumSurveiCatatan} />
         </ul>
-        <Cakupan nilai={cakupanHarga} label="Heksagon dengan data harga" />
+        <Cakupan nilai={cakupanHarga} label={t.cakupanHarga} />
       </Bingkai>
     )
   }
 
   return (
-    <Bingkai judul="ZoneGuard — status izin" kawasan={labelKawasan(kawasan)}>
+    <Bingkai judul={t.zonaJudul} kawasan={labelKawasan(kawasan)}>
       <ul className="space-y-1.5">
-        <Kunci warna="#8fbfb2" label="Zona mengizinkan usaha" jumlah={zona?.diizinkan} />
+        <Kunci warna="#8fbfb2" label={t.zonaBoleh} jumlah={zona?.diizinkan} />
         <Kunci
           warna="#b42318"
-          label="Zona melarang usaha"
-          catatan="skor dinolkan, tidak pernah direkomendasikan"
+          label={t.zonaLarang}
+          catatan={t.zonaLarangCatatan}
           jumlah={zona?.dilarang}
         />
         <Kunci
           warna={ABU_HINDARI}
-          label="Belum ada RDTR digital"
-          catatan="belum bisa dipastikan, bukan larangan"
+          label={t.zonaKosong}
+          catatan={t.zonaKosongCatatan}
           jumlah={zona?.tidak_diketahui}
         />
-        <Kunci arsir label="Belum disurvei langsung" catatan="angkanya dari sumber terukur" />
+        <Kunci arsir label={t.belumSurvei} catatan={t.belumSurveiPendek} />
       </ul>
       {memuat && !zona ? (
         <p className="mt-2.5 border-t border-line/70 pt-2.5 text-[11px] text-ink-3">
           <span className="denyut mr-1 inline-block h-1 w-1 rounded-full bg-ink-3 align-middle" />
-          memuat angka kawasan
+          {t.memuatAngka}
         </p>
       ) : (
-        <Cakupan nilai={cakupanRdtr} label="Heksagon dengan RDTR digital" />
+        <Cakupan nilai={cakupanRdtr} label={t.cakupanRdtr} />
       )}
     </Bingkai>
   )
@@ -327,7 +393,7 @@ function Bingkai({
   kawasan,
   children,
 }: {
-  judul: string
+  judul: React.ReactNode
   kawasan: string
   children: React.ReactNode
 }) {

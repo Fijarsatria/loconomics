@@ -17,12 +17,45 @@
 
 import type { PosisiHarga, RentangWajar } from '../types'
 import { Kosong } from './primitif'
+import { useTeks } from '../lib/bahasa'
 
-const LABEL: Record<PosisiHarga, string> = {
-  MURAH: 'Di bawah rentang wajar',
-  WAJAR: 'Di dalam rentang wajar',
-  MAHAL: 'Di atas rentang wajar',
-  TIDAK_DIKETAHUI: 'Belum bisa dibandingkan',
+const K = {
+  id: {
+    posisi: {
+      MURAH: 'Di bawah rentang wajar',
+      WAJAR: 'Di dalam rentang wajar',
+      MAHAL: 'Di atas rentang wajar',
+      TIDAK_DIKETAHUI: 'Belum bisa dibandingkan',
+    } as Record<PosisiHarga, string>,
+    kosong: (k: string) => `Rentang wajar ${k} belum bisa dihitung — data harganya masih terlalu sedikit`,
+    judulPita: (k: string, a: string, b: string) => `Rentang wajar ${k}: ${a} – ${b}`,
+    judulMedian: (k: string, v: string) => `Median ${k}: ${v}`,
+    judulNilai: (v: string) => `Heksagon ini: ${v}`,
+    rentang: (k: string) => `rentang wajar ${k}`,
+    sampel: (n: number) => ` · ${n} heksagon`,
+    persisMedian: 'Persis di median kawasan.',
+    lebihMahal: 'lebih mahal',
+    lebihMurah: 'lebih murah',
+    daripada: (k: string) => ` daripada harga tengah di ${k}.`,
+  },
+  en: {
+    posisi: {
+      MURAH: 'Below the fair range',
+      WAJAR: 'Inside the fair range',
+      MAHAL: 'Above the fair range',
+      TIDAK_DIKETAHUI: 'Cannot be compared yet',
+    } as Record<PosisiHarga, string>,
+    kosong: (k: string) => `A fair range for ${k} cannot be computed yet — too little price data`,
+    judulPita: (k: string, a: string, b: string) => `Fair range for ${k}: ${a} – ${b}`,
+    judulMedian: (k: string, v: string) => `Median for ${k}: ${v}`,
+    judulNilai: (v: string) => `This hexagon: ${v}`,
+    rentang: (k: string) => `fair range for ${k}`,
+    sampel: (n: number) => ` · ${n} hexagons`,
+    persisMedian: 'Exactly at the area median.',
+    lebihMahal: 'more expensive',
+    lebihMurah: 'cheaper',
+    daripada: (k: string) => ` than the median price in ${k}.`,
+  },
 }
 
 export default function BarHarga({
@@ -40,10 +73,9 @@ export default function BarHarga({
   format: (n: number | null) => string | null
   kawasan: string
 }) {
+  const t = useTeks(K)
   if (wajar.p25 === null || wajar.p75 === null || wajar.p50 === null) {
-    return (
-      <Kosong teks={`Rentang wajar ${kawasan} belum bisa dihitung — data harganya masih terlalu sedikit`} />
-    )
+    return <Kosong teks={t.kosong(kawasan)} />
   }
 
   // Skala diperluas 35% di kedua sisi supaya nilai di luar pita punya ruang
@@ -65,7 +97,7 @@ export default function BarHarga({
           <span
             className={`text-[13px] font-semibold ${luar ? 'text-jebakan' : 'text-ink-2'}`}
           >
-            {LABEL[posisi]}
+            {t.posisi[posisi]}
           </span>
         )}
       </div>
@@ -78,14 +110,14 @@ export default function BarHarga({
         <span
           className="absolute top-1.5 h-5 rounded-xs bg-ground-2"
           style={{ left: `${pos(wajar.p25)}%`, width: `${pos(wajar.p75) - pos(wajar.p25)}%` }}
-          title={`Rentang wajar ${kawasan}: ${format(wajar.p25)} – ${format(wajar.p75)}`}
+          title={t.judulPita(kawasan, format(wajar.p25) ?? '—', format(wajar.p75) ?? '—')}
         />
 
         {/* Median kawasan */}
         <span
           className="absolute top-1 h-6 w-px bg-ink-3"
           style={{ left: `${pos(wajar.p50)}%` }}
-          title={`Median ${kawasan}: ${format(wajar.p50)}`}
+          title={t.judulMedian(kawasan, format(wajar.p50) ?? '—')}
         />
 
         {/* Nilai heksagon ini. Cincin permukaan supaya tetap terbaca saat
@@ -97,7 +129,7 @@ export default function BarHarga({
               left: `${pos(nilai)}%`,
               boxShadow: '0 0 0 2px var(--color-surface)',
             }}
-            title={`Heksagon ini: ${format(nilai)}`}
+            title={t.judulNilai(format(nilai) ?? '—')}
           />
         )}
       </div>
@@ -105,8 +137,8 @@ export default function BarHarga({
       <div className="flex justify-between text-[12px] text-ink-3">
         <span className="tabular">{format(wajar.p25)}</span>
         <span>
-          rentang wajar {kawasan}
-          <span className="tabular text-ink-3/70"> · {wajar.n_sampel} heksagon</span>
+          {t.rentang(kawasan)}
+          <span className="tabular text-ink-3/70">{t.sampel(wajar.n_sampel)}</span>
         </span>
         <span className="tabular">{format(wajar.p75)}</span>
       </div>
@@ -114,13 +146,14 @@ export default function BarHarga({
       {selisih !== null && (
         <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">
           {selisih === 0 ? (
-            'Persis di median kawasan.'
+            t.persisMedian
           ) : (
             <>
               <span className="tabular font-semibold">
                 {Math.abs(selisih).toLocaleString('id-ID', { maximumFractionDigits: 0 })}%
               </span>{' '}
-              {selisih > 0 ? 'lebih mahal' : 'lebih murah'} daripada harga tengah di {kawasan}.
+              {selisih > 0 ? t.lebihMahal : t.lebihMurah}
+              {t.daripada(kawasan)}
             </>
           )}
         </p>

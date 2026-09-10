@@ -33,6 +33,98 @@ import { rupiah } from '../lib/format'
 import type { Rekomendasi as SatuRekomendasi, HasilRekomendasi } from '../types'
 import { useSesi } from './Akun'
 import { Ajakan, Badge, Glif, MemuatNama } from './primitif'
+import { useNamaZona, useTeks } from '../lib/bahasa'
+
+/**
+ * Kalimat komponen ini, dua bahasa.
+ *
+ * YANG TIDAK ADA DI SINI dan tidak akan pernah ada: `alasan[].teks` dan
+ * `kriteria.ringkas`. Keduanya dirakit backend dari angka heksagon itu sendiri
+ * ("2 menit jalan kaki ke Stasiun Manggarai"), dan menerjemahkannya di sini
+ * berarti membuat salinan kedua yang cepat atau lambat berselisih dengan yang
+ * dipakai Laporan PDF dan jawaban AI. Kalimat backend diterjemahkan di backend
+ * atau tidak sama sekali.
+ */
+const K = {
+  id: {
+    palingCocok: 'Paling cocok untuk Anda',
+    sewaBln: 'Sewa / bln',
+    keStasiun: 'Ke stasiun',
+    pesaing: 'Pesaing',
+    menit: 'mnt',
+    judulTamu: 'Rekomendasi khusus Anda',
+    ajakanTamu: (
+      <>
+        Daftar lokasi memeringkat semuanya sama untuk semua orang. Tab ini menyaring menurut{' '}
+        <strong className="font-semibold text-ink">anggaran</strong> dan{' '}
+        <strong className="font-semibold text-ink">kawasan incaran Anda</strong>, lalu
+        menjelaskan tiap lokasi dengan angkanya sendiri.
+      </>
+    ),
+    buatAkun: 'Buat akun gratis',
+    alasanMasuk: 'Rekomendasi disusun dari preferensi akun Anda.',
+    gagal: 'Gagal memuat',
+    gagalMuat: 'Rekomendasi gagal dimuat.',
+    memuat: 'sedang menyusun rekomendasi untuk Anda…',
+    disusun: 'Disusun untuk Anda',
+    belumAda: 'Belum ada preferensi tersimpan',
+    isiKriteria: 'Isi kriteria',
+    ubah: 'Ubah',
+    ubahKriteria: 'Ubah kriteria',
+    memenuhi: 'lokasi memenuhi kriteria Anda',
+    ditampilkan: (n: number) => ` · ${n} ditampilkan`,
+    kosongJudul: 'Tidak ada yang cocok',
+    kosongIsi:
+      'Belum ada lokasi yang memenuhi kriteria itu. Coba naikkan anggaran, atau lepaskan batasan kawasannya.',
+    lainnya: 'Pilihan lain untuk Anda',
+    sisaCocok: (n: number) => `${n} lokasi lain juga cocok`,
+    sisaIsi:
+      'Daftar penuh beserta alasan tiap lokasinya terbuka untuk pelanggan Loconomics Premium.',
+    gabung: 'Gabung Loconomics Premium',
+    alasanLangganan: 'Rekomendasi penuh bagian dari Loconomics Premium.',
+    kaki:
+      'Urutannya memakai Opportunity Score yang dihitung pipeline — preferensi Anda menyaring dan menjelaskan, tidak pernah mengubah skornya. Lokasi berzona terlarang tidak pernah muncul di daftar ini.',
+  },
+  en: {
+    palingCocok: 'Best match for you',
+    sewaBln: 'Rent / mo',
+    keStasiun: 'To the station',
+    pesaing: 'Rivals',
+    menit: 'min',
+    judulTamu: 'Recommendations for you',
+    ajakanTamu: (
+      <>
+        The location list ranks everything the same way for everyone. This tab filters by
+        your <strong className="font-semibold text-ink">budget</strong> and{' '}
+        <strong className="font-semibold text-ink">the areas you are after</strong>, then
+        explains each location with its own numbers.
+      </>
+    ),
+    buatAkun: 'Create a free account',
+    alasanMasuk: 'Recommendations are built from your account preferences.',
+    gagal: 'Could not load',
+    gagalMuat: 'Recommendations failed to load.',
+    memuat: 'putting your recommendations together…',
+    disusun: 'Built for you',
+    belumAda: 'No preferences saved yet',
+    isiKriteria: 'Set criteria',
+    ubah: 'Change',
+    ubahKriteria: 'Change criteria',
+    memenuhi: 'locations meet your criteria',
+    ditampilkan: (n: number) => ` · ${n} shown`,
+    kosongJudul: 'Nothing matches',
+    kosongIsi:
+      'No location meets those criteria yet. Try raising the budget, or dropping the area restriction.',
+    lainnya: 'Other options for you',
+    sisaCocok: (n: number) => `${n} more locations also match`,
+    sisaIsi:
+      'The full list, with the reasoning behind every location, is open to Loconomics Premium subscribers.',
+    gabung: 'Join Loconomics Premium',
+    alasanLangganan: 'Full recommendations are part of Loconomics Premium.',
+    kaki:
+      'The ordering uses the Opportunity Score computed by the pipeline — your preferences filter and explain, they never change the score. Locations in prohibited zones never appear in this list.',
+  },
+}
 
 /** Ikon per jenis alasan. Bentuk lebih cepat dikenali daripada warna. */
 function IkonAlasan({ jenis }: { jenis: 'cocok' | 'catatan' }) {
@@ -83,6 +175,8 @@ function Kartu({
   utama?: boolean
   onPilih: (h3: string) => void
 }) {
+  const t = useTeks(K)
+  const namaZona = useNamaZona()
   const cocok = r.alasan.filter((a) => a.jenis === 'cocok')
   const catatan = r.alasan.filter((a) => a.jenis === 'catatan')
   const q = r.skor.kuadran ? KUADRAN[r.skor.kuadran] : null
@@ -105,7 +199,7 @@ function Kartu({
           <svg width="10" height="10" viewBox="0 0 20 20" aria-hidden>
             <path d="M10 2.5 11.7 7l4.8 1.4L11.7 10l-1.7 4.5L8.3 10 3.5 8.4 8.3 7Z" fill="currentColor" />
           </svg>
-          Paling cocok untuk Anda
+          {t.palingCocok}
         </span>
       )}
 
@@ -124,7 +218,7 @@ function Kartu({
                 <Glif kuadran={r.skor.kuadran} ukuran={utama ? 12 : 10} />
                 {utama && q && (
                   <span className="text-[12px] font-semibold" style={{ color: q.warna }}>
-                    {q.nama}
+                    {namaZona(q.kunci)}
                   </span>
                 )}
               </span>
@@ -153,15 +247,15 @@ function Kartu({
           <div className="mt-3 flex items-end justify-between gap-3 border-t border-line/70 pt-2.5">
             <div className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-1.5">
               <Angka
-                label="Sewa / bln"
+                label={t.sewaBln}
                 nilai={r.harga_sewa_median === null ? null : rupiah(r.harga_sewa_median)}
               />
               <Angka
-                label="Ke stasiun"
+                label={t.keStasiun}
                 nilai={
                   r.waktu_jalan_menit === null
                     ? null
-                    : `${r.waktu_jalan_menit.toFixed(0)} mnt${
+                    : `${r.waktu_jalan_menit.toFixed(0)} ${t.menit}${
                         r.jarak_simpul_m === null
                           ? ''
                           : r.jarak_simpul_m >= 1000
@@ -173,7 +267,7 @@ function Kartu({
                 }
               />
               <Angka
-                label="Pesaing"
+                label={t.pesaing}
                 nilai={
                   r.n_kompetitor_langsung === null ? null : r.n_kompetitor_langsung.toFixed(0)
                 }
@@ -197,6 +291,7 @@ export default function Rekomendasi({
   /** Membuka dialog preferensi supaya kriterianya bisa diubah. */
   onBukaAkun: () => void
 }) {
+  const t = useTeks(K)
   const { akun, premium, mintaMasuk, mintaLangganan } = useSesi()
   const [data, setData] = useState<HasilRekomendasi | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
@@ -208,8 +303,8 @@ export default function Rekomendasi({
     api
       .rekomendasi()
       .then(setData)
-      .catch((e) => setGalat(e instanceof GalatAPI ? e.message : 'Rekomendasi gagal dimuat.'))
-  }, [akun])
+      .catch((e) => setGalat(e instanceof GalatAPI ? e.message : t.gagalMuat))
+  }, [akun, t])
 
   // Dimuat ulang saat akun ATAU preferensinya berubah — kriteria yang baru
   // disimpan harus langsung terlihat, bukan menunggu tab dibuka ulang.
@@ -226,24 +321,21 @@ export default function Rekomendasi({
             <path d="M10 2.5 11.7 7l4.8 1.4L11.7 10l-1.7 4.5L8.3 10 3.5 8.4 8.3 7Z" fill="currentColor" />
           </svg>
         </span>
-        <h2 className="papan text-[19px]">Rekomendasi khusus Anda</h2>
+        <h2 className="papan text-[19px]">{t.judulTamu}</h2>
         <p className="mx-auto mt-2 max-w-[34ch] text-[13.5px] leading-relaxed text-ink-2">
-          Daftar lokasi memeringkat semuanya sama untuk semua orang. Tab ini menyaring
-          menurut <strong className="font-semibold text-ink">anggaran</strong> dan{' '}
-          <strong className="font-semibold text-ink">kawasan incaran Anda</strong>, lalu
-          menjelaskan tiap lokasi dengan angkanya sendiri.
+          {t.ajakanTamu}
         </p>
         <button
-          onClick={() => mintaMasuk('Rekomendasi disusun dari preferensi akun Anda.')}
+          onClick={() => mintaMasuk(t.alasanMasuk)}
           className="mt-4 cursor-pointer rounded-full bg-ink px-5 py-2.5 text-[13.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.03]"
         >
-          Buat akun gratis
+          {t.buatAkun}
         </button>
       </div>
     )
 
-  if (galat) return <Ajakan judul="Gagal memuat" anak={galat} />
-  if (!data) return <MemuatNama teks="sedang menyusun rekomendasi untuk Anda…" />
+  if (galat) return <Ajakan judul={t.gagal} anak={galat} />
+  if (!data) return <MemuatNama teks={t.memuat} />
 
   const tanpaKriteria = !data.kriteria.ringkas
 
@@ -260,11 +352,11 @@ export default function Rekomendasi({
               <svg width="10" height="10" viewBox="0 0 20 20" aria-hidden className="text-gem">
                 <path d="M10 2.5 11.7 7l4.8 1.4L11.7 10l-1.7 4.5L8.3 10 3.5 8.4 8.3 7Z" fill="currentColor" />
               </svg>
-              Disusun untuk Anda
+              {t.disusun}
             </p>
             <p className="papan mt-1 text-[15px] leading-snug">
               {tanpaKriteria ? (
-                <span className="text-ink-3">Belum ada preferensi tersimpan</span>
+                <span className="text-ink-3">{t.belumAda}</span>
               ) : (
                 data.kriteria.ringkas
               )}
@@ -274,7 +366,7 @@ export default function Rekomendasi({
             onClick={onBukaAkun}
             className="shrink-0 cursor-pointer rounded-full border border-line px-3 py-1.5 text-[11.5px] font-semibold text-ink-2 transition-colors hover:border-ink hover:text-ink"
           >
-            {tanpaKriteria ? 'Isi kriteria' : 'Ubah'}
+            {tanpaKriteria ? t.isiKriteria : t.ubah}
           </button>
         </div>
 
@@ -283,24 +375,22 @@ export default function Rekomendasi({
         <div className="mt-2.5 flex items-baseline gap-2">
           <span className="papan tabular text-[20px] leading-none text-ink">{data.total_cocok}</span>
           <span className="text-[12px] leading-snug text-ink-2">
-            lokasi memenuhi kriteria Anda
-            {data.dipotong && (
-              <span className="text-ink-3"> · {data.hasil.length} ditampilkan</span>
-            )}
+            {t.memenuhi}
+            {data.dipotong && <span className="text-ink-3">{t.ditampilkan(data.hasil.length)}</span>}
           </span>
         </div>
       </div>
 
       {data.hasil.length === 0 ? (
         <Ajakan
-          judul="Tidak ada yang cocok"
-          anak="Belum ada lokasi yang memenuhi kriteria itu. Coba naikkan anggaran, atau lepaskan batasan kawasannya."
+          judul={t.kosongJudul}
+          anak={t.kosongIsi}
           aksi={
             <button
               onClick={onBukaAkun}
               className="mt-3 cursor-pointer rounded-full border border-line px-4 py-2 text-[13px] font-medium text-ink-2 transition-colors hover:border-ink hover:text-ink"
             >
-              Ubah kriteria
+              {t.ubahKriteria}
             </button>
           }
         />
@@ -311,7 +401,7 @@ export default function Rekomendasi({
           </div>
           {data.hasil.length > 1 && (
             <>
-              <p className="eyebrow px-4 pb-1 pt-2">Pilihan lain untuk Anda</p>
+              <p className="eyebrow px-4 pb-1 pt-2">{t.lainnya}</p>
               <ul>
                 {data.hasil.slice(1).map((r, i) => (
                   <li key={r.skor.h3_index}>
@@ -330,29 +420,24 @@ export default function Rekomendasi({
       {data.dipotong && (
         <div className="border-y border-line bg-surface-2/70 px-4 py-5 text-center">
           <p className="papan text-[15px] text-ink">
-            {data.total_cocok - data.hasil.length} lokasi lain juga cocok
+            {t.sisaCocok(data.total_cocok - data.hasil.length)}
           </p>
           <p className="mx-auto mt-1 max-w-[34ch] text-[12.5px] leading-snug text-ink-2">
-            Daftar penuh beserta alasan tiap lokasinya terbuka untuk pelanggan Loconomics
-            Premium.
+            {t.sisaIsi}
           </p>
           <button
-            onClick={() => mintaLangganan('Rekomendasi penuh bagian dari Loconomics Premium.')}
+            onClick={() => mintaLangganan(t.alasanLangganan)}
             className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.04]"
           >
             <svg width="12" height="12" viewBox="0 0 20 20" aria-hidden>
               <path d="M10 2.5 11.7 7l4.8 1.4L11.7 10l-1.7 4.5L8.3 10 3.5 8.4 8.3 7Z" fill="currentColor" />
             </svg>
-            Gabung Loconomics Premium
+            {t.gabung}
           </button>
         </div>
       )}
 
-      <p className="px-4 py-4 text-[11.5px] leading-snug text-ink-3">
-        Urutannya memakai Opportunity Score yang dihitung pipeline — preferensi Anda
-        menyaring dan menjelaskan, tidak pernah mengubah skornya. Lokasi berzona terlarang
-        tidak pernah muncul di daftar ini.
-      </p>
+      <p className="px-4 py-4 text-[11.5px] leading-snug text-ink-3">{t.kaki}</p>
     </div>
   )
 }

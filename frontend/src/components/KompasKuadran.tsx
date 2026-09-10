@@ -31,7 +31,7 @@
 import { KUADRAN, URUTAN_KUADRAN } from '../config'
 import type { Kuadran as NamaKuadran, TitikKuadran } from '../types'
 import { Glif } from './primitif'
-import { useNamaZona } from '../lib/bahasa'
+import { useNamaZona, useTeks } from '../lib/bahasa'
 
 interface Props {
   /** Kuadran yang sedang disaring. null = tidak ada filter. */
@@ -79,6 +79,31 @@ const keY = (y: number) => BANTAL + (y / 100) * (100 - 2 * BANTAL)
  */
 const BATAS_BAWAAN = { x: 0.5, y: 50 }
 
+const K = {
+  id: {
+    judul: 'Kompas Kuadran',
+    semua: 'Tampilkan semua',
+    biasa: 'biasa',
+    mahal: 'mahal',
+    sumbuDatar: 'Prestise visual',
+    ajakan: 'Klik satu kuadran untuk menyaring peta.',
+    penuh: 'Buka diagram penuh',
+    sorot: (h3: string, peluang: string, risiko: string) =>
+      `${h3} · peluang ${peluang} · risiko ${risiko}`,
+  },
+  en: {
+    judul: 'Quadrant Compass',
+    semua: 'Show all',
+    biasa: 'ordinary',
+    mahal: 'expensive',
+    sumbuDatar: 'Visual prestige',
+    ajakan: 'Click a quadrant to filter the map.',
+    penuh: 'Open the full diagram',
+    sorot: (h3: string, peluang: string, risiko: string) =>
+      `${h3} · opportunity ${peluang} · risk ${risiko}`,
+  },
+}
+
 export default function KompasKuadran({
   saring,
   onSaring,
@@ -90,6 +115,7 @@ export default function KompasKuadran({
   onBukaPenuh,
 }: Props) {
   const namaZona = useNamaZona()
+  const tk = useTeks(K)
   // Yang KECIL tidak lagi punya lebar sama sekali - ia mengambil sisa ruang.
   //
   // Dulu angkanya 232px, dihitung tangan sebagai "17rem dikurangi bantalan
@@ -120,14 +146,14 @@ export default function KompasKuadran({
   return (
     <div className={besar ? '' : 'kaca pop-naik-kiri rounded-lg p-3.5'}>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="eyebrow">Kompas Kuadran</h3>
+        <h3 className="eyebrow">{tk.judul}</h3>
         <div className="flex items-center gap-1">
           {saring && (
             <button
               onClick={() => onSaring(null)}
               className="cursor-pointer rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
             >
-              Tampilkan semua
+              {tk.semua}
             </button>
           )}
         </div>
@@ -218,7 +244,7 @@ export default function KompasKuadran({
                   <button
                     key={t.h3_index}
                     onClick={() => onPilih?.(t.h3_index)}
-                    title={`${t.h3_index} · peluang ${t.y_peluang?.toFixed(1)} · risiko ${t.risiko}`}
+                    title={tk.sorot(t.h3_index, t.y_peluang?.toFixed(1) ?? '—', t.risiko)}
                     className="absolute -translate-x-1/2 translate-y-1/2 cursor-pointer rounded-full transition-transform hover:scale-150"
                     style={{
                       left: `${keX(t.x_prestise)}%`,
@@ -265,11 +291,11 @@ export default function KompasKuadran({
               membuatnya terpusat pada kotaknya sendiri, dan itu kolom yang sama
               yang membelah kotak di atasnya. */}
           <div className="mt-1.5 grid grid-cols-[auto_1fr_auto] items-baseline gap-1.5">
-            <span className="text-[10.5px] text-ink-3">biasa</span>
+            <span className="text-[10.5px] text-ink-3">{tk.biasa}</span>
             <span className="eyebrow whitespace-nowrap text-center text-[10px] tracking-[0.08em]">
-              Prestise visual
+              {tk.sumbuDatar}
             </span>
-            <span className="text-[10.5px] text-ink-3">mahal</span>
+            <span className="text-[10.5px] text-ink-3">{tk.mahal}</span>
           </div>
         </div>
       </div>
@@ -302,7 +328,7 @@ export default function KompasKuadran({
         <div className="mt-3 border-t border-line/70 pt-2.5">
           {posisi?.x == null && (
             <p className="mb-2 text-[12px] leading-snug text-ink-3">
-              Klik satu kuadran untuk menyaring peta.
+              {tk.ajakan}
             </p>
           )}
           {onBukaPenuh && (
@@ -310,7 +336,7 @@ export default function KompasKuadran({
               onClick={onBukaPenuh}
               className="cursor-pointer text-[12.5px] font-semibold text-ink-2 underline decoration-line-2 underline-offset-[3px] transition-colors hover:text-ink"
             >
-              Buka diagram penuh
+              {tk.penuh}
             </button>
           )}
         </div>

@@ -20,6 +20,20 @@ import { useState } from 'react'
 import { JAM_MULAI, JAM_SELESAI } from '../config'
 import type { TitikJam } from '../types'
 import { Kosong } from './primitif'
+import { useTeks } from '../lib/bahasa'
+
+const K = {
+  id: {
+    kosong: 'Belum ada struk berjam untuk heksagon ini',
+    transaksi: (n: number) => `${n} transaksi`,
+    estimasi: 'estimasi',
+  },
+  en: {
+    kosong: 'No time-stamped receipts for this hexagon yet',
+    transaksi: (n: number) => `${n} transactions`,
+    estimasi: 'estimate',
+  },
+}
 
 const TINGGI = 96
 const CELAH = 2 // celah permukaan antarsegmen, sesuai spesifikasi mark
@@ -31,11 +45,12 @@ export default function ChartJam({
   jam: TitikJam[]
   jamPuncak: number | null
 }) {
+  const t = useTeks(K)
   const [aktif, setAktif] = useState<number | null>(null)
 
   const maks = Math.max(...jam.map((t) => t.n_transaksi), 1)
   const adaIsi = jam.some((t) => t.n_transaksi > 0)
-  if (!adaIsi) return <Kosong teks="Belum ada struk berjam untuk heksagon ini" />
+  if (!adaIsi) return <Kosong teks={t.kosong} />
 
   const sorot = aktif !== null ? jam.find((t) => t.jam === aktif) : null
 
@@ -116,7 +131,7 @@ export default function ChartJam({
           <div className="pointer-events-none absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-sm bg-ink px-2 py-1 text-[12.5px] text-surface shadow-lg">
             <span className="tabular font-semibold">{String(sorot.jam).padStart(2, '0')}:00</span>
             {' · '}
-            <span className="tabular">{sorot.n_transaksi} transaksi</span>
+            <span className="tabular">{t.transaksi(sorot.n_transaksi)}</span>
             {sorot.pangsa_captive !== null && (
               <>
                 {' · '}
@@ -126,7 +141,7 @@ export default function ChartJam({
               </>
             )}
             {sorot.metode === 'proxy' && (
-              <span className="text-surface/70"> · estimasi</span>
+              <span className="text-surface/70"> · {t.estimasi}</span>
             )}
           </div>
         )}
