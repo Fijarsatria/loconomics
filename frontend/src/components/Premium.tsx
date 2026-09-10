@@ -380,6 +380,55 @@ const METRIK: {
     utama: true,
   },
   {
+    kunci: 'puncak_sore',
+    label: 'Keramaian sore',
+    bantuan: 'seberapa ramai pukul 16-20',
+    ambil: (b) => b.puncak_sore,
+    format: (v) => angka(v, 2),
+    arah: 'tinggi',
+    utama: true,
+  },
+  {
+    kunci: 'pop_100m',
+    label: 'Penduduk sekitar',
+    bantuan: 'orang yang tinggal di petak ini',
+    ambil: (b) => b.pop_100m,
+    format: (v) => (v === null ? null : `${angka(v, 0)} orang`),
+    arah: 'tinggi',
+  },
+  {
+    kunci: 'kepadatan_poi_total',
+    label: 'Keramaian usaha',
+    bantuan: 'semua tempat usaha, bukan cuma pesaing',
+    ambil: (b) => b.kepadatan_poi_total,
+    format: (v) => (v === null ? null : `${angka(v, 0)} tempat`),
+    arah: 'tinggi',
+  },
+  {
+    kunci: 'keragaman_usaha',
+    label: 'Keragaman usaha',
+    bantuan: 'makin beragam, makin banyak alasan orang datang',
+    ambil: (b) => b.keragaman_usaha,
+    format: (v) => angka(v, 2),
+    arah: 'tinggi',
+  },
+  {
+    kunci: 'indeks_churn',
+    label: 'Pergantian usaha',
+    bantuan: 'makin sering berganti, makin berisiko',
+    ambil: (b) => b.indeks_churn,
+    format: (v) => angka(v, 2),
+    arah: 'rendah',
+  },
+  {
+    kunci: 'harga_sewa_median',
+    label: 'Sewa per bulan',
+    bantuan: 'yang benar-benar dibayar tiap bulan',
+    ambil: (b) => b.harga_sewa_median,
+    format: (v) => rupiah(v),
+    arah: 'rendah',
+  },
+  {
     kunci: 'hidden_gem_score',
     label: 'Skor hidden gem',
     bantuan: 'bagus tapi belum dilirik',
@@ -795,6 +844,8 @@ export function DialogPantauan({
   const namaZona = useNamaZona()
   const [butir, setButir] = useState<ButirPantauan[] | null>(null)
   const [dinamika, setDinamika] = useState<DinamikaKawasan | null>(null)
+  /** Baris pantauan yang sedang terbuka rinciannya. null = semuanya tertutup. */
+  const [buka, setBuka] = useState<string | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
 
   // Kawasan tunggal saja yang punya dinamika. Untuk "semua" atau gabungan
@@ -874,8 +925,9 @@ export function DialogPantauan({
               {butir.map((b) => (
                 <li
                   key={b.h3_index}
-                  className="flex items-center gap-3 rounded-md border border-line bg-surface px-3.5 py-3"
+                  className="overflow-hidden rounded-md border border-line bg-surface"
                 >
+                <div className="flex items-center gap-3 px-3.5 py-3">
                   {/* Didetailkan 3 Sep 2026: baris lama cuma menyebut nama
                       kawasan dan dua belas karakter heksadesimal.
 
@@ -886,10 +938,21 @@ export function DialogPantauan({
                       ada di responsnya dan tidak pernah ditampilkan: kode
                       lokasi yang terbaca, NAMA kuadrannya, dan kapan ia
                       disimpan. */}
+                  {/* Mengklik baris MEMBUKA rinciannya, tidak lagi langsung
+                      melompat ke peta. (11 Sep 2026, permintaan pemilik repo.)
+
+                      Alasannya bukan selera: daftar ini dibuka DI ATAS peta
+                      sebagai dialog, jadi "buka di peta" berarti menutup dialog
+                      dan kehilangan seluruh daftar - untuk melihat satu lokasi.
+                      Orang yang sedang menimbang empat lokasi tersimpan
+                      melakukan itu berkali-kali. Sekarang rinciannya terbuka di
+                      tempat, dan lompat ke petanya jadi satu tombol DI DALAM
+                      rincian itu - pilihan, bukan akibat. */}
                   <button
-                    onClick={() => onPilih(b.h3_index)}
+                    onClick={() => setBuka((v) => (v === b.h3_index ? null : b.h3_index))}
+                    aria-expanded={buka === b.h3_index}
                     className="min-w-0 flex-1 cursor-pointer text-left"
-                    title="Buka di peta"
+                    title="Lihat rincian lokasi ini"
                   >
                     <span className="papan block truncate text-[14px]">
                       {kodeLokasi(b.h3_index, b.kawasan ?? '')}
@@ -931,13 +994,75 @@ export function DialogPantauan({
                     )}
                   </div>
 
-                  <button
-                    onClick={() => lepas(b.h3_index)}
-                    aria-label={`Berhenti memantau ${b.h3_index}`}
-                    className="shrink-0 cursor-pointer rounded-full border border-line px-2.5 py-1 text-[11.5px] text-ink-3 transition-colors hover:border-bahaya hover:text-bahaya"
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 12 12"
+                    aria-hidden
+                    className={`shrink-0 text-ink-3 transition-transform duration-200 ${
+                      buka === b.h3_index ? 'rotate-180' : ''
+                    }`}
                   >
-                    Lepas
-                  </button>
+                    <path d="M2 4.5 6 8.5 10 4.5" stroke="currentColor" strokeWidth="1.6" fill="none" />
+                  </svg>
+                </div>
+
+                {buka === b.h3_index && (
+                  <div className="border-t border-line/70 bg-surface-2/50 px-3.5 py-3">
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      <BarisRinci label="Kawasan" nilai={b.kawasan ?? '—'} />
+                      <BarisRinci
+                        label="Skor saat disimpan"
+                        nilai={angka(b.skor_saat_dipantau, 1) ?? 'belum tercatat'}
+                      />
+                      <BarisRinci label="Skor sekarang" nilai={angka(b.skor_sekarang, 1) ?? '—'} />
+                      <BarisRinci
+                        label="Risiko pergantian usaha"
+                        nilai={b.risiko ? b.risiko.toLowerCase() : 'belum dinilai'}
+                      />
+                      <BarisRinci label="Indeks H3" nilai={b.h3_index} mono />
+                      <BarisRinci
+                        label="Versi skor"
+                        nilai={
+                          b.versi_saat_dipantau === b.versi_sekarang
+                            ? (b.versi_sekarang ?? '—')
+                            : `${b.versi_saat_dipantau ?? '—'} → ${b.versi_sekarang ?? '—'}`
+                        }
+                      />
+                    </dl>
+                    {b.catatan && (
+                      <p className="mt-2.5 rounded-sm bg-surface px-2.5 py-2 text-[12.5px] leading-snug text-ink-2">
+                        {b.catatan}
+                      </p>
+                    )}
+                    {/* Kalimat ini ada karena selisihnya bisa berbunyi 0,0
+                        selamanya dan itu BUKAN cacat: basis data baru memuat
+                        satu versi penerbitan, jadi "sekarang" dan "saat
+                        disimpan" memang versi yang sama. Tanpa kalimatnya,
+                        angka nol terbaca sebagai fitur yang tidak bekerja. */}
+                    {b.versi_saat_dipantau === b.versi_sekarang && (
+                      <p className="mt-2 text-[11.5px] leading-snug text-ink-3">
+                        Selisihnya nol karena skornya belum pernah diterbitkan ulang sejak
+                        Anda menyimpan lokasi ini — bukan karena tidak ada yang berubah.
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => onPilih(b.h3_index)}
+                        className="cursor-pointer rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-surface transition-transform duration-200 ease-jelly hover:scale-[1.03]"
+                      >
+                        Fokus ke peta
+                      </button>
+                      <button
+                        onClick={() => lepas(b.h3_index)}
+                        aria-label={`Berhenti memantau ${b.h3_index}`}
+                        className="cursor-pointer rounded-full border border-line px-3.5 py-1.5 text-[12px] text-ink-3 transition-colors hover:border-bahaya hover:text-bahaya"
+                      >
+                        Lepas dari pantauan
+                      </button>
+                    </div>
+                  </div>
+                )}
                 </li>
               ))}
             </ul>
@@ -946,7 +1071,18 @@ export function DialogPantauan({
 
         {/* --- Dinamika kawasan ------------------------------------------ */}
         <div className="min-w-0">
-          <h3 className="eyebrow mb-3">Dinamika kawasan</h3>
+          <h3 className="eyebrow mb-1.5">Dinamika kawasan</h3>
+          {/* Ditambahkan 11 Sep 2026: pemilik repo membaca seluruh panel ini
+              lalu bertanya "nah itu untuk apa?". Pertanyaan yang wajar - ia
+              menampilkan tujuh angka tanpa satu kalimat pun yang menyebut untuk
+              apa angka-angka itu dibaca. Panel yang harus ditebak gunanya
+              adalah panel yang tidak dipakai. */}
+          <p className="mb-3 text-[12px] leading-snug text-ink-3">
+            Latar untuk lokasi yang Anda simpan: seberapa sering usaha berganti
+            tangan di kawasan ini, dan berapa banyak lokasinya yang sudah lewat
+            batas wajar. Lokasi berskor bagus di kawasan yang pergantiannya
+            tinggi menuntut pertimbangan yang berbeda.
+          </p>
           {!kawasanTunggal ? (
             <p className="rounded-md bg-surface-2 px-4 py-3.5 text-[12.5px] leading-snug text-ink-2">
               Pilih satu kawasan di bilah atas untuk melihat sebaran churn-nya.
@@ -1073,6 +1209,18 @@ export function DialogPantauan({
         </div>
       </div>
     </Lembar>
+  )
+}
+
+/** Satu pasang label-nilai di dalam rincian lokasi tersimpan. */
+function BarisRinci({ label, nilai, mono }: { label: string; nilai: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] uppercase tracking-[0.06em] text-ink-3">{label}</dt>
+      <dd className={`truncate text-[13px] text-ink ${mono ? 'font-mono text-[11.5px]' : ''}`}>
+        {nilai}
+      </dd>
+    </div>
   )
 }
 

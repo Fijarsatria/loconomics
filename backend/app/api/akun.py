@@ -775,7 +775,7 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     from app.core.aturan import ARTI_KODE, ARTI_VARIABEL, LABEL_KUADRAN, kode_lokasi
     from app.api.bersama import DIMENSI
@@ -803,6 +803,8 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
         ),
         Spacer(1, 8),
         _pita_keyakinan(keyakinan, dok.width, g, colors),
+        Spacer(1, 8),
+        _profil_pengguna(user, hx, g, colors, dok.width),
         Spacer(1, 4),
     ]
     if keyakinan.tingkat == "RENDAH":
@@ -821,19 +823,45 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
     ], dok.width, colors))
 
     # --- 2. Seberapa bagus lokasinya ----------------------------------------
+    #
+    # DIGAMBAR, bukan didaftar. Delapan baris angka desimal menuntut pembacanya
+    # membandingkan sendiri "0,79" dengan "0,49"; delapan batang menjawabnya
+    # sebelum angkanya sempat dibaca. Angkanya tetap ada di kolom kanan - yang
+    # ditambahkan cuma cara memindainya.
     isi += [Paragraph("2. Seberapa bagus lokasinya", g["h2"])]
     kuadran = (
         LABEL_KUADRAN.get(sc.kuadran, sc.kuadran) if sc and sc.kuadran else "belum ada data"
     )
-    isi.append(_tabel([
-        ["Opportunity Score (0-100)", _angka_id(sc.opportunity_score if sc else None, desimal=0)],
-        ["Kelompok lokasi", kuadran],
-        ["Peringkat", str(sc.peringkat) if sc and sc.peringkat else "belum ada data"],
-        ["Skor hidden gem", _angka_id(sc.hidden_gem_score if sc else None)],
-        ["Akses ke stasiun (IPT)", _angka_id(sc.ipt if sc else None)],
-        ["Perputaran uang (IAE)", _angka_id(sc.iae if sc else None)],
-        ["Ketatnya persaingan (IKP)", _angka_id(sc.ikp if sc else None) + "  — rendah lebih baik"],
-        ["Biaya dan risiko (IBR)", _angka_id(sc.ibr if sc else None) + "  — rendah lebih baik"],
+    kepala = Table(
+        [[
+            Paragraph(
+                f"<font size=22><b>{_angka_id(sc.opportunity_score if sc else None, desimal=0)}</b></font>"
+                "<font size=9 color='#5b6b68'> / 100</font><br/>"
+                f"<font size=9 color='#5b6b68'>Opportunity Score"
+                + (f" &nbsp;·&nbsp; peringkat {sc.peringkat}" if sc and sc.peringkat else "")
+                + "</font>",
+                g["n"],
+            ),
+            _kuadran_mini(sc.kuadran if sc else None),
+            Paragraph(f"<b>{kuadran}</b><br/><font size=8 color='#5b6b68'>kelompok lokasi</font>", g["n"]),
+        ]],
+        colWidths=[dok.width * 0.42, dok.width * 0.18, dok.width * 0.40],
+    )
+    kepala.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    isi.append(kepala)
+    isi.append(_tabel_bar([
+        ("Akses ke stasiun (IPT)", sc.ipt if sc else None, 1, _angka_id(sc.ipt if sc else None), "tinggi"),
+        ("Perputaran uang (IAE)", sc.iae if sc else None, 1, _angka_id(sc.iae if sc else None), "tinggi"),
+        ("Ketatnya persaingan (IKP)", sc.ikp if sc else None, 1,
+         _angka_id(sc.ikp if sc else None) + "  rendah = baik", "rendah"),
+        ("Biaya dan risiko (IBR)", sc.ibr if sc else None, 1,
+         _angka_id(sc.ibr if sc else None) + "  rendah = baik", "rendah"),
+        ("Skor hidden gem", sc.hidden_gem_score if sc else None, 1,
+         _angka_id(sc.hidden_gem_score if sc else None), "tinggi"),
     ], dok.width, colors))
 
     # --- 3. Biaya dan permintaan --------------------------------------------
@@ -852,25 +880,34 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
     # --- 4. Kenapa skornya segitu -------------------------------------------
     if faktor:
         isi += [Paragraph("4. Kenapa skornya segitu", g["h2"])]
-        baris = [
-            [
+        isi.append(Paragraph(
+            "Posisi lokasi ini dibanding seluruh lokasi lain di wilayah studi. "
+            "Batang penuh berarti tertinggi.", g["kecil"]))
+        isi.append(Spacer(1, 3))
+        isi.append(_tabel_bar([
+            (
                 ARTI_KODE.get(f.kode_variabel, f.kode_variabel),
-                (
-                    "lebih tinggi daripada "
-                    f"{f.persentil:.0f} dari 100 lokasi lain"
-                    if f.persentil is not None
-                    else "belum ada pembanding"
-                ),
-            ]
+                f.persentil,
+                100,
+                (f"persentil {f.persentil:.0f}" if f.persentil is not None else "belum ada pembanding"),
+                "tinggi",
+            )
             for f in faktor[:8]
-        ]
-        isi.append(_tabel(baris, dok.width, colors))
+        ], dok.width, colors))
 
     # --- 5. Kapan ramainya ---------------------------------------------------
     if jam:
         isi += [Paragraph("5. Kapan uang berpindah", g["h2"])]
         puncak = max(jam, key=lambda r: r.n_transaksi)
         total = sum(r.n_transaksi for r in jam)
+        isi.append(Paragraph(
+            "Delapan belas jam operasional, pukul 05.00 sampai 22.00. Jam tanpa "
+            "transaksi digambar sebagai batang kosong, bukan dilewati &mdash; "
+            "melewatinya membuat lokasi yang ramai tiga jam terlihat sama "
+            "sibuknya dengan yang ramai dua belas jam.", g["kecil"]))
+        isi.append(Spacer(1, 4))
+        isi.append(_grafik_jam(jam, dok.width))
+        isi.append(Spacer(1, 6))
         isi.append(_tabel([
             ["Jam paling ramai", f"pukul {puncak.jam:02d}.00"],
             ["Jam yang ada transaksinya", f"{len(jam)} dari 18 jam operasional"],
@@ -942,8 +979,27 @@ def _rakit_pdf_komparasi(baris, user) -> bytes:
             + " vs ".join(nama),
             g["kecil"],
         ),
+        Spacer(1, 8),
+        _profil_pengguna(user, None, g, colors, dok.width),
         Spacer(1, 10),
     ]
+
+    # Batang skor berdampingan, DI ATAS tabelnya. Empat kolom angka menuntut
+    # pembacanya memindai empat deret digit untuk menjawab satu pertanyaan yang
+    # paling sering diajukan - "yang mana yang paling bagus".
+    skor = [b.opportunity_score for b in baris]
+    maks_skor = max([v for v in skor if v is not None] + [100])
+    isi.append(_tabel_bar([
+        (
+            f"{i + 1}. {n}",
+            b.opportunity_score,
+            maks_skor,
+            _angka_id(b.opportunity_score, "", 0),
+            "tinggi",
+        )
+        for i, (n, b) in enumerate(zip(nama, baris))
+    ], dok.width, colors))
+    isi.append(Spacer(1, 12))
 
     def kolom(ambil, satuan="", desimal=2, arah=None):
         nilai = [ambil(b) for b in baris]
@@ -966,6 +1022,12 @@ def _rakit_pdf_komparasi(baris, user) -> bytes:
         ("Uang berpindah per jam", lambda b: b.belanja_per_jam, "Rp", 0, "tinggi"),
         ("Pesaing sejenis", lambda b: b.n_kompetitor_langsung, "tempat", 0, "rendah"),
         ("Jalan kaki ke stasiun", lambda b: b.waktu_jalan_menit, "menit", 0, "rendah"),
+        ("Keramaian sore", lambda b: b.puncak_sore, "", 2, "tinggi"),
+        ("Penduduk sekitar", lambda b: b.pop_100m, "jiwa", 0, "tinggi"),
+        ("Keramaian usaha", lambda b: b.kepadatan_poi_total, "tempat", 0, "tinggi"),
+        ("Keragaman usaha", lambda b: b.keragaman_usaha, "", 2, "tinggi"),
+        ("Pergantian usaha", lambda b: b.indeks_churn, "", 2, "rendah"),
+        ("Sewa per bulan", lambda b: b.harga_sewa_median, "Rp", 0, "rendah"),
         ("Skor hidden gem", lambda b: b.hidden_gem_score, "", 2, "tinggi"),
         ("Akses ke stasiun (IPT)", lambda b: b.indeks.ipt, "", 2, "tinggi"),
         ("Perputaran uang (IAE)", lambda b: b.indeks.iae, "", 2, "tinggi"),
@@ -1017,6 +1079,216 @@ def _rakit_pdf_komparasi(baris, user) -> bytes:
     ]
     dok.build(isi)
     return penyangga.getvalue()
+
+
+# ===========================================================================
+# Gambar untuk laporan PDF
+# ===========================================================================
+#
+# DIGAMBAR, bukan ditulis. Dokumen yang dibawa ke pemberi modal dibaca dalam
+# hitungan menit, dan deret angka tidak bisa dipindai - satu batang yang lebih
+# panjang daripada batang di sebelahnya bisa. Ketiga gambar di bawah memakai
+# `reportlab.graphics` yang sudah ikut paket, bukan pustaka grafik tambahan:
+# yang digambar cuma persegi panjang dan garis.
+#
+# Nol angka DIKARANG di sini. Tiap gambar menerima nilai yang sudah dihitung
+# pipeline dan hanya memilih panjang batangnya.
+
+
+def _bar(nilai, maks, lebar, tinggi=9, warna=None, latar=None):
+    """Satu batang mendatar berskala. `nilai` None = batang kosong berarsir."""
+    from reportlab.graphics.shapes import Drawing, Rect, String
+    from reportlab.lib import colors as C
+
+    warna = warna or C.HexColor("#1f8f7d")
+    latar = latar or C.HexColor("#e7efed")
+    d = Drawing(lebar, tinggi)
+    d.add(Rect(0, 0, lebar, tinggi, fillColor=latar, strokeColor=None, rx=2, ry=2))
+    if nilai is None or not maks:
+        d.add(String(4, tinggi / 2 - 3, "belum ada data", fontSize=6.6,
+                     fillColor=C.HexColor("#8a9a97")))
+        return d
+    p = max(0.0, min(1.0, float(nilai) / float(maks)))
+    if p > 0:
+        d.add(Rect(0, 0, max(2.0, lebar * p), tinggi, fillColor=warna, strokeColor=None,
+                   rx=2, ry=2))
+    return d
+
+
+def _kuadran_mini(kuadran, lebar=54, tinggi=54):
+    """Petak 2x2 dengan satu titik di kotak yang benar.
+
+    Kuadran adalah tesis produk ini, dan satu kata ("Hidden Gem") tidak
+    menyatakan DI MANA ia berdiri terhadap tiga kemungkinan lain. Petaknya
+    menyatakannya tanpa satu kalimat pun.
+    """
+    from reportlab.graphics.shapes import Circle, Drawing, Rect, String
+    from reportlab.lib import colors as C
+
+    # [kolom, baris] - baris 0 di ATAS, sama dengan Kompas Kuadran di layar.
+    SEL = {
+        "HIDDEN_GEM": (0, 0),
+        "PEMENANG_JELAS": (1, 0),
+        "HINDARI": (0, 1),
+        "JEBAKAN_GENGSI": (1, 1),
+    }
+    WARNA = {
+        "HIDDEN_GEM": "#4C93F7",
+        "PEMENANG_JELAS": "#15803D",
+        "HINDARI": "#B01B1B",
+        "JEBAKAN_GENGSI": "#E58A00",
+    }
+    d = Drawing(lebar, tinggi)
+    sel_w, sel_h = lebar / 2, tinggi / 2
+    for kx in range(2):
+        for ky in range(2):
+            d.add(Rect(kx * sel_w, tinggi - (ky + 1) * sel_h, sel_w, sel_h,
+                       fillColor=C.HexColor("#f4f8f7"), strokeColor=C.HexColor("#dfe7e5"),
+                       strokeWidth=0.6))
+    if kuadran in SEL:
+        kx, ky = SEL[kuadran]
+        # Isian pucat dihitung sebagai CAMPURAN ke putih, bukan lewat alfa.
+        # `HexColor("#4C93F722")` tanpa `hasAlpha=True` diurai sebagai bilangan
+        # 32-bit dan menghasilkan warna yang sama sekali lain - petak Hidden Gem
+        # yang biru tampil hijau menyala. Terlihat begitu di potret.
+        dasar = C.HexColor(WARNA[kuadran])
+        pucat = C.Color(
+            dasar.red * 0.18 + 0.82,
+            dasar.green * 0.18 + 0.82,
+            dasar.blue * 0.18 + 0.82,
+        )
+        d.add(Rect(kx * sel_w, tinggi - (ky + 1) * sel_h, sel_w, sel_h,
+                   fillColor=pucat, strokeColor=dasar, strokeWidth=1.2))
+        d.add(Circle(kx * sel_w + sel_w / 2, tinggi - (ky + 1) * sel_h + sel_h / 2, 3.6,
+                     fillColor=C.HexColor(WARNA[kuadran]), strokeColor=None))
+    d.add(String(1, tinggi + 2.5, "bagus", fontSize=5.6, fillColor=C.HexColor("#8a9a97")))
+    d.add(String(lebar - 22, -7.5, "kelihatan mahal", fontSize=5.6,
+                 fillColor=C.HexColor("#8a9a97")))
+    return d
+
+
+def _grafik_jam(jam, lebar, tinggi=42):
+    """Delapan belas batang: kapan uangnya berpindah.
+
+    Jam yang TIDAK punya transaksi digambar sebagai batang nol, bukan dilewati.
+    Melewatinya memampatkan sumbu waktu dan membuat toko yang ramai tiga jam
+    terlihat sama sibuknya dengan toko yang ramai dua belas jam - jebakan yang
+    sudah tercatat di repo ini.
+    """
+    from reportlab.graphics.shapes import Drawing, Rect, String
+    from reportlab.lib import colors as C
+
+    per = {r.jam: r.n_transaksi for r in jam}
+    jam_urut = list(range(5, 23))
+    maks = max([per.get(j, 0) for j in jam_urut] + [1])
+    d = Drawing(lebar, tinggi + 9)
+    w = lebar / len(jam_urut)
+    for i, j in enumerate(jam_urut):
+        n = per.get(j, 0)
+        h = (n / maks) * tinggi
+        d.add(Rect(i * w + 0.8, 9, w - 1.6, max(0.6, h),
+                   fillColor=C.HexColor("#1f8f7d" if n else "#e7efed"), strokeColor=None))
+        if j % 4 == 1:
+            d.add(String(i * w, 1.5, f"{j:02d}", fontSize=5.8,
+                         fillColor=C.HexColor("#8a9a97")))
+    return d
+
+
+def _profil_pengguna(user, hx, g, colors, lebar):
+    """Siapa yang menerbitkannya, dan apa yang sedang ia cari.
+
+    Ditambahkan 11 Sep 2026, permintaan pemilik repo. Bukan basa-basi: laporan
+    kelayakan dibaca bersama orang lain - pemberi modal, mitra, keluarga - dan
+    yang pertama ditanyakan pembaca kedua selalu "ini punya siapa, dan dia
+    sedang cari apa". Preferensinya SUDAH ada di basis data sejak onboarding;
+    yang belum ada cuma jalannya ke halaman pertama dokumen.
+
+    Anggaran dibandingkan LANGSUNG dengan sewa lokasi ini. Angka yang berdiri
+    sendirian menuntut pembacanya menghitung selisihnya sendiri, dan itu
+    pekerjaan yang bisa dilakukan dokumen ini untuknya.
+    """
+    from reportlab.platypus import Paragraph, Table, TableStyle
+
+    pref: dict[str, Any] = {}
+    mentah = getattr(user, "preferensi", None)
+    if mentah:
+        try:
+            pref = json.loads(mentah) if isinstance(mentah, str) else dict(mentah)
+        except (ValueError, TypeError):
+            pref = {}
+
+    baris: list[str] = []
+    jenis = pref.get("jenis_usaha")
+    if jenis:
+        # Nama yang dibaca orang, bukan kunci basis data. `kuliner_ringan` di
+        # dokumen yang dibawa ke pemberi modal terbaca sebagai kebocoran nama
+        # kolom - jebakan yang sudah tercatat empat kali di repo ini.
+        from app.core.simulasi import JENIS_USAHA as _JENIS
+
+        baris.append(f"Rencana usaha: <b>{_JENIS.get(jenis, {}).get('label', jenis)}</b>")
+    if pref.get("kawasan"):
+        baris.append(f"Kawasan incaran: <b>{pref['kawasan']}</b>")
+    # Kuncinya `budget_sewa_bulanan` - nama yang dipakai `simpan_preferensi`.
+    # Ditulis salah pada percobaan pertama (`anggaran_sewa`) dan gagalnya DIAM:
+    # barisnya cuma tidak muncul, dan tidak ada satu pun galat.
+    anggaran = pref.get("budget_sewa_bulanan")
+    if isinstance(anggaran, (int, float)) and anggaran > 0:
+        potong = f"Anggaran sewa: <b>{_angka_id(anggaran, 'Rp', 0)}</b> per bulan"
+        sewa = hx.harga_sewa_median if hx is not None else None
+        if isinstance(sewa, (int, float)):
+            selisih = anggaran - sewa
+            potong += (
+                f" &mdash; sewa di sini {_angka_id(sewa, 'Rp', 0)}, "
+                + ("<b>masuk anggaran</b>" if selisih >= 0 else "<b>di atas anggaran</b>")
+                + f" ({_angka_id(abs(selisih), 'Rp', 0)})"
+            )
+        baris.append(potong)
+
+    kiri = Paragraph(
+        f"<b>Disusun untuk {user.nama_pengguna}</b>"
+        + ("<br/>" + "<br/>".join(baris) if baris else
+           "<br/>Preferensi usaha belum diisi &mdash; lengkapi di menu akun supaya "
+           "laporan berikutnya bisa membandingkan angkanya dengan anggaran Anda."),
+        g["n"],
+    )
+    t = Table([[kiri]], colWidths=[lebar])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f4f8f7")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#dfe7e5")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    return t
+
+
+def _tabel_bar(baris, lebar, colors):
+    """Tabel label - batang - nilai. Tiga kolom, dan yang tengah yang bekerja.
+
+    `baris` = [(label, nilai, maks, teks, arah)] dengan arah 'tinggi' atau
+    'rendah'; yang 'rendah' diberi warna berbeda supaya batang panjang tidak
+    otomatis terbaca sebagai kabar baik.
+    """
+    from reportlab.platypus import Table, TableStyle
+    from reportlab.lib import colors as C
+
+    isi = []
+    for label, nilai, maks, teks, arah in baris:
+        warna = C.HexColor("#1f8f7d" if arah == "tinggi" else "#b8860b")
+        isi.append([label, _bar(nilai, maks, lebar * 0.34, warna=warna), teks])
+    t = Table(isi, colWidths=[lebar * 0.36, lebar * 0.36, lebar * 0.28])
+    t.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 8.8),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#5b6b68")),
+        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#12211f")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.4, colors.HexColor("#eef3f2")),
+    ]))
+    return t
 
 
 def _tabel(baris: list[list[str]], lebar: float, colors) -> Any:

@@ -794,6 +794,21 @@ class BarisKomparasi(BaseModel):
     belanja_per_jam: float | None = None
     waktu_jalan_menit: float | None = None
     n_kompetitor_langsung: float | None = None
+    # Enam aspek berikut ditambahkan 11 Sep 2026, permintaan pemilik repo
+    # ("aspek aspek yang dibandingkan, kayak keramaian gitu"). Kesamaannya:
+    # semuanya sudah ada di `hex_features` dan sudah dipakai menghitung skor -
+    # yang belum ada cuma jalannya ke tabel komparasi.
+    #
+    # KERAMAIAN dipilih sebagai puncak sore (B03), bukan jumlah keempat ember.
+    # Menjumlahkan empat ember menghasilkan angka yang tidak bisa dibandingkan
+    # antar-lokasi kalau salah satu embernya kosong di satu lokasi dan terisi di
+    # lokasi lain - dan itu keadaan sebagian besar heksagon.
+    puncak_sore: float | None = None
+    kepadatan_poi_total: float | None = None
+    keragaman_usaha: float | None = None
+    indeks_churn: float | None = None
+    pop_100m: float | None = None
+    harga_sewa_median: float | None = None
     keyakinan: BadgeKeyakinan
 
 

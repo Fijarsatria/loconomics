@@ -632,6 +632,13 @@ export interface BarisKomparasi {
   belanja_per_jam: number | null
   waktu_jalan_menit: number | null
   n_kompetitor_langsung: number | null
+  /** Enam aspek yang ditambahkan 11 Sep 2026. Lihat schemas.py::BarisKomparasi. */
+  puncak_sore: number | null
+  kepadatan_poi_total: number | null
+  keragaman_usaha: number | null
+  indeks_churn: number | null
+  pop_100m: number | null
+  harga_sewa_median: number | null
   keyakinan: BadgeKeyakinan
 }
 

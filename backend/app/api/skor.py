@@ -672,6 +672,15 @@ ARAH_METRIK: dict[str, bool] = {
     "belanja_per_jam": True,
     "waktu_jalan_menit": False,
     "n_kompetitor_langsung": False,
+    # Enam aspek baru (11 Sep 2026). Arahnya ditulis DI SINI, bukan di
+    # frontend: "churn tinggi itu buruk" adalah aturan produk, dan aturan yang
+    # hidup di dua tempat cepat atau lambat berselisih.
+    "puncak_sore": True,
+    "kepadatan_poi_total": True,
+    "keragaman_usaha": True,
+    "indeks_churn": False,
+    "pop_100m": True,
+    "harga_sewa_median": False,
 }
 
 MAKS_KOMPARASI = 4
@@ -745,6 +754,12 @@ def komparasi(
                 belanja_per_jam=hx.belanja_per_jam,
                 waktu_jalan_menit=hx.waktu_jalan_menit,
                 n_kompetitor_langsung=hx.n_kompetitor_langsung,
+                puncak_sore=hx.puncak_sore,
+                kepadatan_poi_total=hx.kepadatan_poi_total,
+                keragaman_usaha=hx.keragaman_usaha,
+                indeks_churn=hx.indeks_churn,
+                pop_100m=hx.pop_100m,
+                harga_sewa_median=hx.harga_sewa_median,
                 keyakinan=badge(hx),
             )
         )
