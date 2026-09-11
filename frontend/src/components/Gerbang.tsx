@@ -49,12 +49,12 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SplitText } from 'gsap/SplitText'
 
 import { IDENTITAS, KUADRAN, PENDIRI, URUTAN_KUADRAN } from '../config'
-import { PapanNama } from './primitif'
+import { MenuPengaturan, PapanNama } from './primitif'
 import { TombolAkun, useSesi } from './Akun'
 import BentoKeputusan, { type PilihanKawasan } from './GerbangPeta'
 import { KARTU_GERBANG, potretUntukTema } from '../lib/kartu-gerbang'
 import { SUMBER } from '../lib/ringkasan-data'
-import { SakelarBahasa, SakelarTema, useBahasa, useNamaZona, useTeks, useTema } from '../lib/bahasa'
+import { useBahasa, useNamaZona, useTeks, useTema } from '../lib/bahasa'
 
 gsap.registerPlugin(ScrollTrigger, SplitText)
 
@@ -2073,11 +2073,19 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
             navGelap ? 'g-nav-gelap' : 'g-nav'
           }`}
         >
+          {/* Nama di bilah ini papan nama yang SAMA dengan bilah peta - tiap
+              huruf yang tersentuh melenting lalu mengambil warnanya sendiri.
+              Dulu teks polos, dan dilaporkan pemilik repo: "ga ada interaktif/
+              bergetar/berwarna ... ga kayak yang pas masuk di maps". Komponennya
+              dipakai apa adanya, bukan ditiru, supaya tempo getar dan lunturnya
+              tidak pernah berpisah dari yang di peta.
+
+              `sebagai="span"` karena ia duduk di dalam tombol, dan `aria-label`
+              di tombolnya karena hurufnya disembunyikan dari pembaca layar. */}
           <button
             onClick={keAtas}
-            className={`papan flex shrink-0 cursor-pointer items-center gap-2.5 text-[16px] tracking-[0.02em] sm:text-[18px] ${
-              navGelap ? 'text-white' : ''
-            }`}
+            aria-label={IDENTITAS.produk}
+            className={`flex shrink-0 cursor-pointer items-center gap-2.5 ${navGelap ? 'text-white' : ''}`}
           >
             <svg viewBox="-50 -55 100 110" className="h-[18px] w-[16px] sm:h-5 sm:w-[18px]" aria-hidden>
               <polygon
@@ -2089,18 +2097,28 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
               />
               <circle r="11" fill={navGelap ? '#7cf7dd' : 'var(--g-teal)'} />
             </svg>
-            Loconomics
+            <PapanNama
+              teks={IDENTITAS.produk}
+              sebagai="span"
+              kelas="text-[16px] tracking-[0.02em] sm:text-[18px]"
+            />
           </button>
           {/* Di bawah `sm` tombol "Masuk ke peta" di bilah ini disembunyikan:
-              terukur di 390px, keempat benda ini berjumlah 445px dan halaman
-              jadi bisa digulir MENDATAR. Yang disembunyikan yang paling tidak
-              dibutuhkan di sini - tombol yang sama berdiri dua kali lebih besar
-              tepat di bawahnya, di hero. */}
+              terukur di 390px, isi bilahnya 442px di dalam bilah selebar 358px
+              dan halaman jadi bisa digulir MENDATAR - tanpa tombol itu 297px.
+              (Diukur ulang 11 Sep 2026 sesudah sakelar bahasa pindah ke menu
+              pengaturan; angka lamanya 445px.) Yang disembunyikan yang paling
+              tidak dibutuhkan di sini - tombol yang sama berdiri dua kali lebih
+              besar tepat di bawahnya, di hero. */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {/* Sakelar tema TIDAK lagi di sini. Ia pindah ke tengah bawah hero,
-                atas permintaan pemilik repo - dan bilah ini memang sudah
-                memuat empat benda pada 640px. */}
-            <SakelarBahasa gelap={navGelap} kelas="sm:text-[12.5px] sm:[&>button]:px-3 sm:[&>button]:py-1.5" />
+            {/* Bahasa DAN tema tinggal di menu pengaturan, bukan berdiri di
+                bilah ini dan di hero - permintaan pemilik repo, 11 Sep 2026:
+                "dimasukkan ke dalam tombol setting gitu nah kayak di maps".
+                Menunya komponen yang SAMA dengan bilah peta: dua menu yang
+                ditulis dua kali adalah dua menu yang suatu saat berbeda isi.
+                Yang tidak ikut cuma "Nama tempat" - itu setelan basemap, dan
+                halaman ini tidak punya basemap. */}
+            <MenuPengaturan varian="gerbang" />
             <TombolAkun varian="gerbang" />
             <span className="hidden sm:inline-flex">
               {tombolMasuk('px-5 py-2.5', 'kecil', Boolean(akun))}
@@ -2138,14 +2156,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
               kelas="g-pil cursor-pointer rounded-full px-7 py-4 text-[15px] font-semibold text-[color:var(--g-ink)]"
               anak={teks.lihatSolusi}
             />
-          </div>
-
-          {/* Sakelar tema, DI BAWAH kedua ajakan dan di tengah - permintaan
-              pemilik repo. Tempat ini juga yang benar menurut artinya: ia
-              bukan ajakan melainkan preferensi, jadi ia berdiri sesudah dua
-              hal yang benar-benar diminta halaman ini dilakukan orang. */}
-          <div className="g-masuk-awal mt-7 flex justify-center">
-            <SakelarTema />
           </div>
 
           {/* TANPA `transition-opacity`. GSAP menganimasikan opacity tombol ini

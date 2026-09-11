@@ -618,9 +618,16 @@ td {
 }
 
 /* Kilau tepi harus jauh lebih lemah di atas bahan gelap; 0,75 putih yang
-   dipakai di terang berubah jadi garis neon di gelap. */
+   dipakai di terang berubah jadi garis neon di gelap.
+
+   `.g-nav-gelap` ikut karena alasan yang sama dengan tokennya di atas: bilah
+   gerbang yang turun ke jurang menggelapkan menu di dalamnya WALAUPUN temanya
+   terang, dan di tema terang <body> tidak membawa `.peta-gelap`. Tanpa baris
+   ini menu Pengaturan dan Akun di sana berbadan gelap dengan cincin putih 55%. */
 .peta-gelap .kaca,
-.peta-gelap .kaca-tebal {
+.peta-gelap .kaca-tebal,
+.g-nav-gelap .kaca,
+.g-nav-gelap .kaca-tebal {
   border-color: rgb(255 255 255 / 0.13);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.16),
@@ -628,7 +635,9 @@ td {
     0 24px 60px -18px rgb(0 0 0 / 0.6);
 }
 .peta-gelap .kaca::after,
-.peta-gelap .kaca-tebal::after {
+.peta-gelap .kaca-tebal::after,
+.g-nav-gelap .kaca::after,
+.g-nav-gelap .kaca-tebal::after {
   background: linear-gradient(
     135deg,
     rgb(255 255 255 / 0.12) 0%,
@@ -2943,12 +2952,10 @@ input:focus-visible {
      menggandakan cahayanya di tempat yang salah. */
   --g-latar-pekat: #080b0a;
   --g-kontras-garis: rgb(190 235 225 / 0.16);
-  /* Sakelar bahasa di bilah gerbang. */
-  --sb-rel: rgb(255 255 255 / 0.08);
-  --sb-isi: rgb(255 255 255 / 0.92);
-  --sb-aktif: #06100e;
-  --sb-redup: var(--g-ink-4);
-  --sb-hover: var(--g-ink);
+  /* `--sb-*` sakelar bahasa TIDAK lagi dinyatakan di sini. Sakelarnya pindah
+     dari bilah gerbang ke menu pengaturan (11 Sep 2026), dan di sana
+     `.app-sakelar-bahasa` menyatakan tokennya sendiri pada elemennya sendiri -
+     nilai yang diwarisi dari sini tidak pernah terbaca lagi. */
 }
 
 /* ==========================================================================
@@ -3043,12 +3050,6 @@ input:focus-visible {
   --g-scroll-hover: rgb(12 60 50 / 0.36);
   --g-kontras-garis: rgb(12 60 50 / 0.16);
 
-  --sb-rel: rgb(12 23 20 / 0.07);
-  --sb-isi: #0f2c25;
-  --sb-aktif: #f2f7f5;
-  --sb-redup: var(--g-ink-4);
-  --sb-hover: var(--g-ink);
-
   /* Token APLIKASI dikembalikan ke versi terangnya.
 
      `.gerbang` ikut selektor `.peta-gelap` di atas - benar selama gerbang cuma
@@ -3142,9 +3143,10 @@ input:focus-visible {
    matahari adalah kalimat yang bertengkar dengan dirinya sendiri.
 
    Warnanya diturunkan dari `data-tema` MILIK TOMBOLNYA, bukan dari tempat ia
-   dipasang. Ia berdiri di dua tempat yang paletnya berbeda - hero gerbang dan
-   menu pengaturan peta - dan tombol yang mewarisi palet tempatnya akan tampil
-   sebagai dua benda berbeda. */
+   dipasang. Ia berdiri di menu pengaturan gerbang dan menu pengaturan peta,
+   dan paletnya berbeda: token `.gerbang`, `.g-nav-gelap` saat bilah gerbang
+   turun ke jurang, dan `.peta-gelap`. Tombol yang mewarisi palet tempatnya
+   akan tampil sebagai tiga benda berbeda. */
 
 .sakelar-tema {
   --st-tinggi: 2.5rem;

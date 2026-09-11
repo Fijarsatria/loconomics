@@ -177,6 +177,19 @@ Sembilan asersi terakhir yang masuk menjaga `render.yaml`, dan alasannya layak d
 
 ---
 
+### 11 September 2026, putaran keenam — bilah gerbang: papan nama yang hidup, dan menu pengaturan
+
+| Bagian | Bukti |
+|---|---|
+| **Nama di bilah gerbang melenting dan berwarna, seperti di peta** | Dulu teks polos. Sekarang `PapanNama` yang SAMA dengan bilah peta - bukan tiruan - lewat `sebagai="span"` yang baru, karena ia duduk di dalam tombol kembali-ke-atas; tombolnya ikut membawa `aria-label`. Disapu kursor di headless: kesepuluh huruf mengambil warna dan melenting, lalu luntur sendiri sesudah kursor pergi, dan klik tetap menggulir ke atas. Dibuktikan merah dengan mengembalikan teks polos |
+| **Bahasa dan tema pindah ke dalam menu pengaturan** | Sakelar bahasa di bilah dan sakelar tema di tengah bawah hero dicabut. Yang berdiri di bilah sekarang gerigi `MenuPengaturan varian="gerbang"` - komponen yang sama dengan peta: Bahasa, Tampilan, Tentang kami, Kontak. "Nama tempat" tidak ikut; itu setelan basemap. Variannya cuma bahan (`.g-pil`) dan ukuran (44 px, setinggi tombol akun). Diuji: buka, tutup lewat klik luar / Enter / Escape, ganti bahasa dari menu (label tombolnya ikut jadi "Settings"), ganti tema dari menu (`view-transition-name` dibersihkan sesudahnya). Prop `gelap` `SakelarBahasa` dan token `--sb-*` di `.gerbang` ikut dicabut: tidak ada lagi yang membacanya |
+| **Dialog Tentang kami / Kontak terbuka DI ATAS gerbang** | `z-[60]` → `z-[80]`, lapisan yang sama dengan `Tirai`. Tanpa itu dialognya terbuka di belakang gerbang `z-[70]` - nol galat, cuma klik yang tidak menghasilkan apa-apa. Tirainya `bg-ink/30` → `bg-black/55`, karena krem-putih 30% di tema gelap memutihkan halaman hitam. Dijaga `elementFromPoint` di tengah layar, dibuktikan merah dengan `z-[60]` |
+| **Pesan pengembang di dialog Kontak diganti** | "Isi nilainya di IDENTITAS pada frontend/src/config.ts." → "Kontak tim belum dicantumkan.", dan kalimatnya hanya tampil selama KEEMPAT kontak di `IDENTITAS` kosong - diturunkan dari nilai yang sama dengan barisnya |
+| **Menu di atas jurang pada tema terang terbaca lagi** | Baris menu Pengaturan dan nama di kepala menu Akun mewarisi tinta gelap di atas kaca gelap: kontras 1,03 → 15,84. Lihat jebakan.md |
+| **Nol regresi di tempat lain** | `tsc` 0; `oxlint` 22 peringatan, identik dengan HEAD; `test_infra` 58/58, `test_aturan` 58/58; `audit-prd.mjs` 33/33 tanpa SANDI; build produksi 9 chunk seperti HEAD, selisih ratusan byte. 60 asersi Playwright hijau di dev DAN `vite preview` - 1440/640/390 px, kedua tema, kedua bahasa, tamu dan sesi yang dipalsukan di peramban (tanpa akun sungguhan). Nol gulir mendatar di 390 px: isi bilah 297 px di bilah 358 px |
+
+---
+
 ### Belum dikerjakan — di sinilah pekerjaan berikutnya
 
 | Hal | Yang menghalangi | Kalau sudah ada, kerjakan |

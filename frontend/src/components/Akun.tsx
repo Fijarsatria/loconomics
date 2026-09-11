@@ -1337,11 +1337,16 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
         )}
       </button>
 
+      {/* `text-ink` ditulis, bukan diwarisi - sebab yang sama dengan menu
+          Pengaturan di primitif.tsx. Nama tampilan di kepala menu tidak punya
+          kelas warna, dan di bilah gerbang yang turun ke jurang pada tema
+          terang ia mewarisi tinta GELAP gerbang di atas kaca yang sudah gelap:
+          terlihat di potret sesi yang dipalsukan, 11 Sep 2026. */}
       {tampil && (
         <div
           role="menu"
           data-menutup={menutup ? '1' : undefined}
-          className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[19rem] overflow-hidden rounded-md"
+          className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[19rem] overflow-hidden rounded-md text-ink"
         >
           <div className="border-b border-line/70 px-4 py-3.5">
             <div className="flex items-center gap-3">

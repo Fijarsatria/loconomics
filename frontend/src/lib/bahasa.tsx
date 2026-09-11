@@ -171,25 +171,23 @@ export function useIstilah() {
 /**
  * Sakelar dua posisi ID / EN.
  *
- * Satu komponen untuk kedua tempatnya - bilah gerbang dan bilah peta - supaya
- * keduanya tidak pernah berbeda bentuk. `gelap` dipakai bilah gerbang saat
- * halaman turun ke jurang hitam.
+ * Tinggal di SATU tempat: menu pengaturan - yang sama di bilah gerbang dan di
+ * bilah peta. Sampai 11 Sep 2026 gerbang memasangnya langsung di bilah atas,
+ * lengkap dengan varian `gelap` untuk bilah yang turun ke jurang; varian itu
+ * ikut dicabut begitu sakelarnya pindah ke dalam menu, yang membawa tokennya
+ * sendiri lewat `.app-sakelar-bahasa`.
  */
-export function SakelarBahasa({ gelap, kelas = '' }: { gelap?: boolean; kelas?: string }) {
+export function SakelarBahasa({ kelas = '' }: { kelas?: string }) {
   const { bahasa, ganti } = useBahasa()
   return (
     <div
       role="group"
       aria-label={bahasa === 'id' ? 'Bahasa antarmuka' : 'Interface language'}
-      className={`relative grid grid-cols-2 rounded-full p-[3px] text-[11.5px] font-semibold tracking-[0.04em] ${
-        gelap ? 'bg-white/10' : 'bg-[color:var(--sb-rel,rgb(127_127_127/0.16))]'
-      } ${kelas}`}
+      className={`relative grid grid-cols-2 rounded-full bg-[color:var(--sb-rel,rgb(127_127_127/0.16))] p-[3px] text-[11.5px] font-semibold tracking-[0.04em] ${kelas}`}
     >
       <span
         aria-hidden
-        className={`absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-full transition-transform duration-300 ease-liquid ${
-          gelap ? 'bg-white/90' : 'bg-[color:var(--sb-isi,#ffffff)]'
-        }`}
+        className="absolute inset-y-[3px] left-[3px] w-[calc(50%-3px)] rounded-full bg-[color:var(--sb-isi,#ffffff)] transition-transform duration-300 ease-liquid"
         style={{ transform: bahasa === 'en' ? 'translateX(100%)' : 'none' }}
       />
       {(['id', 'en'] as const).map((b) => (
@@ -200,12 +198,8 @@ export function SakelarBahasa({ gelap, kelas = '' }: { gelap?: boolean; kelas?: 
           aria-pressed={bahasa === b}
           className={`relative cursor-pointer rounded-full px-2.5 py-1 uppercase transition-colors duration-300 ${
             bahasa === b
-              ? gelap
-                ? 'text-[#06100e]'
-                : 'text-[color:var(--sb-aktif,#06100e)]'
-              : gelap
-                ? 'text-white/60 hover:text-white'
-                : 'text-[color:var(--sb-redup,rgb(127_127_127))] hover:text-[color:var(--sb-hover,#06100e)]'
+              ? 'text-[color:var(--sb-aktif,#06100e)]'
+              : 'text-[color:var(--sb-redup,rgb(127_127_127))] hover:text-[color:var(--sb-hover,#06100e)]'
           }`}
         >
           {b}
@@ -368,8 +362,9 @@ const K_TEMA = {
 }
 
 /**
- * Sakelar tema. Satu komponen untuk kedua tempatnya - hero gerbang dan menu
- * pengaturan peta - supaya keduanya tidak pernah berbeda bentuk maupun arti.
+ * Sakelar tema. Tinggal di menu pengaturan, dan menu itu SATU komponen untuk
+ * bilah gerbang dan bilah peta - supaya keduanya tidak pernah berbeda bentuk
+ * maupun arti. Sampai 11 Sep 2026 gerbang memasangnya di tengah bawah hero.
  *
  * BENTUKNYA pil, bukan tombol bundar, dan itu permintaan pemilik repo dengan
  * dua gambar rujukan: kenop meluncur di dalam pil beku, matahari di kiri saat

@@ -492,8 +492,13 @@ export function PapanNama({
   /**
    * Bilah atas aplikasi tetap ada di DOM di belakang halaman gerbang, jadi dua
    * papan nama bisa hidup bersamaan. Hanya satu yang boleh jadi <h1>.
+   *
+   * `span` untuk papan nama yang duduk DI DALAM tombol - logo bilah gerbang,
+   * yang sekaligus tombol kembali ke atas. `<div>` dan `<h1>` tidak sah di
+   * dalam `<button>`. Hurufnya tersembunyi dari pembaca layar, jadi tombol
+   * pembungkusnya WAJIB membawa `aria-label` sendiri - tanpa itu namanya kosong.
    */
-  sebagai?: 'h1' | 'div'
+  sebagai?: 'h1' | 'div' | 'span'
 }) {
   const [warna, setWarna] = useState<Record<number, string>>({})
   // Bukan penanda nyala/mati melainkan penghitung sentuhan: yang dipakai cuma
@@ -1286,6 +1291,7 @@ function BarisIdentitas({ label, nilai }: { label: string; nilai: string }) {
  */
 const K_PENGATURAN = {
   id: {
+    pengaturan: 'Pengaturan',
     tutup: 'Tutup',
     belumDiisi: 'belum diisi',
     tentang: {
@@ -1297,10 +1303,15 @@ const K_PENGATURAN = {
     kontak: {
       judul: 'Kontak',
       label: ['Surel', 'Instagram', 'Situs', 'Repositori'],
-      catatan: 'Isi nilainya di IDENTITAS pada frontend/src/config.ts.',
+      // Dulu "Isi nilainya di IDENTITAS pada frontend/src/config.ts." - pesan
+      // untuk pengembang di layar pengguna, dan sejak menu ini juga berdiri di
+      // halaman gerbang ia jadi kalimat yang dibaca juri. Hanya tampil selama
+      // KEEMPAT nilainya kosong; lihat `isi` di MenuPengaturan.
+      catatan: 'Kontak tim belum dicantumkan.',
     },
   },
   en: {
+    pengaturan: 'Settings',
     tutup: 'Close',
     belumDiisi: 'not filled in',
     tentang: {
@@ -1312,7 +1323,7 @@ const K_PENGATURAN = {
     kontak: {
       judul: 'Contact',
       label: ['Email', 'Instagram', 'Website', 'Repository'],
-      catatan: 'Fill these in at IDENTITAS in frontend/src/config.ts.',
+      catatan: 'The team’s contact details are not listed yet.',
     },
   },
 }
@@ -1361,9 +1372,18 @@ const URUTAN_KERAPATAN = ['mati', 'jarang', 'normal', 'rapat'] as const
 export function MenuPengaturan({
   namaTempat,
   onNamaTempat,
+  varian = 'peta',
 }: {
   namaTempat?: string
   onNamaTempat?: (k: string) => void
+  /**
+   * `gerbang` = bilah atas halaman perkenalan. Yang berbeda cuma BAHAN dan
+   * ukuran tombolnya - pil kaca setinggi tombol-tombol di sebelahnya, bukan
+   * cincin tipis bilah peta. Isi menunya sengaja tidak punya varian: dua menu
+   * pengaturan yang isinya boleh berbeda adalah dua menu yang suatu saat
+   * berselisih soal apa arti "Tampilan".
+   */
+  varian?: 'peta' | 'gerbang'
 } = {}) {
   const { bahasa } = useBahasa()
   const tn = useTeks(K_NAMA_TEMPAT)
@@ -1398,10 +1418,15 @@ export function MenuPengaturan({
   }, [layar])
 
   const tp = useTeks(K_PENGATURAN)
+  const digerbang = varian === 'gerbang'
   const isi = layar
     ? {
         judul: tp[layar].judul,
-        catatan: tp[layar].catatan,
+        // Catatan Kontak menyatakan kontaknya BELUM ADA, jadi ia diturunkan
+        // dari nilai yang sama dengan barisnya: begitu satu alamat diisi di
+        // `IDENTITAS`, kalimatnya berhenti tampil tanpa perlu diingat siapa pun.
+        catatan:
+          layar === 'kontak' && NILAI_PENGATURAN.kontak.some(Boolean) ? '' : tp[layar].catatan,
         baris: tp[layar].label.map(
           (l, i) => [l, NILAI_PENGATURAN[layar][i] ?? ''] as [string, string],
         ),
@@ -1415,12 +1440,20 @@ export function MenuPengaturan({
           onClick={() => setBuka((v) => !v)}
           aria-haspopup="menu"
           aria-expanded={buka}
-          aria-label="Pengaturan"
-          title="Pengaturan"
-          className={`group grid h-9 w-9 cursor-pointer place-items-center rounded-full border transition-all duration-300 ease-jelly hover:scale-[1.08] ${
+          aria-label={tp.pengaturan}
+          title={tp.pengaturan}
+          className={`group grid cursor-pointer place-items-center rounded-full border transition-all duration-300 ease-jelly hover:scale-[1.08] ${
+            digerbang ? 'h-9 w-9 sm:h-11 sm:w-11' : 'h-9 w-9'
+          } ${
             buka
               ? 'border-transparent bg-ink text-surface'
-              : 'border-line text-ink-2 hover:border-line-2 hover:text-ink'
+              : digerbang
+                ? // `.g-pil` hanya saat TERTUTUP. `bg-ink` memang menang atas
+                  // latarnya, tetapi kilau `inset` dan bayangan kacanya tidak
+                  // dibatalkan apa pun - dan tanda "sedang dibuka" harus sama
+                  // persis dengan tombol akun di sebelahnya: bulatan tinta polos.
+                  'g-pil text-[color:var(--g-ink-2)] hover:text-[color:var(--g-ink)]'
+                : 'border-line text-ink-2 hover:border-line-2 hover:text-ink'
           }`}
         >
           <svg
@@ -1428,7 +1461,9 @@ export function MenuPengaturan({
             height="17"
             viewBox="0 0 20 20"
             aria-hidden
-            className="transition-transform duration-500 ease-jelly group-hover:rotate-90"
+            className={`transition-transform duration-500 ease-jelly group-hover:rotate-90 ${
+              digerbang ? 'sm:h-[19px] sm:w-[19px]' : ''
+            }`}
           >
             {/* Gerigi sungguhan: delapan gigi digambar sebagai garis pendek
                 dari lingkaran badan, bukan poligon abstrak yang harus
@@ -1453,11 +1488,19 @@ export function MenuPengaturan({
           </svg>
         </button>
 
+        {/* `text-ink` DITULIS, bukan diwarisi. Baris "Tentang kami" dan
+            "Kontak" tidak punya kelas warna sendiri, dan di peta itu kebetulan
+            benar karena `.peta-gelap` menyatakan `color`. Di bilah gerbang yang
+            turun ke JURANG pada tema terang, `.g-nav-gelap` menukar permukaan
+            menunya ke gelap tetapi warna yang diwarisi masih `--g-ink` gerbang
+            terang - tulisan hampir hitam di atas kaca hitam, terukur di potret.
+            Permukaan yang dibangun dari token aplikasi harus menyatakan tintanya
+            dari token yang SAMA. */}
         {tampil && (
           <div
             role="menu"
             data-menutup={menutup ? '1' : undefined}
-            className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[15.5rem] overflow-hidden rounded-md p-1.5"
+            className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[15.5rem] overflow-hidden rounded-md p-1.5 text-ink"
           >
             {/* Bahasa di baris PERTAMA, sebagai sakelar - bukan sebagai layar
                 yang harus dibuka dulu. Ia satu-satunya pengaturan yang
@@ -1556,11 +1599,18 @@ export function MenuPengaturan({
           sini tidak berarti "seluruh layar" melainkan "sebesar bilah atas", dan
           dialognya terjepit di pita setinggi 56px dengan tombol Tutup-nya
           terlempar ke luar viewport. Ini jebakan yang sama dengan `.kaca` versi
-          lain di CLAUDE.md, hanya lewat properti yang berbeda. */}
+          lain di CLAUDE.md, hanya lewat properti yang berbeda.
+
+          Lapisan dan tirainya SAMA dengan `Tirai` di Akun.tsx, dan keduanya
+          ditentukan halaman gerbang. `z-[60]` yang dulu berada DI BAWAH gerbang
+          (`z-[70]`): begitu menu ini berdiri di bilah gerbang, "Tentang kami"
+          terbuka di belakang halaman yang sedang dibaca - nol galat, cuma klik
+          yang tidak menghasilkan apa-apa. Dan `bg-ink/30` di tema gelap adalah
+          krem-putih 30%, yang mengubah halaman hitam jadi abu-abu susu. */}
       {isi &&
         createPortal(
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/30 p-6 backdrop-blur-[3px]"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-6 backdrop-blur-[4px]"
           onClick={() => setLayar(null)}
           role="dialog"
           aria-modal="true"
@@ -1585,9 +1635,11 @@ export function MenuPengaturan({
                   <BarisIdentitas key={label} label={label} nilai={nilai} />
                 ))}
               </div>
-              <p className="mt-4 border-t border-line/70 pt-4 text-[13px] leading-relaxed text-ink-2">
-                {isi.catatan}
-              </p>
+              {isi.catatan && (
+                <p className="mt-4 border-t border-line/70 pt-4 text-[13px] leading-relaxed text-ink-2">
+                  {isi.catatan}
+                </p>
+              )}
             </div>
           </div>
         </div>,
