@@ -25,7 +25,7 @@
  * rekomendasi yang menyembunyikan alasan untuk ragu bukan rekomendasi, itu iklan.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 
 import { KUADRAN, kodeLokasi } from '../config'
 import { api, GalatAPI } from '../lib/api'
@@ -283,7 +283,7 @@ function Kartu({
   )
 }
 
-export default function Rekomendasi({
+function Rekomendasi({
   onPilih,
   onBukaAkun,
 }: {
@@ -444,3 +444,7 @@ export default function Rekomendasi({
     </div>
   )
 }
+
+// Dibungkus `memo`: tab ini tetap terpasang sesudah pertama dibuka, dan tidak perlu
+// dirender ulang tiap kali tab lain dibuka. Lihat `pilihDariRekomendasi` di App.tsx.
+export default memo(Rekomendasi)

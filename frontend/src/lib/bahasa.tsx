@@ -79,9 +79,29 @@ const Konteks = createContext<{ bahasa: Bahasa; ganti: (b: Bahasa) => void }>({
 })
 
 export function BahasaProvider({ children }: { children: ReactNode }) {
-  const [bahasa, setBahasa] = useState<Bahasa>(bacaAwal)
+  // `lang` di <html> ikut berganti. Bukan kosmetik: pembaca layar memilih suara
+  // dari atribut ini, pemenggalan kata peramban ikut membacanya, dan - yang
+  // paling menentukan - `ambil()` di lib/api.ts dan `lib/format.ts` MEMBACANYA
+  // untuk memilih bahasa kalimat backend dan pemisah angka.
+  //
+  // DITULIS SEBELUM RENDER, bukan di efek. Sampai 11 Sep 2026 ia ditulis di
+  // `useEffect` provider ini - dan React menjalankan efek ANAK lebih dulu
+  // daripada efek leluhurnya. Jadi setiap komponen yang meminta ulang karena
+  // bahasanya berganti berangkat dengan `lang` yang LAMA. Terukur lewat jaringan:
+  // sesudah menekan EN, `/skor/hidden-gems` dan kelima permintaan detail
+  // heksagon terkirim tanpa `bahasa=en`, dan kalimat backendnya tetap Indonesia
+  // di layar Inggris. Membuka web dengan bahasa tersimpan EN kena juga:
+  // gelombang pertama permintaannya membaca `lang="id"` dari index.html. Di dev
+  // tertutup - StrictMode menjalankan efek dua kali, dan putaran kedua sudah
+  // membaca `lang` yang benar - jadi yang kena justru build produksi.
+  const [bahasa, setBahasa] = useState<Bahasa>(() => {
+    const b = bacaAwal()
+    document.documentElement.lang = b
+    return b
+  })
 
   const ganti = useCallback((b: Bahasa) => {
+    document.documentElement.lang = b
     setBahasa(b)
     try {
       localStorage.setItem(KUNCI, b)
@@ -89,12 +109,6 @@ export function BahasaProvider({ children }: { children: ReactNode }) {
       /* diam: pilihan tetap berlaku untuk sesi ini */
     }
   }, [])
-
-  // `lang` di <html> ikut berganti. Bukan kosmetik: pembaca layar memilih suara
-  // dari atribut ini, dan pemenggalan kata peramban ikut membacanya.
-  useEffect(() => {
-    document.documentElement.lang = bahasa
-  }, [bahasa])
 
   const nilai = useMemo(() => ({ bahasa, ganti }), [bahasa, ganti])
   return <Konteks.Provider value={nilai}>{children}</Konteks.Provider>

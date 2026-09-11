@@ -262,6 +262,17 @@ function bacaTampilan(): TampilanTersimpan {
 
 const AWAL = bacaTampilan()
 
+/**
+ * Tiga tab panel kanan, URUT dari kiri ke kanan.
+ *
+ * Urutan ini bukan cuma urutan tombol: ia juga yang menentukan dari sisi mana
+ * isi tab masuk. Tab di sebelah kanan tab yang aktif menunggu di kanan, yang di
+ * kiri menunggu di kiri - jadi isinya selalu datang dari arah yang sama dengan
+ * geseran penunjuknya. Satu larik untuk keduanya supaya tidak bisa berselisih.
+ */
+const URUTAN_TAB = ['rekomendasi', 'daftar', 'ai'] as const
+type NamaTab = (typeof URUTAN_TAB)[number]
+
 // ---------------------------------------------------------------------------
 // Pencarian
 // ---------------------------------------------------------------------------
@@ -796,7 +807,26 @@ export default function App() {
    * Yang SUDAH punya akun dipindahkan ke rekomendasi sekali oleh efek di bawah:
    * bagi mereka daftar itu memang sudah tersedia isinya.
    */
-  const [tab, setTab] = useState<'rekomendasi' | 'daftar' | 'ai'>('daftar')
+  const [tab, setTab] = useState<NamaTab>('daftar')
+  /**
+   * Tab yang PERNAH dibuka. Isinya dipasang saat pertama kali dibuka, lalu
+   * TETAP terpasang - disembunyikan, bukan dicabut.
+   *
+   * Sebelum 11 Sep 2026 "Untuk Anda" dan "Daftar lokasi" dicabut dari DOM tiap
+   * kali ditinggalkan. Dua akibatnya, dan keduanya melawan perpindahan yang
+   * rapi: yang pergi tidak bisa dianimasikan keluar karena elemennya sudah
+   * tidak ada, dan yang kembali MEMINTA ULANG datanya - `ambil()` tidak punya
+   * cache - jadi tiap kembali ke daftar berarti layar tunggu lagi dan posisi
+   * gulirnya hilang. Loconomics AI sudah lama tetap terpasang karena alasan
+   * yang sama (riwayat percakapannya); sekarang ketiganya sama.
+   *
+   * Tidak semua dipasang sejak awal: "Untuk Anda" meminta rekomendasi ke
+   * backend begitu dipasang, dan tamu yang tidak pernah membukanya tidak perlu
+   * membayar permintaan itu. Disesuaikan saat render, bukan lewat efek - lewat
+   * efek, bingkai pertama tab barunya kosong.
+   */
+  const [tabDikunjungi, setTabDikunjungi] = useState<ReadonlySet<NamaTab>>(() => new Set([tab]))
+  if (!tabDikunjungi.has(tab)) setTabDikunjungi(new Set([...tabDikunjungi, tab]))
   const [panelTerbuka, setPanelTerbuka] = useState(true)
   /**
    * Kompas Kuadran / Legenda: sekarang dibuka lewat tombol, tidak berdiri terus.
@@ -1018,12 +1048,18 @@ export default function App() {
   /** Fase tirai pulang. Lihat `keLanding` di bawah. */
   const [pulang, setPulang] = useState<'tutup' | 'buka' | null>(null)
   const jamPulang = useRef<number[]>([])
-  useEffect(
-    () => () => {
-      jamPulang.current.forEach((j) => window.clearTimeout(j))
-    },
-    [],
-  )
+  /** Janji unduhan chunk tidak bisa dibatalkan seperti jam; yang dicek bendera ini. */
+  const hidupPulang = useRef(true)
+  useEffect(() => {
+    hidupPulang.current = true
+    // Larik yang sama yang diisi `push` - ditangkap di sini, bukan dibaca ulang
+    // dari ref saat pembersihan.
+    const jam = jamPulang.current
+    return () => {
+      hidupPulang.current = false
+      jam.forEach((j) => window.clearTimeout(j))
+    }
+  }, [])
 
   /**
    * Pintasan lokasi di jawaban AI ditekan.
@@ -1060,6 +1096,26 @@ export default function App() {
    * memudar di atas halaman perkenalan yang animasi masuknya sudah berjalan di
    * baliknya. Dua fase, dua jam, dan keduanya dibersihkan saat komponen dilepas
    * supaya tidak ada `setState` yang mendarat di komponen yang sudah pergi.
+   *
+   * TIRAINYA MENUNGGU CHUNK-NYA. Fase kedua dulu dipatok ke 430 ms, dan itu
+   * benar selama chunk gerbang sudah pernah diunduh - yaitu selama orang
+   * datang ke peta LEWAT gerbang. Sesi yang dimulai di peta (refresh di peta)
+   * belum pernah memuatnya: tirainya memudar tepat di atas fallback Suspense
+   * yang masih menunggu, dan halaman perkenalannya baru muncul ~420 ms sesudah
+   * tirainya MULAI memudar - di tema terang bahkan sesudah tirainya hilang
+   * sama sekali. Terukur lewat pencatat per bingkai. Sekarang unduhannya
+   * dimulai saat tombolnya ditekan, dan fase kedua menunggu KEDUANYA - tirai
+   * sudah menutup dan chunk sudah tiba. `import()` yang sama dengan `lazy` di
+   * kepala berkas, jadi Vite memberinya chunk yang sama; tidak ada yang pindah
+   * ke bundel pertama.
+   *
+   * Yang TIDAK bisa dihapus dari sini: `lazy` yang belum pernah dirender tetap
+   * menangguhkan satu kali walau modulnya sudah terunduh (React 19.2 membaca
+   * hasil `import()` lewat `.then`, yang asinkron), jadi isi gerbang di jalur
+   * dingin masih menyusul ±470 ms sesudah tirai mulai memudar - terukur di
+   * build produksi. Yang membuatnya tidak terlihat: fallback-nya kini latar
+   * `.gerbang` yang sama persis, jadi yang tersingkap halaman kosong berwarna
+   * benar, lalu isi hero masuk dengan animasinya sendiri.
    */
   const keLanding = useCallback(() => {
     const selesaikan = () => {
@@ -1073,13 +1129,18 @@ export default function App() {
       return
     }
     setPulang('tutup')
-    jamPulang.current.push(
-      window.setTimeout(() => {
-        selesaikan()
-        setPulang('buka')
-      }, 430),
-      window.setTimeout(() => setPulang(null), 860),
-    )
+    // Gagal mengunduh tidak boleh menahan tirai selamanya: Suspense di bawah
+    // yang akan menanganinya, sama seperti sebelum tirai ini ada.
+    const chunk = import('./components/Gerbang').catch(() => null)
+    const tertutup = new Promise<void>((r) => {
+      jamPulang.current.push(window.setTimeout(r, 430))
+    })
+    void Promise.all([chunk, tertutup]).then(() => {
+      if (!hidupPulang.current) return
+      selesaikan()
+      setPulang('buka')
+      jamPulang.current.push(window.setTimeout(() => setPulang(null), 430))
+    })
   }, [])
 
   /**
@@ -1462,21 +1523,71 @@ export default function App() {
     return m
   }, [diagram])
 
+  /**
+   * Prop pane tab yang STABIL - fungsi dan objek yang tidak dibuat ulang tiap
+   * render.
+   *
+   * Ada karena ketiga pane kini tetap terpasang. Tiap `setTab` merender ulang
+   * App, dan tanpa ini React ikut merender ulang seluruh isi pane yang sedang
+   * tidak terlihat - 200 baris daftar lokasi, panel AI, rekomendasi - karena
+   * fungsi sebaris seperti `onPilih={(h3) => ...}` selalu fungsi yang BARU.
+   * Terukur di dev: bingkai pertama sesudah klik tab 350 ms (tugas panjang
+   * ~300 ms), sementara kode sebelum pane dipertahankan 33 ms. Transisinya baru
+   * mulai sesudah tugas itu selesai, jadi yang terasa bukan elegan melainkan
+   * berat. Keempat komponennya dibungkus `memo` di berkasnya masing-masing;
+   * yang di sini memastikan bungkus itu punya sesuatu yang bisa disamakan.
+   */
+  const pilihDariDaftar = useCallback((h3: string) => {
+    setHexTerpilih(h3)
+    setSimulasiTerbuka(false)
+    setHexBanding(null)
+    peta.current?.highlight([h3])
+    peta.current?.fokusHeksagon(h3)
+  }, [])
+  const pilihDariRekomendasi = useCallback((h3: string) => {
+    setHexTerpilih(h3)
+    setTab('daftar')
+    peta.current?.fokusHeksagon(h3)
+  }, [])
+  const bukaKuadranPenuh = useCallback(() => setKuadranPenuh(true), [])
+  const batasKompas = useMemo(
+    () => (diagram ? { x: diagram.batas_x, y: diagram.batas_y } : undefined),
+    [diagram],
+  )
+
+  /** Di sisi mana sebuah pane menunggu, relatif terhadap tab yang aktif. */
+  const sisiTab = (k: NamaTab): 'kiri' | 'aktif' | 'kanan' => {
+    const selisih = URUTAN_TAB.indexOf(k) - URUTAN_TAB.indexOf(tab)
+    return selisih === 0 ? 'aktif' : selisih < 0 ? 'kiri' : 'kanan'
+  }
+
   return (
     <>
       {gerbang && (
         // Fallback berwarna latar gerbang, bukan putih: kedipan putih satu
         // bingkai saat chunk-nya diunduh terbaca sebagai kerusakan.
-        <Suspense fallback={<div className="fixed inset-0 z-40 bg-[#eaf6f1]" />}>
+        //
+        // Warnanya DIPINJAM dari `.gerbang` itu sendiri, bukan ditulis. Dulu
+        // `bg-[#eaf6f1]` - mint pucat dari masa gerbang cuma punya wajah
+        // terang - dan sejak gerbang gelap jadi bawaan, fallback yang
+        // dimaksudkan menyamarkan pemuatan justru jadi kilatan putih penuh:
+        // terukur luminansi 218 dari 255 di tengah tirai pulang yang gelap,
+        // dilaporkan pemilik repo sebagai "sekilas layarnya memutih". Kelas
+        // `.gerbang` + `data-tema` membuat latarnya `--g-latar` yang sama
+        // persis di kedua tema, jadi tidak ada salinan warna yang bisa
+        // tertinggal lagi. `data-tema` dari React, bukan dari <html>:
+        // atribut akar baru ditulis efek SESUDAH render pertama.
+        <Suspense fallback={<div className="gerbang fixed inset-0 z-40" data-tema={tema} aria-hidden />}>
           <Gerbang onMasuk={masukKePeta} />
         </Suspense>
       )}
       {/* Tirai pulang. DI ATAS gerbang (z 70) dan dialog (z 80), DI BAWAH layar
           pembuka (z 100) - keduanya tidak pernah hidup bersamaan, tapi urutan
           yang ditulis apa adanya lebih murah daripada urutan yang harus
-          dibuktikan. */}
+          dibuktikan. `data-tema`: warnanya warna halaman TUJUAN, lihat
+          `.pulang-heks` di index.css. */}
       {pulang && (
-        <div className="pulang" data-fase={pulang} aria-hidden>
+        <div className="pulang" data-fase={pulang} data-tema={tema} aria-hidden>
           <span className="pulang-heks" />
         </div>
       )}
@@ -1496,7 +1607,15 @@ export default function App() {
         // keanehan acak, bukan bug - dan tidak ada uji yang menangkapnya.
         //
         // Terukur pada cache dingin: jendela kosongnya 315 ms.
-        <Suspense fallback={<div className="fixed inset-0 z-[100] bg-[#dff6f0]" />}>
+        //
+        // Legap SAJA belum cukup - warnanya harus warna layar pembuka itu
+        // sendiri. Dulu `bg-[#dff6f0]`, mint dari masa layar pembuka masih
+        // "langit mint". Sejak ia jadi kota malam (`bg-[#06090a]` di
+        // Pembuka.tsx), jendela kosong itu jadi satu kilatan putih penuh di
+        // antara gerbang gelap dan kota malam: terukur luminansi 241 dari 255,
+        // 100% piksel terang, tiap kali "Masuk ke peta" ditekan pertama kali.
+        // Layar pembuka gelap di KEDUA tema, jadi warnanya tidak ikut tema.
+        <Suspense fallback={<div className="fixed inset-0 z-[100] bg-[#06090a]" />}>
           <Pembuka onSelesai={tutupPembuka} />
         </Suspense>
       )}
@@ -1976,29 +2095,72 @@ export default function App() {
             >
               <div className="kaca-tebal flex h-full w-full flex-col overflow-hidden rounded-lg lg:w-[25rem]">
                 <div className="flex shrink-0 items-center gap-1 p-2">
-                  {(
-                    [
-                      // "Untuk Anda" duluan, dan ia yang terbuka pertama:
-                      // rekomendasi adalah inti produk ini, dan tab yang harus
-                      // dicari dulu bukan inti.
-                      ['rekomendasi', t.tabRekomendasi],
-                      ['daftar', t.tabDaftar],
-                      ['ai', t.tabAI],
-                    ] as const
-                  ).map(([k, label]) => (
-                    <button
-                      key={k}
-                      onClick={() => setTab(k)}
-                      aria-current={tab === k ? 'page' : undefined}
-                      className={`flex-1 cursor-pointer rounded-full px-2.5 py-2.5 text-[12.5px] font-semibold transition-all duration-300 ease-liquid ${
-                        tab === k
-                          ? 'bg-ink text-surface shadow-[0_6px_16px_-6px_rgb(22_33_28/0.6)]'
-                          : 'text-ink-3 hover:bg-surface-2 hover:text-ink-2'
-                      }`}
+                  {/* SATU penunjuk yang meluncur, bukan tiga latar yang
+                      bergantian menyala. Versi sebelumnya memberi tiap tombol
+                      `bg-ink`-nya sendiri, jadi berpindah tab terbaca sebagai
+                      satu tombol padam dan tombol lain menyala - dua kejadian
+                      di dua tempat. Penunjuk yang berjalan menyatakan satu hal:
+                      pilihannya PINDAH, dan ke arah mana. Teknik yang sama
+                      dengan sakelar Masuk/Daftar di Akun.tsx.
+
+                      `grid-cols-3`, bukan `flex-1`, supaya ketiga sel pasti
+                      sama lebar dan `translateX(i x 100%)` mendarat tepat -
+                      tanpa satu pun pengukuran. Terukur sebelumnya: ketiga
+                      tombol memang sudah sama lebar di 1440, 1024, 390, dan
+                      360 px, di kedua bahasa. `whitespace-nowrap` + bantalan
+                      yang menyempit di layar kecil: di 360 px "Loconomics AI"
+                      (86 px) dulu terlipat jadi dua baris di sel 97 px.
+
+                      "Untuk Anda" duluan: rekomendasi adalah inti produk ini,
+                      dan tab yang harus dicari dulu bukan inti.
+
+                      LABEL TERANG TIDAK DIWARNAI PER TOMBOL. Versi pertama
+                      penunjuk ini masih mentransisikan warna tiap label, dan
+                      dibekukan di 70 ms warnanya tertinggal dari penunjuknya:
+                      "Daftar lokasi" masih putih di atas latar yang sudah
+                      terbuka, "Loconomics AI" masih abu di atas penunjuk yang
+                      sudah tiba. Sekarang tombolnya selalu berlabel redup, dan
+                      yang terang adalah SALINAN label di dalam penunjuk yang
+                      digeser berlawanan arah sejauh yang sama - dua transform
+                      yang saling meniadakan (jebakan: sorotan yang mengikuti
+                      kursor), jadi salinannya diam terhadap halaman dan warna
+                      berganti persis di tepi penunjuk pada setiap bingkai.
+                      Salinannya `aria-hidden`; yang dibaca pembaca layar tetap
+                      tombolnya, dan penunjuknya `pointer-events-none` supaya
+                      klik jatuh ke tombol di bawahnya. */}
+                  <div className="relative grid min-w-0 flex-1 grid-cols-3">
+                    {URUTAN_TAB.map((k) => (
+                      <button
+                        key={k}
+                        onClick={() => setTab(k)}
+                        aria-current={tab === k ? 'page' : undefined}
+                        className={`cursor-pointer whitespace-nowrap rounded-full px-1.5 py-2.5 text-[12.5px] font-semibold text-ink-3 transition-colors duration-300 ease-liquid sm:px-2.5 ${
+                          tab === k ? '' : 'hover:bg-surface-2 hover:text-ink-2'
+                        }`}
+                      >
+                        {k === 'rekomendasi' ? t.tabRekomendasi : k === 'daftar' ? t.tabDaftar : t.tabAI}
+                      </button>
+                    ))}
+                    <span
+                      aria-hidden
+                      className="tab-penunjuk pointer-events-none absolute inset-y-0 left-0 w-1/3 overflow-hidden rounded-full bg-ink shadow-[0_6px_16px_-6px_rgb(22_33_28/0.6)]"
+                      style={{ transform: `translateX(${URUTAN_TAB.indexOf(tab) * 100}%)` }}
                     >
-                      {label}
-                    </button>
-                  ))}
+                      <span
+                        className="tab-penunjuk-isi absolute inset-y-0 left-0 grid w-[300%] grid-cols-3"
+                        style={{ transform: `translateX(${(-URUTAN_TAB.indexOf(tab) * 100) / 3}%)` }}
+                      >
+                        {URUTAN_TAB.map((k) => (
+                          <span
+                            key={k}
+                            className="grid place-items-center whitespace-nowrap px-1.5 text-[12.5px] font-semibold text-surface sm:px-2.5"
+                          >
+                            {k === 'rekomendasi' ? t.tabRekomendasi : k === 'daftar' ? t.tabDaftar : t.tabAI}
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                  </div>
                   <button
                     onClick={() => setPanelTerbuka(false)}
                     aria-label={t.lipat}
@@ -2017,21 +2179,41 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-hidden border-t border-line/70">
-                  {tab === 'rekomendasi' && (
-                    <Suspense fallback={null}>
-                      <Rekomendasi
-                        onPilih={(h3) => {
-                          setHexTerpilih(h3)
-                          setTab('daftar')
-                          peta.current?.fokusHeksagon(h3)
-                        }}
-                        onBukaAkun={mintaPreferensi}
-                      />
-                    </Suspense>
-                  )}
+                {/* Tiga pane BERTUMPUK, masing-masing di sisinya sendiri:
+                    yang di kiri tab aktif menunggu 16 px di kiri, yang di
+                    kanan menunggu di kanan. Berpindah tab cuma mengganti
+                    `data-sisi`, dan transisi CSS menggeser yang datang dari
+                    arah penunjuknya sementara yang pergi memudar ke arah
+                    sebaliknya - lihat `.panel-tab` di index.css.
 
-                  {tab !== 'ai' && tab !== 'rekomendasi' && (
+                    `overflow-clip`, BUKAN `overflow-hidden`, dan bedanya
+                    menentukan. `hidden` masih wadah gulir: bisa digulir lewat
+                    skrip, dan pane yang menunggu 16 px di kanan melebarkan
+                    area gulirnya. `scrollIntoView` di Loconomics AI - yang
+                    berjalan saat jawaban tiba, juga saat tabnya sedang
+                    ditinggalkan - akan menggeser SELURUH wadah beberapa
+                    piksel tanpa satu pun galat. Dulu aman karena pane AI
+                    `display: none`; sekarang ia cuma tak terlihat. `clip`
+                    tidak bisa digulir oleh apa pun. */}
+                <div className="relative min-h-0 flex-1 overflow-clip border-t border-line/70">
+                  <div
+                    className="panel-tab"
+                    data-sisi={sisiTab('rekomendasi')}
+                    inert={tab !== 'rekomendasi'}
+                  >
+                    {tabDikunjungi.has('rekomendasi') && (
+                      <Suspense fallback={null}>
+                        <Rekomendasi onPilih={pilihDariRekomendasi} onBukaAkun={mintaPreferensi} />
+                      </Suspense>
+                    )}
+                  </div>
+
+                  <div
+                    className="panel-tab"
+                    data-sisi={sisiTab('daftar')}
+                    inert={tab !== 'daftar'}
+                  >
+                  {tabDikunjungi.has('daftar') && (
                     // Detail adalah LAPISAN DI ATAS daftar, bukan penggantinya.
                     //
                     // Percobaan pertama mengganti isinya, dan daftar jadi
@@ -2039,6 +2221,12 @@ export default function App() {
                     // berarti meminta ulang seluruh 112 baris dan kehilangan
                     // posisi gulir. Ditumpuk, daftarnya tetap hidup di
                     // belakangnya dan kembali terasa seketika.
+                    //
+                    // Lapisan detailnya ikut tetap terpasang saat tab lain yang
+                    // aktif. Satu akibat yang disengaja: pintasan lokasi di
+                    // jawaban Loconomics AI - yang sengaja TIDAK memindah tab -
+                    // sekarang sudah memuat rinciannya di belakang, jadi satu
+                    // ketukan ke "Daftar lokasi" langsung menampilkannya.
                     <div className="relative h-full min-h-0">
                       <div className="h-full min-h-0">
                         <DaftarLokasi
@@ -2046,13 +2234,7 @@ export default function App() {
                           layer={layer}
                           kawasan={kawasan}
                           terpilih={hexTerpilih}
-                          onPilih={(h3) => {
-                            setHexTerpilih(h3)
-                            setSimulasiTerbuka(false)
-                            setHexBanding(null)
-                            peta.current?.highlight([h3])
-                            peta.current?.fokusHeksagon(h3)
-                          }}
+                          onPilih={pilihDariDaftar}
                         />
                       </div>
 
@@ -2088,10 +2270,8 @@ export default function App() {
                               rutaTampil={rutaTampil}
                               onUbahRutaTampil={setRutaTampil}
                               posisi={posisi}
-                              batas={
-                                diagram ? { x: diagram.batas_x, y: diagram.batas_y } : undefined
-                              }
-                              onBukaKuadran={() => setKuadranPenuh(true)}
+                              batas={batasKompas}
+                              onBukaKuadran={bukaKuadranPenuh}
                               onBukaSimulasi={bukaSimulasi}
                               onBandingkan={tambahBaki}
                               sedangDibandingkan={baki.includes(hexTerpilih)}
@@ -2102,6 +2282,7 @@ export default function App() {
                       )}
                     </div>
                   )}
+                  </div>
 
                   {/* PanelAI SELALU dimuat, sekalipun tab yang aktif bukan
                       'ai' - dibuktikan bug sebelum diperbaiki 4 Sep 2026: panel
@@ -2113,10 +2294,13 @@ export default function App() {
                       ULANG dari nol, kosong.
 
                       Diperbaiki dengan pola yang SAMA dengan detail-di-atas-
-                      daftar tepat di bawah ini: tetap terpasang, disembunyikan
-                      lewat CSS (`hidden`, bukan pelepasan komponen) saat bukan
-                      gilirannya. */}
-                  <div className={tab === 'ai' ? 'h-full min-h-0' : 'hidden'}>
+                      daftar di atas: tetap terpasang saat bukan gilirannya.
+                      Sejak 11 Sep 2026 disembunyikan lewat `data-sisi` seperti
+                      kedua tab lain, bukan lagi `hidden` - `display: none` tidak
+                      bisa dipudarkan. Satu-satunya yang dipasang sejak awal
+                      tanpa menunggu dibuka, seperti sebelumnya: permintaannya
+                      saat dipasang cuma `/ai/status`, satu kali. */}
+                  <div className="panel-tab" data-sisi={sisiTab('ai')} inert={tab !== 'ai'}>
                     <PanelAI
                       kendali={kendali}
                       hexTerpilih={hexTerpilih}

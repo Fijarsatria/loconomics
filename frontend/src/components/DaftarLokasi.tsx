@@ -20,7 +20,7 @@
  * memaksa pengguna memegang dua konteks sekaligus.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import {
   KUADRAN,
@@ -158,7 +158,7 @@ const K = {
   },
 }
 
-export default function DaftarLokasi({
+function DaftarLokasi({
   layer,
   kawasan,
   terpilih,
@@ -186,6 +186,21 @@ export default function DaftarLokasi({
   const [isi, setIsi] = useState<Isi | null>(null)
   const [memuat, setMemuat] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
+
+  /**
+   * Bahasa ikut memicu permintaan ulang - tetapi HANYA untuk layer yang
+   * kalimatnya dirakit backend. `/skor/hidden-gems` dan `/skor/risk-radar`
+   * menerima `bahasa`; peringkat skor, cakupan zona, dan ringkasan harga tidak.
+   *
+   * Dulu tidak perlu dipikirkan: daftar ini dicabut tiap kali tabnya
+   * ditinggalkan, jadi mengganti bahasa di menu pengaturan lalu kembali ke sini
+   * selalu memasangnya ulang dalam bahasa yang baru. Sejak panel kanan
+   * mempertahankan tabnya tetap terpasang (11 Sep 2026), yang tidak meminta
+   * ulang akan tetap menulis alasan GemFinder dalam bahasa lama. Untuk layer
+   * lain `null`, supaya mengganti bahasa tidak membuang saringan dan posisi
+   * gulir demi angka yang sama persis.
+   */
+  const bahasaKalimat = layer === 'hidden_gem' || layer === 'risk_radar' ? bahasa : null
 
   useEffect(() => {
     let batal = false
@@ -223,7 +238,7 @@ export default function DaftarLokasi({
     return () => {
       batal = true
     }
-  }, [layer, kawasan])
+  }, [layer, kawasan, bahasaKalimat])
 
   if (memuat) return <MemuatNama teks={t.memuat} />
   if (galat) return <Ajakan judul="Daftar gagal dimuat" anak={galat} />
@@ -840,3 +855,8 @@ function Cakupan({
     </div>
   )
 }
+
+// Dibungkus `memo`: panel kanan mempertahankan tabnya tetap terpasang, dan tanpa ini
+// 200 baris daftar ikut dirender ulang tiap kali tab LAIN dibuka - terukur 350 ms
+// per klik di dev. Lihat `pilihDariDaftar` di App.tsx.
+export default memo(DaftarLokasi)

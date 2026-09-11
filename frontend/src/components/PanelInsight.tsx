@@ -20,7 +20,7 @@
  * orang membaca enam bagian sebelum tahu lokasinya tidak boleh dipakai.
  */
 
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 
 import { KUADRAN, TINGGI_BAIK, frasaPrestise, keKalimat, kodeLokasi } from '../config'
 import { api, GalatAPI } from '../lib/api'
@@ -487,7 +487,7 @@ function SumbuKuadran({
   )
 }
 
-export default function PanelInsight({
+function PanelInsight({
   h3,
   onBukaKuadran,
   posisi,
@@ -1775,3 +1775,8 @@ function TombolBulat({
     </button>
   )
 }
+
+// Dibungkus `memo`: lapisan detail ini tetap terpasang di balik tab lain, dan tidak
+// perlu dirender ulang tiap kali tab lain dibuka. `batas` dan `onBukaKuadran` sengaja
+// distabilkan di App.tsx supaya perbandingannya berarti.
+export default memo(PanelInsight)

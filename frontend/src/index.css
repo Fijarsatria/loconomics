@@ -2305,6 +2305,89 @@ input:focus-visible {
 }
 
 /* ==========================================================================
+   Panel kanan peta — perpindahan Untuk Anda / Daftar lokasi / Loconomics AI
+
+   Bahasa geraknya sama dengan pertukaran Masuk <-> Daftar di atas, dan itu
+   disengaja: isi baru datang dari sisi yang SAMA dengan arah geseran
+   penunjuknya. Sampai 11 Sep 2026 ketiga tab ini berganti seketika - latar
+   tombol menyala dan padam di tempat, lalu isi panelnya melompat pada bingkai
+   berikutnya - dan diminta pemilik repo dibuat "rapih dan elegan".
+
+   TRANSISI, bukan animasi keyframe. Orang yang menekan dua tab berturut-turut
+   memotong perpindahan yang sedang berjalan; transisi berangkat dari nilai yang
+   sedang terlihat, sedangkan keyframe mulai lagi dari nol - pane yang separuh
+   memudar akan berkedip kembali ke tak terlihat sebelum masuk lagi.
+
+   FADE-THROUGH: yang pergi HABIS sebelum yang datang mulai terlihat. Versi
+   pertama menumpangkan keduanya (pergi 180 ms, datang mulai 70 ms), dan
+   dibekukan lewat Web Animations API di 140 ms hasilnya dua lapis teks yang
+   saling menembus - "100 Opportunity Score" dari daftar dan "Loconomics" dari
+   panel AI terbaca bersamaan, masing-masing separuh. Sekarang yang pergi
+   memudar dalam 120 ms, dan yang datang baru mulai di 120 ms. Arahnya tetap
+   terbaca karena keduanya bergerak di sumbu yang sama: yang pergi sempat
+   bergeser selama memudar, yang datang menempuh seluruh 16 px-nya sesudah
+   terlihat - geserannya ditunda 100 ms justru supaya jaraknya tidak habis
+   ditempuh saat ia masih tak terlihat (kurva liquid menghabiskan 70% jarak di
+   30% waktu pertamanya).
+
+   `visibility` ditunda sepanjang geserannya lalu `hidden`: pane yang menunggu
+   tidak dilukis, tidak bisa diklik, dan tidak masuk urutan Tab - ditambah
+   `inert` dari JSX untuk bagian yang masih memudar. 16 px, bukan 14 seperti
+   dialog: panelnya jauh lebih besar, dan geseran yang sama kecilnya terbaca
+   sebagai getar alih-alih arah. Hanya `transform` dan `opacity` yang
+   bergerak (jebakan: jangan animasikan blur maupun masker).
+   ========================================================================== */
+/* Penunjuk dan salinan labelnya WAJIB bertransisi identik - durasi, kurva,
+   dan saat mulai. Keduanya saling meniadakan hanya kalau di setiap bingkai
+   jarak tempuhnya sama; selisih sekecil apa pun terbaca sebagai label yang
+   bergoyang di dalam penunjuk. Satu aturan untuk keduanya supaya tidak bisa
+   berpisah. */
+.tab-penunjuk,
+.tab-penunjuk-isi {
+  transition: transform 460ms var(--ease-liquid);
+}
+.panel-tab {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  transition:
+    opacity 120ms cubic-bezier(0.4, 0, 1, 1),
+    transform 300ms var(--ease-liquid),
+    visibility 0s linear 300ms;
+}
+.panel-tab[data-sisi='aktif'] {
+  transition:
+    opacity 280ms cubic-bezier(0.2, 0, 0, 1) 120ms,
+    transform 440ms var(--ease-liquid) 100ms,
+    visibility 0s;
+}
+.panel-tab[data-sisi='kiri'],
+.panel-tab[data-sisi='kanan'] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.panel-tab[data-sisi='kiri'] {
+  transform: translate3d(-16px, 0, 0);
+}
+.panel-tab[data-sisi='kanan'] {
+  transform: translate3d(16px, 0, 0);
+}
+/* Gerak dikurangi: pertukaran SEKETIKA, termasuk jedanya. Aturan menyeluruh di
+   akhir lapisan komponen cuma memendekkan `transition-duration`, tidak
+   menyentuh `transition-delay` - jadi tanpa blok ini pane barunya tetap diam
+   di opasitas 0 selama jedanya. Terukur pada versi pertama: opasitas pane
+   baru masih 0 pada 60 ms. */
+@media (prefers-reduced-motion: reduce) {
+  .tab-penunjuk,
+  .tab-penunjuk-isi,
+  .panel-tab,
+  .panel-tab[data-sisi] {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
    Loconomics AI — kaca cair
 
    Bahannya SENGAJA berlawanan dengan chrome di sekitarnya: gelap saat aplikasi
@@ -3874,9 +3957,19 @@ input:focus-visible {
   margin-top: -120vmax;
   /* Warna dasar halaman perkenalan, bukan hitam murni: yang muncul sesudahnya
      halaman itu, dan tirai yang warnanya berbeda membuat pertukarannya terbaca
-     sebagai dua kejadian. */
+     sebagai dua kejadian. Nilainya perhentian PERTAMA `--g-latar` gerbang. */
   background: #0b100e;
   clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+}
+/* Alasan yang sama, dibaca untuk tema TERANG. Tirai di atas ditulis saat gerbang
+   cuma punya wajah gelap, dan sejak tema terang ada ia tetap gelap: peta terang
+   -> heksagon gelap (luminansi 237 -> 14) -> gerbang terang, satu kilatan hitam
+   di tengah pertukaran yang tidak berpindah ke tempat gelap mana pun. Kalau
+   perhentian pertama `--g-latar` terang di `.gerbang[data-tema='terang']`
+   berubah, ubah juga yang ini. `data-tema` datang dari React pada `.pulang`,
+   bukan dari <html> - lihat fallback gerbang di App.tsx. */
+.pulang[data-tema='terang'] .pulang-heks {
+  background: #f4f9f7;
 }
 @keyframes pulang-tumbuh {
   from {

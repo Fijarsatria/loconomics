@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 268 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 273 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -422,7 +422,7 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 268 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 273 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit

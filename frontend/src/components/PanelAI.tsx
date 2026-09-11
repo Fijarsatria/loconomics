@@ -37,7 +37,7 @@
  *   mencari sendiri yang mana - jawaban yang benar tetapi tidak bisa diikuti.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { KUADRAN, LAYER, type NamaLayer } from '../config'
 import { api } from '../lib/api'
@@ -342,7 +342,7 @@ function PintasLokasi({
   )
 }
 
-export default function PanelAI({
+function PanelAI({
   kendali,
   hexTerpilih,
   layerAktif,
@@ -879,3 +879,7 @@ export default function PanelAI({
     </div>
   )
 }
+
+// Dibungkus `memo`: pane ini tetap terpasang di balik tab lain, dan tidak perlu
+// dirender ulang tiap kali tab lain dibuka. Lihat prop pane yang stabil di App.tsx.
+export default memo(PanelAI)

@@ -190,6 +190,19 @@ Sembilan asersi terakhir yang masuk menjaga `render.yaml`, dan alasannya layak d
 
 ---
 
+### 11 September 2026, putaran ketujuh — kilatan putih, bahasa yang tertinggal, dan tab yang meluncur
+
+| Bagian | Bukti |
+|---|---|
+| **Kilatan putih gerbang ↔ peta hilang** | Dilaporkan pemilik repo. Direkam per bingkai (CDP screencast + pencatat elemen teratas tiap bingkai), empat skenario × dua tema, di dev dan build produksi. Sebelum: masuk peta pertama kali luminansi **241**, pulang di sesi yang dimulai di peta **218**, keduanya 100% piksel terang, pelakunya dua fallback `Suspense` bermint pucat; di tema terang tirai pulang jadi kilatan hitam (237 → 14). Sesudah: gelap tidak pernah melewati **30**, terang tidak pernah turun ke gelap. Fallback gerbang memakai latar `.gerbang` itu sendiri, tirai pulang ikut tema dan menunggu chunk gerbang tiba |
+| **Kalimat backend benar-benar ikut bahasa** | `lang` di `<html>` kini ditulis sebelum render dan sebelum `setBahasa`, bukan di efek leluhur. Terukur lewat jaringan: sesudah menekan EN, kelima permintaan ulang membawa `bahasa=en` (sebelumnya nol); muat awal dengan EN tersimpan juga, di build produksi - tempat bug ini sebenarnya muncul, karena StrictMode di dev menutupinya |
+| **Tab Untuk Anda / Daftar lokasi / Loconomics AI dengan transisi** | Satu penunjuk yang meluncur (`grid-cols-3` + `translateX`, tanpa pengukuran) berisi salinan label terang yang digeser berlawanan arah, jadi warna berganti persis di tepinya. Isi tab masuk dari sisi yang searah penunjuk, fade-through 120 ms keluar lalu 280 ms masuk. Diperiksa dengan membekukan transisinya di 0/60/120/180/260/540 ms di kedua tema: nol lapisan teks yang saling menembus. Gerak-dikurangi: pertukaran seketika. Label "Loconomics AI" berhenti terlipat dua baris di layar 360 px |
+| **Kembali ke tab terasa seketika** | Pane dipasang saat pertama dibuka lalu tetap hidup: nol permintaan `/skor/ranking` baru, nol layar tunggu, posisi gulir dan ketikan di Loconomics AI bertahan, detail heksagon tidak diminta ulang. Wadahnya `overflow: clip` - dibuktikan: dengan `overflow: hidden`, `scrollIntoView` di pane AI yang tersembunyi menggeser seluruh wadah 16 px |
+| **Tanpa membuat klik tab berat** | Pane yang tetap hidup semula membuat bingkai pertama sesudah klik **350 ms** di dev (kode sebelumnya 33 ms). `memo` pada keempat komponen pane + empat prop yang distabilkan: **58 ms** di dev, **53 ms** di produksi |
+| **Nol regresi di tempat lain** | `tsc` 0; `oxlint` 22 peringatan, sama dengan sebelum sesi; `test_infra` 58/58, `test_aturan` 58/58; `audit-prd.mjs` 33/33 tanpa SANDI; bundel pertama +1,5 kB, `Rekomendasi` tetap chunk malas. 40 asersi transisi tab hijau di dev DAN build produksi (1440/390/360 px, gerak-dikurangi), asersi arahnya dibuktikan merah dengan menyuntikkan `transition: none`; 60 asersi pengaturan gerbang hijau di build produksi |
+
+---
+
 ### Belum dikerjakan — di sinilah pekerjaan berikutnya
 
 | Hal | Yang menghalangi | Kalau sudah ada, kerjakan |
