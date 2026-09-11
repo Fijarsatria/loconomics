@@ -43,7 +43,7 @@
  * gagal di `tsc` - lihat `lib/bahasa.tsx`.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SplitText } from 'gsap/SplitText'
@@ -187,6 +187,7 @@ const K = {
       eyebrow: 'Lima orang',
       judul: 'Tim di baliknya',
       ketua: 'Ketua tim',
+      angkatan: 'Angkatan',
       permukaan: 'Kembali ke permukaan',
     },
   },
@@ -312,6 +313,7 @@ const K = {
       eyebrow: 'Five people',
       judul: 'The team behind it',
       ketua: 'Team lead',
+      angkatan: 'Class of',
       permukaan: 'Back to the surface',
     },
   },
@@ -331,6 +333,29 @@ function jalurHeks(r: number) {
     const a = (Math.PI / 180) * (60 * k - 30)
     return `${(r * Math.cos(a)).toFixed(2)},${(r * Math.sin(a)).toFixed(2)}`
   }).join(' ')
+}
+
+/**
+ * Letak satu kartu di kisi tim: tiga sebaris di layar lebar, dua di layar
+ * sedang, satu di ponsel - dan baris terakhir yang tidak penuh selalu di
+ * TENGAH. Permintaan pemilik repo, 11 Sep 2026: "3 di atas, 2 di bawah".
+ * Sebelumnya dua kartu terakhir menempel ke kiri dan menyisakan lubang
+ * selebar satu kartu di kanan.
+ *
+ * Kisinya enam kolom di `lg` supaya "dua kartu di tengah" bisa dinyatakan
+ * tanpa angka ajaib: tiap kartu dua kolom, dan baris sisanya berangkat dari
+ * kolom 2 (dua kartu) atau kolom 3 (satu kartu). Ditulis untuk jumlah orang
+ * berapa pun, bukan untuk lima - dan setiap kelas ditulis utuh, karena
+ * Tailwind hanya membangkitkan kelas yang muncul harfiah di sumber.
+ */
+function kelasSelTim(i: number, n: number): string {
+  const kelas = ['lg:col-span-2']
+  const sisaLebar = n % 3
+  if (sisaLebar && i === n - sisaLebar) kelas.push(sisaLebar === 2 ? 'lg:col-start-2' : 'lg:col-start-3')
+  if (n % 2 === 1 && i === n - 1) {
+    kelas.push('sm:col-span-2 sm:mx-auto sm:w-[calc(50%-0.625rem)] lg:mx-0 lg:w-auto')
+  }
+  return kelas.join(' ')
 }
 
 /**
@@ -2564,48 +2589,91 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
               <p className="mx-auto mt-3 text-[13.5px] text-white/55">{IDENTITAS.institusi}</p>
             </div>
 
+            {/* Kartu POTRET, bukan kartu mendatar - permintaan pemilik repo:
+                "cardnya itu memanjang kebawah" dan "efek background ... tiap
+                orang itu beda beda". Kepala kartu adalah panggung dengan cahaya
+                berwarna identitas orangnya (`rona` di config.ts) yang hanyut
+                pelan di belakang terowongan heksagon - bentuk yang sama dengan
+                terowongan jurang di atas, sekarang satu per orang.
+
+                DUA LAPIS, dan pembagiannya bukan kerapian. GSAP menganimasikan
+                `transform` `.g-orang` saat kartunya masuk, lalu meninggalkan
+                `transform: translate(0px, 0px)` sebaris - yang mengalahkan
+                `:hover` di CSS mana pun. Terukur pada kartu versi sebelumnya:
+                efek angkatnya terangkat 0,00 px, tidak pernah bekerja sejak
+                animasi masuk dipasang. Sekarang GSAP memegang bingkai luar,
+                dan hover memegang kartu di dalamnya. */}
             <div
-              className="g-tim-grid mx-auto mt-14 grid max-w-[74rem] gap-5 sm:grid-cols-2 lg:grid-cols-3"
+              className="g-tim-grid mx-auto mt-14 grid max-w-[74rem] gap-5 sm:auto-rows-fr sm:grid-cols-2 lg:grid-cols-6"
               style={{ perspective: 1400 }}
             >
-              {PENDIRI.map((o) => (
+              {PENDIRI.map((o, i) => (
                 <article
                   key={o.peran}
-                  className="g-orang g-kaca-gelap group relative overflow-hidden rounded-[22px] p-7"
+                  className={`g-orang flex ${kelasSelTim(i, PENDIRI.length)}`}
                   style={{ transformStyle: 'preserve-3d' }}
                 >
-                  <span
-                    className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
-                    style={{ background: 'radial-gradient(circle,#2fa891,transparent 70%)' }}
-                    aria-hidden
-                  />
-                  <div className="relative flex items-start gap-4">
-                    <span className="relative grid h-14 w-14 shrink-0 place-items-center" aria-hidden>
-                      <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
-                        <polygon
-                          points={jalurHeks(46)}
-                          fill="rgb(255 255 255 / 0.09)"
-                          stroke="rgb(255 255 255 / 0.28)"
-                          strokeWidth="2"
-                        />
+                  <div
+                    className="g-kartu-orang group relative flex w-full flex-col overflow-hidden rounded-[24px]"
+                    style={
+                      { '--rona': o.rona[0], '--rona-2': o.rona[1], '--urutan': i } as CSSProperties
+                    }
+                  >
+                    <div
+                      className="g-orang-panggung relative h-52 shrink-0 overflow-hidden sm:h-60 lg:h-[18.5rem]"
+                      aria-hidden
+                    >
+                      <span className="g-orang-cahaya absolute" />
+                      <svg
+                        className="g-orang-cincin absolute left-1/2 top-1/2 h-[140%] w-[140%] -translate-x-1/2 -translate-y-1/2"
+                        viewBox="-100 -100 200 200"
+                      >
+                        {[92, 70, 50].map((r) => (
+                          <polygon key={r} points={jalurHeks(r)} />
+                        ))}
                       </svg>
-                      <span className="relative text-[14px] font-semibold text-white">{o.inisial}</span>
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-[15.5px] font-semibold leading-tight text-white">{o.nama}</p>
-                      <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[12.5px] text-white/55">
+                      <span className="g-orang-lencana absolute left-1/2 top-1/2 grid h-24 w-24 -translate-x-1/2 -translate-y-1/2 place-items-center">
+                        <svg viewBox="-50 -50 100 100" className="absolute inset-0 h-full w-full">
+                          <polygon points={jalurHeks(46)} />
+                        </svg>
+                        <span className="papan relative text-[22px] leading-none text-white">{o.inisial}</span>
+                      </span>
+                    </div>
+
+                    <div className="relative flex flex-1 flex-col px-6 pb-7 pt-5">
+                      <p className="g-orang-peran text-[11.5px] font-semibold uppercase tracking-[0.09em]">
                         {o.peran}
+                      </p>
+                      <h3 className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[19px] font-semibold leading-tight text-white">
+                        {o.namaLengkap ?? o.nama}
                         {o.ketua && (
-                          <span className="rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-white/80">
+                          <span className="rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-white/85">
                             {teks.tim.ketua}
                           </span>
                         )}
+                      </h3>
+                      {/* Prodi dan angkatan - hanya yang benar-benar diisi. Nama
+                          prodi tidak diterjemahkan: ia nama resmi, sama seperti
+                          "Telkom University" yang tetap di layar Inggris. */}
+                      {(o.prodi || o.angkatan) && (
+                        <p className="mt-2 text-[12.5px] leading-snug text-white/55">
+                          {o.prodi}
+                          {o.prodi && o.angkatan ? ' · ' : null}
+                          {/* Sebaris utuh: "Angkatan" yang tertinggal di ujung baris
+                              dengan tahunnya di baris berikutnya terbaca patah. */}
+                          {o.angkatan ? (
+                            <span className="whitespace-nowrap">
+                              {teks.tim.angkatan} {o.angkatan}
+                            </span>
+                          ) : null}
+                        </p>
+                      )}
+                      <span className="g-orang-garis mt-4 block h-px w-full" aria-hidden />
+                      <p className="mt-4 text-[13px] leading-relaxed text-white/65">
+                        {bahasa === 'en' && o.kerjaEn ? o.kerjaEn : o.kerja}
                       </p>
                     </div>
                   </div>
-                  <p className="relative mt-5 border-t border-white/10 pt-4 text-[13px] leading-relaxed text-white/65">
-                    {bahasa === 'en' && o.kerjaEn ? o.kerjaEn : o.kerja}
-                  </p>
                 </article>
               ))}
             </div>

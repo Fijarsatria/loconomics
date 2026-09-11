@@ -17,14 +17,16 @@
    sekilas, dan setiap warna yang muncul di layar punya arti yang sama di mana
    pun ia muncul.
 
-   Dua pengecualian, dan hanya dua:
+   Tiga pengecualian, dan hanya tiga:
 
      1. Papan nama "Loconomics" di bilah atas (primitif.tsx::PapanNama) menyapu
         roda warna penuh saat kursor melewatinya.
      2. Layar pembuka (Pembuka.tsx) memakai ketiga warna kuadran sebagai warna
         kota heksagonnya.
+     3. Kartu tim di dasar jurang gerbang (sejak 11 Sep 2026): satu warna
+        identitas per orang, `PENDIRI[].rona` di config.ts.
 
-   Keduanya tidak melanggar aturan di atas karena tidak pernah menyentuh data:
+   Ketiganya tidak melanggar aturan di atas karena tidak pernah menyentuh data:
    yang diwarnai cuma identitas dan layar sambutan, bukan angka. Begitu peta
    muncul, aturannya berlaku penuh lagi.
 
@@ -2625,24 +2627,138 @@ input:focus-visible {
   );
 }
 
-/* Kartu di dasar jurang. Bahan yang sama dengan .g-kaca, dibalik arahnya:
-   yang di atas gelap, kilaunya tetap dari atas, dan bayangannya hilang karena
-   di kegelapan tidak ada permukaan untuk menampungnya. */
-.g-kaca-gelap {
-  background: rgb(255 255 255 / 0.06);
-  border: 1px solid rgb(255 255 255 / 0.12);
+/* --- Kartu tim di dasar jurang: potret, satu warna identitas per orang -----
+   Menggantikan `.g-kaca-gelap` (11 Sep 2026). Bahannya tetap kaca gelap yang
+   sama - kilau dari atas, bayangan yang tenggelam - tetapi kepalanya kini
+   panggung berwarna milik orangnya: `--rona` dan `--rona-2` ditulis per kartu
+   dari `PENDIRI[].rona` di config.ts. Bagian ini gelap di KEDUA tema (jurang),
+   jadi warna sebaris itu tidak perlu mengikuti tema.
+
+   Cahayanya dua gradien radial yang HANYUT lewat `transform` saja - tanpa
+   `filter: blur`, tanpa masker yang digeser (jebakan: keduanya tahap paint).
+   Tiap kartu berangkat dari titik waktu yang berbeda (`--urutan`), jadi kelima
+   cahaya tidak pernah bergerak serempak seperti satu mesin. Berhenti sendiri
+   saat bagiannya di luar layar, lewat `[data-diam]` yang sudah ada.
+
+   `transform` hover dipasang di kartu DALAM, bukan di `.g-orang` yang
+   dianimasikan GSAP - lihat catatan di Gerbang.tsx. */
+/* Badannya PEKAT, dan warnanya sama persis dengan ujung pudar panggung di
+   bawah. Versi pertama memakai kaca 4,5% seperti kartu lama, dan dua hal
+   terlihat di potret: garis terowongan jurang melintas di atas teks
+   deskripsi, dan karena panggungnya pekat sementara badannya tembus, garis itu
+   berhenti tepat di batas keduanya - batasnya terbaca sebagai sambungan. */
+.g-kartu-orang {
+  background: #0f1312;
+  border: 1px solid rgb(255 255 255 / 0.1);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
     0 30px 60px -30px rgb(0 0 0 / 0.9);
   transition:
-    background 300ms var(--ease-liquid),
-    border-color 300ms var(--ease-liquid),
-    transform 300ms var(--ease-liquid);
+    transform 460ms var(--ease-liquid),
+    border-color 320ms var(--ease-liquid);
 }
-.g-kaca-gelap:hover {
-  background: rgb(255 255 255 / 0.09);
-  border-color: rgb(255 255 255 / 0.24);
-  transform: translateY(-4px);
+/* Warna badan TIDAK berubah saat disorot. Versi pertama menerangkannya ke
+   #121716, dan ujung pudar panggung yang tetap #0f1312 langsung terbaca
+   sebagai garis melintang di tengah kartu yang sedang dilihat - terlihat di
+   potret hover. Angkat, tepi berwarna, cahaya, dan cincin sudah cukup
+   menyatakan "kartu ini yang disorot". */
+.g-kartu-orang:hover {
+  transform: translateY(-6px);
+  border-color: color-mix(in srgb, var(--rona) 45%, transparent);
+}
+.g-orang-panggung {
+  background:
+    radial-gradient(85% 75% at 50% 42%, color-mix(in srgb, var(--rona) 14%, transparent) 0%, transparent 75%),
+    #070b0a;
+}
+/* Panggung memudar ke badan kartu, bukan berhenti di satu garis tegas. */
+.g-orang-panggung::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 42%;
+  background: linear-gradient(to bottom, transparent, #0f1312);
+  pointer-events: none;
+}
+/* KECIL dan HANYA BERGESER - bukan lapisan raksasa yang diputar dan diskala
+   seperti versi pertama (`inset: -40%` + `rotate()` + `scale()`), yang p95-nya
+   sampai 67 ms saat bagian ini digulir.
+
+   BIAYA YANG TERSISA, diukur jujur di build produksi headless, berselang-
+   seling dengan kode sebelumnya supaya beban mesin yang berubah mengenai
+   semuanya (bingkai per 4 detik menggulir melintasi bagian tim, median):
+   kartu lama 189, kartu baru dengan cahaya diam 161, dengan cahaya bergerak
+   150. Sebagian besar selisihnya kartu yang memang lebih tinggi dan lebih
+   berwarna di jalur gulir yang sama - tanpa panggung sama sekali pun 173.
+   Sisa ~7% adalah LAPISAN kompositor yang bergerak itu sendiri, dan tiga
+   penangkal sudah dicoba lalu dibantah pengukuran: menjedanya selama menggulir
+   (152 lawan 149 - lapisan yang dijeda tetap lapisan), mencabut sudut membulat
+   kartu (146), dan mengurung cahaya jauh dari tepi (147). Headless merender
+   kompositornya lewat CPU; di GPU lapisan transform semacam ini diharapkan
+   nyaris gratis, tetapi itu belum diukur di sini. */
+.g-orang-cahaya {
+  inset: -14%;
+  background:
+    radial-gradient(closest-side at 36% 42%, color-mix(in srgb, var(--rona) 60%, transparent), transparent),
+    radial-gradient(closest-side at 66% 62%, color-mix(in srgb, var(--rona-2) 46%, transparent), transparent);
+  opacity: 0.55;
+  animation: g-orang-arus 16s ease-in-out infinite alternate;
+  animation-delay: calc(var(--urutan, 0) * -3.3s);
+  transition: opacity 600ms var(--ease-liquid);
+}
+.g-kartu-orang:hover .g-orang-cahaya {
+  opacity: 0.9;
+}
+@keyframes g-orang-arus {
+  0% {
+    transform: translate3d(-7%, -5%, 0);
+  }
+  50% {
+    transform: translate3d(4%, 6%, 0);
+  }
+  100% {
+    transform: translate3d(7%, -3%, 0);
+  }
+}
+.g-orang-cincin {
+  opacity: 0.6;
+  transition: transform 900ms var(--ease-liquid);
+}
+.g-orang-cincin polygon {
+  fill: none;
+  stroke: color-mix(in srgb, var(--rona) 42%, transparent);
+  stroke-width: 0.6;
+}
+.g-kartu-orang:hover .g-orang-cincin {
+  transform: scale(1.06) rotate(8deg);
+}
+/* Pendar diam di belakang lencana - gradien, bukan blur. */
+.g-orang-lencana::before {
+  content: '';
+  position: absolute;
+  inset: -70%;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--rona) 42%, transparent), transparent);
+}
+.g-orang-lencana polygon {
+  fill: color-mix(in srgb, var(--rona) 20%, rgb(8 12 11 / 0.88));
+  stroke: color-mix(in srgb, var(--rona) 80%, white);
+  stroke-width: 2.2;
+}
+.g-orang-peran {
+  color: color-mix(in srgb, var(--rona) 72%, white);
+}
+.g-orang-garis {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rona) 55%, transparent), transparent 85%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-orang-cahaya {
+    animation: none;
+  }
+  .g-kartu-orang:hover,
+  .g-kartu-orang:hover .g-orang-cincin {
+    transform: none;
+  }
 }
 
 /* Pil kaca versi gelap, untuk tombol di dasar jurang. */

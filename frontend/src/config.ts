@@ -353,7 +353,20 @@ export const IDENTITAS = {
  * ada di repositori ini, jadi kartunya bisa diperiksa, bukan cuma dibaca.
  */
 export interface Pendiri {
+  /** Nama panggilan. Tampil hanya selama `namaLengkap` belum diisi. */
   nama: string
+  /**
+   * Nama lengkap, program studi, dan angkatan - diminta pemilik repo untuk
+   * kartu tim (11 Sep 2026), karena prodi dan angkatan kelimanya berbeda.
+   *
+   * Diisi tangan dari data registrasi tim, BUKAN dibaca otomatis dari scan
+   * KTM: dokumen itu memuat NIM dan foto, dan yang boleh keluar ke halaman
+   * publik cuma ketiga kolom ini. Yang kosong tidak dikarang - kartunya
+   * memakai nama panggilan dan melewati baris prodi, persis aturan 4.
+   */
+  namaLengkap?: string
+  prodi?: string
+  angkatan?: number
   peran: string
   /** Inisial untuk avatar. Dikosongkan berarti kartunya belum terisi. */
   inisial: string
@@ -363,13 +376,29 @@ export interface Pendiri {
   kerjaEn?: string
   /** Ditandai di kartu. Hanya satu orang yang boleh membawanya. */
   ketua?: boolean
+  /**
+   * Warna identitas orangnya, [utama, pendamping] - cahaya yang bergerak di
+   * kepala kartunya di bagian tim gerbang. Diminta pemilik repo, 11 Sep 2026:
+   * "efek background ... tiap orang itu beda beda efek warnanya".
+   *
+   * Ini pengecualian KETIGA dari aturan "warna jenuh hanya berarti kuadran"
+   * (kepala index.css), dengan alasan yang sama dengan dua yang pertama: yang
+   * diwarnai identitas, bukan data. Karena itu kelimanya diambil dari luar
+   * rona kuadran sejauh mungkin - teal, ungu, fuchsia, langit, kuning emas -
+   * dan hidup di dasar jurang, bagian yang tidak memuat satu angka pun.
+   */
+  rona: readonly [string, string]
 }
 
 export const PENDIRI: Pendiri[] = [
   {
     nama: 'Ajis',
     peran: 'Data Analyst',
-    inisial: 'AJ',
+    inisial: 'AG',
+    namaLengkap: 'Aziz Abdul Ghofur',
+    prodi: 'Informatika',
+    angkatan: 2023,
+    rona: ['#2de8c0', '#22d3ee'],
     kerja: 'Mengubah hasil misi survei MAPID jadi Kamus Data 43 variabel per heksagon — termasuk membiarkan yang kosong tetap kosong.',
     kerjaEn: 'Turns MAPID survey missions into a 43-variable data dictionary per hexagon — including leaving the blanks blank.',
   },
@@ -377,27 +406,43 @@ export const PENDIRI: Pendiri[] = [
     nama: 'Ukas',
     peran: 'AI Engineer',
     inisial: 'UK',
+    namaLengkap: 'Ukasyah',
+    prodi: 'Teknik Komputer',
+    angkatan: 2024,
+    rona: ['#8b5cf6', '#6366f1'],
     kerja: 'Loconomics AI: dua belas alat mode strict di dalam satu loop agentik. Modelnya menjawab, tidak pernah menghitung.',
     kerjaEn: 'Loconomics AI: twelve strict-mode tools inside one agentic loop. The model answers; it never does the math.',
   },
   {
     nama: 'Wily',
     peran: 'UI/UX Designer',
-    inisial: 'WL',
+    inisial: 'WT',
+    namaLengkap: 'Wily Franklyn Togatorop',
+    prodi: 'Teknologi Informasi',
+    angkatan: 2024,
+    rona: ['#e879f9', '#f472b6'],
     kerja: 'Sistem visual dan Kompas Kuadran — empat kuadran yang bisa dipahami tanpa seorang pun menjelaskannya lebih dulu.',
     kerjaEn: 'The visual system and the Quadrant Compass — four quadrants anyone can read without a walkthrough.',
   },
   {
     nama: 'Fijar',
     peran: 'WebGIS Developer',
-    inisial: 'FJ',
+    inisial: 'FM',
+    namaLengkap: 'Fijar Satria Pinandita Mangkauna',
+    prodi: 'Teknologi Informasi',
+    angkatan: 2024,
+    rona: ['#38bdf8', '#3b82f6'],
     kerja: 'Peta MapLibre di atas basemap MAPID, API FastAPI, dan basis data PostGIS di Supabase.',
     kerjaEn: 'The MapLibre map on a MAPID basemap, the FastAPI backend, and the PostGIS database on Supabase.',
   },
   {
     nama: IDENTITAS.ketua,
     peran: 'Business Analyst',
-    inisial: 'IR',
+    inisial: 'IY',
+    namaLengkap: IDENTITAS.ketua,
+    prodi: 'Informatika',
+    angkatan: 2023,
+    rona: ['#fbbf24', '#fb923c'],
     kerja: 'Merumuskan dua pertanyaan yang dijawab produk ini: mana yang tersembunyi, dan mana yang menjebak.',
     kerjaEn: 'Framed the two questions this product answers: which places are hidden, and which ones are traps.',
     ketua: true,

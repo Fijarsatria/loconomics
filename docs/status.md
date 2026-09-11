@@ -203,6 +203,21 @@ Sembilan asersi terakhir yang masuk menjaga `render.yaml`, dan alasannya layak d
 
 ---
 
+### 11 September 2026, putaran kedelapan — tim di baliknya: kartu potret, warna per orang
+
+| Bagian | Bukti |
+|---|---|
+| **Tiga di atas, dua di tengah bawah** | Kisi enam kolom di `lg`, tiap kartu dua kolom, dan baris sisa berangkat dari kolom 2 - lewat `kelasSelTim()`, yang ditulis untuk jumlah orang berapa pun. Terukur: di 1440 dan 1024 px celah kiri dan kanan baris bawah sama (201 px di 1440); di 820 px 2-2-1 dengan kartu kelima di tengah dan selebar yang lain; di 390 px satu kolom; nol gulir mendatar di keempatnya. Kelima kartu setinggi (`auto-rows-fr`). Dibuktikan merah dengan mencabut `col-start` (kiri 0, kanan 401) |
+| **Kartu memanjang ke bawah** | 381 × 491 px di 1440 (sebelumnya 381 × 214). Kepala kartu adalah panggung dengan terowongan heksagon - bentuk yang sama dengan terowongan jurang di atasnya - dan lencana heksagon berinisial; badannya peran, nama, garis berwarna, dan kalimat kerja |
+| **Satu warna identitas per orang** | `PENDIRI[].rona` di config.ts: teal (Ajis), ungu (Ukas), fuchsia (Wily), langit (Fijar), emas (Irvan, ketua) - masing-masing dengan warna pendamping. Cahayanya hanyut pelan lewat `transform` saja, tiap kartu dari titik waktu yang berbeda, dan berhenti sendiri saat bagian tim di luar layar. Dicatat sebagai pengecualian ketiga dari "warna jenuh hanya berarti kuadran": yang diwarnai identitas, bukan data. Diuji: lima warna berbeda, kelimanya bergerak dan tidak serempak, berhenti di luar layar, diam saat gerak-dikurangi |
+| **Efek angkat saat disorot akhirnya bekerja** | Sebelumnya 0,00 px sejak animasi masuk dipasang - transform sebaris GSAP mengalahkan `:hover`. Sekarang 6 px, dengan tepi berwarna orangnya dan cahaya yang menguat. Lihat jebakan.md |
+| **Badan kartu pekat** | Garis terowongan jurang dulu melintas di atas teks deskripsi, dan batas kepala-badan terbaca sebagai sambungan. Terukur sesudahnya: selisih luminansi di batas itu 0,5 - juga saat kartu disorot, sesudah warna badan saat hover dicabut (versi itu memberi selisih 4,3) |
+| **Biaya gulir yang tersisa, dinyatakan** | Build produksi headless, berselang-seling: kartu lama 189 bingkai/4 dtk, kartu baru 150. Sebagian besar dari kartu yang lebih tinggi dan berwarna; ~7% dari lapisan cahaya yang bergerak, dan tiga penangkalnya dibantah pengukuran - lihat jebakan.md |
+| **Nama lengkap, prodi, dan angkatan kelima orang** | Diminta pemilik repo; kolom `namaLengkap`, `prodi`, `angkatan` di `PENDIRI`. Diisi dari data yang DIKETIK pemilik repo, bukan dibaca dari scan KTM di folder registrasi Drive - unduhannya ditolak pengaman izin sebagai dokumen data pribadi, dan yang boleh keluar ke halaman publik memang cuma ketiga kolom ini (NIM dan foto tidak). Inisial lencana ikut nama lengkap (huruf pertama nama depan dan belakang). Kolom yang kosong tidak dikarang: kartu kembali ke nama panggilan dan melewati baris prodinya. Nama prodi tidak diterjemahkan; "Angkatan" jadi "Class of". Diuji: kelima nama, prodi, angkatan, inisial, badge ketua, dan versi Inggrisnya - 51 asersi tim hijau di dev dan build produksi; tata letak juga diuji dengan isian palsu yang sengaja panjang sebelum data aslinya ada |
+| **Nol regresi di tempat lain** | `tsc` 0; `oxlint` sama dengan sebelum sesi; `test_infra` 58/58, `test_aturan` 58/58; `audit-prd.mjs` 33/33 (satu putaran sebelumnya 32/33 pada asersi saringan kuadran peta - tidak berulang, dan tidak menyentuh berkas yang diubah); 51 asersi tim hijau di dev DAN build produksi, lima penjaganya dibuktikan merah lewat sabotase; 60 asersi pengaturan gerbang hijau di build produksi |
+
+---
+
 ### Belum dikerjakan — di sinilah pekerjaan berikutnya
 
 | Hal | Yang menghalangi | Kalau sudah ada, kerjakan |
