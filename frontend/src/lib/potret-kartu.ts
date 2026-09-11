@@ -59,6 +59,63 @@ import {
  */
 export type PilihSorot = 'skor' | 'sewa-murah' | 'gem' | 'terlarang' | 'churn'
 
+/** Kotak [[barat, selatan], [timur, utara]]. */
+export type Bingkai = [[number, number], [number, number]]
+
+/**
+ * Kamera yang DIPESAN, bukan yang diturunkan dari seluruh kawasan.
+ *
+ * Dipakai potret komparasi: yang harus terlihat di sana RUTE-nya, dan kamera
+ * yang membingkai seluruh 127 heksagon membuat rute 900 m tinggal beberapa
+ * piksel. Potret dan geometri sorotnya WAJIB menerima kamera yang sama persis,
+ * kalau tidak heksagon di atas gambarnya meleset tanpa satu pun galat.
+ */
+export interface Kamera {
+  bingkai: Bingkai
+  /** Jarak tepi, dalam PECAHAN lebar/tinggi kotak - bukan piksel. */
+  tepi: { atas: number; bawah: number; kiri: number; kanan: number }
+  /**
+   * Zoom yang DIKUNCI. Tanpa ini tiap potret memilih zoom-nya sendiri dari
+   * rutenya, dan dua peta di kartu "satu ukuran yang sama" tampil dengan skala
+   * berbeda - heksagon kiri dua kali lebih besar daripada yang kanan.
+   */
+  zoom?: number
+}
+
+function tepiPiksel(kamera: Kamera, lebar: number, tinggi: number) {
+  const t = kamera.tepi
+  return {
+    top: Math.round(tinggi * t.atas),
+    bottom: Math.round(tinggi * t.bawah),
+    left: Math.round(lebar * t.kiri),
+    right: Math.round(lebar * t.kanan),
+  }
+}
+
+/**
+ * Zoom yang dibutuhkan sebuah kamera supaya bingkainya muat. Dipakai skrip
+ * untuk mencari satu zoom yang cukup untuk KEDUA peta komparasi.
+ */
+export async function zoomKamera(p: { lebar: number; tinggi: number; kamera: Kamera }): Promise<number> {
+  const wadah = document.createElement('div')
+  wadah.style.cssText = `position:fixed;left:0;top:0;width:${p.lebar}px;height:${p.tinggi}px;z-index:-1;opacity:0;pointer-events:none`
+  document.body.appendChild(wadah)
+  const m = new MapLibreMap({
+    container: wadah,
+    style: { version: 8, sources: {}, layers: [] },
+    center: [106.81, -6.2],
+    zoom: 12,
+    interactive: false,
+    attributionControl: false,
+    pixelRatio: 1,
+  })
+  await new Promise<void>((selesai) => m.on('load', () => selesai()))
+  const cam = m.cameraForBounds(p.kamera.bingkai, { padding: tepiPiksel(p.kamera, p.lebar, p.tinggi) })
+  m.remove()
+  wadah.remove()
+  return cam?.zoom ?? 14
+}
+
 export interface PesananSorot {
   kawasan: string
   layer: NamaLayer
@@ -66,6 +123,9 @@ export interface PesananSorot {
   tinggi: number
   pilih: PilihSorot
   banyak: number
+  kamera?: Kamera
+  /** Heksagon asal rute. Tanpa ini: heksagon teratas. */
+  ruteH3?: string
 }
 
 export interface HasilSorot {
@@ -166,13 +226,7 @@ export async function sorotKartu(p: PesananSorot): Promise<HasilSorot> {
     },
   })
 
-  const b = bingkaiDari(data)
-  if (b) {
-    m.fitBounds(b, {
-      padding: Math.round(Math.max(14, Math.min(p.tinggi * 0.13, p.lebar * 0.1, 90))),
-      animate: false,
-    })
-  }
+  arahkanKamera(m, data, p.lebar, p.tinggi, p.kamera)
   await new Promise<void>((selesai) => m.once('idle', () => selesai()))
 
   // Piksel dibaca SEKALI untuk seluruh kanvas. Membacanya per heksagon berarti
@@ -228,12 +282,14 @@ export async function sorotKartu(p: PesananSorot): Promise<HasilSorot> {
     .slice(0, p.banyak)
   const sorot = terpilih.map((d) => ({ x: bulat(d.x), y: bulat(d.y), c: warnaDi(d.x, d.y) }))
 
-  // Rute heksagon TERATAS saja. Enam rute di satu kartu kecil berhenti jadi
-  // rute dan jadi benang kusut; satu rute menyatakan hal yang sama.
+  // SATU rute. Enam rute di satu kartu kecil berhenti jadi rute dan jadi
+  // benang kusut; satu rute menyatakan hal yang sama. Asalnya heksagon
+  // teratas, KECUALI pemesan menyebut heksagonnya sendiri - lihat `pilihRute`.
   let rute: HasilSorot['rute'] = null
-  if (terpilih[0]) {
+  const asal = p.ruteH3 ?? terpilih[0]?.h3
+  if (asal) {
     try {
-      const k = await api.simpulTerdekat(terpilih[0].h3)
+      const k = await api.simpulTerdekat(asal)
       const garis = k.rute?.find((r) => r.utama) ?? k.rute?.[0]
       const titik = garis?.koordinat
       if (titik && titik.length > 1 && k.simpul) {
@@ -284,6 +340,99 @@ export interface PesananKartu {
   angka: boolean
   /** 0..1. Makin rendah makin kecil berkasnya. */
   mutu: number
+  kamera?: Kamera
+}
+
+/**
+ * Satu kamera untuk KEDUA jenis pemotretan - potret dan sorotnya.
+ *
+ * Dua salinan `fitBounds` pernah berdiri di sini, satu per fungsi, dengan angka
+ * padding yang sama ditulis dua kali. Selama keduanya sama, heksagon sorot
+ * duduk tepat di atas gambarnya; begitu salah satunya diubah, seluruh kisi
+ * meleset beberapa piksel dan tidak ada yang memberi tahu.
+ */
+function arahkanKamera(
+  m: MapLibreMap,
+  data: { features: unknown[] },
+  lebar: number,
+  tinggi: number,
+  kamera?: Kamera,
+) {
+  if (kamera) {
+    const padding = tepiPiksel(kamera, lebar, tinggi)
+    if (kamera.zoom != null) {
+      // Pusatnya tetap dari bingkai BESERTA tepinya - jadi rutenya berdiri di
+      // bagian yang tidak dipudarkan - tetapi zoom-nya milik pemesan.
+      const cam = m.cameraForBounds(kamera.bingkai, { padding })
+      m.jumpTo({ center: cam?.center ?? m.getCenter(), zoom: kamera.zoom })
+      return
+    }
+    m.fitBounds(kamera.bingkai, { padding, maxZoom: 14.6, animate: false })
+    return
+  }
+  const b = bingkaiDari(data)
+  if (b) {
+    m.fitBounds(b, {
+      padding: Math.round(Math.max(14, Math.min(tinggi * 0.13, lebar * 0.1, 90))),
+      animate: false,
+    })
+  }
+}
+
+/**
+ * Heksagon yang rutenya PALING DEKAT ke panjang sasaran, di antara yang
+ * menjawab kartunya.
+ *
+ * Ada karena laporan pemilik repo soal kartu komparasi: "rute nya keknya
+ * kependekan, panjangin dong biar kelihatan jelas". Heksagon teratas di
+ * Harjamukti kebetulan berdiri dekat simpulnya, jadi rutenya 11 menit dan
+ * nyaris tertutup penanda A-nya sendiri.
+ *
+ * SASARAN, bukan batas atas. Percobaan pertama memilih "yang terpanjang di
+ * bawah 1,9 km" - dan untuk kartu Manggarai tidak menemukan satu pun, karena
+ * dua belas heksagon bersewa termurah di sana semuanya berdiri lebih jauh dari
+ * itu (sewa murah memang cenderung jauh dari stasiun). Sasaran selalu punya
+ * jawaban: rute yang cukup panjang untuk terbaca sebagai JALUR, dan tidak
+ * sepanjang itu sampai kameranya harus mundur kembali ke seluruh kawasan.
+ *
+ * Yang dipilih TETAP salah satu heksagon yang disorot kartunya, dan rutenya
+ * tetap rute ORS sungguhan. Yang berubah cuma heksagon MANA dari daftar
+ * jawaban itu yang rutenya digambar.
+ */
+export async function pilihRute(p: {
+  kawasan: string
+  pilih: PilihSorot
+  banyak: number
+  sasaranM: number
+}): Promise<{ h3: string; jarakM: number; bingkai: Bingkai } | null> {
+  const data = (await api.layerHeksagon({ kawasan: p.kawasan })) as {
+    features: { properties?: Record<string, unknown> }[]
+  }
+  const calon = data.features
+    .map((f) => ({ h3: String(f.properties?.h3_index ?? ''), nilai: nilaiPilih(f.properties ?? {}, p.pilih) }))
+    .filter((c): c is { h3: string; nilai: number } => c.nilai !== null && c.h3 !== '')
+    .sort((a, b) => b.nilai - a.nilai)
+    .slice(0, p.banyak)
+
+  let terbaik: { h3: string; jarakM: number; bingkai: Bingkai } | null = null
+  for (const c of calon) {
+    const k = await api.simpulTerdekat(c.h3).catch(() => null)
+    const garis = k?.rute?.find((r) => r.utama) ?? k?.rute?.[0]
+    if (!k?.simpul || !garis || garis.koordinat.length < 2) continue
+    if (terbaik && Math.abs(garis.jarak_m - p.sasaranM) >= Math.abs(terbaik.jarakM - p.sasaranM)) continue
+    let x1 = 180
+    let y1 = 90
+    let x2 = -180
+    let y2 = -90
+    for (const [x, y] of [...garis.koordinat, [k.simpul.lon, k.simpul.lat]]) {
+      x1 = Math.min(x1, x)
+      y1 = Math.min(y1, y)
+      x2 = Math.max(x2, x)
+      y2 = Math.max(y2, y)
+    }
+    terbaik = { h3: c.h3, jarakM: garis.jarak_m, bingkai: [[x1, y1], [x2, y2]] }
+  }
+  return terbaik
 }
 
 /**
@@ -483,13 +632,7 @@ export async function potretKartu(
     })
   }
 
-  const b = bingkaiDari(data)
-  if (b) {
-    m.fitBounds(b, {
-      padding: Math.round(Math.max(14, Math.min(p.tinggi * 0.13, p.lebar * 0.1, 90))),
-      animate: false,
-    })
-  }
+  arahkanKamera(m, data, p.lebar, p.tinggi, p.kamera)
 
   // `idle` menyala saat tidak ada lagi ubin yang dimuat DAN tidak ada transisi
   // yang berjalan - satu-satunya saat yang menjamin kanvasnya sudah utuh.

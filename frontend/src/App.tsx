@@ -58,7 +58,7 @@ import { api } from './lib/api'
 import type {
   DiagramKuadran,
   Kuadran as NamaKuadran,
-  ModaTampil,
+  ProfilRute,
   SimpulTransit,
 } from './types'
 import DaftarLokasi from './components/DaftarLokasi'
@@ -748,12 +748,17 @@ export default function App() {
    * siapa pun.
    */
   const [rutaTampil, setRutaTampil] = useState(false)
-  // Bawaannya GELAP sejak tampilan terang dicabut. Yang tersimpan di
-  // localStorage tetap menang: yang berubah cuma pilihan pertama bagi orang
-  // yang belum pernah memilih. Chrome aplikasinya gelap seluruhnya, dan
-  // basemap terang di dalam bingkai gelap membuat petanya - benda paling
-  // besar di layar - jadi satu-satunya yang tidak ikut temanya.
-  const [gaya, setGaya] = useState<NamaGaya>(AWAL.gaya ?? 'gelap')
+  // Yang tersimpan di localStorage tetap menang. Tanpa pilihan tersimpan,
+  // basemap pertama DITURUNKAN DARI TEMA - gelap untuk gelap, `dasar` untuk
+  // terang, pasangan yang sama dengan yang dipilih sakelar tema di bawah.
+  //
+  // Dulu bawaannya selalu 'gelap', dan di DEV SERVER itu tidak pernah terlihat
+  // salah: StrictMode menjalankan efek penyelaras tema di bawah DUA kali saat
+  // dipasang, jadi lintasan keduanya lolos dari penjaga "lewati yang pertama"
+  // dan menukar basemapnya ke terang. Build produksi menjalankannya sekali -
+  // orang yang kembali dengan tema terang membuka peta hitam di bawah panel
+  // putih. Terlihat 11 Sep 2026 di `vite preview`, bukan di dev.
+  const [gaya, setGaya] = useState<NamaGaya>(AWAL.gaya ?? (tema === 'terang' ? 'dasar' : 'gelap'))
   const [hexTerpilih, setHexTerpilih] = useState<string | null>(null)
 
   // Pilihan menampilkan rute berlaku untuk SATU heksagon. Berpindah heksagon
@@ -881,16 +886,20 @@ export default function App() {
    * yang ingin kombinasi lain tidak punya jalan.
    *
    * Jadi: sakelar tema menyelaraskan keduanya sebagai TITIK BERANGKAT, lalu
-   * menu Basemap tetap berkuasa penuh sesudahnya. Efek ini melewati jalannya
-   * yang pertama, jadi basemap yang dipulihkan dari localStorage tidak pernah
-   * ditimpa hanya karena aplikasinya baru dimuat.
+   * menu Basemap tetap berkuasa penuh sesudahnya. Efek ini hanya bekerja saat
+   * temanya BENAR-BENAR berubah, jadi basemap yang dipulihkan dari localStorage
+   * tidak pernah ditimpa hanya karena aplikasinya baru dimuat.
+   *
+   * Dibandingkan dengan tema SEBELUMNYA, bukan dengan bendera "jalan pertama".
+   * Bendera itu cuma benar di produksi: StrictMode di dev menjalankan efeknya
+   * dua kali saat dipasang, lintasan kedua lolos dari benderanya, dan dev
+   * diam-diam menimpa basemap tersimpan sementara produksi tidak - dua perilaku
+   * untuk kode yang sama. Tema sebelumnya sama di kedua lintasan itu.
    */
-  const temaPertama = useRef(true)
+  const temaSebelum = useRef(tema)
   useEffect(() => {
-    if (temaPertama.current) {
-      temaPertama.current = false
-      return
-    }
+    if (temaSebelum.current === tema) return
+    temaSebelum.current = tema
     setGaya((g) => {
       if (tema === 'gelap') return g === 'gelap' ? g : 'gelap'
       return g === 'gelap' ? 'dasar' : g
@@ -911,9 +920,9 @@ export default function App() {
    * dari nilai yang sama adalah dua salinan yang suatu saat berselisih - dan
    * yang terlihat waktu itu garis mobil dengan keterangan jalan kaki.
    */
-  // Moda TAMPIL, bukan profil tersimpan. Motor memakai jaringan mobil, dan
-  // pemetaannya ada di `profilUntukModa` - satu tempat, bukan di tiap pemanggil.
-  const [profilRute, setProfilRute] = useState<ModaTampil>('foot-walking')
+  // Tiap moda di layar persis satu profil tersimpan sejak sepeda menggantikan
+  // motor - lihat `ProfilRute` di types.ts.
+  const [profilRute, setProfilRute] = useState<ProfilRute>('foot-walking')
 
   const {
     premium,

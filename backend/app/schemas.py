@@ -484,7 +484,7 @@ class RuteJalan(BaseModel):
     jarak_m: float
     menit: float
     utama: bool
-    #: "foot-walking" atau "driving-car". IKUT DIKIRIM, bukan disimpulkan dari
+    #: "foot-walking", "driving-car", atau "cycling-regular". IKUT DIKIRIM, bukan disimpulkan dari
     #: parameter permintaan: antarmuka menggambar dua profil dengan gaya garis
     #: yang berbeda, dan gaya yang ditebak dari parameter akan salah begitu ada
     #: respons yang memuat keduanya sekaligus.

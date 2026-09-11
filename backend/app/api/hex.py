@@ -330,6 +330,18 @@ def commuter_clock(
     )
 
 
+#: Kata kerja tiap profil di kalimat catatan. Satu tabel, bukan ternary di dua
+#: tempat: ternary dua cabang yang dulu berdiri di sini akan diam-diam menyebut
+#: rute sepeda "jalan kaki", karena cabang `else`-nya menangkap apa pun yang
+#: bukan mobil. Profil yang tidak ada di tabel ini gagal KERAS (KeyError),
+#: dan `Literal` di parameter endpoint menjaga pintunya lebih dulu.
+KUNCI_CARA = {
+    "foot-walking": "simpul_cara_kaki",
+    "driving-car": "simpul_cara_mobil",
+    "cycling-regular": "simpul_cara_sepeda",
+}
+
+
 @router.get(
     "/{h3_index}/simpul-terdekat",
     response_model=KonteksSimpul,
@@ -340,8 +352,8 @@ def simpul_terdekat(
     h3_index: str,
     db: Annotated[Session, Depends(get_db)],
     profil: Annotated[
-        Literal["foot-walking", "driving-car"],
-        Query(description="Profil rute. Motor tidak ada di ORS."),
+        Literal["foot-walking", "driving-car", "cycling-regular"],
+        Query(description="Profil rute. Motor tidak ada di ORS; sepeda ada."),
     ] = "foot-walking",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> KonteksSimpul:
@@ -466,10 +478,7 @@ def simpul_terdekat(
                 "simpul_lurus",
                 bahasa,
                 nama=baris["nama"],
-                cara=kalimat(
-                    "simpul_cara_mobil" if profil == "driving-car" else "simpul_cara_kaki",
-                    bahasa,
-                ),
+                cara=kalimat(KUNCI_CARA[profil], bahasa),
             ),
         )
 
@@ -479,9 +488,7 @@ def simpul_terdekat(
     # Kalimatnya menyebut angka yang paling berguna lebih dulu, dan menambahkan
     # peringatan HANYA kalau memang ada yang perlu diperingatkan. Catatan yang
     # selalu berisi peringatan berhenti dibaca sebagai peringatan.
-    cara = kalimat(
-        "simpul_cara_mobil" if profil == "driving-car" else "simpul_cara_kaki", bahasa
-    )
+    cara = kalimat(KUNCI_CARA[profil], bahasa)
     catatan = kalimat(
         "simpul_rute", bahasa, menit=f"{utama.menit:.0f}", cara=cara, nama=baris["nama"]
     )

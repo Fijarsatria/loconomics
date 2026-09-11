@@ -87,6 +87,43 @@ const DAFTAR = [
   { berkas: 'harjamukti', kawasan: 'Harjamukti', gaya: 'terang', layer: 'opportunity', condong: 0.9, lebar: 620, tinggi: 380, angka: false, mutu: 0.72, pilih: 'skor', banyak: 10 },
 ]
 
+/**
+ * Dua potret KHUSUS kartu komparasi, dengan kamera yang membingkai RUTE-nya.
+ *
+ * Sebelumnya kartu itu meminjam potret Harjamukti dan Manggarai milik kartu
+ * lain lalu memperbesarnya 1,55x lewat CSS. Dua keluhan pemilik repo lahir dari
+ * situ: rutenya terlalu pendek untuk terlihat, dan petanya harus "lebih zoom
+ * lagi" - padahal WebP 620 px sudah mulai lunak pada 1,55x. Potret sendiri
+ * dengan kamera sendiri menjawab keduanya tanpa satu piksel pun yang diperbesar.
+ *
+ * `tepi` dalam pecahan kotak. Peta KIRI diberi tepi kiri yang lebih lebar,
+ * karena sisi itu bersentuhan dengan kolom teks dan dipudarkan; rutenya harus
+ * berdiri di bagian yang tidak tertutup pudar itu. Peta kanan tidak dipudarkan
+ * sama sekali, jadi tepinya simetris.
+ */
+/*
+ * `banyak: 18` untuk peta A, bukan 10 seperti kartunya sendiri. Sepuluh
+ * heksagon berskor tertinggi Harjamukti SEMUANYA berdiri dalam 1,2 km dari
+ * LRT-nya - terukur: 409 sampai 1.167 m - jadi tidak satu pun punya rute yang
+ * cukup panjang untuk terbaca. Rute 1,8 km baru muncul di peringkat ke-18.
+ * Himpunan sorotnya yang dilebarkan, bukan asal rutenya yang dicari di luar
+ * himpunan itu: penanda A harus tetap berdiri di atas heksagon yang disorot.
+ */
+const BANDING = [
+  { berkas: 'banding-a', kawasan: 'Harjamukti', gaya: 'terang', layer: 'opportunity', lebar: 900, tinggi: 520, mutu: 0.8, pilih: 'skor', banyak: 18, tepi: { atas: 0.14, bawah: 0.14, kiri: 0.26, kanan: 0.08 } },
+  { berkas: 'banding-b', kawasan: 'Manggarai', gaya: 'terang', layer: 'pricelens', lebar: 900, tinggi: 520, mutu: 0.8, pilih: 'sewa-murah', banyak: 12, tepi: { atas: 0.14, bawah: 0.14, kiri: 0.1, kanan: 0.1 } },
+]
+
+/**
+ * Panjang rute yang dicari untuk kartu komparasi. Lihat `pilihRute`.
+ *
+ * 2.400 m, bukan 1.300 m. Dengan zoom yang dikunci sama untuk kedua peta,
+ * panjang rute di GAMBAR sebanding dengan panjangnya di jalan - dan rute
+ * 1,2 km di Harjamukti tampil sepertiga panjang rute 2,6 km di Manggarai,
+ * terkubur di bawah heksagon sorotnya sendiri. Terlihat begitu di potret.
+ */
+const SASARAN_RUTE_M = 2400
+
 /** `--sorot`: segarkan geometri heksagonnya saja, jangan sentuh satu WebP pun. */
 const hanyaSorot = process.argv.includes('--sorot')
 
@@ -105,6 +142,7 @@ await mkdir(TUJUAN, { recursive: true })
 
 let totalKb = 0
 let manifes = []
+let manifesBanding = []
 
 /*
  * Mode `--sorot` membaca angka kartu dari manifes yang SUDAH ada.
@@ -116,8 +154,16 @@ let manifes = []
 if (hanyaSorot) {
   const { readFile } = await import('node:fs/promises')
   const teks = await readFile(join(AKAR, 'src', 'lib', 'kartu-gerbang.ts'), 'utf-8')
-  const mulai = teks.indexOf('[', teks.indexOf('=', teks.indexOf('export const KARTU_GERBANG')))
-  manifes = JSON.parse(teks.slice(mulai, teks.lastIndexOf(']') + 1))
+  // Dua daftar di satu berkas, masing-masing ditutup PENANDA - bukan kurung
+  // siku terakhir, yang sejak ada daftar kedua menunjuk ke daftar yang salah.
+  const potong = (nama) => {
+    const mulai = teks.indexOf('[', teks.indexOf('=', teks.indexOf('export const ' + nama)))
+    const penanda = teks.indexOf('// akhir ' + nama, mulai)
+    const akhir = penanda === -1 ? teks.length : penanda
+    return JSON.parse(teks.slice(mulai, teks.lastIndexOf(']', akhir) + 1))
+  }
+  manifes = potong('KARTU_GERBANG')
+  manifesBanding = teks.includes('export const KARTU_BANDING') ? potong('KARTU_BANDING') : []
   console.log('  --sorot: ' + manifes.length + ' kartu dibaca dari manifes, WebP tidak disentuh')
 }
 
@@ -133,8 +179,30 @@ for (const p of hanyaSorot ? [] : DAFTAR) {
   const kb = isi.length / 1024
   totalKb += kb
 
+  /*
+   * Kartu bergaya GELAP mendapat kembaran bergaya TERANG untuk halaman terang.
+   *
+   * Dilaporkan pemilik repo dengan potret: di mode terang, kartu GemFinder
+   * tampil sebagai peta hitam pekat di tengah halaman putih. Menyaring gambar
+   * gelapnya lewat CSS (`invert`) membalik warna heksagonnya juga; menggambar
+   * ulang dengan gaya terang dan KAMERA YANG SAMA tidak membalik apa pun - dan
+   * karena kameranya sama, geometri sorotnya tetap berlaku untuk keduanya.
+   */
+  let berkasTerang = null
+  if (GAYA_GELAP.includes(p.gaya)) {
+    const kembar = await halaman.evaluate(async (pesan) => {
+      const mod = await import('/src/lib/potret-kartu.ts')
+      return mod.potretKartu(pesan)
+    }, { ...p, gaya: 'terang' })
+    const isiKembar = Buffer.from(kembar.gambar.split(',')[1], 'base64')
+    berkasTerang = p.berkas + '-terang'
+    await writeFile(join(TUJUAN, berkasTerang + '.webp'), isiKembar)
+    totalKb += isiKembar.length / 1024
+  }
+
   manifes.push({
     berkas: p.berkas,
+    berkasTerang,
     kawasan: p.kawasan,
     layer: p.layer,
     gelap: GAYA_GELAP.includes(p.gaya),
@@ -180,6 +248,86 @@ for (const p of DAFTAR) {
   )
 }
 
+/*
+ * Kartu komparasi. Urutannya wajib: rute DULU (menentukan kameranya), baru
+ * potret dan sorotnya dengan kamera itu. `--sorot` tetap menghitung ulang
+ * rute dan kameranya - tanpa itu geometri baru berdiri di atas gambar yang
+ * dipotret dengan kamera lama.
+ */
+const bandingLama = manifesBanding
+manifesBanding = []
+
+/*
+ * SATU zoom untuk kedua peta: yang terkecil di antara zoom yang dibutuhkan
+ * masing-masing rutenya, dan tidak lebih dekat dari ZOOM_BANDING_MAKS. Kartunya
+ * berbunyi "satu ukuran yang sama"; dua peta berskala berbeda membantahnya
+ * sebelum kalimatnya selesai dibaca.
+ */
+// Batas atas, bukan sasaran: zoom sebenarnya yang TERKECIL di antara kedua
+// kebutuhan rute. Di atas 15 panel selebar 450 px memuat kurang dari lima
+// heksagon dan kisinya berhenti terbaca sebagai kisi.
+const ZOOM_BANDING_MAKS = 15
+const pilihanBanding = []
+for (const p of BANDING) {
+  const pilihan = await halaman.evaluate(async (pesan) => {
+    const mod = await import('/src/lib/potret-kartu.ts')
+    return mod.pilihRute(pesan)
+  }, { kawasan: p.kawasan, pilih: p.pilih, banyak: p.banyak, sasaranM: SASARAN_RUTE_M })
+  if (!pilihan) {
+    console.log('  banding ' + p.berkas + ': tidak ada heksagon berute - dilewati')
+    continue
+  }
+  const zoom = await halaman.evaluate(async (pesan) => {
+    const mod = await import('/src/lib/potret-kartu.ts')
+    return mod.zoomKamera(pesan)
+  }, { lebar: p.lebar, tinggi: p.tinggi, kamera: { bingkai: pilihan.bingkai, tepi: p.tepi } })
+  pilihanBanding.push({ p, pilihan, zoom })
+}
+const zoomBersama = Math.min(ZOOM_BANDING_MAKS, ...pilihanBanding.map((x) => x.zoom))
+console.log('  banding zoom bersama ' + zoomBersama.toFixed(2) + ' (' + pilihanBanding.map((x) => x.zoom.toFixed(2)).join(', ') + ')')
+
+for (const { p, pilihan } of pilihanBanding) {
+  const kamera = { bingkai: pilihan.bingkai, tepi: p.tepi, zoom: zoomBersama }
+
+  if (!hanyaSorot) {
+    const hasil = await halaman.evaluate(async (pesan) => {
+      const mod = await import('/src/lib/potret-kartu.ts')
+      return mod.potretKartu(pesan)
+    }, { kawasan: p.kawasan, gaya: p.gaya, layer: p.layer, lebar: p.lebar, tinggi: p.tinggi, angka: false, mutu: p.mutu, kamera })
+    const isi = Buffer.from(hasil.gambar.split(',')[1], 'base64')
+    await writeFile(join(TUJUAN, p.berkas + '.webp'), isi)
+    totalKb += isi.length / 1024
+  } else if (!bandingLama.some((b) => b.berkas === p.berkas)) {
+    console.log('  banding ' + p.berkas + ': belum pernah dipotret - jalankan tanpa --sorot')
+    continue
+  }
+
+  const sorot = await halaman.evaluate(async (pesan) => {
+    const mod = await import('/src/lib/potret-kartu.ts')
+    return mod.sorotKartu(pesan)
+  }, { kawasan: p.kawasan, layer: p.layer, lebar: p.lebar, tinggi: p.tinggi, pilih: p.pilih, banyak: p.banyak, kamera, ruteH3: pilihan.h3 })
+
+  manifesBanding.push({
+    berkas: p.berkas,
+    berkasTerang: null,
+    kawasan: p.kawasan,
+    layer: p.layer,
+    gelap: GAYA_GELAP.includes(p.gaya),
+    condong: 0,
+    utama: false,
+    lebar: p.lebar,
+    tinggi: p.tinggi,
+    n: sorot.sel.length / 2,
+    kuadran: {},
+    sorotan: { nilai: '', label: '' },
+    sorot,
+  })
+  console.log(
+    '  banding ' + p.berkas.padEnd(12) + ' rute ' + pilihan.jarakM + ' m dari ' + pilihan.h3 +
+    (sorot.rute ? '  (' + sorot.rute.menit + ' mnt -> ' + sorot.rute.simpul + ')' : '  TANPA RUTE'),
+  )
+}
+
 /**
  * Manifesnya ditulis sebagai MODUL TS, bukan JSON di public/.
  *
@@ -202,6 +350,8 @@ const baris = [
   '',
   'export interface KartuGerbang {',
   '  berkas: string',
+  '  /** Kembaran bergaya terang untuk halaman terang. Hanya kartu bergaya gelap. */',
+  '  berkasTerang: string | null',
   '  kawasan: string',
   '  layer: NamaLayer',
   '  gelap: boolean',
@@ -240,10 +390,32 @@ const baris = [
   '  }',
   '}',
   '',
+  '/**',
+  ' * Berkas dan basemap yang BENAR-BENAR dipakai untuk tema yang sedang berlaku.',
+  ' *',
+  ' * Kartu bergaya gelap punya kembaran terang (`berkasTerang`), dan di halaman',
+  ' * terang kembaran itulah yang dipasang - dilaporkan pemilik repo: kartu',
+  ' * GemFinder tampil sebagai peta hitam di tengah halaman putih. `gelap` ikut',
+  ' * dihitung ulang dari berkas yang dipakai, BUKAN dibaca dari manifes: garis',
+  ' * kisi yang dipilih untuk basemap hitam jadi garis putih di atas peta putih.',
+  ' *',
+  ' * Tinggal di sini, di sebelah manifesnya, karena ia satu-satunya yang tahu',
+  ' * arti `berkasTerang` - dan dipakai dua komponen (Solusi dan Ekosistem).',
+  ' */',
+  "export function potretUntukTema(d: KartuGerbang, tema: 'terang' | 'gelap') {",
+  "  const kembar = tema === 'terang' && d.berkasTerang !== null",
+  '  return { berkas: kembar ? (d.berkasTerang as string) : d.berkas, gelap: kembar ? false : d.gelap }',
+  '}',
+  '',
   '/** Tanggal potret terakhir, dinyatakan apa adanya di halamannya. */',
   "export const DIPOTRET = '" + new Date().toISOString().slice(0, 10) + "'",
   '',
   'export const KARTU_GERBANG: KartuGerbang[] = ' + JSON.stringify(manifes, null, 2),
+  '// akhir KARTU_GERBANG',
+  '',
+  '/** Dua potret kartu komparasi, dibingkai pada rutenya. A lalu B. */',
+  'export const KARTU_BANDING: KartuGerbang[] = ' + JSON.stringify(manifesBanding, null, 2),
+  '// akhir KARTU_BANDING',
   '',
 ].join('\n')
 

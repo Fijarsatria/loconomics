@@ -113,7 +113,8 @@ class HexRoute(Base):
     #: Lama jalan kaki menurut ORS, menit. Profil foot-walking.
     menit: Mapped[float] = mapped_column(Float, nullable=False)
     geom: Mapped[str] = mapped_column(Geometry("LINESTRING", srid=4326), nullable=False)
-    #: Profil ORS yang dipakai: "foot-walking" atau "driving-car".
+    #: Profil ORS yang dipakai: "foot-walking", "driving-car", atau
+    #: "cycling-regular" (sejak 11 Sep 2026).
     #:
     #: Ia bagian dari KUNCI UNIK, bukan sekadar penanda. Satu heksagon punya
     #: rute jalan kaki DAN rute mobil ke simpul yang sama, dan keduanya

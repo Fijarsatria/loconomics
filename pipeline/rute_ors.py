@@ -35,6 +35,8 @@ Pemakaian:
 
     cd pipeline
     python rute_ors.py                 # yang belum punya rute saja
+    python rute_ors.py --mobil         # profil driving-car, ditambahkan
+    python rute_ors.py --sepeda        # profil cycling-regular, ditambahkan
     python rute_ors.py --kawasan Manggarai
     python rute_ors.py --ulang         # hitung ulang semuanya
     python rute_ors.py --batas 20      # coba sedikit dulu
@@ -72,8 +74,17 @@ URL_ORS = "https://api.openrouteservice.org/v2/directions/{profil}/geojson"
 #: akan salah ke arah yang paling merugikan - motor melewati gang yang mobil
 #: tidak bisa, jadi rute mobil MELEBIH-LEBIHKAN jaraknya. Lebih baik tidak ada
 #: daripada ada dan menyesatkan.
+#:
+#: SEPEDA menggantikan tempat motor di antarmuka sejak 11 Sep 2026, atas
+#: permintaan pemilik repo ("motor itu pake jalur sepeda aja... ganti aja
+#: motobike jadi sepeda"). Ia diterbitkan sebagai SEPEDA, dengan nama itu -
+#: bukan sebagai motor yang meminjam jaringan sepeda. Jaringan sepeda ORS
+#: memang lebih dekat ke jalur motor daripada jaringan mobil (lewat gang,
+#: menghindari tol), tetapi waktu tempuhnya waktu MENGAYUH, dan mencetaknya
+#: sebagai menit bermotor akan jadi angka yang tidak diukur siapa pun.
 PROFIL_JALAN = "foot-walking"
 PROFIL_MOBIL = "driving-car"
+PROFIL_SEPEDA = "cycling-regular"
 
 #: Profil yang SEDANG ditarik. Disetel sekali di `main()` dari benderanya.
 #: Modul-level supaya `minta_rute` dan `simpan` tidak perlu meneruskannya
@@ -160,6 +171,9 @@ def menit_penggal(meter: float, profil: str, jarak_m: float, menit: float) -> fl
     hampir sepersepuluh ke rute mobil rata-rata - dan menambahkannya berarti
     mencampur dua moda di dalam satu angka. Yang dipakai kecepatan RUTE ITU
     SENDIRI, satu-satunya laju yang benar-benar terukur untuk perjalanan itu.
+
+    SEPEDA ikut aturan mobil, dengan alasan yang sama: ia kendaraan, dan laju
+    rutenya sendiri yang terukur.
     """
     if profil == PROFIL_JALAN or menit <= 0 or jarak_m <= 0:
         return meter / M_PER_MENIT
@@ -629,7 +643,10 @@ def status(db) -> None:
                    count(DISTINCT r.h3_index) FILTER (WHERE r.profil = 'driving-car')  AS mobil_hex,
                    count(r.id)                FILTER (WHERE r.profil = 'driving-car')  AS mobil_baris,
                    round(avg(r.menit) FILTER (
-                       WHERE r.urutan = 0 AND r.profil = 'driving-car')::numeric, 1)   AS mobil_menit
+                       WHERE r.urutan = 0 AND r.profil = 'driving-car')::numeric, 1)   AS mobil_menit,
+                   count(DISTINCT r.h3_index) FILTER (WHERE r.profil = 'cycling-regular') AS sepeda_hex,
+                   round(avg(r.menit) FILTER (
+                       WHERE r.urutan = 0 AND r.profil = 'cycling-regular')::numeric, 1) AS sepeda_menit
             FROM hex_features h
             LEFT JOIN hex_routes r ON r.h3_index = h.h3_index
             GROUP BY h.kawasan ORDER BY h.kawasan
@@ -643,15 +660,18 @@ def status(db) -> None:
         f"\n  {'kawasan':<14}{'heks':>6}"
         f"{'kaki hx':>9}{'kaki rute':>11}{'kaki mnt':>10}"
         f"{'mobil hx':>10}{'mobil rute':>12}{'mobil mnt':>11}"
+        f"{'sepeda hx':>11}{'sepeda mnt':>12}"
     )
-    print("  " + "-" * 83)
+    print("  " + "-" * 106)
     for r in baris:
         kmnt = f"{r['kaki_menit']}" if r["kaki_menit"] else "-"
         mmnt = f"{r['mobil_menit']}" if r["mobil_menit"] else "-"
+        smnt = f"{r['sepeda_menit']}" if r["sepeda_menit"] else "-"
         print(
             f"  {r['kawasan']:<14}{r['hex']:>6}"
             f"{r['kaki_hex']:>9}{r['kaki_baris']:>11}{kmnt:>10}"
             f"{r['mobil_hex']:>10}{r['mobil_baris']:>12}{mmnt:>11}"
+            f"{r['sepeda_hex']:>11}{smnt:>12}"
         )
     total = db.execute(select(func.count()).select_from(HexRoute)).scalar_one()
     iso = db.execute(select(func.count()).select_from(CatchmentArea)).scalar_one()
@@ -667,6 +687,14 @@ def main() -> int:
         help=(
             "tarik profil driving-car, bukan foot-walking. Rute mobil DITAMBAHKAN "
             "di sebelah rute jalan kaki, tidak menggantikannya. Motor tidak ada di ORS."
+        ),
+    )
+    ap.add_argument(
+        "--sepeda",
+        action="store_true",
+        help=(
+            "tarik profil cycling-regular. Sama seperti --mobil: DITAMBAHKAN di "
+            "sebelah profil lain, tidak menggantikannya."
         ),
     )
     ap.add_argument("--kawasan", help="batasi ke satu kawasan pilot")
@@ -689,8 +717,13 @@ def main() -> int:
     a = ap.parse_args()
 
     global PROFIL
+    if a.mobil and a.sepeda:
+        print("Pilih salah satu: --mobil atau --sepeda.")
+        return 1
     if a.mobil:
         PROFIL = PROFIL_MOBIL
+    if a.sepeda:
+        PROFIL = PROFIL_SEPEDA
 
     db = SessionLocal()
     try:
@@ -730,6 +763,25 @@ def main() -> int:
 
         for i, t in enumerate(target, 1):
             hasil = minta_rute((t["hx"], t["hy"]), (t["sx"], t["sy"]))
+            # KUOTA HABIS menghentikan seluruh putaran, bukan cuma heksagon ini.
+            #
+            # Terjadi 11 Sep 2026: kuota harian ORS habis di heksagon ke-195
+            # penarikan mobil, dan skripnya tetap berjalan - 338 "gagal" untuk
+            # mobil lalu 706 lagi untuk sepeda, masing-masing 1,7 detik, dan
+            # ringkasannya membaca seperti ribuan heksagon yang tidak bisa
+            # dirutekan. Padahal tidak satu pun yang salah; layanannya cuma
+            # menolak semua permintaan sampai kuotanya pulih. Yang sudah
+            # tersimpan tetap tersimpan, dan menjalankan ulang besok melanjutkan
+            # dari heksagon yang belum punya rute.
+            if isinstance(hasil, str) and hasil.startswith("HTTP 403") and "uota" in hasil:
+                db.commit()
+                print(
+                    f"\n  KUOTA ORS HABIS di heksagon {i}/{n}. {ok} heksagon tersimpan sebelum itu."
+                    "\n  Jalankan ulang perintah yang sama sesudah kuotanya pulih; yang sudah"
+                    " ada tidak ditarik lagi."
+                )
+                status(db)
+                return 3
             if isinstance(hasil, str):
                 gagal += 1
                 if len(gagal_contoh) < 5:

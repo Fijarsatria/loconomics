@@ -34,9 +34,9 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from 'react'
+import { flushSync } from 'react-dom'
 
 import {
   ARTI_INDEKS,
@@ -108,7 +108,7 @@ export function useBahasa() {
  * Nama zona (kuadran) dalam bahasa yang sedang berlaku.
  *
  * Satu tempat untuk keempatnya, dipakai peta, panel, Kompas, dan gerbang -
- * supaya "Aman" dan "Safe Bet" tidak pernah bisa tampil di dua sudut layar
+ * supaya "Aman" dan "Safe" tidak pernah bisa tampil di dua sudut layar
  * yang sama pada saat yang sama.
  */
 export function useNamaZona(): (kunci: string) => string {
@@ -250,21 +250,19 @@ function bacaTema(): Tema {
 
 const KonteksTema = createContext<{
   tema: Tema
-  gantiTema: (asal?: { x: number; y: number }) => void
+  /** `sakelar` = tombol yang ditekan, supaya ia bergerak sendiri di atas silang-pudarnya. */
+  gantiTema: (sakelar?: HTMLElement | null) => void
 }>({ tema: 'gelap', gantiTema: () => {} })
 
-/**
- * Tirai CAIR: lingkaran yang mekar dari tombolnya, tema ditukar di baliknya,
- * lalu lingkarannya memudar.
- *
- * Warnanya warna dasar tema TUJUAN - kalau ia warna tema sekarang, yang
- * terlihat cuma layar berkedip lalu berganti, bukan satu gerakan.
- */
-const DASAR: Record<Tema, string> = { gelap: '#0b100e', terang: '#f2f8f6' }
+/** Lama silang-pudar, milidetik. Sama dengan `::view-transition-*(root)` di index.css. */
+const PUDAR_MS = 520
+
+type DokumenVT = Document & {
+  startViewTransition?: (ubah: () => void) => { finished: Promise<void> }
+}
 
 export function TemaProvider({ children }: { children: ReactNode }) {
   const [tema, setTema] = useState<Tema>(bacaTema)
-  const [tirai, setTirai] = useState<{ fase: 'tutup' | 'buka'; warna: string } | null>(null)
   const jam = useRef<number[]>([])
 
   useEffect(
@@ -287,57 +285,77 @@ export function TemaProvider({ children }: { children: ReactNode }) {
   }, [tema])
 
   /**
-   * SILANG-PUDAR, dan sesederhana itu memang tujuannya.
+   * SILANG-PUDAR HALAMANNYA SENDIRI - isinya tidak pernah hilang dari layar.
    *
-   * Ini bentuk KETIGA transisi ini, dan dua yang pertama gagal karena alasan
-   * yang sama: keduanya punya PENDAPAT. Lingkaran yang mekar dari titik yang
-   * ditekan cocok untuk tombol bundar, lalu sakelarnya jadi slider dan
-   * lingkarannya berhenti nyambung. Sapuan mendatar cocok untuk slider, tetapi
-   * ia membawa arah - dan arah adalah satu hal lagi yang bisa terasa salah.
-   * Pemilik repo memintanya "yang simple dan elegan", dan itu jawaban yang
-   * benar: pergantian tema bukan peristiwa, ia cuma perubahan suasana.
+   * Ini bentuk KEEMPAT transisi ini. Tiga yang pertama - lingkaran yang mekar,
+   * sapuan mendatar, lalu selembar warna tema tujuan yang menutup layar - punya
+   * satu kesamaan yang baru terlihat sesudah yang ketiga ditolak: ketiganya
+   * MENYEMBUNYIKAN pergantiannya di balik sesuatu. Selama beberapa ratus
+   * milidetik layarnya putih polos atau hitam polos, dan pemilik repo
+   * menyebutnya persis begitu: "gausah sampe kayak memutihkan semuanya /
+   * gelapkan semuanya sampai ga kelihatan semuanya".
    *
-   * Yang tersisa satu lembar warna tema tujuan yang muncul, menutupi layar
-   * selama satu bingkai tempat temanya ditukar, lalu hilang. Tidak ada
-   * gerakan, tidak ada arah, tidak ada yang bisa berselisih dengan bentuk
-   * kendali mana pun - jadi ia akan tetap cocok kalau sakelarnya berubah lagi.
+   * Yang dilakukan sekarang: peramban MEMOTRET halaman lama, tema ditukar, lalu
+   * potret lama memudar di atas halaman baru yang sudah hidup. Pada setiap
+   * bingkai, judul, peta, dan tombol tetap di tempatnya - yang berubah cuma
+   * warnanya, dari yang satu ke yang lain. Tidak ada satu bingkai pun yang
+   * kosong.
    *
-   * 240 masuk, 300 keluar. Keluarnya lebih panjang dengan sengaja: yang masuk
-   * menutupi sesuatu yang sudah dilihat mata, yang keluar memperkenalkan
-   * sesuatu yang baru - dan yang baru pantas diberi waktu sedikit lebih lama.
+   * View Transitions API. Kekhawatiran lama soal kanvas WebGL diperiksa lewat
+   * bingkai yang DIBEKUKAN di tengah pudar (animasinya dijeda lewat Web
+   * Animations API, lalu dipotret): kanvas peta tetap tergambar di setiap
+   * bingkai, dan yang dipotret peramban cuma satu tekstur seukuran layar,
+   * sekali, bukan per bingkai. Di titik tengah (260 ms) judul dan tombol
+   * gerbang masih terbaca jelas - simpangan luminansinya 18,5, sementara
+   * selembar warna polos mendekati nol.
+   *
+   * SAKELARNYA TIDAK IKUT DIPUDARKAN. Tombol yang ditekan diberi
+   * `view-transition-name` sendiri sepanjang transisi, dan index.css
+   * menyembunyikan potret LAMA-nya - jadi yang terlihat cuma kenop yang
+   * meluncur dengan transisinya sendiri, bukan dua kenop yang saling menembus.
+   *
+   * Tanpa API itu (peramban lama), warna halaman ditransisikan CSS selama
+   * pergantian saja - lihat `[data-alih-tema]` di index.css. Kurang rapi
+   * (gradien dan gambar tidak bisa ditransisikan), tetapi tetap tidak pernah
+   * menutup layar.
    */
-  const gantiTema = useCallback(() => {
-    const tujuan: Tema = tema === 'gelap' ? 'terang' : 'gelap'
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setTema(tujuan)
-      return
-    }
-    setTirai({ fase: 'tutup', warna: DASAR[tujuan] })
-    jam.current.push(
-      window.setTimeout(() => {
+  const gantiTema = useCallback(
+    (sakelar?: HTMLElement | null) => {
+      const tujuan: Tema = tema === 'gelap' ? 'terang' : 'gelap'
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         setTema(tujuan)
-        setTirai((t) => (t ? { ...t, fase: 'buka' } : null))
-      }, 240),
-      window.setTimeout(() => setTirai(null), 560),
-    )
-  }, [tema])
+        return
+      }
+      const akar = document.documentElement
+      const dok = document as DokumenVT
+
+      if (!dok.startViewTransition) {
+        akar.dataset.alihTema = 'css'
+        setTema(tujuan)
+        jam.current.push(window.setTimeout(() => delete akar.dataset.alihTema, PUDAR_MS + 60))
+        return
+      }
+
+      if (sakelar) sakelar.style.setProperty('view-transition-name', 'sakelar-tema')
+      akar.dataset.alihTema = 'vt'
+      const transisi = dok.startViewTransition(() => {
+        // `flushSync`: potret BARU diambil begitu fungsi ini selesai, jadi
+        // tema baru harus sudah tertulis ke DOM saat itu - bukan dijadwalkan
+        // untuk render berikutnya. `data-tema` di <html> ikut ditulis di sini
+        // karena efek yang biasanya menulisnya belum tentu sudah berjalan.
+        flushSync(() => setTema(tujuan))
+        akar.dataset.tema = tujuan
+      })
+      transisi.finished.finally(() => {
+        delete akar.dataset.alihTema
+        sakelar?.style.removeProperty('view-transition-name')
+      })
+    },
+    [tema],
+  )
 
   const nilai = useMemo(() => ({ tema, gantiTema }), [tema, gantiTema])
-  return (
-    <KonteksTema.Provider value={nilai}>
-      {children}
-      {tirai && (
-        <div
-          className="tirai-tema"
-          data-fase={tirai.fase}
-          aria-hidden
-          style={{ '--tt-warna': tirai.warna } as CSSProperties}
-        >
-          <span className="tirai-tema-isi" />
-        </div>
-      )}
-    </KonteksTema.Provider>
-  )
+  return <KonteksTema.Provider value={nilai}>{children}</KonteksTema.Provider>
 }
 
 export function useTema() {
@@ -374,7 +392,7 @@ export function SakelarTema({ kelas = '' }: { kelas?: string }) {
       role="switch"
       aria-checked={!terang}
       data-tema={tema}
-      onClick={() => gantiTema()}
+      onClick={(e) => gantiTema(e.currentTarget)}
       title={t.ganti}
       aria-label={t.ganti}
       className={`sakelar-tema ${kelas}`}

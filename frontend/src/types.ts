@@ -334,32 +334,22 @@ export interface SimpulTransit {
  * geometri LineString tanpa dibalik.
  */
 /**
- * Profil rute yang benar-benar TERSIMPAN. Keduanya, tidak lebih.
+ * Profil rute yang benar-benar TERSIMPAN, dan sekaligus moda yang bisa dipilih.
  *
  * Motor tidak ada di sini dan tidak akan pernah ada dari ORS - layanannya tidak
  * menyediakan profil sepeda motor sama sekali.
- */
-export type ProfilRute = 'foot-walking' | 'driving-car'
-
-/**
- * Moda yang bisa DIPILIH di layar. Bukan hal yang sama dengan `ProfilRute`.
  *
- * `motorcycle` diminta pemilik repo, dan ia dilayani apa adanya: jaringan
- * jalannya memakai rute MOBIL - yang memang jalan yang sama untuk sebagian
- * besar ruas - sementara WAKTU TEMPUHNYA tidak ditampilkan sama sekali, karena
- * tidak ada yang pernah mengukurnya.
- *
- * Yang TIDAK dilakukan: mengalikan waktu mobil dengan sebuah faktor lalu
- * mencetaknya sebagai menit. Faktor itu akan jadi satu-satunya angka di seluruh
- * produk ini yang tidak bisa ditelusuri ke pengukuran mana pun, dan ia akan
- * tampil dengan kepercayaan diri yang sama dengan angka yang diukur.
+ * SEPEDA menggantikan tempat motor sejak 11 Sep 2026, atas permintaan pemilik
+ * repo. Sebelumnya layar menawarkan "Motor" yang meminjam jaringan MOBIL dan
+ * cuma menampilkan jarak, karena waktu tempuh motor tidak pernah diukur siapa
+ * pun. Sepeda punya profil ORS-nya sendiri, jadi jaringan DAN waktunya diukur -
+ * dan dengan itu `ModaTampil` beserta pemetaan moda->profilnya dicabut: setiap
+ * moda di layar sekarang persis satu profil tersimpan, tanpa perkecualian.
  */
-export type ModaTampil = ProfilRute | 'motorcycle'
+export type ProfilRute = 'foot-walking' | 'driving-car' | 'cycling-regular'
 
-/** Profil tersimpan yang dipakai sebuah moda saat meminta rutenya. */
-export function profilUntukModa(m: ModaTampil): ProfilRute {
-  return m === 'motorcycle' ? 'driving-car' : m
-}
+/** Urutan tampil di tombol moda. Satu daftar, dipakai panel dan peta. */
+export const URUTAN_PROFIL: readonly ProfilRute[] = ['foot-walking', 'driving-car', 'cycling-regular']
 
 export interface RuteJalan {
   urutan: number

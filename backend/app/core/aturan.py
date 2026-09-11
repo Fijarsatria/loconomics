@@ -407,7 +407,7 @@ PENJELASAN_KUADRAN_EN: dict[str, str] = {
 
 LABEL_KUADRAN_EN: dict[str, str] = {
     "HIDDEN_GEM": "Hidden Gem",
-    "PEMENANG_JELAS": "Safe Bet",
+    "PEMENANG_JELAS": "Safe",
     "JEBAKAN_GENGSI": "Prestige Trap",
     "HINDARI": "Avoid",
 }
@@ -672,6 +672,7 @@ KALIMAT: dict[str, tuple[str, str]] = {
     ),
     "simpul_cara_kaki": ("jalan kaki", "on foot"),
     "simpul_cara_mobil": ("berkendara", "by car"),
+    "simpul_cara_sepeda": ("bersepeda", "by bike"),
     "simpul_lurus": (
         "Garis lurus ke {nama}. Rute {cara} yang sebenarnya lebih panjang karena "
         "mengikuti jalan - heksagon ini belum dirutekan untuk profil itu.",

@@ -72,8 +72,7 @@ import {
 } from '../config'
 import { api } from '../lib/api'
 import { jarakSingkat } from '../lib/format'
-import { profilUntukModa } from '../types'
-import type { KonteksSimpul, PropertiHeksagon, RuteJalan, SimpulTransit, ModaTampil } from '../types'
+import type { KonteksSimpul, PropertiHeksagon, ProfilRute, RuteJalan, SimpulTransit } from '../types'
 import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 
 const SUMBER = 'heksagon'
@@ -795,7 +794,7 @@ interface Props {
    * dan petanya yang menggambar. Dua tempat, satu nilai - dan nilai yang
    * disalin ke dua tempat adalah nilai yang suatu saat berselisih.
    */
-  profilRute?: ModaTampil
+  profilRute?: ProfilRute
   onMuat: (n: number) => void
   /**
    * Layar pembuka sudah menyingkir?
@@ -1867,10 +1866,14 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               18, 12.8,
             ],
             'line-opacity': 0.9,
+            // Sepeda: kapsul yang sama dengan garis utamanya, dibagi 1,35 -
+            // alasan yang persis sama dengan titik jalan kaki di atas.
             'line-dasharray': [
               'case',
               ['==', ['get', 'profil'], 'driving-car'],
               ['literal', [1, 0]],
+              ['==', ['get', 'profil'], 'cycling-regular'],
+              ['literal', [1.04, 1.78]],
               ['literal', [0, 1.63]],
             ],
           },
@@ -1951,10 +1954,19 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             // tikungan - tempat titik-titiknya merapat lagi - mereka menyatu
             // jadi gumpalan. 2,2x menyisakan satu diameter penuh di antaranya,
             // jarak yang dipakai peta jalan kaki di mana-mana.
+            //
+            // SEPEDA = KAPSUL BERDERET (11 Sep 2026). Moda ketiga butuh pola
+            // ketiga, dan pola itu harus terbaca beda dari keduanya tanpa
+            // bantuan warna. Dash 1,4x lebar ditambah tutup bulat jadi kapsul
+            // sepanjang 2,4x lebar; celah 2,4x menyisakan 1,4x lebar kosong
+            // di antaranya. Lebih panjang daripada titik, jelas terputus
+            // dibanding garis padat.
             'line-dasharray': [
               'case',
               ['==', ['get', 'profil'], 'driving-car'],
               ['literal', [1, 0]],
+              ['==', ['get', 'profil'], 'cycling-regular'],
+              ['literal', [1.4, 2.4]],
               ['literal', [0, 2.2]],
             ],
           },
@@ -2257,9 +2269,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // satu waktu - dan itu yang memaksa jawaban yang datang terlambat dibuang.
   const [konteks, setKonteks] = useState<Map<string, KonteksSimpul>>(new Map())
   const dimintaRef = useRef(new Set<string>())
-  /** Profil yang BENAR-BENAR diminta. Motor menumpang jalur mobil, dan dua
-   *  kunci berbeda untuk satu jawaban yang sama cuma menggandakan permintaan. */
-  const profilNyata = profilUntukModa(profilRute)
+  /** Profil yang diminta. Namanya sisa masa ketika moda "Motor" menumpang
+   *  jalur mobil; sejak sepeda menggantikannya, tiap moda persis satu profil. */
+  const profilNyata = profilRute
   const kunciKt = useCallback((h: string) => `${profilNyata}|${h}`, [profilNyata])
   /** Komponennya masih terpasang. Lihat alasannya di efek pengambilan di bawah.
    *

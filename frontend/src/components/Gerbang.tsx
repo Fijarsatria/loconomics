@@ -52,7 +52,7 @@ import { IDENTITAS, KUADRAN, PENDIRI, URUTAN_KUADRAN } from '../config'
 import { PapanNama } from './primitif'
 import { TombolAkun, useSesi } from './Akun'
 import BentoKeputusan, { type PilihanKawasan } from './GerbangPeta'
-import { KARTU_GERBANG } from '../lib/kartu-gerbang'
+import { KARTU_GERBANG, potretUntukTema } from '../lib/kartu-gerbang'
 import { SUMBER } from '../lib/ringkasan-data'
 import { SakelarBahasa, SakelarTema, useBahasa, useNamaZona, useTeks, useTema } from '../lib/bahasa'
 
@@ -150,8 +150,8 @@ const K = {
         },
         {
           nama: 'Loconomics Route',
-          isi: 'Rute jalan kaki dan mobil sungguhan ke simpul terdekat, lengkap dengan kawasan jangkau 5 sampai 60 menit.',
-          tanda: 'Jalan kaki · mobil · motor',
+          isi: 'Rute jalan kaki, mobil, dan sepeda sungguhan ke simpul terdekat, lengkap dengan kawasan jangkau 5 sampai 60 menit.',
+          tanda: 'Jalan kaki · mobil · sepeda',
         },
         {
           nama: 'Loconomics Feature',
@@ -168,7 +168,7 @@ const K = {
         keyakinan: 'Keyakinan',
         sedang: 'Sedang',
         basemap: ['Terang', 'Dasar', 'Jalan', 'Gelap'],
-        moda: ['Jalan kaki', 'Mobil', 'Motor'],
+        moda: ['Jalan kaki', 'Mobil', 'Sepeda'],
         banding: 'Bandingkan',
         barisBanding: ['Skor', 'Sewa', 'Pesaing'],
         lokasiA: 'Lokasi A',
@@ -275,8 +275,8 @@ const K = {
         },
         {
           nama: 'Loconomics Route',
-          isi: 'Real walking and driving routes to the nearest hub, with 5-to-60-minute reach areas.',
-          tanda: 'Walk · drive · ride',
+          isi: 'Real walking, driving, and cycling routes to the nearest hub, with 5-to-60-minute reach areas.',
+          tanda: 'Walk · drive · cycle',
         },
         {
           nama: 'Loconomics Feature',
@@ -293,7 +293,7 @@ const K = {
         keyakinan: 'Confidence',
         sedang: 'Medium',
         basemap: ['Light', 'Basic', 'Street', 'Dark'],
-        moda: ['Walking', 'Driving', 'Riding'],
+        moda: ['Walking', 'Driving', 'Cycling'],
         banding: 'Compare',
         barisBanding: ['Score', 'Rent', 'Rivals'],
         lokasiA: 'Location A',
@@ -1580,12 +1580,117 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         },
       )
 
+      // --- Kosakata gerak bersama: MASALAH dan SOLUSI ------------------------
+      //
+      // Diminta pemilik repo, 11 Sep 2026: "semuanya dikasih animasi/transisi
+      // kemunculan yang keren dan mewah/elegan" untuk bagian Latar belakang,
+      // dan Solusi "dipermewah". Sebelumnya di bagian Latar belakang cuma tiga
+      // baris masalah yang bergerak; judul, paragraf pembuka, garis pengantar,
+      // dan panel penutupnya sudah berdiri diam sebelum orang sampai.
+      //
+      // YANG MEMBUATNYA TERBACA MEWAH, dan tidak satu pun berupa efek tambahan:
+      //
+      //   1. KURVA. `expo.out` - berangkat cepat, lalu mendarat sangat panjang.
+      //      Benda murah berhenti mendadak; benda mahal melambat lama.
+      //   2. TOPENG. Kata dan baris naik dari balik tepi yang tidak terlihat,
+      //      bukan memudar di tempat. Mata membacanya sebagai huruf yang
+      //      DIBUKA, seperti cetakan yang diangkat dari kertasnya.
+      //   3. URUTAN. Tidak ada dua benda yang tiba bersamaan: garis dulu, label,
+      //      judul kata demi kata, lalu paragrafnya baris demi baris.
+      //
+      // Semua gerak tetap HANYA `transform`, `opacity`, dan `clip-path` - kepala
+      // berkas ini. Dan semuanya SEKALI JALAN: tidak ada scrub, jadi tidak ada
+      // yang dilukis ulang tiap bingkai selama orang menggulir.
+      const MEWAH = 'expo.out'
+
+      /**
+       * Kata atau baris yang naik dari balik topengnya sendiri.
+       *
+       * `autoSplit` + tween yang DIKEMBALIKAN dari `onSplit`: saat font selesai
+       * dimuat atau lebar berubah, SplitText memecah ulang dan GSAP memutar
+       * ulang tween-nya pada potongan yang baru - bukan menganimasikan baris
+       * lama yang sudah tidak ada di DOM.
+       */
+      const pecahNaik = (pilih: string, jenis: 'words' | 'lines', mulai: string) => {
+        gsap.utils.toArray<HTMLElement>(pilih).forEach((el) => {
+          const jeda = Number(el.dataset.jeda ?? 0)
+          const pecah = SplitText.create(el, {
+            type: jenis,
+            mask: jenis,
+            // Kelas dipasang supaya TOPENGNYA bisa diberi ruang di index.css
+            // (`.g-kata-mask`, `.g-pecah-mask`): topeng setinggi kotak baris
+            // memotong ekor huruf p, y, g - "profitable" kehilangan kakinya.
+            wordsClass: 'g-kata',
+            linesClass: 'g-pecah',
+            autoSplit: true,
+            onSplit: (diri) =>
+              gsap.from(jenis === 'words' ? diri.words : diri.lines, {
+                yPercent: jenis === 'words' ? 118 : 110,
+                // Kata-kata judul sedikit MIRING lalu tegak saat mendarat -
+                // dua derajat, cukup untuk terasa seperti huruf yang diletakkan,
+                // tidak cukup untuk terbaca sebagai huruf yang jatuh.
+                rotate: jenis === 'words' ? 2.5 : 0,
+                transformOrigin: '0% 100%',
+                opacity: 0,
+                duration: jenis === 'words' ? 1.3 : 1.15,
+                stagger: jenis === 'words' ? 0.055 : 0.09,
+                delay: jeda,
+                ease: MEWAH,
+                scrollTrigger: { scroller, trigger: el, start: mulai },
+              }),
+          })
+          pembersih.push(() => pecah.revert())
+        })
+      }
+      pecahNaik('.g-pecah-kata', 'words', 'top 86%')
+      pecahNaik('.g-pecah-baris', 'lines', 'top 88%')
+
+      // Label kecil yang tersapu terbuka. Dari kiri untuk yang rata kiri, dari
+      // TENGAH untuk yang rata tengah - label di tengah yang tersapu dari kiri
+      // terlihat seperti kalimat yang sedang diketik, bukan yang dibuka.
+      gsap.utils.toArray<HTMLElement>('.g-sapu-kiri, .g-sapu-tengah').forEach((el) => {
+        gsap.fromTo(
+          el,
+          { clipPath: el.classList.contains('g-sapu-tengah') ? 'inset(0% 50% 0% 50%)' : 'inset(0% 100% 0% 0%)' },
+          {
+            clipPath: 'inset(0% 0% 0% 0%)',
+            duration: 1.1,
+            ease: 'expo.inOut',
+            scrollTrigger: { scroller, trigger: el, start: 'top 90%' },
+          },
+        )
+      })
+
+      // Garis rambut yang TUMBUH, mendatar dan tegak. Satu-satunya benda yang
+      // bergerak pelan-cepat-pelan (`inOut`): garis yang melesat lalu mengerem
+      // terbaca sebagai benda yang ditarik, bukan dilempar.
+      gsap.utils.toArray<HTMLElement>('.g-garis-tumbuh').forEach((el) => {
+        gsap.from(el, {
+          scaleX: 0,
+          duration: 1.6,
+          ease: 'expo.inOut',
+          scrollTrigger: { scroller, trigger: el, start: 'top 90%' },
+        })
+      })
+      gsap.utils.toArray<HTMLElement>('.g-garis-tegak').forEach((el) => {
+        gsap.from(el, {
+          scaleY: 0,
+          duration: 1.3,
+          ease: 'expo.inOut',
+          scrollTrigger: { scroller, trigger: el, start: 'top 85%' },
+        })
+      })
+
       // --- BERGANTIAN: tiga masalah, satu per satu -------------------------
       //
       // Tiap baris masuk DARI SISI GAMBARNYA, dan sisinya berselang - jadi
       // arah masuknya sendiri yang memberi tahu bahwa ini masalah berikutnya,
-      // bukan lanjutan dari yang barusan. Katanya menyusul 0,12 dtk sesudah
-      // pelatnya; dua benda yang datang bersamaan terbaca sebagai satu benda.
+      // bukan lanjutan dari yang barusan.
+      //
+      // Pelatnya kini TERBUKA seperti tirai dari sisinya (clip-path), bukan
+      // cuma meluncur sambil memudar, dan gambar di dalamnya mendarat dari
+      // sedikit lebih besar - dua gerak yang berlawanan arah, jadi yang
+      // terbaca adalah JENDELA yang dibuka, bukan kartu yang digeser.
       //
       // TANPA hanyut pada pelatnya, dan itu keputusan yang diukur, bukan selera.
       //
@@ -1595,41 +1700,125 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
       // memaksa seluruh latar itu DILUKIS ULANG bersama SVG di atasnya.
       // Terukur di build produksi, gulir sungguhan 55px/bingkai: bingkai median
       // 48,2 ms dengan hanyut, 40,4 ms tanpa - hampir seluruh ongkos tiga
-      // pelat ini ada di sana, untuk gerakan setinggi sepuluh piksel.
+      // pelat ini ada di sana, untuk gerakan setinggi sepuluh piksel. Tween
+      // sekali jalan di bawah ini tidak membayar ongkos itu: ia selesai dalam
+      // satu setengah detik dan tidak disetir gulir.
       gsap.utils.toArray<HTMLElement>('.g-mas-baris').forEach((el) => {
         const kiri = el.dataset.sisi === 'kiri'
         const panggung = el.querySelector('.g-mas-panggung')
-        const kata = el.querySelector('.g-mas-kata')
-        const tl = gsap.timeline({ scrollTrigger: { scroller, trigger: el, start: 'top 84%' } })
-        if (panggung) {
-          tl.from(
-            panggung,
-            lebarBesar
-              ? { x: kiri ? -50 : 50, opacity: 0, duration: 0.95, ease: 'power3.out' }
-              : { y: 32, opacity: 0, duration: 0.9, ease: 'power3.out' },
+        const plat = el.querySelector('.g-mas-plat')
+        const gambar = plat?.querySelector('svg')
+        const tanda = el.querySelector('.g-mas-tanda')
+        const kepala = el.querySelector('.g-mas-kepala')
+        const isi = el.querySelector('.g-mas-isi')
+        const tl = gsap.timeline({ scrollTrigger: { scroller, trigger: el, start: 'top 80%' } })
+        if (plat) {
+          tl.fromTo(
+            plat,
+            { clipPath: kiri ? 'inset(0% 100% 0% 0% round 18px)' : 'inset(0% 0% 0% 100% round 18px)' },
+            {
+              clipPath: 'inset(0% 0% 0% 0% round 18px)',
+              duration: 1.35,
+              ease: 'expo.inOut',
+              // Dicabut sesudah selesai: `inset(0)` tetap memotong apa pun yang
+              // keluar sepiksel dari tepinya, termasuk bayangan yang nanti
+              // ditambahkan siapa pun ke pelat ini.
+              clearProps: 'clipPath',
+            },
             0,
           )
         }
-        if (kata) tl.from(kata, { y: 26, opacity: 0, duration: 0.85, ease: 'power3.out' }, 0.12)
+        if (panggung) {
+          tl.from(
+            panggung,
+            lebarBesar ? { x: kiri ? -36 : 36, duration: 1.5, ease: MEWAH } : { y: 30, duration: 1.3, ease: MEWAH },
+            0,
+          )
+        }
+        if (gambar) tl.from(gambar, { scale: 1.12, opacity: 0, duration: 1.6, ease: MEWAH }, 0.35)
+        if (tanda) {
+          tl.fromTo(
+            tanda,
+            { clipPath: 'inset(0% 100% 0% 0%)' },
+            { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.9, ease: 'expo.inOut' },
+            0.3,
+          )
+        }
+        if (kepala) tl.from(kepala, { y: 34, opacity: 0, duration: 1.2, ease: MEWAH }, 0.45)
+        if (isi) tl.from(isi, { y: 24, opacity: 0, duration: 1.2, ease: MEWAH }, 0.6)
       })
 
-      // --- MENYAPU: judul Solusi terungkap kiri ke kanan, kartu mekar dari tengah
-      gsap.utils.toArray<HTMLElement>('.g-sapu').forEach((el) => {
-        gsap.from(el, {
-          clipPath: 'inset(0% 100% 0% 0%)',
-          duration: 1.1,
-          ease: 'power4.inOut',
-          scrollTrigger: { scroller, trigger: el, start: 'top 85%' },
-        })
+      // Panel "satu kawasan, dua cara melihat" menutup bagian: TERBUKA DARI
+      // BAWAH, dan naik sedikit - satu-satunya benda di bagian ini yang dibuka
+      // ke atas, karena ia satu-satunya yang merangkum, bukan menambah.
+      gsap.utils.toArray<HTMLElement>('.g-mas-kontras').forEach((el) => {
+        gsap.fromTo(
+          el,
+          { clipPath: 'inset(100% 0% 0% 0% round 22px)', y: 46 },
+          {
+            clipPath: 'inset(0% 0% 0% 0% round 22px)',
+            y: 0,
+            duration: 1.5,
+            ease: 'expo.out',
+            clearProps: 'clipPath',
+            scrollTrigger: { scroller, trigger: el, start: 'top 84%' },
+          },
+        )
       })
-      gsap.from('.g-bento', {
-        scale: 0.86,
-        opacity: 0,
-        duration: 0.9,
-        ease: 'power3.out',
-        stagger: { each: 0.07, from: 'center', grid: 'auto' },
-        scrollTrigger: { scroller, trigger: '.g-bento-grid', start: 'top 82%' },
-      })
+
+      // --- SOLUSI: kartu TERBUKA dari tengah susunan, petanya MENDARAT -------
+      //
+      // Tiga gerak per kartu, berundak, dan ketiganya berbeda jenis:
+      //   bingkai  terbuka dari potongan yang lebih kecil ke ukuran penuhnya
+      //   peta     mendarat dari perbesaran 1,3x - seperti kamera yang turun
+      //   kata     naik sesudah bingkainya cukup lebar untuk menampungnya
+      // lalu satu kilau menyapu permukaannya SEKALI.
+      //
+      // Undakannya dari TENGAH susunan ke tepinya (`from: 'center'`), sama
+      // dengan heksagon yang mekar dari pusat kawasan di peta sungguhan.
+      const bento = gsap.utils.toArray<HTMLElement>('.g-bento')
+      if (bento.length) {
+        const undak = { each: 0.09, from: 'center', grid: 'auto' } as const
+        const tl = gsap.timeline({ scrollTrigger: { scroller, trigger: '.g-bento-grid', start: 'top 80%' } })
+        tl.fromTo(
+          bento,
+          { clipPath: 'inset(9% 7% 9% 7% round 16px)', y: 70, opacity: 0 },
+          {
+            clipPath: 'inset(0% 0% 0% 0% round 16px)',
+            y: 0,
+            opacity: 1,
+            duration: 1.45,
+            ease: MEWAH,
+            stagger: undak,
+            // Tanpa dicabut, `inset(0)` memotong cincin 1 px yang dipasang
+            // `:hover` di luar tepi kartu - kartunya kehilangan sorotnya.
+            clearProps: 'clipPath',
+          },
+          0,
+        )
+        const dalam = (pilih: string) => bento.flatMap((b) => Array.from(b.querySelectorAll<HTMLElement>(pilih)))
+        tl.from(dalam('.g-bento-masuk'), { scale: 1.3, duration: 2, ease: MEWAH, stagger: undak }, 0.05)
+        tl.from(
+          dalam('.g-bento-teks > *'),
+          { y: 22, opacity: 0, duration: 1.1, ease: MEWAH, stagger: { each: 0.05, from: 'start' } },
+          0.3,
+        )
+        tl.fromTo(
+          dalam('.g-bento-kilau'),
+          { xPercent: -120, opacity: 0 },
+          {
+            keyframes: [
+              { opacity: 1, duration: 0.25 },
+              { xPercent: 260, duration: 1.1 },
+              { opacity: 0, duration: 0.3 },
+            ],
+            ease: 'power2.inOut',
+            stagger: undak,
+          },
+          0.55,
+        )
+        tl.from('.g-bento-catatan', { y: 16, opacity: 0, duration: 1.1, ease: MEWAH }, 0.9)
+      }
 
       // --- MERANGKAI: ekosistem ---------------------------------------------
       //
@@ -1847,7 +2036,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         <>
           <span
             className={`${sorot ? 'g-catalyst-teks' : ''} ${
-              ukuran === 'besar' ? 'text-[15px]' : 'text-[13.5px]'
+              ukuran === 'besar' ? 'text-[15px]' : 'text-[14.5px]'
             }`}
           >
             {teks.masuk}
@@ -1868,16 +2057,38 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           `sticky`, bukan `fixed`: `fixed` di dalam wadah yang punya
           backdrop-filter di salah satu leluhurnya adalah jebakan yang sudah
           pernah kena di repo ini. */}
-      <div className="sticky top-0 z-50 px-4 pt-4 sm:px-6">
+      {/* DIPERBESAR 11 Sep 2026, permintaan pemilik repo ("perbesar gitu nah
+          bar atas nya, biar bagus"). Tingginya naik dari ~54 px ke ~66 px, dan
+          lebarnya ikut kisi bento di bawahnya (76rem) - bilah yang lebih sempit
+          daripada isi halamannya terbaca sebagai benda yang mengambang di luar
+          susunan. Tanda heksagon di depan nama bukan hiasan: itu satuan data
+          produk ini, bentuk yang sama dengan simpul tulang punggung Ekosistem.
+
+          Tinggi bilah + jarak atasnya = `-mt-[5.4rem]` di hero. Keduanya WAJIB
+          berubah bersama: kalau tidak, hero berhenti tepat di bawah bilah dan
+          sarang heksagonnya meninggalkan pita polos di atasnya. */}
+      <div className="sticky top-0 z-50 px-4 pt-4 sm:px-6 sm:pt-5">
         <nav
-          className={`mx-auto flex max-w-[72rem] items-center gap-2 rounded-full py-2 pl-4 pr-2 transition-colors duration-500 ease-liquid sm:gap-3 sm:pl-5 ${
+          className={`mx-auto flex max-w-[76rem] items-center gap-2 rounded-full py-2 pl-5 pr-2 transition-colors duration-500 ease-liquid sm:gap-3 sm:py-2.5 sm:pl-7 sm:pr-2.5 ${
             navGelap ? 'g-nav-gelap' : 'g-nav'
           }`}
         >
           <button
             onClick={keAtas}
-            className={`papan shrink-0 cursor-pointer text-[15px] tracking-[0.02em] ${navGelap ? 'text-white' : ''}`}
+            className={`papan flex shrink-0 cursor-pointer items-center gap-2.5 text-[16px] tracking-[0.02em] sm:text-[18px] ${
+              navGelap ? 'text-white' : ''
+            }`}
           >
+            <svg viewBox="-50 -55 100 110" className="h-[18px] w-[16px] sm:h-5 sm:w-[18px]" aria-hidden>
+              <polygon
+                points={jalurHeks(44)}
+                fill="none"
+                stroke={navGelap ? '#7cf7dd' : 'var(--g-teal)'}
+                strokeWidth="11"
+                strokeLinejoin="round"
+              />
+              <circle r="11" fill={navGelap ? '#7cf7dd' : 'var(--g-teal)'} />
+            </svg>
             Loconomics
           </button>
           {/* Di bawah `sm` tombol "Masuk ke peta" di bilah ini disembunyikan:
@@ -1889,10 +2100,10 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
             {/* Sakelar tema TIDAK lagi di sini. Ia pindah ke tengah bawah hero,
                 atas permintaan pemilik repo - dan bilah ini memang sudah
                 memuat empat benda pada 640px. */}
-            <SakelarBahasa gelap={navGelap} />
+            <SakelarBahasa gelap={navGelap} kelas="sm:text-[12.5px] sm:[&>button]:px-3 sm:[&>button]:py-1.5" />
             <TombolAkun varian="gerbang" />
             <span className="hidden sm:inline-flex">
-              {tombolMasuk('px-4 py-2', 'kecil', Boolean(akun))}
+              {tombolMasuk('px-5 py-2.5', 'kecil', Boolean(akun))}
             </span>
           </div>
         </nav>
@@ -1901,7 +2112,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
       {/* ================= 1 · HERO (dipatok) ============================= */}
       <section
         id="hero"
-        className="g-hero sticky top-0 z-0 -mt-[4.5rem] flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-6 pb-16 pt-24 text-center"
+        className="g-hero sticky top-0 z-0 -mt-[4.5rem] flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-6 pb-16 pt-24 text-center sm:-mt-[5.4rem]"
       >
         <LatarHero />
         <div
@@ -2003,21 +2214,32 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
             {/* Pembuka EDITORIAL: judul kiri, paragraf kanan. Ekosistem membuka
                 di tengah; dua bagian berurutan yang membuka dengan susunan yang
                 sama terbaca sebagai satu bagian yang panjang. */}
-            <div className="grid gap-x-14 gap-y-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-end">
+            <div className="g-mas-buka grid gap-x-14 gap-y-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-end">
               <div>
-                <p className="eyebrow mb-5 text-[color:var(--g-ink-3)]">{teks.masalah.eyebrow}</p>
-                <h2 className="judul-bagian text-[clamp(2rem,4.6vw,3.4rem)]">{teks.masalah.judul}</h2>
+                <p className="g-sapu-kiri eyebrow mb-5 text-[color:var(--g-ink-3)]">{teks.masalah.eyebrow}</p>
+                <h2 className="g-pecah-kata judul-bagian text-[clamp(2rem,4.6vw,3.4rem)]">{teks.masalah.judul}</h2>
               </div>
-              <p className="max-w-[34rem] text-[15.5px] leading-relaxed text-[color:var(--g-ink-2)] lg:pb-2">
+              <p
+                data-jeda="0.3"
+                className="g-pecah-baris max-w-[34rem] text-[15.5px] leading-relaxed text-[color:var(--g-ink-2)] lg:pb-2"
+              >
                 {teks.masalah.isi}
               </p>
             </div>
 
             {/* Pengantar ke ketiga baris. Garis rambut penuh lebar sebagai
                 batas - bukan judul kedua, yang akan jadi tesis kedua untuk satu
-                gagasan (kesalahan yang persis pernah dibuat halaman ini). */}
-            <div className="mt-14 flex items-center gap-4 border-t border-[color:var(--g-garis-halus-2)] pt-5 sm:mt-20">
-              <span className="eyebrow text-[color:var(--g-ink-4)]">{teks.masalah.antar}</span>
+                gagasan (kesalahan yang persis pernah dibuat halaman ini).
+
+                Garisnya ELEMEN, bukan `border-top`: border tidak bisa tumbuh,
+                dan yang diminta di bagian ini justru setiap bendanya punya
+                kemunculannya sendiri. */}
+            <div className="g-mas-antar relative mt-14 flex items-center gap-4 pt-5 sm:mt-20">
+              <span
+                className="g-garis-tumbuh absolute inset-x-0 top-0 block h-px origin-left bg-[color:var(--g-garis-halus-2)]"
+                aria-hidden
+              />
+              <span className="g-sapu-kiri eyebrow text-[color:var(--g-ink-4)]">{teks.masalah.antar}</span>
             </div>
 
             {/* Tiga baris, berselang kiri-kanan. */}
@@ -2034,11 +2256,11 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                       <PelatMasalah i={i} t={teks.masalah.alat} />
                     </figure>
                     <div className={`g-mas-kata ${kiri ? 'lg:order-2 lg:pl-6' : 'lg:order-1 lg:pr-6'}`}>
-                      <p className="eyebrow mb-3 text-[color:var(--g-ink-4)]">{butir.tanda}</p>
-                      <h3 className="judul-anak text-[clamp(1.22rem,2.1vw,1.7rem)] leading-tight text-[color:var(--g-ink)]">
+                      <p className="g-mas-tanda eyebrow mb-3 text-[color:var(--g-ink-4)]">{butir.tanda}</p>
+                      <h3 className="g-mas-kepala judul-anak text-[clamp(1.22rem,2.1vw,1.7rem)] leading-tight text-[color:var(--g-ink)]">
                         {butir.kepala}
                       </h3>
-                      <p className="mt-3.5 max-w-[30rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+                      <p className="g-mas-isi mt-3.5 max-w-[30rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
                         {butir.isi}
                       </p>
                     </div>
@@ -2062,30 +2284,54 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                 layar dan yang dibaca mata boleh berbeda, dan di layar sempit
                 gambarnya memang harus datang lebih dulu seperti tiga baris di
                 atasnya. */}
-            <div className="mt-8 grid items-center gap-10 border-t border-[color:var(--g-garis-halus-2)] pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-14 sm:mt-12">
-              <div className="g-mas-panggung lg:order-2">
+            <div className="g-mas-tutup relative mt-8 grid items-center gap-10 pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-14 sm:mt-12">
+              <span
+                className="g-garis-tumbuh absolute inset-x-0 top-0 block h-px origin-left bg-[color:var(--g-garis-halus-2)]"
+                aria-hidden
+              />
+              <div className="g-mas-panggung g-mas-kontras lg:order-2">
                 <KontrasKawasan />
               </div>
-              <p className="max-w-[32rem] border-l-2 border-[color:var(--g-teal)]/45 pl-6 text-[clamp(1rem,1.6vw,1.2rem)] leading-relaxed text-[color:var(--g-ink)] lg:order-1">
-                {teks.masalah.penutup}
-              </p>
+              {/* Aksen kiri juga ELEMEN, bukan `border-l`, dengan alasan yang
+                  sama dengan garis di atas: ia tumbuh dari atas ke bawah
+                  sebelum kalimatnya naik. */}
+              <div className="relative max-w-[32rem] pl-6 lg:order-1">
+                <span
+                  className="g-garis-tegak absolute inset-y-0 left-0 block w-[2px] origin-top rounded-full bg-[color:var(--g-teal)]/45"
+                  aria-hidden
+                />
+                <p
+                  data-jeda="0.35"
+                  className="g-pecah-baris text-[clamp(1rem,1.6vw,1.2rem)] leading-relaxed text-[color:var(--g-ink)]"
+                >
+                  {teks.masalah.penutup}
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
         {/* ================= 3 · SOLUSI ================================== */}
-        <section id="solusi" className="relative px-6 py-40 sm:py-52">
+        {/* Latarnya TANDA SILANG berkisi - tanda registrasi lembar peta cetak,
+            tempat dua garis koordinat bertemu. Bagian ini berisi enam potret
+            peta, dan latar yang menyatakan "ini lembar peta" tanpa satu garis
+            jalan pun tidak berebut perhatian dengan peta sungguhan di atasnya.
+            Lihat `.g-latar-silang` di index.css. */}
+        <section id="solusi" className="g-latar-silang relative px-6 py-40 sm:py-52">
           <div className="mx-auto mb-12 max-w-[48rem] text-center">
-            <p className="g-sapu eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.solusi.eyebrow}</p>
-            <h2 className="g-sapu judul-bagian text-[clamp(1.5rem,2.8vw,2.35rem)]">{teks.solusi.judul}</h2>
-            <p className="g-sapu mx-auto mt-4 max-w-[38rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]">
+            <p className="g-sapu-tengah eyebrow mb-4 text-[color:var(--g-ink-3)]">{teks.solusi.eyebrow}</p>
+            <h2 className="g-pecah-kata judul-bagian text-[clamp(1.5rem,2.8vw,2.35rem)]">{teks.solusi.judul}</h2>
+            <p
+              data-jeda="0.35"
+              className="g-pecah-baris mx-auto mt-4 max-w-[38rem] text-[14.5px] leading-relaxed text-[color:var(--g-ink-2)]"
+            >
               {teks.solusi.isi}
             </p>
           </div>
 
           <BentoKeputusan onBuka={onMasuk} />
 
-          <p className="mx-auto mt-9 max-w-[44rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
+          <p className="g-bento-catatan mx-auto mt-9 max-w-[44rem] text-center text-[11.5px] leading-snug text-[color:var(--g-ink-4)]">
             {teks.solusi.catatan}
           </p>
         </section>
@@ -2116,6 +2362,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
             {teks.ekosistem.item.map((it, i) => {
               const kiri = i % 2 === 0
               const kartu = KARTU_GERBANG[i % KARTU_GERBANG.length]
+              const potret = potretUntukTema(kartu, tema)
               return (
                 <div
                   key={it.nama}
@@ -2148,7 +2395,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                   <figure className={`g-eko-media relative ${kiri ? 'lg:order-1' : 'lg:order-2'}`}>
                     <div className="g-eko-bingkai relative overflow-hidden rounded-[20px]">
                       <img
-                        src={`${import.meta.env.BASE_URL}kartu/${kartu.berkas}.webp`}
+                        src={`${import.meta.env.BASE_URL}kartu/${potret.berkas}.webp`}
                         alt=""
                         aria-hidden
                         width={kartu.lebar}
@@ -2168,7 +2415,7 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                         // dari ternary di dalam `style`. `brightness(0.24)` yang
                         // benar di halaman hitam mengubah kartunya jadi lubang
                         // hitam di halaman putih.
-                        data-gelap={kartu.gelap ? '1' : '0'}
+                        data-gelap={potret.gelap ? '1' : '0'}
                         className="g-eko-gambar block h-[16rem] w-full scale-[1.06] object-cover sm:h-[18.5rem]"
                       />
                       <span className="g-eko-scrim pointer-events-none absolute inset-0" aria-hidden />

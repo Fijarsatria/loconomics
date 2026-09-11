@@ -39,7 +39,7 @@ import type {
 } from '../types'
 import { useSesi } from './Akun'
 import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
-import { Badge, Glif, Kosong, Memuat, MemuatNama, Terkunci } from './primitif'
+import { Badge, Glif, Kosong, Memuat, MemuatNama, Terkunci, useTutupHalus } from './primitif'
 
 /**
  * Kalimat keempat alat berbayar ini, dua bahasa.
@@ -346,6 +346,7 @@ export function MenuKawasan({
     en: { n: (n: number) => `${n} areas` },
   })
   const [buka, setBuka] = useState(false)
+  const { tampil, menutup } = useTutupHalus(buka)
   const wadah = useRef<HTMLDivElement>(null)
 
   const dipilih = useMemo(
@@ -418,10 +419,11 @@ export function MenuKawasan({
         </svg>
       </button>
 
-      {buka && (
+      {tampil && (
         <div
           role="listbox"
           aria-label={tk.kawasan}
+          data-menutup={menutup ? '1' : undefined}
           className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[17rem] overflow-hidden rounded-md"
         >
           <div className="p-1.5">

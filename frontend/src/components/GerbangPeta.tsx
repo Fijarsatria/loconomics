@@ -52,8 +52,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 
 import { LAYER, type NamaLayer } from '../config'
-import { KARTU_GERBANG, type KartuGerbang } from '../lib/kartu-gerbang'
-import { useTeks, type Bahasa } from '../lib/bahasa'
+import { KARTU_BANDING, KARTU_GERBANG, potretUntukTema, type KartuGerbang } from '../lib/kartu-gerbang'
+import { useTema, useTeks, type Bahasa } from '../lib/bahasa'
 
 export interface PilihanKawasan {
   kawasan: string
@@ -183,18 +183,19 @@ const LABEL: Record<Bahasa, { buka: (k: string, l: string) => string; peta: (l: 
    `[data-tampil]` yang dipasang pengamat di bawah.
    ========================================================================== */
 
-/** Berapa cincin jarak dipakai mengundak kisi. Tujuh sudah terbaca sebagai gelombang. */
-/**
- * Perbesaran kedua peta di kartu komparasi.
+/*
+ * PERBESARAN CSS KARTU KOMPARASI DICABUT (11 Sep 2026).
  *
- * Kamera potretnya membingkai SELURUH heksagon satu kawasan, dan pada kartu
- * selebar 300 px itu membuat rute jalan kakinya - yang justru jadi alasan
- * kartu ini ada - tinggal beberapa piksel. 1,55 cukup untuk membuat garis
- * bertitiknya terbaca sebagai jalur, dan masih di bawah ambang tempat WebP
- * 620 px mulai terlihat lunak.
+ * Kartu itu dulu meminjam potret Harjamukti dan Manggarai milik kartu lain -
+ * kamera yang membingkai SELURUH kawasan - lalu memperbesarnya 1,55x di sini.
+ * Pemilik repo meminta dua hal yang tidak bisa dipenuhi cara itu: "lebih zoom
+ * lagi" (WebP 620 px sudah mulai lunak pada 1,55x) dan rute yang lebih panjang
+ * (rute heksagon teratas Harjamukti memang pendek). Sekarang keduanya punya
+ * potret sendiri, `KARTU_BANDING`, yang kameranya membingkai RUTE-nya dengan
+ * zoom yang sama untuk keduanya. Tidak ada satu piksel pun yang diperbesar.
  */
-const PERBESAR_BANDING = 1.55
 
+/** Berapa cincin jarak dipakai mengundak kisi. Tujuh sudah terbaca sebagai gelombang. */
 const N_CINCIN = 7
 
 /** Poligon dari satu pusat dan simpangan enam simpulnya. */
@@ -215,15 +216,28 @@ function poligon(bentuk: number[], x: number, y: number) {
  */
 function LapisanHeks({
   d,
+  gelap,
   jeda = 0,
   rute,
 }: {
   d: KartuGerbang
+  /** Basemap berkas yang SEDANG dipasang gelap. Lihat `potretUntukTema`. */
+  gelap: boolean
   jeda?: number
   /** Huruf penanda titik asal. Ada = rute jalan kakinya ikut digambar. */
   rute?: 'A' | 'B'
 }) {
   const s = d.sorot
+  /**
+   * Satuan ukuran garis dan penanda, dalam piksel GAMBAR.
+   *
+   * Potret komparasi 900 px dan tampil sekitar 460 px - separuh ukurannya -
+   * sementara angka garis di bawah ditulis untuk potret 620 px yang dulu
+   * diperbesar 1,55x, yaitu tampil hampir seukuran aslinya. Tanpa pengali ini
+   * penanda A dan B mengecil jadi titik tiga piksel.
+   */
+  const u = rute ? s.w / 460 : 1
+  const uGaris = rute ? 1.3 : 1
 
   /**
    * Kisi dipecah jadi tujuh CINCIN, bukan satu path tunggal maupun 108 simpul.
@@ -252,7 +266,7 @@ function LapisanHeks({
 
   // Garis kisi harus melawan basemapnya, sama alasannya dengan `GARIS_HEX` di
   // peta: garis gelap di atas basemap gelap tidak menggambar apa pun.
-  const garis = d.gelap ? 'rgba(233,244,240,0.5)' : 'rgba(16,33,28,0.42)'
+  const garis = gelap ? 'rgba(233,244,240,0.5)' : 'rgba(16,33,28,0.42)'
   /**
    * Cincin heksagon yang menjawab. WARNANYA LAWAN BASEMAP, bukan warna isinya.
    *
@@ -262,7 +276,7 @@ function LapisanHeks({
    * putih. Yang terlihat noda pucat, bukan heksagon yang dipilih. Isinya tetap
    * membawa datanya; cincinnya yang membuatnya terbaca sebagai "yang ini".
    */
-  const tepiJawab = d.gelap ? 'rgba(255,255,255,0.92)' : 'rgba(12,22,18,0.78)'
+  const tepiJawab = gelap ? 'rgba(255,255,255,0.92)' : 'rgba(12,22,18,0.78)'
 
   return (
     <svg
@@ -279,7 +293,7 @@ function LapisanHeks({
             d={jalur}
             fill="none"
             stroke={garis}
-            strokeWidth="0.9"
+            strokeWidth={0.9 * uGaris}
             style={{
               transformOrigin: `${s.cx}px ${s.cy}px`,
               animationDelay: `${(jeda + (i / N_CINCIN) * 0.62).toFixed(2)}s`,
@@ -294,10 +308,15 @@ function LapisanHeks({
           d={poligon(s.bentuk, h.x, h.y)}
           fill={h.c}
           stroke={tepiJawab}
-          strokeWidth="1.5"
+          strokeWidth={1.5 * uGaris}
           style={{
             transformOrigin: `${h.x}px ${h.y}px`,
             animationDelay: `${(jeda + 0.5 + i * 0.085).toFixed(2)}s`,
+            // Potret komparasi dipotret dari dekat, dan delapan belas heksagon
+            // seukuran itu pada 0,68 menutup seluruh jalannya dengan satu
+            // blok hijau - terlihat begitu di potret. Isinya diturunkan; tepi
+            // legapnya yang tetap menandai "yang ini".
+            ...(rute ? { fillOpacity: 0.36 } : null),
           }}
         />
       ))}
@@ -316,35 +335,41 @@ function LapisanHeks({
           kaki di peta: bayangan gelap yang juga bertitik di bawah titik
           terangnya, supaya titiknya terbaca di atas jalan maupun di atas atap. */}
       {rute && s.rute && (
-        <g className="g-heks-rute" style={{ animationDelay: `${(jeda + 1.1).toFixed(2)}s` }}>
+        <g
+          className="g-heks-rute"
+          data-lama="1"
+          style={{ animationDelay: `${(jeda + 1.1).toFixed(2)}s` }}
+        >
+          {/* Titik jalan kaki: dash NOL + tutup bulat. Celahnya ikut `u`, kalau
+              tidak titiknya berdempet jadi garis padat di potret yang besar. */}
           <path
             d={s.rute.d}
             fill="none"
             stroke="rgba(8,16,13,0.6)"
-            strokeWidth="4.6"
+            strokeWidth={4.6 * u}
             strokeLinecap="round"
-            strokeDasharray="0 6.4"
+            strokeDasharray={`0 ${6.4 * u}`}
           />
           <path
             d={s.rute.d}
             fill="none"
             stroke="#7cf7dd"
-            strokeWidth="3.3"
+            strokeWidth={3.3 * u}
             strokeLinecap="round"
-            strokeDasharray="0 8.9"
+            strokeDasharray={`0 ${8.9 * u}`}
           />
           {/* Simpul: cincin, bukan pin. Pin menandai tujuan yang dipilih; ini
               stasiun yang sudah ada di sana sebelum siapa pun memilih apa pun. */}
-          <circle cx={s.rute.bx} cy={s.rute.by} r="5" fill="rgba(8,16,13,0.8)" stroke="#e8f5f1" strokeWidth="1.6" />
-          <circle cx={s.rute.bx} cy={s.rute.by} r="1.7" fill="#e8f5f1" />
+          <circle cx={s.rute.bx} cy={s.rute.by} r={5 * u} fill="rgba(8,16,13,0.8)" stroke="#e8f5f1" strokeWidth={1.6 * u} />
+          <circle cx={s.rute.bx} cy={s.rute.by} r={1.7 * u} fill="#e8f5f1" />
           {/* Titik asal, berhuruf. A di peta kiri, B di kanan - huruf yang sama
               dipakai tabel komparasi di dalam aplikasinya. */}
-          <circle cx={s.rute.ax} cy={s.rute.ay} r="7.4" fill="#5bf3d3" stroke="rgba(8,16,13,0.75)" strokeWidth="1.4" />
+          <circle cx={s.rute.ax} cy={s.rute.ay} r={7.4 * u} fill="#5bf3d3" stroke="rgba(8,16,13,0.75)" strokeWidth={1.4 * u} />
           <text
             x={s.rute.ax}
-            y={s.rute.ay + 2.9}
+            y={s.rute.ay + 2.9 * u}
             textAnchor="middle"
-            fontSize="8.4"
+            fontSize={8.4 * u}
             fontWeight="700"
             fill="#08100d"
             style={{ fontFamily: 'inherit' }}
@@ -358,51 +383,27 @@ function LapisanHeks({
 }
 
 /** Potret layer + heksagonnya + atribusi. */
-function Potret({
-  d,
-  jeda = 0,
-  rute,
-  perbesar = 1,
-}: {
-  d: KartuGerbang
-  jeda?: number
-  rute?: 'A' | 'B'
-  /**
-   * Perbesaran optis kartu, dipakai kartu komparasi.
-   *
-   * GAMBAR DAN HEKSAGONNYA DISKALA BERSAMA, dalam satu pembungkus - bukan
-   * masing-masing. Keduanya menempati kotak yang sama persis (`inset-0`) dan
-   * `LapisanHeks` memakai viewBox seukuran WebP-nya, jadi satu `transform` di
-   * atas keduanya menjaga heksagon tetap duduk di petak yang benar. Menskala
-   * salah satunya saja akan menggeser seluruh kisi terhadap petanya, dan
-   * itu tidak akan pernah memunculkan galat - cuma heksagon yang meleset.
-   *
-   * Titik pusatnya BUKAN tengah gambar melainkan tengah RUTE-nya, kalau ada.
-   * Yang diminta pemilik repo justru rutenya terlihat, dan rute berangkat dari
-   * heksagon menuju stasiun - sering di tepi bingkai, tempat pembesaran dari
-   * tengah justru membuangnya keluar layar.
-   */
-  perbesar?: number
-}) {
+function Potret({ d, jeda = 0, rute }: { d: KartuGerbang; jeda?: number; rute?: 'A' | 'B' }) {
   const label = useTeks(LABEL)
-  const r = d.sorot.rute
-  const pusat =
-    perbesar === 1 || !r
-      ? undefined
-      : `${(((r.ax + r.bx) / 2) / d.sorot.w) * 100}% ${(((r.ay + r.by) / 2) / d.sorot.h) * 100}%`
+  const { tema } = useTema()
+  const { berkas, gelap } = potretUntukTema(d, tema)
   return (
     <>
-      <div
-        className="g-bento-media-isi absolute inset-0"
-        style={perbesar === 1 ? undefined : { transform: `scale(${perbesar})`, transformOrigin: pusat }}
-      >
+      {/* DUA pembungkus, dan masing-masing punya satu tugas:
+          `g-bento-masuk`     ditulis GSAP saat kartunya masuk (zoom mendarat)
+          `g-bento-media-isi` membawa masker bulu di tepinya
+          Menyatukannya membuat `transform` GSAP dan `mask-image` berbagi satu
+          elemen, dan elemen bermasker yang diskalakan menyeret maskernya ikut
+          membesar - tepi bulunya melebar persis selama animasi berjalan. */}
+      <div className="g-bento-masuk absolute inset-0">
+      <div className="g-bento-media-isi absolute inset-0">
       <img
         // `BASE_URL`, BUKAN garis miring di depan. Terbitan GitHub Pages
         // disajikan di /loconomics/, jadi jalur berakar seperti `/kartu/...`
         // menunjuk ke akar domain dan pulang 404 - keenam potret hilang tanpa
         // satu pun galat JavaScript. Terukur di terbitan hidup 9 Sep 2026.
         // Gaya basemap dan GeoJSON statis sudah memakai pola ini sejak awal.
-        src={`${import.meta.env.BASE_URL}kartu/${d.berkas}.webp`}
+        src={`${import.meta.env.BASE_URL}kartu/${berkas}.webp`}
         alt={label.peta(LAYER[d.layer].nama, d.kawasan)}
         /* Ukuran intrinsik ditulis supaya peramban menyediakan ruangnya sebelum
            berkasnya sampai — tanpa ini tata letak melompat saat tiap gambar
@@ -413,15 +414,22 @@ function Potret({
         loading="lazy"
         decoding="async"
         draggable={false}
+        data-gelap={gelap ? '1' : '0'}
         className="g-bento-gambar absolute inset-0 h-full w-full object-cover"
       />
-      <LapisanHeks d={d} jeda={jeda} rute={rute} />
+      <LapisanHeks d={d} gelap={gelap} jeda={jeda} rute={rute} />
+      </div>
       </div>
       {/* Atribusi ditulis sendiri: kontrol MapLibre tidak ikut terpotret, dan
           ketentuan A.3 tidak gugur cuma karena gambarnya statis. DI LUAR
-          pembungkus berskala: atribusi yang ikut diperbesar bisa terdorong
-          keluar bingkai, dan A.3 tidak mengenal alasan itu. */}
-      <span className="pointer-events-none absolute bottom-1.5 right-2.5 max-w-[70%] truncate text-[8.5px] text-white/40">
+          pembungkus yang dianimasikan: atribusi yang ikut diperbesar bisa
+          terdorong keluar bingkai, dan A.3 tidak mengenal alasan itu.
+          Warnanya ikut basemap BERKAS YANG DIPASANG - putih 40% di atas peta
+          terang yang tidak lagi diredupkan tidak terbaca sama sekali. */}
+      <span
+        data-gelap={gelap ? '1' : '0'}
+        className="g-atribusi pointer-events-none absolute bottom-1.5 right-2.5 max-w-[70%] truncate text-[8.5px]"
+      >
         {ATRIBUSI}
       </span>
     </>
@@ -459,8 +467,8 @@ function KartuKeputusan({
 }: {
   d: KartuGerbang
   k: Keputusan
-  /** Potret KEDUA, hanya untuk kartu komparasi. */
-  pembanding?: KartuGerbang
+  /** Kedua potret komparasi (A lalu B), hanya untuk kartu komparasi. */
+  pembanding?: readonly [KartuGerbang, KartuGerbang]
   onBuka: (p: PilihanKawasan) => void
 }) {
   const label = useTeks(LABEL)
@@ -487,21 +495,28 @@ function KartuKeputusan({
    * tentang membandingkan dua tempat sambil menunjukkan satu tempat. Sekarang
    * bentuknya sendiri yang mengatakannya, dan lapisan heksagonnya digeser
    * setengah siklus supaya yang kiri menyala lebih dulu.
+   *
+   * HANYA PETA KIRI yang dipudarkan, dan pudarnya tipis (11 Sep 2026). Dulu
+   * kedua peta memakai scrim samping yang sama - 68% lebar - padahal peta
+   * kanan tidak bersentuhan dengan teks mana pun. Separuh kiri peta kanan
+   * tertutup kabut putih tanpa alasan, dan separuh kiri peta kiri ikut
+   * termakan. Dilaporkan pemilik repo: "setengah kirinya itu kayak kemakan
+   * transisi warna putih/hitam".
    */
   const mediaBanding = pembanding && (
     <div className="relative flex min-h-[150px] flex-1 self-stretch overflow-hidden">
-      <div className="g-bento-media g-bento-media-samping relative min-w-0 flex-1 overflow-hidden">
-        <Potret d={d} rute="A" perbesar={PERBESAR_BANDING} />
+      <div className="g-bento-media g-bento-media-samping-tipis relative min-w-0 flex-1 overflow-hidden">
+        <Potret d={pembanding[0]} rute="A" />
       </div>
       <span className="w-px shrink-0 bg-[color:var(--g-kartu-tepi)]" aria-hidden />
-      <div className="g-bento-media g-bento-media-samping relative min-w-0 flex-1 overflow-hidden">
-        <Potret d={pembanding} jeda={2.1} rute="B" perbesar={PERBESAR_BANDING} />
+      <div className="g-bento-media relative min-w-0 flex-1 overflow-hidden">
+        <Potret d={pembanding[1]} jeda={2.1} rute="B" />
       </div>
     </div>
   )
 
   const teks = (
-    <div className="flex shrink-0 flex-col justify-center p-6 sm:p-7">
+    <div className="g-bento-teks flex shrink-0 flex-col justify-center p-6 sm:p-7">
       <Teks d={d} k={k} />
     </div>
   )
@@ -518,14 +533,17 @@ function KartuKeputusan({
     >
       {k.bentuk === 'belah' || k.bentuk === 'banding' ? (
         <>
+          {/* 31%, bukan 38%: kolom teks yang lebih sempit memberi kedua peta
+              komparasi ruang yang ia ambil, dan kalimatnya tetap muat tiga
+              baris. "Dibuat agak geser ke kiri", kata pemilik repo. */}
           <div
-            className={`flex flex-col justify-center p-6 sm:p-7 ${
-              k.bentuk === 'banding' ? 'sm:basis-[38%]' : 'sm:basis-[52%]'
+            className={`g-bento-teks flex flex-col justify-center p-6 sm:p-7 ${
+              k.bentuk === 'banding' ? 'sm:basis-[31%]' : 'sm:basis-[52%]'
             }`}
           >
             <Teks d={d} k={k} />
           </div>
-          {k.bentuk === 'banding' ? mediaBanding : media}
+          {k.bentuk === 'banding' ? (mediaBanding ?? media) : media}
         </>
       ) : k.bentuk === 'atas' ? (
         <>
@@ -538,6 +556,11 @@ function KartuKeputusan({
           {teks}
         </>
       )}
+      {/* Kilau yang menyapu SEKALI saat kartunya masuk - disetir GSAP di
+          Gerbang.tsx, bukan animasi CSS yang berulang. Cahaya yang lewat satu
+          kali terbaca sebagai permukaan yang baru dibuka; yang lewat terus
+          terbaca sebagai tombol yang minta diklik. */}
+      <span className="g-bento-kilau pointer-events-none absolute inset-y-0 left-0 w-[46%]" aria-hidden />
     </button>
   )
 }
@@ -580,17 +603,16 @@ export default function BentoKeputusan({ onBuka }: { onBuka: (p: PilihanKawasan)
   }, [])
 
   /**
-   * Pembanding kartu komparasi: potret kedua yang BUKAN dirinya sendiri.
+   * Kedua potret kartu komparasi, dari manifesnya SENDIRI (`KARTU_BANDING`).
    *
-   * `manggarai`, bukan `dukuh-atas`, dan sebabnya bukan selera. Dukuh Atas
-   * dipotret di atas basemap GELAP; Harjamukti di atas basemap terang. Di
-   * halaman hitam keduanya menyatu, di halaman PUTIH kartu itu jadi separuh
-   * peta terang bertemu separuh lubang hitam dengan sambungan tegas di
-   * tengahnya - persis yang dilaporkan pemilik repo. Manggarai dipotret dengan
-   * gaya `terang` yang sama, jadi keduanya terbaca sebagai dua peta yang
-   * sedang dibandingkan, bukan sebagai satu kartu yang rusak.
+   * Keduanya bergaya `terang` - alasan yang sama dengan pilihan `manggarai`
+   * sebelumnya: basemap yang berbeda terang di kedua sisi membuat kartunya
+   * terbaca sebagai satu kartu yang rusak, bukan dua peta yang dibandingkan.
+   * Kalau manifesnya belum memuat keduanya (skrip belum pernah dijalankan),
+   * kartu itu jatuh kembali ke satu potret biasa - bukan ke peta kosong.
    */
-  const pembanding = KARTU_GERBANG.find((k) => k.berkas === 'manggarai') ?? KARTU_GERBANG[0]
+  const pembanding =
+    KARTU_BANDING.length >= 2 ? ([KARTU_BANDING[0], KARTU_BANDING[1]] as const) : undefined
 
   return (
     // ENAM kolom, bukan tiga: kartu selebar setengah baris butuh 3, kolom

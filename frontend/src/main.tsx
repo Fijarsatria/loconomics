@@ -25,9 +25,9 @@ bangunkan()
 // dibaca, dan masuk dari halaman perkenalan tidak akan terbawa ke peta.
 // BahasaProvider di LUAR SesiProvider: pilihan bahasa tidak bergantung pada
 // siapa yang masuk, dan dialog masuk itu sendiri butuh membaca bahasanya.
-// TemaProvider di luar keduanya, dengan alasan yang sama sekaligus satu
-// tambahan: tirai pergantian temanya harus bisa menutupi SELURUH layar,
-// termasuk dialog yang di-portal ke <body>.
+// TemaProvider di luar keduanya, dengan alasan yang sama: tema tidak
+// bergantung pada bahasa maupun sesi, dan dialog yang di-portal ke <body> ikut
+// membacanya.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <TemaProvider>

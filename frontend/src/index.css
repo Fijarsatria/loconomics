@@ -442,13 +442,27 @@ td {
   color: var(--color-ink-3);
 }
 
+/* URUTANNYA WAJIB: `-webkit-backdrop-filter` DULU, baru `backdrop-filter`.
+   Di seluruh berkas ini, bukan cuma di sini.
+
+   Ditemukan 11 Sep 2026, dan sudah terjadi di terbitan publik entah sejak kapan.
+   Lightning CSS (pemampat CSS Tailwind v4) memperlakukan kedua baris sebagai
+   SATU properti, dan yang ditulis belakangan menang - jadi urutan
+   `backdrop-filter` lalu `-webkit-backdrop-filter` keluar di build produksi
+   sebagai `-webkit-backdrop-filter` SAJA. Chrome tidak mengenal awalan itu.
+   Hasilnya: seluruh panel kaca di peta tanpa buram sama sekali, dan label
+   basemap terbaca tajam MENEMBUS bilah atas dan panel samping. Terukur:
+   `getComputedStyle(header).backdropFilter` = "blur(26px) saturate(1.8)" di
+   dev server, "none" di `vite preview` dan di terbitan hidup. Dev server tidak
+   memampatkan CSS, jadi tidak pernah memperlihatkannya. Dijaga
+   `test_infra.py::test_backdrop_filter_berawalan_lebih_dulu`. */
 .kaca,
 .kaca-tebal {
   position: relative;
   isolation: isolate;
   background: color-mix(in srgb, var(--color-surface) 62%, transparent);
-  backdrop-filter: blur(26px) saturate(180%);
   -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid color-mix(in srgb, #ffffff 55%, transparent);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.75),
@@ -463,8 +477,8 @@ td {
    kontrasnya jatuh di bawah ambang yang bisa dibaca. */
 .kaca-tebal {
   background: color-mix(in srgb, var(--color-surface) 88%, transparent);
-  backdrop-filter: blur(30px) saturate(150%);
   -webkit-backdrop-filter: blur(30px) saturate(150%);
+  backdrop-filter: blur(30px) saturate(150%);
 }
 
 /* Kilau diagonal. Sangat tipis - kalau ia terlihat sebagai gradien, ia terlalu
@@ -1217,6 +1231,69 @@ input:focus-visible {
   transition: transform 620ms var(--ease-liquid);
 }
 
+/* Peredupan di atas HANYA untuk halaman gelap.
+   Ia ditulis untuk menahan peta putih supaya tidak menyilaukan di atas
+   halaman near-black - dan tetap berlaku sesudah tema terang ada, jadi di
+   halaman PUTIH kelima peta terang tampil kusam kelabu dan satu peta gelap
+   tampil hitam. Dilaporkan pemilik repo dengan potret: "di light mode itu
+   kayak gelap/redup gitu nah maps nya". Di halaman terang peta terang memang
+   sudah sewarna dengan halamannya; tidak ada yang perlu ditahan. Peta gelap
+   tidak pernah sampai ke sini - `potretUntukTema()` menukarnya dengan
+   kembaran terangnya. */
+.gerbang[data-tema='terang'] .g-bento-gambar {
+  filter: none;
+}
+
+/* Kilau yang menyapu kartu SEKALI saat masuk. Mulai tak terlihat di CSS, jadi
+   tanpa GSAP (gerak dikurangi) ia tidak pernah tampil sebagai pita diam. */
+.g-bento-kilau {
+  opacity: 0;
+  z-index: 2;
+  background: linear-gradient(
+    102deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.05) 30%,
+    rgb(255 255 255 / 0.16) 50%,
+    rgb(255 255 255 / 0.05) 70%,
+    transparent 100%
+  );
+}
+.gerbang[data-tema='terang'] .g-bento-kilau {
+  background: linear-gradient(
+    102deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.25) 30%,
+    rgb(255 255 255 / 0.62) 50%,
+    rgb(255 255 255 / 0.25) 70%,
+    transparent 100%
+  );
+}
+
+/* Topeng kata dan baris yang dipecah SplitText. Diberi ruang ke BAWAH lalu
+   ditarik kembali dengan margin negatif yang sama - ekor huruf p, y, dan g
+   tidak lagi terpotong tepi topeng yang setinggi kotak barisnya.
+   Bawah SAJA, bukan atas-bawah: topeng baris adalah blok yang bertetangga, dan
+   dua margin negatif yang bersentuhan TIDAK dijumlahkan melainkan diambil yang
+   terbesar - jadi pasangan atas-bawah menambah jarak antarbaris diam-diam. */
+.gerbang .g-kata-mask,
+.gerbang .g-pecah-mask {
+  padding-bottom: 0.16em;
+  margin-bottom: -0.16em;
+}
+
+/* Atribusi MAPID di pojok potret. Warnanya harus melawan PETA di belakangnya,
+   bukan halamannya: putih 40% cocok untuk peta yang diredupkan di halaman
+   gelap, dan hilang sama sekali di atas peta terang yang tidak diredupkan. */
+.g-atribusi {
+  color: rgb(255 255 255 / 0.42);
+}
+.gerbang[data-tema='terang'] .g-atribusi {
+  color: rgb(16 33 28 / 0.5);
+}
+.gerbang[data-tema='terang'] .g-atribusi[data-gelap='1'] {
+  color: rgb(255 255 255 / 0.5);
+}
+
 /* Scrim di tepi DALAM gambar, supaya potretnya melebur ke kartunya alih-alih
    berdiri sebagai persegi terang yang ditempel.
 
@@ -1294,9 +1371,29 @@ input:focus-visible {
     transparent 62%
   );
 }
+/* Peta KIRI kartu komparasi. Pudarnya seperempat lebar, bukan dua pertiga:
+   peta ini membawa rute yang justru harus terlihat, dan kabut 68% menutup
+   separuhnya.
+   Di bawah 640px TANPA pudar: kartunya bertumpuk dan kedua peta berdiri
+   berdampingan di bawah teks, jadi pudar tepi atas yang cuma dipasang di peta
+   kiri akan memotong tepi atas pasangan itu jadi dua ketinggian. Bulu 10 px
+   milik `.g-bento-media-isi` sudah melunakkan tepinya. */
+.g-bento-media-samping-tipis::after {
+  background: none;
+}
+
 /* Baru sejak 640px kartu `belah` benar-benar berdampingan, dan barulah tepi
    yang bersentuhan pindah ke sisi KIRI. */
 @media (min-width: 640px) {
+  .g-bento-media-samping-tipis::after {
+    background: linear-gradient(
+      90deg,
+      var(--g-kartu-isi) 0%,
+      color-mix(in srgb, var(--g-kartu-isi) 62%, transparent) 9%,
+      color-mix(in srgb, var(--g-kartu-isi) 18%, transparent) 18%,
+      transparent 26%
+    );
+  }
   .g-bento-media-samping::after {
     background: linear-gradient(
       90deg,
@@ -1390,6 +1487,29 @@ input:focus-visible {
   100% {
     opacity: 0;
   }
+}
+
+/* Rute kartu KOMPARASI bertahan lebih lama: sampai 86% siklus, bukan 48%.
+   Di kartu ini rutenya subjek, bukan pelengkap - pemilik repo memintanya
+   "kelihatan jelas" - dan rute yang cuma terlihat tiga detik dari sembilan
+   lebih sering tertangkap mata sebagai peta tanpa rute. Tetap pergi sebelum
+   siklusnya berulang, supaya kemunculan berikutnya terbaca sebagai kemunculan. */
+@keyframes g-heks-rute-lama {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  20%,
+  86% {
+    opacity: 1;
+  }
+  93%,
+  100% {
+    opacity: 0;
+  }
+}
+.g-heks-rute[data-lama='1'] {
+  animation-name: g-heks-rute-lama;
 }
 
 /* Kisi: mekar 0 -> 7%, bertahan sampai 72%, surut sampai 80%.
@@ -1543,8 +1663,8 @@ input:focus-visible {
    arahnya: gelap tembus pandang dengan kilau tepi yang tetap dari atas. */
 .g-nav-gelap {
   background: rgb(10 26 22 / 0.62);
-  backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid rgb(255 255 255 / 0.14);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.16),
@@ -2196,8 +2316,8 @@ input:focus-visible {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.16),
     0 12px 30px -14px rgb(0 0 0 / 0.6);
-  backdrop-filter: blur(22px) saturate(180%);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
   transition:
     background 400ms var(--ease-liquid),
     border-color 400ms var(--ease-liquid);
@@ -2456,8 +2576,8 @@ input:focus-visible {
    dan di atas dasar jurang yang hitam - latar yang benar-benar berubah. */
 .g-nav {
   background: var(--g-nav-isi);
-  backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid var(--g-nav-tepi);
   box-shadow:
     inset 0 1px 0 var(--g-kaca-kilau),
@@ -2640,6 +2760,29 @@ input:focus-visible {
   transform-origin: top right;
 }
 
+/* TUTUP: kebalikan `pop`, dan sengaja LEBIH SINGKAT (180ms lawan 280ms).
+   Yang membuka memperkenalkan sesuatu dan pantas diberi waktu; yang menutup
+   cuma menyingkir, dan tutup yang selambat bukanya terasa seperti menu yang
+   enggan pergi. Kurvanya condong ease-in - pelan di awal, cepat di akhir -
+   karena benda yang pergi harus terlihat MENINGGALKAN tempatnya, bukan
+   mendarat; ujungnya tetap melandai supaya nol opasitasnya tercapai sebelum
+   elemennya dicabut, bukan tepat pada bingkai yang sama.
+
+   `pointer-events: none` selama itu: 180 ms tempat menu yang sudah ditutup
+   masih bisa menelan klik adalah 180 ms tempat peta di belakangnya terasa
+   rusak. Elemennya ditahan terpasang oleh `useTutupHalus()` di primitif.tsx,
+   SEDIKIT lebih lama daripada animasi ini - lihat `TUTUP_MS`. */
+@keyframes pop-tutup {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.955);
+  }
+}
+.pop[data-menutup='1'] {
+  animation: pop-tutup 180ms cubic-bezier(0.4, 0, 0.7, 1) both;
+  pointer-events: none;
+}
+
 /* Untuk yang digantung DI ATAS pemicunya: kartu konsultan AI, Kompas. Arah
    geraknya dibalik - ia naik, bukan turun - karena benda yang muncul harus
    terlihat berangkat dari tombol yang memanggilnya, bukan dari arah mana pun. */
@@ -2714,8 +2857,8 @@ input:focus-visible {
   border-radius: var(--radius-sm) !important;
   overflow: hidden;
   background: color-mix(in srgb, var(--color-surface) 78%, transparent) !important;
-  backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.7),
     0 10px 26px -10px rgb(22 33 28 / 0.4),
@@ -2732,8 +2875,8 @@ input:focus-visible {
   font-size: 11px !important;
   border-radius: 999px !important;
   background: color-mix(in srgb, var(--color-surface) 78%, transparent) !important;
-  backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   padding: 2px 10px !important;
 }
 .maplibregl-ctrl-scale {
@@ -2785,10 +2928,12 @@ input:focus-visible {
    ==========================================================================
    Enam bagian, dan tiap bagian punya latarnya sendiri HANYA kalau latar itu
    menyatakan sesuatu. Hero: sarang heksagon (bentuk datanya). Masalah: kisi
-   titik - kisi pengukuran, tempat data diambil. Solusi: hitam polos, supaya
-   enam potret petanya satu-satunya yang berwarna. Ekosistem: dua cahaya
-   lembut, teal dan ungu, dua kutub yang jadi tesis produknya. Penutup dan
-   tim memakai yang sudah ada. Yang tidak disebut di sini sengaja polos.
+   titik - kisi pengukuran, tempat data diambil. Solusi: tanda silang lembar
+   peta, tanpa warna, supaya enam potret petanya tetap satu-satunya yang
+   berwarna. Ekosistem: dua cahaya lembut, teal dan ungu, dua kutub yang jadi
+   tesis produknya, ditambah cincin kawasan jangkau. Penutup dan tim memakai
+   yang sudah ada. Solusi dan Ekosistem dulu polos; sejak 11 Sep 2026 tidak
+   lagi, atas permintaan pemilik repo - lihat catatan di masing-masing.
    ========================================================================== */
 
 .gerbang {
@@ -2903,6 +3048,49 @@ input:focus-visible {
   --sb-aktif: #f2f7f5;
   --sb-redup: var(--g-ink-4);
   --sb-hover: var(--g-ink);
+
+  /* Token APLIKASI dikembalikan ke versi terangnya.
+
+     `.gerbang` ikut selektor `.peta-gelap` di atas - benar selama gerbang cuma
+     punya satu wajah, yang gelap. Begitu ada tema terang, selektor itu tetap
+     menukar token aplikasinya ke versi GELAP apa pun temanya, dan setiap
+     komponen aplikasi yang dipakai ulang di sini membaca tinta krem-putih di
+     atas bilah putih. Yang paling terlihat nama akun di bilah atas: `text-ink`
+     = #eef3f0 di atas kaca putih, dilaporkan pemilik repo sebagai "nama akun
+     kita itu ga kelihatan".
+
+     Nilainya salinan `@theme`, bukan `revert`: properti khusus tidak punya
+     nilai "kembali ke :root", dan `initial` membuatnya TIDAK SAH - yang
+     menghapus warnanya sama sekali. `.g-nav-gelap` tidak terpengaruh: ia
+     menyatakan tokennya sendiri pada elemennya sendiri, dan itu menang atas
+     yang diwarisi dari sini. */
+  --color-ground: #e7ebe8;
+  --color-ground-2: #dde2df;
+  --color-surface: #ffffff;
+  --color-surface-2: #f4f7f5;
+  --color-ink: #16211c;
+  --color-ink-2: #4a5651;
+  --color-ink-3: #78857f;
+  --color-line: #d6dcd8;
+  --color-line-2: #bcc5bf;
+  --color-bahaya: #b42318;
+  --color-bahaya-soft: #fbe4e2;
+  --color-gem: #109184;
+  --color-gem-soft: #d8efec;
+  --color-pemenang: #6849cc;
+  --color-pemenang-soft: #e5e0f8;
+  --color-jebakan: #c97400;
+  --color-jebakan-soft: #f6e7cf;
+  --color-jam-kuat: #34534a;
+  --color-jam-lemah: #a8bdb5;
+  --q-gem: #4c93f7;
+  --q-menang: #15803d;
+  --q-jebakan: #e58a00;
+  --q-hindari: #b01b1b;
+  --q-gem-lembut: #dceafd;
+  --q-menang-lembut: #d7ecdf;
+  --q-jebakan-lembut: #fcecd4;
+  --q-hindari-lembut: #f8dcdc;
 }
 
 /* Pelat alat ukur bagian masalah ikut membalik ronanya: kisi milimeter yang
@@ -2939,18 +3127,6 @@ input:focus-visible {
   --g-ink-4: #66807a;
 }
 
-/* --- Tirai cair sakelar tema ---------------------------------------------
-   Lingkaran yang MEKAR dari tombolnya sampai menutupi layar, tema ditukar di
-   balik lingkaran itu, lalu lingkarannya memudar. Tiga fase, satu elemen.
-
-   Bukan `document.startViewTransition`: aplikasi ini berisi kanvas WebGL
-   seukuran layar, dan memotretnya dua kali untuk sebuah pergantian warna
-   adalah harga yang tidak sepadan - selain API-nya belum ada di setiap
-   peramban yang harus dilayani halaman lomba.
-
-   Warnanya diberi TEPI LEMBUT lewat radial-gradient, bukan potongan tegas.
-   Itu satu-satunya hal yang membedakan "cairan yang menyebar" dari "lingkaran
-   yang membesar". */
 /* --- Sakelar tema: pil kaca ----------------------------------------------
 
    BENTUKNYA diminta pemilik repo dengan dua gambar rujukan: pil beku dengan
@@ -3139,64 +3315,59 @@ input:focus-visible {
   }
 }
 
-.tirai-tema {
-  position: fixed;
-  inset: 0;
-  z-index: 94;
-  pointer-events: none;
+/* --- Pergantian tema: silang-pudar halamannya sendiri -----------------------
+   Lihat catatan panjangnya di `gantiTema()`, lib/bahasa.tsx. Ringkasnya: tiga
+   bentuk sebelumnya MENUTUP layar dengan sesuatu selama temanya ditukar, dan
+   yang terakhir - selembar warna polos - dilaporkan sebagai "memutihkan
+   semuanya sampai ga kelihatan". Sekarang potret halaman lama memudar di atas
+   halaman baru yang sudah hidup, jadi isinya terlihat di SETIAP bingkai.
+
+   Kurvanya ease-in-out yang lembut dan durasinya 520 ms: cukup panjang untuk
+   terbaca sebagai perubahan suasana, cukup pendek untuk tidak menahan orang
+   yang cuma ingin membaca. Pengelompokan `plus-lighter` bawaan peramban yang
+   membuat kedua potret tidak meredup bersamaan di tengah jalan - JANGAN diganti
+   `mix-blend-mode` lain, atau bingkai tengahnya akan tampak lebih gelap daripada
+   kedua ujungnya. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.25, 1);
 }
 
-/* Satu lembar warna tema tujuan. Tidak bergerak, tidak punya arah, dan tidak
-   punya tepi yang harus dilembutkan - yang berubah cuma opasitasnya.
-   Bentuk paling sederhana yang masih menyembunyikan pergantian temanya, dan
-   itu justru syarat utamanya: yang tidak boleh terlihat adalah SAAT ratusan
-   warna bertukar sekaligus. */
-.tirai-tema-isi {
-  position: absolute;
-  inset: 0;
-  background: var(--tt-warna);
-  will-change: opacity;
+/* Sakelar yang ditekan dipotret TERPISAH dan tidak ikut dipudarkan: potret
+   lamanya disembunyikan, yang baru tampil apa adanya. Hasilnya satu kenop yang
+   meluncur dengan transisinya sendiri - bukan kenop lama yang memudar di kiri
+   sementara kenop baru muncul di kanan. */
+::view-transition-old(sakelar-tema) {
+  display: none;
+}
+::view-transition-new(sakelar-tema) {
+  animation: none;
 }
 
-@keyframes tirai-pudar-masuk {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes tirai-pudar-keluar {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
+/* Peramban TANPA View Transitions: warnanya ditransisikan CSS, HANYA selama
+   pergantian berjalan - atributnya dicabut `gantiTema()` sesudah 580 ms.
 
-/* Masuk dengan ease-out (cepat di awal, mendarat pelan), keluar dengan
-   ease-in-out. Bukan simetris, dan itu disengaja: yang masuk menutupi sesuatu
-   yang sudah dilihat mata, yang keluar memperkenalkan sesuatu yang baru. */
-.tirai-tema[data-fase='tutup'] .tirai-tema-isi {
-  animation: tirai-pudar-masuk 240ms cubic-bezier(0.33, 0, 0.2, 1) both;
+   Kenapa tidak dipasang permanen: transisi pada ribuan elemen adalah pekerjaan
+   yang dilakukan pada SETIAP hover, dan transisi CSS pada properti yang juga
+   ditulis skrip membuat nilai terhitungnya tertinggal - jebakan yang sudah
+   memakan tombol "gulir" di hero. Yang ditransisikan di sini cuma WARNA, yang
+   tidak pernah ditulis GSAP di halaman mana pun.
+
+   Bagian dalam sakelar DIKECUALIKAN: `transition` di bawah ini menimpa seluruh
+   daftar transisinya, termasuk `transform` kenopnya - dan kenop yang melompat
+   di tengah halaman yang memudar mulus lebih mencolok daripada tanpa pudar. */
+:root[data-alih-tema='css'] *:not(.st-kenop, .st-kata, .st-glif),
+:root[data-alih-tema='css'] *::before,
+:root[data-alih-tema='css'] *::after {
+  transition:
+    background-color 480ms ease,
+    color 480ms ease,
+    border-color 480ms ease,
+    fill 480ms ease,
+    stroke 480ms ease,
+    box-shadow 480ms ease !important;
 }
-.tirai-tema[data-fase='buka'] .tirai-tema-isi {
-  animation: tirai-pudar-keluar 300ms cubic-bezier(0.4, 0, 0.3, 1) both;
-}
-
-/* TANPA transisi warna menyeluruh, dan itu disengaja.
-
-   Godaannya besar: satu aturan `* { transition: background-color, color }` dan
-   pergantiannya jadi mulus di mana-mana. Harganya dua, dan keduanya sudah
-   pernah dibayar halaman ini. Pertama, transisi pada ribuan elemen sekaligus
-   adalah pekerjaan yang dilakukan pada SETIAP hover dan setiap perubahan warna
-   lain, bukan cuma saat tema berganti. Kedua - dan ini yang mahal - transisi
-   CSS pada properti yang juga ditulis skrip membuat nilai terhitungnya
-   tertinggal, dan itu jebakan yang sudah memakan tombol "gulir" di hero.
-
-   Ia juga tidak dibutuhkan: tirainya MENUTUPI seluruh layar pada saat tema
-   ditukar. Yang berubah di baliknya tidak dilihat siapa pun. */
 
 /* Pembungkus yang menggulir NAIK menutupi hero yang dipatok. Pekat, dengan
    bayangan tipis di tepi atasnya - tanpa bayangan itu tepi lembarannya tidak
@@ -3241,13 +3412,97 @@ input:focus-visible {
 }
 
 /* Latar bagian EKOSISTEM: dua cahaya lembut di sudut berlawanan, dan garis
-   rambut di tepi atasnya sebagai batas dari hitam polos Solusi. */
+   rambut di tepi atasnya sebagai batas dari Solusi.
+
+   DITAMBAH CINCIN JANGKAU (11 Sep 2026). Pemilik repo membaca bagian ini dan
+   Solusi sebagai "tidak punya latar" di sebelah kisi titik Latar belakang dan
+   kisi garis Penutup - dan ia benar: dua cahaya di bawah 12% tidak terbaca
+   sebagai latar, cuma sebagai hitam yang sedikit tidak rata.
+
+   Motifnya cincin konsentris yang berpusat di puncak tulang punggung bagian
+   ini - bentuk yang sama dengan pita kawasan jangkau 5 sampai 60 menit yang
+   digambar produknya di sekitar tiap stasiun. Ia memudar ke segala arah
+   sebelum mencapai tepi, jadi yang terlihat gema, bukan target tembak. */
 .g-latar-mesh {
+  --g-cincin: rgb(190 235 225 / 0.085);
+  position: relative;
+  isolation: isolate;
   background-color: var(--g-latar-pekat);
   background-image:
     radial-gradient(900px 560px at 88% 8%, rgb(45 232 192 / 0.11) 0%, transparent 62%),
     radial-gradient(820px 560px at 8% 96%, rgb(124 92 255 / 0.12) 0%, transparent 60%);
   border-top: 1px solid var(--g-garis-halus-2);
+}
+.g-latar-mesh::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: repeating-radial-gradient(
+    circle at 50% 7rem,
+    transparent 0,
+    transparent 75px,
+    var(--g-cincin) 75px,
+    var(--g-cincin) 76px
+  );
+  -webkit-mask-image: radial-gradient(ellipse 58% 900px at 50% 7rem, #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 100%);
+  mask-image: radial-gradient(ellipse 58% 900px at 50% 7rem, #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 100%);
+}
+.gerbang[data-tema='terang'] .g-latar-mesh {
+  --g-cincin: rgb(12 60 50 / 0.1);
+}
+
+/* Latar bagian SOLUSI: tanda silang berkisi - tanda registrasi di lembar peta
+   cetak, tempat dua garis koordinat bertemu.
+
+   Menggantikan "hitam polos, supaya enam potret petanya satu-satunya yang
+   berwarna" (9 Sep 2026). Alasan lama itu tetap dijaga: motifnya TIDAK
+   berwarna, cuma tinta setipis garis kisi, dan kartunya pekat sehingga motif
+   itu hanya terlihat di sela-sela dan di sekitar judul.
+
+   Tanda silangnya satu SVG yang dipakai sebagai TOPENG, bukan sebagai gambar
+   latar: warna di dalam data-URI tidak bisa membaca token tema, sedangkan
+   topeng cuma butuh bentuknya - warnanya datang dari `background-color` yang
+   bisa. Topeng kedua memudarkan tepi atas dan bawahnya supaya batas ke bagian
+   tetangga tidak berupa garis potong. */
+.g-latar-silang {
+  --g-silang: rgb(190 235 225 / 0.16);
+  --g-silang-cahaya: rgb(45 232 192 / 0.07);
+  isolation: isolate;
+}
+.g-latar-silang::before,
+.g-latar-silang::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.g-latar-silang::before {
+  background-color: var(--g-silang);
+  -webkit-mask-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 27.5v9M27.5 32h9' stroke='%23000' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E"),
+    linear-gradient(to bottom, transparent 0%, #000 14%, #000 84%, transparent 100%);
+  -webkit-mask-size: 64px 64px, 100% 100%;
+  -webkit-mask-repeat: repeat, no-repeat;
+  -webkit-mask-position: center top, 0 0;
+  -webkit-mask-composite: source-in;
+  mask-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 27.5v9M27.5 32h9' stroke='%23000' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E"),
+    linear-gradient(to bottom, transparent 0%, #000 14%, #000 84%, transparent 100%);
+  mask-size: 64px 64px, 100% 100%;
+  mask-repeat: repeat, no-repeat;
+  mask-position: center top, 0 0;
+  mask-composite: intersect;
+}
+/* Satu cahaya di belakang judulnya, dan hanya di sana. */
+.g-latar-silang::after {
+  background: radial-gradient(1000px 560px at 50% 9rem, var(--g-silang-cahaya) 0%, transparent 70%);
+}
+.gerbang[data-tema='terang'] .g-latar-silang {
+  --g-silang: rgb(12 60 50 / 0.15);
+  --g-silang-cahaya: rgb(15 156 128 / 0.08);
 }
 
 /* --- Jarak sengaja antara hero dan latar belakang -------------------------

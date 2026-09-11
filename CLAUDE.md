@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 257 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 266 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -77,10 +77,14 @@ frontend/    React + Vite + MapLibre GL. Sengaja ramping; berkas baru butuh alas
                                      cakupan, batasan, DAN keempat temuan berikut
                                      kalimatnya. Jangan disunting tangan
              scripts/              — pembuat gambar kartu gerbang
-             public/kartu/         — enam WebP, ~210 KB, di-commit
+             public/kartu/         — sembilan WebP, ~430 KB, di-commit: enam kartu,
+                                      kembaran terang kartu bergaya gelap, dan dua
+                                      potret komparasi (`KARTU_BANDING`) yang
+                                      dibingkai pada rutenya
 pipeline/    Python s1→s7. Satu-satunya tempat skor dihitung
              rute_ors.py — DUA hal lewat OpenRouteService, dijalankan MANUAL:
-                           rute jalan kaki heksagon→simpul (`hex_routes`) dan
+                           rute heksagon→simpul untuk jalan kaki, mobil, dan
+                           sepeda (`hex_routes`, satu kolom `profil`) dan
                            kawasan jangkau 5/10/15 menit (`catchment_areas`).
                            Backend tidak pernah memanggil ORS saat melayani
                            permintaan — ia cuma membaca kedua tabel itu
@@ -333,6 +337,10 @@ cd pipeline && python demo_pameran.py --copot    # kembalikan persis seperti sem
 # Rute jalan kaki (ORS). Butuh ORS_API_KEY di backend/.env.
 cd pipeline && python rute_ors.py --status       # cakupan, tanpa memanggil ORS
 cd pipeline && python rute_ors.py                # yang belum punya rute saja
+cd pipeline && python rute_ors.py --mobil        # profil mobil, DITAMBAHKAN
+cd pipeline && python rute_ors.py --sepeda       # profil sepeda, DITAMBAHKAN
+# Kuota harian ORS bisa habis di tengah jalan: skripnya keluar dengan kode 3,
+# dan menjalankan ulang besok melanjutkan dari yang belum punya rute.
 cd pipeline && python rute_ors.py --rapikan      # jahit ujung + urutkan, tanpa ORS
 cd pipeline && python rute_ors.py --isochrone    # kawasan jangkau tiap simpul
 
@@ -414,7 +422,7 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 257 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 266 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit

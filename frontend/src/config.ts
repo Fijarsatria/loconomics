@@ -236,7 +236,11 @@ export const KUADRAN: Record<string, Kuadran> = {
     // `arti` di bawah - jadi harganya cuma nama yang panjang dan sulit dibaca
     // di lencana peta. Kuncinya tetap PEMENANG_JELAS.
     nama: 'Aman',
-    namaEn: 'Safe Bet',
+    // "Safe", bukan "Safe Bet" (11 Sep 2026). Pemilik repo membacanya sebagai
+    // terjemahan yang kelebihan satu kata - "aku kira cuma Safe" - dan ia benar:
+    // "Aman" satu kata, dan nama zona di lencana peta memang harus sependek itu.
+    // Pasangannya di backend `aturan.LABEL_KUADRAN_EN` ikut diganti.
+    namaEn: 'Safe',
     ringkas: 'bagus, dan Anda membayar gengsinya',
     ringkasEn: 'good, and you pay for the prestige',
     warna: 'var(--q-menang)',

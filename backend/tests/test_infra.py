@@ -649,6 +649,39 @@ def test_kunci_basemap_tidak_pernah_masuk_git():
             raise AssertionError(f"{berkas.name}: kunci tertulis di sumber - {m.group(1)[:6]}...")
         _ = heks
 
+
+def test_backdrop_filter_berawalan_lebih_dulu():
+    """`-webkit-backdrop-filter` wajib ditulis SEBELUM `backdrop-filter`.
+
+    Lightning CSS - pemampat CSS Tailwind v4 - menganggap keduanya satu
+    properti dan menyimpan yang ditulis belakangan. Urutan terbalik keluar di
+    build produksi sebagai `-webkit-backdrop-filter` saja, yang tidak dikenal
+    Chrome: seluruh panel kaca peta kehilangan buramnya dan label basemap
+    terbaca tajam menembus bilah atas. Dev server tidak memampatkan CSS, jadi
+    tidak pernah memperlihatkannya - ditemukan 11 Sep 2026 lewat
+    `getComputedStyle` di `vite preview`, sesudah hidup di terbitan publik.
+
+    Diperiksa di SUMBER, bukan di `dist/`: `dist/` tidak di-commit, dan uji yang
+    menuntut build dulu adalah uji yang dilewati.
+    """
+    import re
+
+    akar = Path(__file__).resolve().parents[2]
+    salah = []
+    for berkas in (akar / "frontend" / "src").rglob("*.css"):
+        baris = berkas.read_text(encoding="utf-8").splitlines()
+        for i in range(len(baris) - 1):
+            if re.match(r"\s*backdrop-filter\s*:", baris[i]) and re.match(
+                r"\s*-webkit-backdrop-filter\s*:", baris[i + 1]
+            ):
+                salah.append(f"{berkas.name}:{i + 1}")
+    cek(
+        "-webkit-backdrop-filter ditulis sebelum backdrop-filter",
+        not salah,
+        f"- urutan terbalik di {', '.join(salah)}",
+    )
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

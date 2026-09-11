@@ -38,7 +38,7 @@ import { useTeks } from '../lib/bahasa'
 
 import { api, GalatAPI, setTiket, adaTiket } from '../lib/api'
 import { KAWASAN_PILOT } from '../config'
-import { PapanNama } from './primitif'
+import { PapanNama, useTutupHalus } from './primitif'
 import type { Akun, KatalogPaket, Tingkat } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -1245,6 +1245,9 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
   const { akun, premium, memuat, keluar, mintaMasuk, mintaLangganan, mintaPreferensi } = useSesi()
   const t = useTeks(K_TOMBOL)
   const [buka, setBuka] = useState(false)
+  // Dipanggil SEBELUM cabang tamu di bawah, yang keluar lebih awal: kait yang
+  // hanya dipanggil sebagian waktu mengacaukan urutan kait React.
+  const { tampil, menutup } = useTutupHalus(buka)
   const wadah = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -1281,7 +1284,7 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
     // pendarnya kembali ke "Masuk ke peta" - lihat `tombolMasuk` di
     // Gerbang.tsx.
     const kelas = digerbang
-      ? 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold'
+      ? 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold sm:px-5 sm:py-2.5 sm:text-[14.5px]'
       : 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-3.5 py-2 text-[12.5px] font-semibold'
     const kelasTeks = 'g-catalyst-teks'
     return (
@@ -1310,17 +1313,21 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
         aria-expanded={buka}
         className={`flex cursor-pointer items-center gap-2 rounded-full border py-1 pl-1 pr-3 transition-all duration-300 ease-jelly hover:scale-[1.03] ${
           buka ? 'border-transparent bg-ink text-surface' : 'border-line text-ink hover:border-line-2'
-        }`}
+        } ${varian === 'gerbang' ? 'sm:py-1.5 sm:pl-1.5 sm:pr-4' : ''}`}
         title={akun.nama_pengguna}
       >
         <span
           className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11.5px] font-bold ${
             premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
-          }`}
+          } ${varian === 'gerbang' ? 'sm:h-8 sm:w-8 sm:text-[12.5px]' : ''}`}
         >
           {inisial}
         </span>
-        <span className="hidden max-w-[7rem] truncate text-[12.5px] font-semibold sm:inline">
+        <span
+          className={`hidden max-w-[7rem] truncate text-[12.5px] font-semibold sm:inline ${
+            varian === 'gerbang' ? 'sm:max-w-[9rem] sm:text-[14px]' : ''
+          }`}
+        >
           {akun.nama_pengguna}
         </span>
         {premium && (
@@ -1330,9 +1337,10 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
         )}
       </button>
 
-      {buka && (
+      {tampil && (
         <div
           role="menu"
+          data-menutup={menutup ? '1' : undefined}
           className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[19rem] overflow-hidden rounded-md"
         >
           <div className="border-b border-line/70 px-4 py-3.5">

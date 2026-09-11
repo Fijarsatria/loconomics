@@ -717,6 +717,56 @@ export function Markdown({ teks }: { teks: string }) {
   return <div className="space-y-2.5">{blok}</div>
 }
 
+// --- Tutup yang beranimasi --------------------------------------------------
+
+/**
+ * Berapa lama popover DITAHAN terpasang sesudah ditutup.
+ *
+ * SENGAJA lebih panjang daripada animasi `pop-tutup` (180 ms) di index.css.
+ * Jam ini mulai berdetak saat tombol ditekan, sedangkan animasinya baru mulai
+ * sesudah React me-render dan peramban menghitung ulang gaya - satu sampai dua
+ * bingkai kemudian. Dengan angka yang sama persis, menunya dicabut di tengah
+ * pudarnya: terukur di headless, opasitasnya masih 0,44-0,57 saat elemennya
+ * hilang, jadi ekor animasinya terbaca sebagai kedipan.
+ */
+const TUTUP_MS = 250
+
+/**
+ * Menahan sebuah popover tetap TERPASANG selama animasi tutupnya berjalan.
+ *
+ * Ada karena laporan pemilik repo: menu Pengaturan, Akun, Layer, dan Kawasan
+ * MEMBUKA dengan animasi tetapi MENUTUP dengan hilang begitu saja. Sebabnya
+ * bukan CSS yang lupa ditulis - `{buka && <div>}` mencabut elemennya dari DOM
+ * pada render yang sama dengan `buka` jadi false, dan elemen yang sudah tidak
+ * ada tidak bisa dianimasikan apa pun.
+ *
+ * Satu kait untuk keempatnya, bukan empat salinan: yang ditulis empat kali
+ * adalah yang suatu saat berbeda satu dari tiga lainnya.
+ *
+ * Keadaannya disesuaikan SAAT RENDER (pola "state dari prop sebelumnya"),
+ * bukan lewat efek: lewat efek, render pertama sesudah `buka` jadi false sudah
+ * mencabut elemennya sebelum efeknya sempat menahan apa pun - satu bingkai
+ * kosong yang terlihat sebagai kedipan.
+ *
+ * Membuka lagi di tengah tutup membatalkan tutupnya: `menutup` jatuh ke false,
+ * nama animasinya kembali ke `pop`, dan peramban memulainya dari awal.
+ */
+export function useTutupHalus(buka: boolean): { tampil: boolean; menutup: boolean } {
+  const [menutup, setMenutup] = useState(false)
+  const [bukaSebelum, setBukaSebelum] = useState(buka)
+  if (buka !== bukaSebelum) {
+    setBukaSebelum(buka)
+    // Gerak dikurangi: tutup seketika, tanpa elemen yang tertahan tak bergerak.
+    setMenutup(!buka && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  }
+  useEffect(() => {
+    if (!menutup) return
+    const jam = window.setTimeout(() => setMenutup(false), TUTUP_MS)
+    return () => window.clearTimeout(jam)
+  }, [menutup])
+  return { tampil: buka || menutup, menutup: menutup && !buka }
+}
+
 // --- Menu pilihan -----------------------------------------------------------
 
 /**
@@ -744,6 +794,7 @@ export function Menu<T extends string>({
   onUbah: (v: T) => void
 }) {
   const [buka, setBuka] = useState(false)
+  const { tampil, menutup } = useTutupHalus(buka)
   const [sorot, setSorot] = useState(0)
   const wadah = useRef<HTMLDivElement>(null)
   const terpilih = opsi.find((o) => o.nilai === nilai)
@@ -822,10 +873,11 @@ export function Menu<T extends string>({
         </svg>
       </button>
 
-      {buka && (
+      {tampil && (
         <ul
           role="listbox"
           aria-label={label}
+          data-menutup={menutup ? '1' : undefined}
           className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 max-h-[60vh] min-w-full overflow-auto rounded-md p-1.5"
         >
           {opsi.map((o, i) => {
@@ -1316,6 +1368,7 @@ export function MenuPengaturan({
   const { bahasa } = useBahasa()
   const tn = useTeks(K_NAMA_TEMPAT)
   const [buka, setBuka] = useState(false)
+  const { tampil, menutup } = useTutupHalus(buka)
   const [layar, setLayar] = useState<KunciPengaturan | null>(null)
   const wadah = useRef<HTMLDivElement>(null)
 
@@ -1400,9 +1453,10 @@ export function MenuPengaturan({
           </svg>
         </button>
 
-        {buka && (
+        {tampil && (
           <div
             role="menu"
+            data-menutup={menutup ? '1' : undefined}
             className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[15.5rem] overflow-hidden rounded-md p-1.5"
           >
             {/* Bahasa di baris PERTAMA, sebagai sakelar - bukan sebagai layar

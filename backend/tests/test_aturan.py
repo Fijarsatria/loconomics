@@ -378,6 +378,43 @@ def test_kode_lokasi_terbaca_dan_tidak_bentrok():
     assert "padStart(5, '0')" in ts
 
 
+def test_profil_rute_sama_di_empat_tempat():
+    """Profil rute ditulis EMPAT kali: parameter endpoint, kata kerja kalimatnya,
+    skrip penariknya, dan tipe frontend. Keempatnya proses atau bahasa berbeda.
+
+    Kalau berpisah, tidak satu pun yang berteriak. Profil yang ada di skrip
+    tetapi tidak di `Literal` endpoint membuat rutenya tersimpan dan tidak
+    pernah bisa diminta; profil yang ada di endpoint tetapi tidak di
+    `KUNCI_CARA` membuat kalimatnya gagal KeyError hanya untuk moda itu; dan
+    profil yang tidak ada di `URUTAN_PROFIL` frontend tidak pernah punya tombol.
+    Ditambahkan 11 Sep 2026 bersama profil sepeda.
+    """
+    import inspect
+    import typing
+
+    from app.api.hex import KUNCI_CARA, simpul_terdekat
+    from app.core.aturan import KALIMAT
+
+    anotasi = inspect.signature(simpul_terdekat).parameters["profil"].annotation
+    literal = typing.get_args(anotasi)[0]
+    di_endpoint = set(typing.get_args(literal))
+    assert di_endpoint == set(KUNCI_CARA), f"endpoint {di_endpoint} != KUNCI_CARA {set(KUNCI_CARA)}"
+    for kunci in KUNCI_CARA.values():
+        assert kunci in KALIMAT, f"kata kerja '{kunci}' tidak ada di KALIMAT"
+    assert "motorcycle" not in di_endpoint, "ORS tidak punya profil motor - jangan dipalsukan"
+
+    akar = Path(__file__).resolve().parents[2]
+    ors = (akar / "pipeline" / "rute_ors.py").read_text(encoding="utf-8")
+    for p in di_endpoint:
+        assert f'= "{p}"' in ors, f"rute_ors.py tidak punya konstanta profil '{p}'"
+
+    ts = (akar / "frontend" / "src" / "types.ts").read_text(encoding="utf-8")
+    awal = ts.index("export const URUTAN_PROFIL")
+    baris = ts[awal : ts.index("\n", awal)]
+    for p in di_endpoint:
+        assert f"'{p}'" in baris, f"URUTAN_PROFIL frontend tidak memuat '{p}'"
+
+
 def test_menit_jalan_kosong_tetap_kosong():
     from app.core.aturan import KECEPATAN_JALAN_M_PER_MENIT, menit_jalan
 

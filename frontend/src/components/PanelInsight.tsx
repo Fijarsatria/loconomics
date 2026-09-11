@@ -25,13 +25,12 @@ import { useEffect, useState } from 'react'
 import { KUADRAN, TINGGI_BAIK, frasaPrestise, keKalimat, kodeLokasi } from '../config'
 import { api, GalatAPI } from '../lib/api'
 import { angka, jarakSingkat, rupiah } from '../lib/format'
-import { profilUntukModa } from '../types'
+import { URUTAN_PROFIL } from '../types'
 import type {
   CommuterClock,
   DetailHeksagon,
   KonteksSimpul,
   PriceLensHeksagon,
-  ModaTampil,
   ProfilRute,
 } from '../types'
 import BarHarga from './BarHarga'
@@ -82,7 +81,7 @@ const K = {
     menujuJudul: 'Cara menuju ke sini',
     sembunyiRute: 'Sembunyikan rute & jangkauan',
     tampilRute: 'Tampilkan rute & jangkauan',
-    moda: { kaki: 'Jalan kaki', mobil: 'Mobil', motor: 'Motor' },
+    moda: { kaki: 'Jalan kaki', mobil: 'Mobil', sepeda: 'Sepeda' },
     belumDitarik: 'belum ditarik',
     mnt: 'mnt',
 
@@ -111,6 +110,7 @@ const K = {
     menit: 'menit',
     berkendara: 'berkendara',
     jalanKaki: 'jalan kaki',
+    bersepeda: 'bersepeda',
     keArah: 'ke',
     lewatJalan: 'lewat jalan yang ada',
     memutar: (x: string) => `${x}x lebih jauh dari kelihatannya di peta`,
@@ -237,7 +237,7 @@ const K = {
     menujuJudul: 'Getting here',
     sembunyiRute: 'Hide route & reach',
     tampilRute: 'Show route & reach',
-    moda: { kaki: 'On foot', mobil: 'Car', motor: 'Motorbike' },
+    moda: { kaki: 'On foot', mobil: 'Car', sepeda: 'Bike' },
     belumDitarik: 'not fetched yet',
     mnt: 'min',
 
@@ -266,6 +266,7 @@ const K = {
     menit: 'minutes',
     berkendara: 'by car',
     jalanKaki: 'on foot',
+    bersepeda: 'by bike',
     keArah: 'to',
     lewatJalan: 'along the streets that exist',
     memutar: (x: string) => `${x}x farther than it looks on the map`,
@@ -374,6 +375,25 @@ const K = {
 
     kaki: 'The numbers on this card are computed once by the pipeline and read back as they are. Information to weigh, not investment advice.',
   },
+}
+
+/** Kunci kamus tiap moda: nama tombolnya dan kata kerjanya di kalimat waktu tempuh. */
+const MODA = { 'foot-walking': 'kaki', 'driving-car': 'mobil', 'cycling-regular': 'sepeda' } as const
+const CARA_MODA = {
+  'foot-walking': 'jalanKaki',
+  'driving-car': 'berkendara',
+  'cycling-regular': 'bersepeda',
+} as const
+
+/** Glif tiap moda, viewBox 16. */
+const GLIF_MODA: Record<ProfilRute, string> = {
+  'foot-walking':
+    'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8',
+  'driving-car': 'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1',
+  // Dua roda, rangka segitiga, setang. Sengaja bukan glif motor lama yang
+  // diberi nama baru: dua benda yang namanya berbeda harus BENTUKNYA berbeda.
+  'cycling-regular':
+    'M3.8 8.6a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5ZM12.2 8.6a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5ZM3.8 11.1h3.9l2.9-4.4M3.8 11.1l2.4-4.1h4.4M7.7 11.1 5.9 5.6M5 5.6h1.9M10.6 6.7l1.6 4.4M10.6 6.7l-.5-1.9h1.7',
 }
 
 /**
@@ -493,8 +513,8 @@ export default function PanelInsight({
   /** Sudah ada di baki komparasi. */
   sedangDibandingkan?: boolean
   /** Profil rute yang sedang digambar. Dimiliki App, dipakai bersama peta. */
-  profilRute?: ModaTampil
-  onGantiProfil?: (p: ModaTampil) => void
+  profilRute?: ProfilRute
+  onGantiProfil?: (p: ProfilRute) => void
   /** Apakah rute & kawasan jangkau sedang digambar di peta. */
   rutaTampil?: boolean
   onUbahRutaTampil?: (v: boolean) => void
@@ -525,12 +545,12 @@ export default function PanelInsight({
   const [jam, setJam] = useState<CommuterClock | null>(null)
   const [konteks, setKonteks] = useState<KonteksSimpul | null>(null)
   /**
-   * Konteks simpul untuk KEDUA profil tersimpan, bukan cuma yang aktif.
+   * Konteks simpul untuk KETIGA profil tersimpan, bukan cuma yang aktif.
    *
    * Tombol moda menuliskan jarak dan waktu tempuhnya masing-masing, dan itu
-   * angka per profil - respons hanya membawa satu. Dua permintaan, bukan
-   * satu; backend men-cache keduanya 15 menit, jadi yang kedua hampir selalu
-   * dijawab dari cache.
+   * angka per profil - respons hanya membawa satu. Tiga permintaan, bukan
+   * satu; backend men-cache semuanya 15 menit, jadi yang berikutnya hampir
+   * selalu dijawab dari cache.
    */
   const [perProfil, setPerProfil] = useState<Partial<Record<ProfilRute, KonteksSimpul>>>({})
   const [memuat, setMemuat] = useState(false)
@@ -577,8 +597,9 @@ export default function PanelInsight({
       // hampir selalu dijawab dari cache, bukan dari basis data.
       api.simpulTerdekat(h3, 'foot-walking'),
       api.simpulTerdekat(h3, 'driving-car'),
+      api.simpulTerdekat(h3, 'cycling-regular'),
     ])
-      .then(([d, p, c, sk, sm]) => {
+      .then(([d, p, c, sk, sm, ss]) => {
         if (batal) return
         if (d.status === 'fulfilled') setDetail(d.value)
         // String KOSONG, bukan kalimat: efek ini tidak boleh bergantung pada
@@ -590,10 +611,10 @@ export default function PanelInsight({
         setJam(c.status === 'fulfilled' ? c.value : null)
         const kaki = sk.status === 'fulfilled' ? sk.value : undefined
         const mobil = sm.status === 'fulfilled' ? sm.value : undefined
-        setPerProfil({ 'foot-walking': kaki, 'driving-car': mobil })
-        setKonteks(
-          (profilUntukModa(profilRute) === 'driving-car' ? mobil : kaki) ?? kaki ?? mobil ?? null,
-        )
+        const sepeda = ss.status === 'fulfilled' ? ss.value : undefined
+        const semua = { 'foot-walking': kaki, 'driving-car': mobil, 'cycling-regular': sepeda }
+        setPerProfil(semua)
+        setKonteks(semua[profilRute] ?? kaki ?? mobil ?? sepeda ?? null)
       })
       .finally(() => !batal && setMemuat(false))
 
@@ -776,30 +797,10 @@ export default function PanelInsight({
             )}
 
             <div className="flex gap-2">
-              {(
-                [
-                  [
-                    'foot-walking',
-                    t.moda.kaki,
-                    'M9 3.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8ZM8.6 4.4 6.4 5.6 5.2 8.4M8.6 4.4l1.8 1 1.4 2.4M8.6 4.4 8 8.6l2.4 1.8.6 4.4M8 8.6 5.4 11l-.8 3.8',
-                  ],
-                  [
-                    'driving-car',
-                    t.moda.mobil,
-                    'M2.4 10.6h11.2M3.8 10.6 5 6.6h6l1.2 4M4.2 10.6v2.2M11.8 10.6v2.2M5.4 12.8h1M10 12.8h1',
-                  ],
-                  [
-                    'motorcycle',
-                    t.moda.motor,
-                    'M3.6 11.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm8.8 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM5.6 9.6h4.8L9 6.4H6.8M10.4 9.6 12 6.4h1.6',
-                  ],
-                ] as const
-              ).map(([nilai, label, glif]) => {
-                // Motor menumpang jaringan MOBIL, jadi ketersediaannya mengikuti
-                // rute mobil - bukan profil bernama 'motorcycle', yang memang
-                // tidak pernah ada di basis data.
-                const profilNilai = profilUntukModa(nilai)
-                const ada = konteks.profil_tersedia?.includes(profilNilai) ?? false
+              {URUTAN_PROFIL.map((nilai) => {
+                const label = t.moda[MODA[nilai]]
+                const glif = GLIF_MODA[nilai]
+                const ada = konteks.profil_tersedia?.includes(nilai) ?? false
                 const aktif = profilRute === nilai
                 return (
                   <button
@@ -825,33 +826,24 @@ export default function PanelInsight({
                       />
                     </svg>
                     <span className="text-[12.5px] font-semibold leading-none">{label}</span>
-                    {/* Motor menyatakan asal jaringannya APA ADANYA. Ia satu-satunya
-                        moda di sini yang jalurnya bukan miliknya sendiri, dan
-                        menyembunyikan itu berarti mencetak jalur mobil sebagai
-                        jalur motor tanpa ada yang tahu. Waktu tempuhnya sengaja
-                        TIDAK ditampilkan di mana pun: tidak ada yang pernah
-                        mengukurnya, dan angka karangan akan tampil dengan
-                        kepercayaan diri yang sama dengan angka yang diukur. */}
                     {/* JARAK dan WAKTU, bukan "ada rutenya".
                         Yang ingin diketahui orang di tombol moda bukan apakah
                         datanya ada - itu urusan kami - melainkan berapa jauh
                         dan berapa lama. Angkanya dari profil masing-masing,
-                        jadi "25 mnt jalan kaki" dan "8 mnt mobil" sama-sama
-                        diukur, bukan satu dibagi sebuah faktor.
-
-                        Motor menampilkan JARAK saja: jaringannya pinjaman dari
-                        mobil, dan waktu tempuhnya tidak pernah diukur. */}
+                        jadi "25 mnt jalan kaki", "8 mnt mobil", dan "9 mnt
+                        sepeda" sama-sama diukur, bukan satu dibagi sebuah
+                        faktor. Sejak sepeda menggantikan motor, tidak ada lagi
+                        moda yang cuma boleh menyebut jaraknya. */}
                     <span className="text-center text-[10.5px] leading-tight text-ink-3">
                       {!ada ? (
                         t.belumDitarik
                       ) : (
                         <>
-                          {perProfil[profilNilai]?.jarak_m != null
-                            ? jarakSingkat(perProfil[profilNilai]!.jarak_m!)
+                          {perProfil[nilai]?.jarak_m != null
+                            ? jarakSingkat(perProfil[nilai]!.jarak_m!)
                             : '—'}
-                          {nilai !== 'motorcycle' &&
-                            perProfil[profilNilai]?.menit_jalan != null &&
-                            ` · ${Math.round(perProfil[profilNilai]!.menit_jalan!)} ${t.mnt}`}
+                          {perProfil[nilai]?.menit_jalan != null &&
+                            ` · ${Math.round(perProfil[nilai]!.menit_jalan!)} ${t.mnt}`}
                         </>
                       )}
                     </span>
@@ -1044,7 +1036,7 @@ export default function PanelInsight({
               {Math.round(konteks.menit_jalan ?? 0)}
             </span>
             <span className="text-[12px] text-ink-2">
-              {t.menit} {profilRute === 'driving-car' ? t.berkendara : t.jalanKaki} {t.keArah}{' '}
+              {t.menit} {t[CARA_MODA[profilRute]]} {t.keArah}{' '}
               <strong className="font-semibold text-ink">{konteks.simpul.nama}</strong>
             </span>
           </div>
@@ -1631,7 +1623,9 @@ export default function PanelInsight({
 
           Motor tidak ada dan tidak akan pernah ada: ORS tidak menyediakan
           profilnya, dan menyodorkan mobil sebagai "kira-kira motor" salah ke
-          arah yang paling merugikan - motor melewati gang yang mobil tidak. */}
+          arah yang paling merugikan - motor melewati gang yang mobil tidak.
+          SEPEDA berdiri di tempatnya sejak 11 Sep 2026, dengan namanya sendiri
+          dan waktu tempuh yang diukur profil sepedanya sendiri. */}
       {/* --- Kenapa masuk kuadran ini ----------------------------------------
           Turun ke SINI, sesudah simulasi.
 
