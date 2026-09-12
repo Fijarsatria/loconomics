@@ -48,7 +48,10 @@ const q = (k: string) => KUADRAN[k].warnaPeta
  * menyentuh state peta, tidak ada yang bisa dipanggil untuk mengubah apa pun.
  * Pemakainya membangun petanya sendiri; yang dipinjam cuma cara mewarnainya.
  */
-export const BASEMAP_GELAP: NamaGaya[] = ['gelap']
+// Satelit ikut GELAP: citra kota tropis didominasi atap, pohon, dan aspal yang
+// gelap, jadi garis, angka, dan rute harus terang untuk terbaca di atasnya -
+// jawaban yang sama dengan basemap gelap, bukan dengan basemap terang.
+export const BASEMAP_GELAP: NamaGaya[] = ['gelap', 'satelit']
 
 /**
  * Selubung penenang basemap, per gaya.
@@ -66,6 +69,25 @@ export const SELUBUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
   dasar: { warna: '#ffffff', opasitas: 0.45 },
   jalan: { warna: '#ffffff', opasitas: 0.45 },
   gelap: { warna: '#000000', opasitas: 0.3 },
+  // Tipis sekali. Orang memilih satelit justru untuk MELIHAT atap dan halaman
+  // di bawah heksagonnya; selubung setebal gaya lain akan menghapus alasan itu.
+  // Yang tersisa cuma sedikit peredupan supaya warna heksagon tetap menang.
+  satelit: { warna: '#000000', opasitas: 0.14 },
+}
+
+/**
+ * Warna gedung 3D, per gaya. Harfiah - `var()` di ekspresi cat mematikan layer.
+ *
+ * Gedung harus TERBACA sebagai massa tanpa menutupi warna heksagon di kakinya,
+ * jadi warnanya selalu senada dengan kertas basemap-nya, bukan warna tersendiri.
+ * `dasar` tidak ada di sini: gaya itu membawa layer gedung 3D-nya sendiri.
+ */
+export const WARNA_GEDUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
+  terang: { warna: '#e3e8e4', opasitas: 0.88 },
+  dasar: { warna: '#dcd6cc', opasitas: 0.85 },
+  jalan: { warna: '#ddd6ca', opasitas: 0.88 },
+  gelap: { warna: '#3a4642', opasitas: 0.9 },
+  satelit: { warna: '#ece9e2', opasitas: 0.78 },
 }
 
 /**

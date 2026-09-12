@@ -34,6 +34,7 @@ import {
   ScaleControl,
   type ExpressionSpecification,
   type GeoJSONSource,
+  type StyleSpecification,
 } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -56,13 +57,18 @@ import {
   WARNA_ISO,
   WARNA_RUTE_BAYANG,
   WARNA_RUTE_TUNGGAL,
+  WARNA_GEDUNG,
   WARNA_LAYER,
   idLabelPertama,
 } from '../lib/layer-peta'
 
 import {
+  ATRIBUSI_SATELIT,
+  GAYA_BASEMAP,
+  GLYPH_MAPID,
   KAWASAN_AWAL,
   KUADRAN,
+  SUMBER_UBIN_MAPID,
   ZOOM_AWAL,
   bubuhiKunciBasemap,
   urlGaya,
@@ -289,7 +295,115 @@ const ZOOM_POI: Record<string, number> = {
  * "jalanan dan detail detail jangan ketutupan". Mematikan nama jalan bekerja
  * melawan permintaan itu.
  */
-const RE_NAMA_TEMPAT = /^(poi|place|water_name)/
+// Gaya SATELIT memakai skema penamaan MapTiler, bukan OpenMapTiles-nya MAPID:
+// "Place labels", "City labels", "Country labels" - berspasi dan berhuruf
+// besar. Tanpa cabang kedua, setelan "Nama tempat: Mati" diam-diam tidak
+// berlaku sama sekali di satelit. "Road labels" sengaja tidak ikut, dengan
+// alasan yang sama seperti nama jalan di gaya vektor.
+const RE_NAMA_TEMPAT = /^(poi|place|water_name)|^(place|city|capital city|state|country|continent) labels$/i
+
+/** Layer ekstrusi gedung milik kita, untuk gaya yang tidak membawanya sendiri. */
+const L_GEDUNG = 'loc-gedung-3d'
+/** Sumber ubin vektor MAPID yang ditambahkan ke gaya satelit untuk gedung 3D. */
+const SUMBER_GEDUNG = 'loc-mapidtiles'
+
+/**
+ * Siapkan gaya satelit SEBELUM dipasang - lewat `transformStyle` MapLibre.
+ *
+ * Dua hal, keduanya tidak bisa dikerjakan sesudah gayanya terpasang tanpa
+ * membongkarnya lagi:
+ *
+ *   ATRIBUSI. Sumber citra di gaya satelit MAPID tidak membawa satu pun teks
+ *   atribusi, jadi kontrol atribusi akan diam tentang siapa pemilik gambarnya.
+ *
+ *   GLYPH. Label gaya satelit meminta font ke api.maptiler.com, sementara
+ *   angka heksagon kita memakai tumpukan "Metropolis Regular,Noto Sans
+ *   Regular" yang tidak ada di sana - satu tumpukan yang tidak dikenal
+ *   membuat SELURUH angka heksagon gagal digambar tanpa galat. Server font
+ *   MAPID melayani keduanya (diuji 200), jadi label satelit ikut memakainya.
+ *
+ * Gaya vektor lain dikembalikan apa adanya.
+ */
+function tataGaya(gaya: NamaGaya) {
+  return (_lama: StyleSpecification | undefined, baru: StyleSpecification): StyleSpecification => {
+    if (!GAYA_BASEMAP[gaya]?.langsung) return baru
+    const sumber = { ...baru.sources }
+    const kunciCitra = Object.keys(sumber).find((k) => sumber[k]?.type === 'raster')
+    if (kunciCitra) {
+      sumber[kunciCitra] = { ...sumber[kunciCitra], attribution: ATRIBUSI_SATELIT } as never
+    }
+    return { ...baru, glyphs: GLYPH_MAPID, sources: sumber }
+  }
+}
+
+/** Layer simbol basemap PERTAMA dalam urutan gaya - di bawahnya gedung berdiri. */
+function labelBasemapPertama(m: MapLibreMap, kecuali: string): string | undefined {
+  return (m.getStyle().layers ?? []).find(
+    (l) => l.type === 'symbol' && l.id !== kecuali && !l.id.startsWith('hex-') && !l.id.startsWith('rute-') && !l.id.startsWith('fokus-') && !l.id.startsWith('catchment-') && !l.id.startsWith('blok-'),
+  )?.id
+}
+
+/**
+ * Gedung 3D menyala atau mati, dan URUTANNYA terhadap heksagon.
+ *
+ * Urutannya yang menentukan apakah 3D ini berguna. Gedung harus berdiri DI
+ * ATAS isian dan garis heksagon - kalau sebaliknya, warna heksagon dicat di
+ * atas dinding dan atap, dan yang terlihat kotak berwarna yang melayang, bukan
+ * kawasan yang diwarnai. Tetapi angka heksagon dan label tempat tetap di atas
+ * gedung, supaya keduanya masih terbaca saat peta dimiringkan.
+ *
+ * Dipanggil ulang sesudah heksagon selesai dipasang, karena `setStyle`
+ * membongkar seluruh layer dan heksagon dipasang ulang secara asinkron - urutan
+ * yang benar sebelum itu tidak bertahan.
+ */
+function aturGedung3D(m: MapLibreMap, gaya: NamaGaya, nyala: boolean) {
+  if (!m.isStyleLoaded() && !m.getStyle()?.layers?.length) return
+  const bawaan = GAYA_BASEMAP[gaya]?.gedung3d
+  const idGedung = bawaan && m.getLayer(bawaan) ? bawaan : L_GEDUNG
+
+  if (!nyala) {
+    if (m.getLayer(L_GEDUNG)) m.removeLayer(L_GEDUNG)
+    // Gaya yang membawa gedungnya sendiri: kembalikan ke bawah heksagon, tempat
+    // gayanya menaruhnya - di peta datar ia cuma tapak bangunan, dan tapak di
+    // atas isian heksagon menutupi warnanya.
+    if (bawaan && m.getLayer(bawaan) && m.getLayer(L_ISI)) m.moveLayer(bawaan, L_ISI)
+    return
+  }
+
+  if (idGedung === L_GEDUNG && !m.getLayer(L_GEDUNG)) {
+    let sumber = 'mapidtiles'
+    if (!m.getSource(sumber)) {
+      if (!m.getSource(SUMBER_GEDUNG)) m.addSource(SUMBER_GEDUNG, SUMBER_UBIN_MAPID)
+      sumber = SUMBER_GEDUNG
+    }
+    const w = WARNA_GEDUNG[gaya] ?? WARNA_GEDUNG.terang
+    m.addLayer({
+      id: L_GEDUNG,
+      type: 'fill-extrusion',
+      source: sumber,
+      'source-layer': 'building',
+      minzoom: 14,
+      paint: {
+        'fill-extrusion-color': w.warna,
+        'fill-extrusion-opacity': w.opasitas,
+        // `render_height` diisi OpenMapTiles untuk seluruh bangunan (bawaan
+        // 5 m kalau OSM tidak menyebut tingkat). Coalesce tetap dipasang: ubin
+        // lama tanpa kolom itu akan menggambar tinggi nol - tapak rata yang
+        // terbaca sebagai layer yang rusak.
+        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
+        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+      },
+    })
+  } else if (bawaan && idGedung === bawaan) {
+    // Gedung bawaan gaya Jalan 3D baru muncul di zoom 17. Diturunkan ke 14
+    // supaya mode 3D langsung terlihat di zoom kerja kawasan, bukan hanya
+    // saat orang sudah menempel ke satu atap.
+    m.setLayerZoomRange(bawaan, 14, 24)
+  }
+
+  const sebelum = m.getLayer(L_ANGKA) ? L_ANGKA : labelBasemapPertama(m, idGedung)
+  if (sebelum && sebelum !== idGedung) m.moveLayer(idGedung, sebelum)
+}
 
 function terapkanNamaTempat(m: MapLibreMap, kerapatan: string) {
   // `?? 0` DI SINI adalah bug yang bertahan sejak setelan ini dipasang, dan
@@ -353,7 +467,7 @@ function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
     }
   }
 
-  const selubung = SELUBUNG[gaya]
+  const selubung = SELUBUNG[gaya] ?? SELUBUNG.terang
   if (m.getLayer(L_SELUBUNG)) m.removeLayer(L_SELUBUNG)
   m.addLayer(
     {
@@ -814,6 +928,8 @@ interface Props {
    * terjadi - dan peta yang tidak pernah diputar tidak butuh tombol pelurus.
    */
   onArah?: (a: { bearing: number; pitch: number }) => void
+  /** Mode 3D: kamera miring dan gedung MAPID berdiri. Milik App, disimpan di peramban. */
+  tigaDimensi?: boolean
 }
 
 /** Satu kalimat yang muncul di kartu sorot peta. */
@@ -833,7 +949,7 @@ const K_PETA = {
     ubinIsi:
       'Gaya basemap-nya sendiri termuat — ia berkas statis di server ini. Yang ditolak permintaan ubinnya, di sisi MAPID.',
     ubinLanjut:
-      'Keempat gaya memakai server ubin yang sama, jadi berganti gaya tidak menolong. Heksagon, skor, dan seluruh analisisnya tidak terpengaruh.',
+      'Gaya vektor MAPID memakai server ubin yang sama, jadi berganti ke gaya vektor lain tidak menolong. Heksagon, skor, dan seluruh analisisnya tidak terpengaruh.',
     basemapLanjut:
       'Pilih basemap lain lewat menu di kanan atas; heksagon dan skornya tidak terpengaruh.',
     cobaLagi: 'Coba muat ulang basemap',
@@ -856,7 +972,7 @@ const K_PETA = {
     ubinIsi:
       'The basemap style itself loaded — it is a static file on this server. What is being refused are the tile requests, on the MAPID side.',
     ubinLanjut:
-      'All four styles use the same tile server, so switching style does not help. The hexagons, the scores, and every analysis are unaffected.',
+      'The MAPID vector styles share the same tile server, so switching to another vector style does not help. The hexagons, the scores, and every analysis are unaffected.',
     basemapLanjut:
       'Pick another basemap from the menu at the top right; hexagons and scores are unaffected.',
     cobaLagi: 'Try reloading the basemap',
@@ -883,6 +999,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     onMuat,
     tampil,
     onArah,
+    tigaDimensi = false,
   },
   ref,
 ) {
@@ -930,6 +1047,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // bukan nilai yang tertangkap closure dan basi pada pemuatan berikutnya.
   const namaKini = useRef(namaTempat)
   namaKini.current = namaTempat
+  /** Dibaca efek pemuatan heksagon, yang sengaja tidak bergantung padanya. */
+  const tigaDimensiRef = useRef(tigaDimensi)
+  tigaDimensiRef.current = tigaDimensi
   /**
    * Himpunan fokus, dibaca dari dalam callback gelombang yang identitasnya
    * harus tetap. Sama alasannya dengan `layerKini`: kalau gelombangnya ikut
@@ -1116,9 +1236,13 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // --- Inisialisasi. Sekali saja seumur komponen. ---
   useEffect(() => {
     if (!wadah.current) return
+    // Gayanya TIDAK diberikan di sini, melainkan lewat `setStyle` di bawah,
+    // sesudah seluruh pendengar terpasang. Sebabnya `transformStyle`: opsi
+    // konstruktor tidak menerimanya, dan gaya satelit yang dipulihkan dari
+    // localStorage butuh ditata (atribusi, glyph) sebelum dipasang - persis
+    // seperti saat dipilih dari menu.
     const m = new MapLibreMap({
       container: wadah.current,
-      style: urlGaya(gayaAwal.current),
       center: KAWASAN_AWAL.pusat,
       zoom: ZOOM_AWAL,
       // SATU kait untuk gaya, TileJSON, ubin, font, dan sprite sekaligus.
@@ -1173,6 +1297,47 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // setSiap(true) idempoten - mana pun yang lebih dulu, hasilnya sama.
     m.on('load', () => setSiap(true))
     m.once('styledata', () => setSiap(true))
+    m.setStyle(urlGaya(gayaAwal.current), { transformStyle: tataGaya(gayaAwal.current) })
+
+    // --- Penangan klik & sorot heksagon: SEKALI seumur peta ---------------
+    //
+    // Dulu dipasang di dalam efek pemuatan heksagon, di cabang yang membangun
+    // ulang seluruh layer - dan cabang itu berjalan lagi SETIAP kali gaya
+    // basemap diganti, karena `setStyle` membongkar semua layer. MapLibre
+    // mempertahankan pendengar berdelegasi-layer menembus `setStyle`, jadi
+    // sesudah N kali ganti basemap, satu klik dua kali menyimpan lokasi N+1
+    // kali. Nol galat; yang terlihat cuma permintaan simpan yang berlipat.
+    // Pendengar berdelegasi aman dipasang sebelum layernya ada: MapLibre
+    // memeriksa `getLayer` saat kejadian, bukan saat mendaftar.
+    m.on('click', L_ISI, (e) => {
+      const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
+      onPilihRef.current(p?.h3_index ?? null)
+    })
+    // `preventDefault()` WAJIB, dan bukan formalitas: tanpa itu MapLibre
+    // ikut menjalankan zoom bawaannya, jadi menyimpan sebuah lokasi
+    // sekaligus melompatkan peta satu tingkat zoom. Yang tersimpan benar,
+    // yang terlihat pindah tempat.
+    m.on('dblclick', L_ISI, (e) => {
+      const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
+      if (!p?.h3_index || !onSimpanRef.current) return
+      e.preventDefault()
+      onSimpanRef.current(p.h3_index)
+    })
+    m.on('mousemove', L_ISI, (e) => {
+      const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
+      setSorot(p ?? null)
+      m.getCanvas().style.cursor = 'pointer'
+      if (p && m.getLayer(L_SOROT)) {
+        m.setFilter(L_SOROT, ['in', ['get', 'h3_index'], ['literal', [p.h3_index]]])
+      }
+    })
+    m.on('mouseleave', L_ISI, () => {
+      setSorot(null)
+      m.getCanvas().style.cursor = ''
+      if (m.getLayer(L_SOROT)) {
+        m.setFilter(L_SOROT, ['in', ['get', 'h3_index'], ['literal', []]])
+      }
+    })
 
     // --- Ikon sprite yang tidak ada di gaya MAPID -------------------------
     //
@@ -1234,6 +1399,18 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       // panel, dan ini tempat keempatnya.
       if (/non-existing layer|does not exist in the map's style/i.test(pesan)) {
         console.warn('[basemap] penataan layer mendahului pemasangannya:', pesan)
+        return
+      }
+
+      // CITRA SATELIT datang dari penyedia hulu MAPID, bukan dari server ubin
+      // MAPID - jadi penolakannya tidak sama dengan pemadaman MAPID dan tidak
+      // pulih dengan memuat ulang gaya yang sama. Dilaporkan KAPAN PUN (bukan
+      // hanya selama gaya dimuat): ubin citra baru diminta SESUDAH gayanya
+      // siap, jadi jendela di bawah tidak akan pernah melihatnya, dan peta
+      // hitam tanpa keterangan persis yang tidak boleh terjadi.
+      if (/api\.(maptiler|mapbox)\.com/.test(url || pesan)) {
+        console.warn('[basemap] citra satelit ditolak penyedianya:', pesan)
+        setGalatPeta((g) => g ?? { pesan, ubin: false })
         return
       }
 
@@ -1360,9 +1537,36 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // Gagalnya diam dan menyesatkan: peringatannya HILANG (karena efek ini
     // memang mengosongkannya) tanpa satu pun ubin diminta ulang, jadi yang
     // terlihat peta polos tanpa keterangan apa pun.
-    m.setStyle(urlGaya(gaya), { diff: false })
+    m.setStyle(urlGaya(gaya), { diff: false, transformStyle: tataGaya(gaya) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gaya, muatUlang])
+
+  // --- Mode 3D ---
+  //
+  // Dua hal yang berjalan bersama: kamera dimiringkan, dan gedung berdiri.
+  // Kamera hanya digerakkan saat pilihannya BERUBAH - bukan tiap kali gaya
+  // diganti atau peta dimuat - supaya memilih basemap lain tidak melempar
+  // kamera yang sedang dipakai orang.
+  const tigaSebelum = useRef(tigaDimensi)
+  useEffect(() => {
+    const m = peta.current
+    if (!m || !siap) return
+    aturGedung3D(m, gaya, tigaDimensi)
+    if (tigaSebelum.current === tigaDimensi) return
+    tigaSebelum.current = tigaDimensi
+    const diam = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (tigaDimensi) {
+      m.easeTo({
+        pitch: 58,
+        bearing: Math.abs(m.getBearing()) > 0.5 ? m.getBearing() : -18,
+        // Gedung baru terlihat mulai zoom 14; di bawahnya "3D" cuma peta miring.
+        zoom: Math.max(m.getZoom(), 15.2),
+        duration: diam ? 0 : 900,
+      })
+    } else {
+      m.easeTo({ pitch: 0, bearing: 0, duration: diam ? 0 : 700 })
+    }
+  }, [tigaDimensi, siap, gaya])
 
   /**
    * Menjalankan gelombang dari `dari` ke `ke`. Mengembalikan janji supaya
@@ -2087,35 +2291,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           paint: { 'text-color': fokus.teks },
         })
 
-        m.on('click', L_ISI, (e) => {
-          const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
-          onPilihRef.current(p?.h3_index ?? null)
-        })
-        // `preventDefault()` WAJIB, dan bukan formalitas: tanpa itu MapLibre
-        // ikut menjalankan zoom bawaannya, jadi menyimpan sebuah lokasi
-        // sekaligus melompatkan peta satu tingkat zoom. Yang tersimpan benar,
-        // yang terlihat pindah tempat.
-        m.on('dblclick', L_ISI, (e) => {
-          const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
-          if (!p?.h3_index || !onSimpanRef.current) return
-          e.preventDefault()
-          onSimpanRef.current(p.h3_index)
-        })
-        m.on('mousemove', L_ISI, (e) => {
-          const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
-          setSorot(p ?? null)
-          m.getCanvas().style.cursor = 'pointer'
-          if (p && m.getLayer(L_SOROT)) {
-            m.setFilter(L_SOROT, ['in', ['get', 'h3_index'], ['literal', [p.h3_index]]])
-          }
-        })
-        m.on('mouseleave', L_ISI, () => {
-          setSorot(null)
-          m.getCanvas().style.cursor = ''
-          if (m.getLayer(L_SOROT)) {
-            m.setFilter(L_SOROT, ['in', ['get', 'h3_index'], ['literal', []]])
-          }
-        })
+        // Penangan klik/sorot TIDAK dipasang di sini lagi - lihat efek
+        // inisialisasi. Yang tersisa di sini hanya urutan gedung 3D, yang
+        // memang harus disusun ulang tiap kali layer heksagon lahir kembali.
+        aturGedung3D(m, gaya, tigaDimensiRef.current)
 
         if (tampilRef.current) {
           await tungguTenang(m)

@@ -30,45 +30,92 @@
  * yang berfungsi — itu sebabnya proyek ini memakai MapLibre GL, bukan Leaflet.
  */
 /**
- * Gaya `satellite` DICABUT 29 Agustus 2026. Empat yang tersisa seluruhnya
- * melayani ubin dari basemap.mapid.io.
+ * Kelima gaya basemap resmi MAPID - sama dengan daftar di halaman basemap
+ * MAPID sendiri (Light, Street 3D, Street 2D, Dark, Satellite).
  *
- * Sebelumnya ini ditandai "keputusan pemilik repo" karena tampak sebagai
- * pertimbangan kepatuhan yang bisa ditimbang dua arah. Yang mengubahnya satu
- * temuan konkret saat gaya mulai disimpan sebagai berkas statis: `satellite`
- * membawa `access_token` Mapbox sepanjang 93 karakter MILIK ORANG LAIN, plus
- * tiga sumber ke api.maptiler.com. Menyajikannya berarti ikut menerbitkan
- * kredensial pihak ketiga dari deployment kita sendiri - dan itu bukan lagi
- * soal menimbang A.3, melainkan soal tidak menyebarkan kunci orang.
+ * SATELIT KEMBALI 12 September 2026, keputusan pemilik repo, dan cara
+ * memasangnya yang membedakannya dari pencabutan 29 Agustus.
  *
- * Aturan keras #6 sudah menyatakannya lebih dulu: tidak ada sumber tile lain.
+ * Yang dulu jadi masalah: berkas gaya `satellite` membawa `access_token` Mapbox
+ * dan kunci MapTiler milik akun MAPID, dan menyimpannya sebagai berkas statis
+ * di repo berarti ikut menerbitkan kredensial itu dari deployment kita.
+ * Diperiksa ulang 12 Sep 2026: MAPID TIDAK merender raster satelitnya sendiri -
+ * `/styles/satellite/512/{z}/{x}/{y}.png` dan `/styles/512/satellite.json`
+ * menjawab 404 "Cannot GET" untuk kunci mana pun, jadi citranya memang hanya
+ * bisa tampil lewat GL Style resminya, yang menarik ubin dari penyedia hulu
+ * MAPID (MapTiler dan Mapbox).
+ *
+ * Maka satelit dimuat LANGSUNG dari basemap.mapid.io saat dipilih (`langsung`),
+ * tidak pernah disimpan ke repo: kredensial di dalamnya tetap milik dan
+ * diterbitkan MAPID, bukan salinan di git kita. Basemap UTAMA tetap vektor
+ * MAPID (ketentuan B.2: "MAPID MAPS sebagai basemap utama").
+ *
+ * `gedung3d`: gaya yang SUDAH membawa layer gedung 3D-nya sendiri. Sisanya
+ * diberi layer ekstrusi dari ubin vektor MAPID yang sama saat mode 3D menyala.
  */
-export const GAYA_BASEMAP: Record<string, { id: string; label: string }> = {
-  terang: { id: 'light', label: 'Terang' },
-  dasar: { id: 'basic', label: 'Dasar' },
-  jalan: { id: 'street-2d-building', label: 'Jalan' },
-  gelap: { id: 'dark', label: 'Gelap' },
+export interface GayaBasemap {
+  id: string
+  label: string
+  labelEn: string
+  langsung?: boolean
+  gedung3d?: string
+}
+
+export const GAYA_BASEMAP: Record<string, GayaBasemap> = {
+  terang: { id: 'light', label: 'Terang', labelEn: 'Light' },
+  dasar: { id: 'basic', label: 'Jalan 3D', labelEn: 'Street 3D', gedung3d: 'building-3d' },
+  jalan: { id: 'street-2d-building', label: 'Jalan 2D', labelEn: 'Street 2D' },
+  gelap: { id: 'dark', label: 'Gelap', labelEn: 'Dark' },
+  satelit: { id: 'satellite', label: 'Satelit', labelEn: 'Satellite', langsung: true },
 }
 
 export type NamaGaya = keyof typeof GAYA_BASEMAP
 
 /**
- * Berkas STATIS di `public/basemap/`, bukan panggilan ke backend.
- *
- * Kuncinya tetap tidak pernah ada di peramban - berkas ini dibangkitkan
- * `scripts/gaya-basemap.mjs` lewat proksi backend, yang mengambilnya dari MAPID
- * dengan kunci lalu membuangnya dari badan respons.
+ * Berkas STATIS di `public/basemap/` untuk keempat gaya vektor; URL MAPID
+ * langsung untuk satelit.
  *
  * Statis, karena kalau peramban memintanya ke backend saat peta dibuka, basemap
- * ikut mati setiap kali Render free tier sedang tidur - persis puluhan detik
- * pertama saat juri membuka tautan. Ini penerapan mitigasi yang sudah tertulis
- * di PRD untuk masalah yang sama: precompute, lalu sajikan dari CDN.
- *
- * Ubin, font, dan sprite TIDAK ikut jadi statis - ketiganya tetap diambil
- * peramban langsung dari MAPID.
+ * ikut mati setiap kali backend sedang tidur - persis puluhan detik pertama saat
+ * juri membuka tautan. Kuncinya tidak pernah ada di berkas mana pun: yang
+ * membubuhkannya `transformRequest` lewat `bubuhiKunciBasemap` di bawah.
  */
-export const urlGaya = (nama: NamaGaya = 'terang') =>
-  `${import.meta.env.BASE_URL}basemap/${GAYA_BASEMAP[nama].id}.json`
+export const urlGaya = (nama: NamaGaya = 'terang') => {
+  const g = GAYA_BASEMAP[nama] ?? GAYA_BASEMAP.terang
+  return g.langsung
+    ? `https://basemap.mapid.io/styles/${g.id}/style.json`
+    : `${import.meta.env.BASE_URL}basemap/${g.id}.json`
+}
+
+/**
+ * Sumber vektor MAPID untuk gedung 3D di gaya yang tidak membawanya (satelit).
+ *
+ * Bentuknya SALINAN persis sumber `mapidtiles` di berkas gaya statis - TileJSON
+ * yang sudah disisipkan, bukan `url` ke mapidtiles.json. Yang kedua 2,7 MB dan
+ * terbukti gagal sesekali sebagai permintaan lintas-asal (lihat
+ * scripts/gaya-basemap.mjs), sementara yang pertama tidak butuh permintaan
+ * tambahan sama sekali.
+ */
+export const SUMBER_UBIN_MAPID = {
+  type: 'vector' as const,
+  tiles: ['https://basemap.mapid.io/data/mapidtiles/{z}/{x}/{y}.pbf'],
+  minzoom: 0,
+  maxzoom: 14,
+  attribution:
+    '<a href="https://mapid.co.id/" target="_blank">&copy; MAPID Maps</a> <a href="https://www.openmaptiles.org/" target="_blank">&copy; OpenMapTiles</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
+}
+
+/**
+ * Atribusi citra satelit. Gaya satelit MAPID tidak membawa satu pun teks
+ * atribusi di sumbernya, jadi tanpa ini peta citra tampil tanpa menyebut siapa
+ * pemilik gambarnya - dan A.1 menuntut setiap sumber disebut.
+ */
+export const ATRIBUSI_SATELIT =
+  '<a href="https://mapid.co.id/" target="_blank">&copy; MAPID Maps</a> · Citra/Imagery <a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.mapbox.com/about/maps/" target="_blank">&copy; Mapbox</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>'
+
+/** Font MAPID - server fontnya melayani Noto Sans (dipakai label satelit) dan
+ *  Metropolis (angka heksagon). Diuji 12 Sep 2026: keduanya 200. */
+export const GLYPH_MAPID = 'https://basemap.mapid.io/fonts/{fontstack}/{range}.pbf'
 
 /**
  * Kunci basemap MAPID, dan kenapa ia sekarang ADA di peramban lagi.

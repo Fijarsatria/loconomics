@@ -185,6 +185,8 @@ interface TampilanTersimpan {
   layerNyala?: boolean
   namaTempat?: string
   gaya?: NamaGaya
+  /** Mode 3D (kamera miring + gedung berdiri). */
+  tigaDimensi?: boolean
 }
 
 /**
@@ -252,6 +254,8 @@ function bacaTampilan(): TampilanTersimpan {
       layerNyala: typeof t.layerNyala === 'boolean' ? t.layerNyala : undefined,
       namaTempat: t.namaTempat && t.namaTempat in KERAPATAN_NAMA ? t.namaTempat : undefined,
       gaya: t.gaya && t.gaya in GAYA_BASEMAP ? t.gaya : undefined,
+      // Ditulis DAN dibaca sejak lahir - pelajaran `layerNyala` di atas.
+      tigaDimensi: typeof t.tigaDimensi === 'boolean' ? t.tigaDimensi : undefined,
     }
   } catch {
     // JSON rusak, atau mode privat yang melempar. Keduanya berarti hal yang
@@ -345,6 +349,8 @@ const K_APP: Record<
     ajakanLangganan: string
     ajakanMasuk: string
     basemap: Record<string, string>
+    tigaDimensiNyala: string
+    tigaDimensiMati: string
   }
 > = {
   id: {
@@ -405,7 +411,9 @@ const K_APP: Record<
     daftarSekarang: 'Sign Up sekarang',
     ajakanLangganan: 'Pemantauan bagian dari Loconomics Premium.',
     ajakanMasuk: 'Buat akun dulu untuk mulai memantau lokasi.',
-    basemap: { terang: 'Terang', dasar: 'Dasar', jalan: 'Jalan', gelap: 'Gelap' },
+    basemap: { terang: 'Terang', dasar: 'Jalan 3D', jalan: 'Jalan 2D', gelap: 'Gelap', satelit: 'Satelit' },
+    tigaDimensiNyala: 'Kembali ke peta datar',
+    tigaDimensiMati: 'Tampilan 3D - gedung berdiri',
   },
   en: {
     cari: 'Search a station, area, or H3 index…',
@@ -466,7 +474,9 @@ const K_APP: Record<
     daftarSekarang: 'Sign up now',
     ajakanLangganan: 'Watching locations is part of Loconomics Premium.',
     ajakanMasuk: 'Create an account first to start watching locations.',
-    basemap: { terang: 'Light', dasar: 'Basic', jalan: 'Street', gelap: 'Dark' },
+    basemap: { terang: 'Light', dasar: 'Street 3D', jalan: 'Street 2D', gelap: 'Dark', satelit: 'Satellite' },
+    tigaDimensiNyala: 'Back to the flat map',
+    tigaDimensiMati: '3D view - standing buildings',
   },
 }
 
@@ -770,6 +780,8 @@ export default function App() {
   // orang yang kembali dengan tema terang membuka peta hitam di bawah panel
   // putih. Terlihat 11 Sep 2026 di `vite preview`, bukan di dev.
   const [gaya, setGaya] = useState<NamaGaya>(AWAL.gaya ?? (tema === 'terang' ? 'dasar' : 'gelap'))
+  /** Mode 3D. Bawaannya datar: peta analitik dibaca dari atas, 3D dipilih sadar. */
+  const [tigaDimensi, setTigaDimensi] = useState<boolean>(AWAL.tigaDimensi ?? false)
   const [hexTerpilih, setHexTerpilih] = useState<string | null>(null)
 
   // Pilihan menampilkan rute berlaku untuk SATU heksagon. Berpindah heksagon
@@ -931,6 +943,10 @@ export default function App() {
     if (temaSebelum.current === tema) return
     temaSebelum.current = tema
     setGaya((g) => {
+      // Satelit tidak punya versi terang atau gelap - citra adalah citra. Orang
+      // yang memilihnya lalu mengganti tema sedang mengganti warna CHROME, dan
+      // melempar petanya ke gaya vektor akan membatalkan pilihan yang disengaja.
+      if (g === 'satelit') return g
       if (tema === 'gelap') return g === 'gelap' ? g : 'gelap'
       return g === 'gelap' ? 'dasar' : g
     })
@@ -1182,12 +1198,12 @@ export default function App() {
       // yang diminta untuk tidak terjadi.
       localStorage.setItem(
         KUNCI_TAMPILAN,
-        JSON.stringify({ kawasan, layer, layerNyala, gaya, namaTempat }),
+        JSON.stringify({ kawasan, layer, layerNyala, gaya, namaTempat, tigaDimensi }),
       )
     } catch {
       // Mode privat. Sesi tetap jalan, cuma tidak selamat dari refresh.
     }
-  }, [gerbang, kawasan, layer, layerNyala, gaya, namaTempat])
+  }, [gerbang, kawasan, layer, layerNyala, gaya, namaTempat, tigaDimensi])
 
   /**
    * Pin lokasi tersimpan di peta - hanya untuk pelanggan.
@@ -1650,6 +1666,7 @@ export default function App() {
             namaTempat={namaTempat}
             rutaTampil={rutaTampil}
             gaya={gaya}
+            tigaDimensi={tigaDimensi}
             terpilih={hexTerpilih}
             saringKuadran={saringKuadran}
             dibandingkan={baki}
@@ -1758,7 +1775,12 @@ export default function App() {
                   kawasan, layer, pengaturan, dan akun; preferensi tampilan
                   bukan benda yang ditekan orang tiap menit, dan ia berdiri di
                   sebelah sakelar bahasa yang sifatnya sama persis. */}
-              <MenuPengaturan namaTempat={namaTempat} onNamaTempat={setNamaTempat} />
+              <MenuPengaturan
+                namaTempat={namaTempat}
+                onNamaTempat={setNamaTempat}
+                tigaDimensi={tigaDimensi}
+                onTigaDimensi={setTigaDimensi}
+              />
               {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
                   visual keduanya terbaca sebagai satu kelompok tombol. */}
               <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-line sm:block" aria-hidden />
@@ -1952,6 +1974,22 @@ export default function App() {
                       className="grid h-10 w-11 cursor-pointer place-items-center text-[17px] leading-none transition-colors hover:bg-surface-2/70"
                     >
                       −
+                    </button>
+                    <span className="mx-2.5 h-px bg-line" />
+                    {/* Sakelar 3D. Sesumbu dengan zoom karena keduanya mengubah
+                        KAMERA, bukan isi peta. Tulisan "3D" alih-alih ikon kubus:
+                        kubus di ukuran 17px terbaca sebagai ikon paket, dan dua
+                        huruf ini justru kata yang dicari orang. */}
+                    <button
+                      onClick={() => setTigaDimensi((v) => !v)}
+                      aria-pressed={tigaDimensi}
+                      aria-label={tigaDimensi ? t.tigaDimensiNyala : t.tigaDimensiMati}
+                      title={tigaDimensi ? t.tigaDimensiNyala : t.tigaDimensiMati}
+                      className={`grid h-10 w-11 cursor-pointer place-items-center text-[12px] font-bold leading-none tracking-wide transition-colors ${
+                        tigaDimensi ? 'bg-ink text-surface' : 'hover:bg-surface-2/70'
+                      }`}
+                    >
+                      3D
                     </button>
                   </div>
 

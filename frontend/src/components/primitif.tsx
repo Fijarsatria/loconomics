@@ -1369,13 +1369,38 @@ const K_NAMA_TEMPAT = {
 
 const URUTAN_KERAPATAN = ['mati', 'jarang', 'normal', 'rapat'] as const
 
+/** Mode 3D di menu pengaturan - satu-satunya jalan ke 3D di layar sempit. */
+const K_TIGA_DIMENSI = {
+  id: {
+    judul: 'Gedung 3D',
+    catatan: 'Peta dimiringkan dan gedung MAPID berdiri di atas heksagon',
+    datar: 'Datar',
+    tiga: '3D',
+  },
+  en: {
+    judul: '3D buildings',
+    catatan: 'The map tilts and MAPID buildings stand on top of the hexagons',
+    datar: 'Flat',
+    tiga: '3D',
+  },
+}
+
 export function MenuPengaturan({
   namaTempat,
   onNamaTempat,
+  tigaDimensi,
+  onTigaDimensi,
   varian = 'peta',
 }: {
   namaTempat?: string
   onNamaTempat?: (k: string) => void
+  /**
+   * Mode 3D. Di layar lebar ada tombolnya sendiri di tumpukan zoom; di layar
+   * sempit tumpukan itu disembunyikan (cubit-untuk-zoom menggantikannya), dan
+   * tanpa baris ini 3D tidak punya satu pun jalan masuk di ponsel.
+   */
+  tigaDimensi?: boolean
+  onTigaDimensi?: (v: boolean) => void
   /**
    * `gerbang` = bilah atas halaman perkenalan. Yang berbeda cuma BAHAN dan
    * ukuran tombolnya - pil kaca setinggi tombol-tombol di sebelahnya, bukan
@@ -1387,6 +1412,7 @@ export function MenuPengaturan({
 } = {}) {
   const { bahasa } = useBahasa()
   const tn = useTeks(K_NAMA_TEMPAT)
+  const t3 = useTeks(K_TIGA_DIMENSI)
   const [buka, setBuka] = useState(false)
   const { tampil, menutup } = useTutupHalus(buka)
   const [layar, setLayar] = useState<KunciPengaturan | null>(null)
@@ -1546,6 +1572,27 @@ export function MenuPengaturan({
                       }`}
                     >
                       {tn.pilihan[k]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {onTigaDimensi && (
+              <div className="ungkap rounded-sm px-3 py-2.5">
+                <p className="text-[13.5px] text-ink-2">{t3.judul}</p>
+                <p className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{t3.catatan}</p>
+                <div className="mt-2 grid grid-cols-2 gap-1 rounded-full bg-surface-2 p-1">
+                  {([false, true] as const).map((v) => (
+                    <button
+                      key={String(v)}
+                      type="button"
+                      onClick={() => onTigaDimensi(v)}
+                      aria-pressed={Boolean(tigaDimensi) === v}
+                      className={`cursor-pointer rounded-full py-1 text-[11px] font-semibold transition-colors duration-200 ${
+                        Boolean(tigaDimensi) === v ? 'bg-ink text-surface' : 'text-ink-3 hover:text-ink-2'
+                      }`}
+                    >
+                      {v ? t3.tiga : t3.datar}
                     </button>
                   ))}
                 </div>
