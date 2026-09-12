@@ -1091,6 +1091,91 @@ def test_rupiah_memisahkan_ribuan_menurut_bahasanya():
     assert rp(2_250_000, "en") == "Rp2,250,000"
     assert rp(0, "en") == "Rp0"
 
+def test_kode_perkiraan_menunjuk_kolom_yang_benar_benar_ada():
+    """Jembatan kode->kolom yang salah gagalnya DIAM.
+
+    Antarmuka menamai tiap perkiraan lewat nama KOLOMNYA. Kolom yang salah ketik
+    tidak melempar apa pun - ia cuma tampil sebagai baris tanpa nama di panel,
+    dan tidak ada satu pun jalur yang memeriksanya.
+    """
+    from app.api.bersama import SEMUA_VARIABEL
+    from app.core.aturan import KODE_PERKIRAAN
+
+    from config import KODE_KE_KOLOM  # pipeline
+
+    for kode, kolom in KODE_PERKIRAAN.items():
+        assert kode in KODE_KE_KOLOM, f"{kode} bukan kode variabel yang dikenal pipeline"
+        assert KODE_KE_KOLOM[kode] == kolom, (
+            f"{kode}: backend bilang '{kolom}', pipeline bilang '{KODE_KE_KOLOM[kode]}'"
+        )
+        assert kolom in SEMUA_VARIABEL, f"{kolom} bukan salah satu dari 43 variabel"
+
+
+def test_setiap_kode_perkiraan_punya_nama_dan_satuan():
+    """Perkiraan tanpa satuan terbaca sebagai angka telanjang.
+
+    "Meleset rata-rata 2,34" tidak berarti apa pun tanpa "skala 1-3" di
+    belakangnya - dan yang paling mungkin membuatnya hilang adalah kode baru
+    yang ditambahkan ke KODE_PERKIRAAN tanpa menambah pasangannya di sini.
+    """
+    from app.core.aturan import KODE_PERKIRAAN, NAMA_PERKIRAAN, SATUAN_PERKIRAAN
+
+    for kode in KODE_PERKIRAAN:
+        assert kode in NAMA_PERKIRAAN, f"{kode} tidak punya nama awam"
+        assert kode in SATUAN_PERKIRAAN, f"{kode} tidak punya satuan"
+        for tabel in (NAMA_PERKIRAAN, SATUAN_PERKIRAAN):
+            assert len(tabel[kode]) == 2 and all(tabel[kode]), f"{kode} kurang satu bahasa"
+
+
+def test_kalimat_perkiraan_selalu_menyangkal_tiga_hal():
+    """Tiga penyangkalan itu SATU-SATUNYA hal yang membedakan perkiraan dari
+    pengukuran di mata pembaca: ia tidak menghitung skor, tidak mewarnai peta,
+    tidak menaikkan lencana. Kalau salah satu kalimatnya hilang, angka model
+    duduk di panel yang sama dengan angka survei tanpa pembeda apa pun.
+    """
+    from app.core.aturan import kalimat_perkiraan
+
+    for bahasa, kata in (("id", ("skor", "peta", "keyakinan")), ("en", ("score", "map", "confidence"))):
+        t = kalimat_perkiraan("B07", "model_gbr", {}, bahasa)  # type: ignore[arg-type]
+        for k in kata:
+            assert k in t.lower(), f"{bahasa}: '{k}' hilang dari kalimat perkiraan"
+
+
+def test_kalimat_perkiraan_tidak_mengarang_saat_rincian_kosong():
+    """Rincian kosong harus menghasilkan kalimat yang PENDEK, bukan kalimat yang
+    menebak. Perkiraan yang keterangannya dikarang lebih buruk daripada
+    perkiraan tanpa keterangan.
+    """
+    from app.core.aturan import kalimat_perkiraan
+
+    t = kalimat_perkiraan("B07", "model_gbr", {}, "id")
+    for dilarang in ("R²", "meleset", "dilatih"):
+        assert dilarang not in t, f"'{dilarang}' muncul padahal rinciannya kosong"
+
+
+def test_kalimat_perkiraan_memakai_pemisah_angka_bahasanya():
+    """Keluarga yang sama dengan `rp()`: "14.580" dan "14,580" berselisih
+    seribu kali lipat di antara dua pembaca.
+    """
+    from app.core.aturan import kalimat_perkiraan
+
+    r = {"n_uji_terukur": 12, "mae_vs_terukur": 14580.13}
+    assert "14.580" in kalimat_perkiraan("B07", "model_gbr", r, "id")
+    assert "14,580" in kalimat_perkiraan("B07", "model_gbr", r, "en")
+
+
+def test_kalimat_perkiraan_menyebut_benda_yang_benar():
+    """D10 bukan harga. Kalimat penutup yang tidak cocok dengan angkanya
+    terbaca sebagai kalimat yang disalin - dan itu membuat seluruh
+    keterangannya dicurigai.
+    """
+    from app.core.aturan import kalimat_perkiraan
+
+    r = {"n_uji_terukur": 12, "mae_vs_terukur": 2.34}
+    assert "bukan sebagai harga" in kalimat_perkiraan("B07", "model_gbr", r, "id")
+    assert "bukan sebagai harga" not in kalimat_perkiraan("D10", "model_gbr", r, "id")
+
+
 if __name__ == "__main__":
     lolos = gagal = 0
     for nama, fn in sorted(globals().items()):

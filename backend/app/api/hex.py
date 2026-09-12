@@ -33,6 +33,7 @@ from app.api.bersama import (
 from app.core.aturan import (
     JAM_OPERASIONAL,
     KELAS_USAHA,
+    KODE_PERKIRAAN,
     MEMUTAR_MENCOLOK,
     BAHASA_BAWAAN,
     Bahasa,
@@ -40,6 +41,7 @@ from app.core.aturan import (
     PENJELASAN_KUADRAN_EN,
     alasan_blok,
     kalimat,
+    kalimat_perkiraan,
     pilih,
     cakupan_indeks,
     cakupan_prestise,
@@ -57,7 +59,14 @@ from app.core.simulasi import (
 from app.core.cache import ber_cache
 from app.core.galat import KesalahanAPI
 from app.core.database import get_db
-from app.models import BlokHeksagon, HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
+from app.models import (
+    BlokHeksagon,
+    HexFeature,
+    HexHourlyProfile,
+    HexPerkiraan,
+    LocationScore,
+    ScoreFactor,
+)
 from app.schemas import (
     BedahBlok,
     BlokDalamHeksagon,
@@ -73,6 +82,7 @@ from app.schemas import (
     Simulasi,
     JamSimulasi,
     LingkunganSimulasi,
+    PerkiraanHeksagon,
 )
 
 router = APIRouter(prefix="/hex", tags=["heksagon"])
@@ -810,7 +820,7 @@ def detail_heksagon(
         boleh_penuh = sudah_terbuka(db, pengguna, h3_index)
 
     terkunci: list[str] = (
-        [] if boleh_penuh else ["variabel", "faktor", "indeks", "kuadran"]
+        [] if boleh_penuh else ["variabel", "faktor", "indeks", "kuadran", "perkiraan"]
     )
 
     skor = db.execute(
@@ -824,6 +834,34 @@ def detail_heksagon(
         .where(ScoreFactor.h3_index == h3_index, ScoreFactor.versi == versi)
         .order_by(ScoreFactor.kontribusi.desc().nullslast())
     ).scalars().all()
+
+    # PERKIRAAN. Diminta hanya kalau boleh dikirim - sebuah kueri yang hasilnya
+    # sudah pasti dibuang cuma membebani basis data untuk tiap tamu yang
+    # mengklik heksagon.
+    perkiraan: list[PerkiraanHeksagon] = []
+    if boleh_penuh:
+        for baris in db.execute(
+            select(HexPerkiraan).where(HexPerkiraan.h3_index == h3_index)
+        ).scalars():
+            rincian = baris.rincian or {}
+            kolom = KODE_PERKIRAAN.get(baris.kode)
+            if kolom is None:
+                # Kode yang tidak kita kenal DILEWATI, bukan dikirim apa adanya.
+                # Antarmuka menamai perkiraan lewat nama kolomnya; kode tanpa
+                # kolom akan tampil sebagai baris tanpa nama.
+                continue
+            perkiraan.append(
+                PerkiraanHeksagon(
+                    kode=baris.kode,
+                    kolom=kolom,
+                    nilai=baris.nilai,
+                    metode=baris.metode,
+                    keterangan=kalimat_perkiraan(baris.kode, baris.metode, rincian, bahasa),
+                    n_sumber=baris.n_sumber,
+                    mutu=rincian,
+                )
+            )
+        perkiraan.sort(key=lambda p: p.kode)
 
     p75, p90 = persentil_churn(db, hx.kawasan)
 
@@ -883,4 +921,5 @@ def detail_heksagon(
         # dikirim daftar kodenya saja - tidak satu pun nilai, jadi ia tetap di
         # sisi gratis bersama kuadrannya sendiri.
         cakupan_prestise=CakupanPrestise(**cakupan_prestise([hx])),  # type: ignore[arg-type]
+        perkiraan=perkiraan,
     )

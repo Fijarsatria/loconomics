@@ -1295,6 +1295,103 @@ def _bangunan_bertitik() -> pd.DataFrame:
     return pd.concat(potongan, ignore_index=True) if potongan else pd.DataFrame(columns=["lat", "lon", "luas_m2"])
 
 
+# --- Serah terima tim AI ----------------------------------------------------
+#
+# Berkasnya TIDAK di-commit: `pipeline/data/` seluruhnya di-gitignore karena
+# ketentuan lomba B.7 melarang redistribusi data MAPID/mitra. Yang masuk git
+# cuma kode pembacanya dan angka mutunya di docs/.
+TIM_AI = DATA_MENTAH / "tim_ai"
+
+#: Satu-satunya kolom serah terima yang masuk `hex_features` sebagai DATA.
+#:
+#: WorldPop struktur umur - sumber yang sama dengan D01 yang sudah kita pakai,
+#: cuma lapisan yang berbeda, jadi ia pengukuran dan bukan perkiraan. D02 tidak
+#: ada di satu pun BOBOT_* (IPT, IAE, IKP, IBR), jadi memuatnya menambah satu
+#: variabel yang bisa dibaca orang TANPA menggeser satu pun skor - sudah
+#: diperiksa, bukan diasumsikan.
+KOLOM_TIM_AI_NYATA = {"pop_usia_produktif": "D02"}
+
+#: Dua keluaran MODEL, dan keduanya tidak boleh menyentuh `hex_features`.
+#:
+#: Alasannya ada di log training tim AI sendiri: dari 480 titik label, 15 asli
+#: (Menu Go di dalam bbox) dan ~465 sintetis dari formula populasi + jarak
+#: simpul + derau - 96,9%. Catatan serah terimanya menulis "BUKAN bukti model
+#: sudah akurat untuk dunia nyata" dan melarang file itu dipakai sebagai data
+#: 100% asli tanpa disclosure.
+#:
+#: Ditaruh di `hex_perkiraan`, angka itu tetap bisa dibaca orang di panel dan
+#: laporan - berlabel Perkiraan, lengkap dengan R2 dan MAE-nya. Ditaruh di
+#: `hex_features`, ia akan ikut memeringkat 708 lokasi dan menaikkan lencana
+#: keyakinan atas dasar label yang sebagian besar dikarang formula.
+KOLOM_TIM_AI_PERKIRAAN = {"skor_ramai_terkoreksi": "D10", "harga_median_porsi": "B07"}
+
+#: Yang SENGAJA tidak diambil, supaya alasannya tidak hilang bersama sesi ini.
+#:
+#: `jarak_simpul_m`  - milik mereka Euclidean (DATA_SCHEMA.md menyebutnya
+#:                     proksi dan melarang diklaim sebagai jaringan jalan);
+#:                     milik kita rute OpenRouteService sungguhan. Menambal 5
+#:                     heksagon yang kosong dengan angka berdefinisi lain
+#:                     membuat satu kolom memuat dua satuan yang tidak bisa
+#:                     dibedakan siapa pun sesudahnya (jebakan 5).
+#: `luas_bangunan_median`, `rasio_tutupan_bangunan`
+#:                   - milik mereka Google Open Buildings, milik kita jejak
+#:                     OSM. Alasan yang sama; selisihnya cuma 9 heksagon.
+#: `risiko_banjir`   - milik mereka indeks InaRISK 0-1, milik kita kelas dari
+#:                     RDTR GISTARU. Dua definisi berbeda, dan milik kita
+#:                     justru lebih lengkap (364 vs 344).
+#: `n_kompetitor`, `n_generator_keramaian`
+#:                   - sudah 708/708 di kita, dari taksonomi 8 kelas yang
+#:                     mereka sendiri catat belum punya.
+KOLOM_TIM_AI_DILEWATI = (
+    "jarak_simpul_m", "luas_bangunan_median", "rasio_tutupan_bangunan",
+    "risiko_banjir_indeks_mean", "risiko_banjir_indeks_max", "pop_100m",
+    "n_kompetitor", "n_generator_keramaian", "jumlah_bangunan",
+)
+
+
+def baca_tim_ai() -> tuple[pd.DataFrame, dict]:
+    """`hex_features_final.geojson` + `hasil_validasi.json` dari tim AI.
+
+    Mengembalikan (fitur berindeks h3_index, mutu model). Seluruh 40.288
+    heksagon dibaca lalu disaring ke heksagon KITA di pemanggilnya - menyaring
+    di sini akan menyembunyikan berapa banyak yang sebetulnya tersedia.
+    """
+    berkas = TIM_AI / "hex_features_final.geojson"
+    if not berkas.exists():
+        raise SystemExit(
+            f"{berkas} tidak ada. Unduh dari repo tim AI "
+            "(syahh-coder/Loconomics-AI, folder hasilTrain) lebih dulu."
+        )
+    isi = json.loads(berkas.read_text(encoding="utf-8"))
+    baris = [f["properties"] for f in isi["features"]]
+    df = pd.DataFrame(baris).set_index("hex_id")
+    df.index.name = "h3_index"
+    mutu = json.loads((TIM_AI / "hasil_validasi.json").read_text(encoding="utf-8"))
+    return df, mutu
+
+
+def muat_perkiraan(db: Session, baris: list[dict]) -> int:
+    """Hapus-lalu-sisip per KODE, bukan per tabel.
+
+    Menghapus seluruh isi `hex_perkiraan` akan ikut membuang perkiraan dari
+    sumber lain (spanduk OCR, pola jam) yang tidak sedang dimuat ulang - dan
+    hilangnya tidak akan memunculkan satu pun galat.
+    """
+    if not baris:
+        return 0
+    kode = sorted({b["kode"] for b in baris})
+    db.execute(
+        text("DELETE FROM hex_perkiraan WHERE kode = ANY(:kode)"), {"kode": kode}
+    )
+    sisip = text(
+        "INSERT INTO hex_perkiraan (h3_index, kode, nilai, rincian, metode, n_sumber, radius_m) "
+        "VALUES (:h3_index, :kode, :nilai, CAST(:rincian AS jsonb), :metode, :n_sumber, :radius_m)"
+    )
+    for bagian in _potong(baris):
+        db.execute(sisip, bagian)
+    return len(baris)
+
+
 def bangun_blok(heksagon: pd.Series) -> pd.DataFrame:
     """Seluruh blok (anak H3 res-10) beserta indikator dan skornya.
 
@@ -2373,14 +2470,124 @@ if __name__ == "__main__":
         action="store_true",
         help="Bersama --blok: hitung lalu tulis ke data/03_olahan/blok.json, TANPA basis data",
     )
+    p.add_argument(
+        "--tim-ai",
+        action="store_true",
+        help="Serah terima tim AI: D02 -> hex_features (data), D10/B07 -> hex_perkiraan (perkiraan)",
+    )
     p.add_argument("--versi", default="baseline")
     arg = p.parse_args()
 
     if not any([arg.muat, arg.ekspor, arg.cakupan, arg.isi_d04, arg.penduduk,
                 arg.bangunan, arg.osm, arg.misi, arg.survei, arg.rdtr, arg.transit,
-                arg.gapfill, arg.kosongkan, arg.hitung_ulang, arg.grid, arg.blok]):
+                arg.gapfill, arg.kosongkan, arg.hitung_ulang, arg.grid, arg.blok,
+                arg.tim_ai]):
         p.print_help()
         raise SystemExit(0)
+
+    # --- Serah terima tim AI ----------------------------------------------
+    #
+    # Transaksinya sendiri, dan berjalan sebelum --hitung-ulang supaya D02 yang
+    # baru masuk ikut terbaca kalau skornya memang dihitung ulang di lari yang
+    # sama. D02 tidak menggeser skor - tapi menggantungkan urutannya pada fakta
+    # itu berarti menaruh bom waktu untuk hari seseorang memberi D02 bobot.
+    if arg.tim_ai:
+        print("Serah terima tim AI (syahh-coder/Loconomics-AI, hasilTrain)...")
+        tim, mutu = baca_tim_ai()
+        print(f"  heksagon di berkas   {len(tim)}")
+        with sessionmaker(bind=_mesin())() as db:
+            punya = pd.read_sql(
+                "SELECT h3_index FROM hex_features", db.connection()
+            )["h3_index"]
+            irisan = tim.reindex(punya)
+            print(f"  heksagon kita        {len(punya)}")
+            print(f"  ketemu di berkas     {int(irisan['resolusi'].notna().sum())}")
+
+            # 1. Yang NYATA - satu kolom, dan ia memang pengukuran.
+            nyata = irisan[list(KOLOM_TIM_AI_NYATA)].copy()
+            n = muat_variabel(db, nyata)
+            for kol, kode in KOLOM_TIM_AI_NYATA.items():
+                print(f"  {kode} {kol:<22} {int(nyata[kol].notna().sum())}/{len(punya)} terisi")
+
+            # 2. Yang PERKIRAAN - ke tabelnya sendiri, berlabel dan bermutu.
+            #
+            # UJI SILANG TERHADAP UKURAN KITA, bukan cuma R2 yang mereka
+            # laporkan. R2 0,62 dan MAE 2.864 itu diukur terhadap label yang
+            # 96,9%-nya sintetis, jadi ia mengukur seberapa baik model menebak
+            # formula yang membuatnya - bukan seberapa dekat ia ke kenyataan.
+            # Yang kita punya justru pembanding yang tidak dilihat model:
+            # pengamatan misi MAPID di heksagon kita sendiri. Angkanya ikut
+            # disimpan supaya setiap tempat yang menampilkan perkiraan ini bisa
+            # menyebut selisihnya, bukan cuma menyebut R2-nya.
+            terukur = pd.read_sql(
+                "SELECT h3_index, harga_median_porsi, skor_ramai_terkoreksi FROM hex_features",
+                db.connection(),
+            ).set_index("h3_index")
+            uji: dict[str, dict] = {}
+            for kol, kode in KOLOM_TIM_AI_PERKIRAAN.items():
+                pas = terukur[kol].dropna()
+                if pas.empty:
+                    continue
+                beda = (irisan.loc[pas.index, kol] - pas).abs()
+                # MAPE hanya atas nilai terukur yang BUKAN nol. D10 sah bernilai
+                # nol ("Sepi"), dan membaginya menghasilkan tak hingga - yang
+                # bukan cuma mustahil ditulis ke JSON, tapi juga akan terbaca
+                # sebagai "modelnya salah tak terhingga" alih-alih "pembaginya
+                # nol".
+                bukan_nol = pas[pas != 0]
+                mape = (
+                    round(float((beda[bukan_nol.index] / bukan_nol.abs()).mean() * 100), 1)
+                    if not bukan_nol.empty
+                    else None
+                )
+                uji[kode] = {
+                    "n_uji_terukur": int(len(pas)),
+                    "mae_vs_terukur": round(float(beda.mean()), 3),
+                    "mape_vs_terukur": mape,
+                    "n_mape": int(len(bukan_nol)),
+                }
+                print(f"    {kode}  vs ukuran ASLI: n={len(pas)} "
+                      f"MAE {uji[kode]['mae_vs_terukur']:,.2f} "
+                      f"MAPE {mape if mape is not None else '-'}% (n={len(bukan_nol)})")
+
+            baris: list[dict] = []
+            for kol, kode in KOLOM_TIM_AI_PERKIRAAN.items():
+                m = mutu.get({"D10": "skor_ramai", "B07": "harga"}[kode], {})
+                for h3, nilai in irisan[kol].items():
+                    if pd.isna(nilai):
+                        continue
+                    baris.append({
+                        "h3_index": h3,
+                        "kode": kode,
+                        "nilai": float(nilai),
+                        "metode": "model_gbr",
+                        # Berapa pengamatan SUNGGUHAN yang menyusunnya. 15, bukan
+                        # 480: sisanya augmentasi sintetis, dan menuliskan 480 di
+                        # kolom bernama n_sumber adalah cara paling rapi untuk
+                        # membuat angka karangan terbaca sebagai survei.
+                        "n_sumber": 15,
+                        "radius_m": None,
+                        "rincian": json.dumps({
+                            "algoritma": "GradientBoostingRegressor",
+                            "n_pohon": 100, "kedalaman": 3, "n_fitur": 14,
+                            "r2": round(m.get("r2_rata", float("nan")), 3),
+                            "mae": round(m.get("mae_rata", float("nan")), 3),
+                            "n_label": 480,
+                            "n_label_asli": 15,
+                            "sumber_label": "Menu Go (15 titik) + augmentasi sintetis (~465)",
+                            "keluaran_tim": irisan.loc[h3, "data_source"],
+                            "dilatih": "2026-09-12",
+                            **uji.get(kode, {}),
+                        }, ensure_ascii=False),
+                    })
+            print(f"  perkiraan dimuat     {muat_perkiraan(db, baris)}")
+            for kode in KOLOM_TIM_AI_PERKIRAAN.values():
+                k = {"D10": "skor_ramai", "B07": "harga"}[kode]
+                print(f"    {kode}  R2 {mutu[k]['r2_rata']:.3f}  MAE {mutu[k]['mae_rata']:.3f}")
+            db.commit()
+        print(f"  dilewati sengaja     {len(KOLOM_TIM_AI_DILEWATI)} kolom "
+              "(definisi berbeda / kita lebih lengkap - lihat KOLOM_TIM_AI_DILEWATI)")
+        print(f"  variabel diperbarui  {n}")
 
     # --- Blok -------------------------------------------------------------
     # Transaksinya SENDIRI dan berjalan sebelum yang lain: ia hanya membaca

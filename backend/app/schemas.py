@@ -420,6 +420,31 @@ class Simulasi(BaseModel):
 # --- Detail heksagon -------------------------------------------------------
 
 
+class PerkiraanHeksagon(BaseModel):
+    """Satu angka PERKIRAAN untuk sebuah heksagon, berikut mutunya.
+
+    Dipisahkan dari `variabel` dengan sengaja, dan pemisahan itu bukan soal
+    kerapian. `variabel` memuat pengukuran DI heksagon itu; yang di sini
+    diturunkan dari tempat lain - model yang dilatih di seluruh wilayah, atau
+    median pengamatan di sekitarnya. Duduk di kolom yang sama, keduanya tidak
+    bisa dibedakan oleh siapa pun yang membaca responsnya.
+
+    `mutu` selalu ikut, dan itu syarat masuknya: angka perkiraan yang dikirim
+    tanpa keterangan seberapa jauh ia pernah meleset adalah angka yang akan
+    dibaca sebagai pengukuran.
+    """
+
+    kode: str = Field(description="Kode variabel yang diperkirakan, mis. B07")
+    kolom: str = Field(description="Nama kolomnya, supaya antarmuka bisa menamainya")
+    nilai: float | None = None
+    metode: str = Field(description="model_gbr | sekitar | kawasan | jabodetabek")
+    keterangan: str = Field(description="Kalimat yang menerangkan asal dan batasnya")
+    n_sumber: int | None = Field(
+        default=None, description="Berapa pengamatan SUNGGUHAN yang menyusunnya"
+    )
+    mutu: dict[str, Any] = Field(default_factory=dict)
+
+
 class DetailHeksagon(BaseModel):
     """Respons lengkap saat pengguna mengklik satu heksagon.
 
@@ -456,6 +481,13 @@ class DetailHeksagon(BaseModel):
     #: sama dengan `indeks.cakupan`: kuadrannya gratis, jadi keterangan yang
     #: menjaganya supaya tidak dibaca berlebihan harus ikut gratis.
     cakupan_prestise: CakupanPrestise | None = None
+    #: PERKIRAAN pendukung. Berbayar, sama dengan `variabel`: isinya menjawab
+    #: pertanyaan yang sama ("berapa angkanya di sini"), dan batas berbayar yang
+    #: berbeda untuk pertanyaan yang sama tidak bisa diterangkan ke siapa pun.
+    perkiraan: list[PerkiraanHeksagon] = Field(
+        default_factory=list,
+        description="Angka perkiraan, tidak pernah dari pengukuran di heksagon ini. Premium.",
+    )
 
 
 class SimpulTransit(BaseModel):

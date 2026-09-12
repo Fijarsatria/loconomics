@@ -1029,3 +1029,147 @@ def cakupan_prestise(fitur: "list") -> dict[str, object]:
         "kosong": kosong,
         "diukur_langsung": bool(BAHAN_PRESTISE_LANGSUNG.intersection(terisi)),
     }
+
+
+# ---------------------------------------------------------------------------
+# Perkiraan
+# ---------------------------------------------------------------------------
+#
+# Kalimat yang menyertai angka PERKIRAAN. Tempatnya di sini dan bukan di
+# frontend karena ia dirakit DARI ANGKANYA - dan pemicu yang dihitung dari data
+# dengan kalimat yang ditulis tetap adalah jebakan yang sudah terjadi tiga kali
+# di repo ini (pita status, halaman gerbang, catatan_data).
+#
+# Yang paling menentukan di sini kalimat kedua. Tim AI melaporkan R2 0,62 untuk
+# D10 dan 0,57 untuk B07, dan angka itu benar - tetapi ia diukur terhadap label
+# yang 96,9%-nya sintetis, jadi yang diukurnya adalah seberapa baik model
+# menebak formula yang membuat labelnya. Pembanding yang sungguhan justru ada
+# di tangan kita: pengamatan misi MAPID di heksagon kita sendiri, yang tidak
+# pernah dilihat model itu. Menyebut R2 tanpa menyebut selisih terhadap ukuran
+# sungguhan berarti memamerkan nilai ujian dari soal yang dibuat sendiri.
+
+#: Nama awam variabel yang punya perkiraan. Sengaja hanya yang dipakai - daftar
+#: lengkap 43 variabel sudah hidup di `api/bersama.py::SEMUA_VARIABEL`.
+NAMA_PERKIRAAN: dict[str, tuple[str, str]] = {
+    "B07": ("Harga rata-rata per porsi", "Average price per portion"),
+    "D10": ("Tingkat keramaian terkoreksi", "Corrected busyness level"),
+}
+
+#: Kode variabel -> nama kolomnya di `hex_features`.
+#:
+#: Jembatan yang sama dengan `pipeline/config.py::KODE_KE_KOLOM`, tapi hanya
+#: untuk kode yang punya perkiraan. Antarmuka menamai angka lewat nama KOLOM
+#: (kamusnya sudah ada di `lib/bahasa.tsx`), jadi tanpa jembatan ini perkiraan
+#: akan tampil sebagai baris "B07" tanpa nama. Kesamaannya dijaga
+#: `tests/test_aturan.py`.
+KODE_PERKIRAAN: dict[str, str] = {
+    "B07": "harga_median_porsi",
+    "D10": "skor_ramai_terkoreksi",
+}
+
+#: Satuan, untuk kalimatnya saja. Angkanya sendiri dikirim apa adanya.
+SATUAN_PERKIRAAN: dict[str, tuple[str, str]] = {
+    "B07": ("rupiah per porsi", "rupiah per portion"),
+    "D10": ("skala 1-3", "1-3 scale"),
+}
+
+
+def _ang(n: float, desimal: int = 0, bahasa: Bahasa = BAHASA_BAWAAN) -> str:
+    """Angka dengan pemisah yang benar untuk bahasanya.
+
+    Alasan yang sama persis dengan `rp()` di atas: "14,580" dibaca pembaca
+    Indonesia sebagai empat belas koma lima, dan "0.57" dibaca sebagai nol
+    lima puluh tujuh. Keduanya salah seribu kali lipat pada angka yang justru
+    sedang dipakai menimbang.
+    """
+    utuh = f"{n:,.{desimal}f}"
+    if bahasa == "en":
+        return utuh
+    # `translate`, bukan tiga `replace` berantai: rantai itu menukar koma jadi
+    # titik lalu menukar titik-titik itu balik jadi koma, dan hasilnya "1.234,5"
+    # yang benar cuma kalau ada sentinel di tengahnya. `translate` menukar
+    # keduanya dalam satu lintasan, jadi tidak ada langkah antara yang bisa
+    # salah dibaca langkah berikutnya.
+    return utuh.translate(str.maketrans(",.", ".,"))
+
+
+def kalimat_perkiraan(kode: str, metode: str, rincian: dict, bahasa: Bahasa) -> str:
+    """Satu kalimat: dari mana angkanya, dan seberapa jauh ia pernah meleset.
+
+    `rincian` isinya apa adanya dari `hex_perkiraan.rincian`; yang tidak ada
+    dilewati, bukan ditebak. Perkiraan yang keterangannya kosong lebih jujur
+    daripada perkiraan yang keterangannya dikarang.
+    """
+    en = bahasa == "en"
+    bagian: list[str] = []
+
+    if metode == "model_gbr":
+        n_label = rincian.get("n_label")
+        n_asli = rincian.get("n_label_asli")
+        algo = rincian.get("algoritma", "model")
+        if n_label and n_asli is not None:
+            sintetis = n_label - n_asli
+            bagian.append(
+                f"Prediksi {algo} yang dilatih tim AI atas {n_label} titik label — "
+                f"{n_asli} survei sungguhan dan {sintetis} titik sintetis."
+                if not en
+                else f"A {algo} prediction trained by the AI team on {n_label} labelled "
+                f"points — {n_asli} real surveys and {sintetis} synthetic ones."
+            )
+        r2 = rincian.get("r2")
+        if r2 is not None:
+            bagian.append(
+                f"R² validasi silangnya {_ang(r2, 2, bahasa)}, tetapi diukur terhadap label sintetis itu."
+                if not en
+                else f"Its cross-validated R² is {r2:.2f}, but measured against those synthetic labels."
+            )
+    elif metode in {"sekitar", "kawasan", "jabodetabek"}:
+        n = rincian.get("n_sumber") or rincian.get("n_label")
+        lingkup = {
+            "sekitar": ("heksagon di sekitarnya", "the surrounding hexagons"),
+            "kawasan": ("kawasan yang sama", "the same area"),
+            "jabodetabek": ("seluruh Jabodetabek", "the whole of Jabodetabek"),
+        }[metode]
+        bagian.append(
+            f"Median dari pengamatan di {lingkup[0]}" + (f", {n} titik." if n else ".")
+            if not en
+            else f"Median of the observations in {lingkup[1]}" + (f", {n} points." if n else ".")
+        )
+
+    # Selisih terhadap ukuran SUNGGUHAN. Ini bagian yang paling perlu ada.
+    n_uji = rincian.get("n_uji_terukur")
+    mae = rincian.get("mae_vs_terukur")
+    if n_uji and mae is not None:
+        satuan = SATUAN_PERKIRAAN.get(kode, ("", ""))[1 if en else 0]
+        # Desimalnya mengikuti BESARAN, bukan disetel tetap. "Meleset rata-rata
+        # 14.580 rupiah" tidak butuh koma; "meleset rata-rata 2" pada skala 1-3
+        # justru kehilangan seluruh isinya - selisih 2,34 pada skala bermentok 3
+        # adalah salah total, dan "2" terbaca seperti angka yang wajar.
+        desimal = 0 if abs(mae) >= 100 else 2
+        # "Bacalah sebagai kisaran, bukan sebagai harga" salah untuk D10, yang
+        # bukan harga melainkan tingkat keramaian. Kalimat penutup yang tidak
+        # cocok dengan angkanya terbaca sebagai kalimat yang disalin - dan
+        # kalimat yang terbaca disalin membuat seluruh keterangannya dicurigai.
+        ekor_benda = (
+            ("harga", "a price") if kode == "B07" else ("angka pasti", "a fixed number")
+        )
+        mape = rincian.get("mape_vs_terukur")
+        ekor = f" (rata-rata {_ang(mape, 0, bahasa)}% dari nilainya)" if mape else ""
+        ekor_en = f" ({mape:.0f}% of the value on average)" if mape else ""
+        bagian.append(
+            f"Pada {n_uji} heksagon yang SUDAH kami ukur di lapangan, ia meleset "
+            f"rata-rata {_ang(mae, desimal, bahasa)} {satuan}{ekor} — jadi bacalah sebagai kisaran, "
+            f"bukan sebagai {ekor_benda[0]}."
+            if not en
+            else f"On the {n_uji} hexagons we have actually measured in the field it was "
+            f"off by {_ang(mae, desimal, bahasa)} {satuan} on average{ekor_en} — so read it as a range, "
+            f"not as {ekor_benda[1]}."
+        )
+
+    bagian.append(
+        "Angka ini tidak pernah ikut menghitung skor, mewarnai peta, atau menaikkan "
+        "lencana keyakinan."
+        if not en
+        else "This number never enters the score, colours the map, or raises the confidence badge."
+    )
+    return " ".join(bagian)
