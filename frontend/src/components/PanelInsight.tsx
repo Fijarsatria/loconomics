@@ -129,6 +129,10 @@ const K = {
     zonaKosongIsi: 'Status izinnya belum bisa dipastikan. Skor tetap dihitung.',
     artinyaApa: 'Apa artinya buat saya?',
 
+    perkiraanJudul: 'Perkiraan pendukung',
+    perkiraanIsi:
+      'Angka di bawah ini BUKAN hasil pengukuran di lokasi ini. Ia diturunkan dari tempat lain — model yang dilatih tim kami, atau median pengamatan di sekitarnya — dan disimpan terpisah justru supaya bisa dibedakan.',
+    perkiraanLabel: 'Perkiraan',
     blokJudul: 'Di sisi mana, di dalam heksagon ini',
     blokIsi:
       'Heksagon ini bergaris tengah ±350 m — cukup luas untuk memuat sisi yang menempel jalan besar dan gang di belakangnya sekaligus. Bedah jadi tujuh blok untuk melihat keduanya terpisah.',
@@ -286,6 +290,10 @@ const K = {
     zonaKosongIsi: 'Its permission status cannot be confirmed. The score is still computed.',
     artinyaApa: 'What does that mean for me?',
 
+    perkiraanJudul: 'Supporting estimates',
+    perkiraanIsi:
+      'The numbers below are NOT measurements taken here. They are derived from elsewhere — a model our team trained, or the median of nearby observations — and kept separate precisely so they can be told apart.',
+    perkiraanLabel: 'Estimate',
     blokJudul: 'Which side, inside this hexagon',
     blokIsi:
       'This hexagon is about 350 m across — wide enough to hold both the side facing the main road and the lane behind it. Split it into seven blocks to see them apart.',
@@ -1657,6 +1665,77 @@ function PanelInsight({
           </div>
         </details>
       </Bagian>
+      )}
+
+      {/* --- 7b. Perkiraan pendukung ---------------------------------------
+          SESUDAH tabel 43 variabel, dan urutannya itu yang membuatnya terbaca
+          benar. Pembaca baru saja melihat variabel mana yang terukur dan mana
+          yang kosong; bagian ini menjawab "lalu apa yang bisa dikatakan soal
+          yang kosong" — bukan menawarkan angka kedua untuk yang sudah terukur.
+
+          Berbayar, dan tirainya digambar dari `terkunci` yang sama. */}
+      {(detail.perkiraan.length > 0 || terkunci) && (
+        <Bagian
+          judul={t.perkiraanJudul}
+          nada="jebakan"
+          ikon={<><path d="M2 11.5c2.2-5 4-5 6 0s3.8 5 6 0"/><path d="M2 4.5h12"/></>}
+        >
+          {terkunci ? (
+            <Terkunci
+              judul={t.perkiraanJudul}
+              kalimat={t.perkiraanIsi}
+              labelAksi={t.gabung}
+              baris={3}
+              onBuka={ajakanBuka}
+            />
+          ) : (
+            <>
+              <p className="mb-2.5 text-[13px] leading-snug text-ink-2">{t.perkiraanIsi}</p>
+              <ul className="flex flex-col gap-2.5">
+                {detail.perkiraan.map((p) => {
+                  const arti = ist.variabel(p.kolom)
+                  return (
+                    <li key={p.kode} className="rounded-lg border border-dashed border-line-2 px-2.5 py-2">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="flex min-w-0 items-baseline gap-1.5">
+                          {/* Lencananya DI DEPAN nama, bukan di belakang angka.
+                              Yang dibaca mata lebih dulu di baris ini adalah
+                              angkanya; label yang datang sesudahnya dibaca
+                              sesudah angkanya sempat dipercaya. */}
+                          <span className="shrink-0 rounded-full bg-jebakan-soft px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-jebakan uppercase">
+                            {t.perkiraanLabel}
+                          </span>
+                          <span className="truncate text-[13.5px] text-ink-2" title={p.kode}>
+                            {arti?.nama ?? p.kolom.replace(/_/g, ' ')}
+                          </span>
+                        </span>
+                        <span className="tabular shrink-0 text-right text-[15px] text-ink">
+                          {p.nilai === null ? (
+                            <Kosong teks="—" />
+                          ) : (
+                            <>
+                              {angka(p.nilai, p.nilai < 10 ? 2 : 0)}
+                              {arti?.satuan && (
+                                <span className="ml-1 text-[11px] font-normal text-ink-3">
+                                  {arti.satuan}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      {/* Kalimatnya dari BACKEND, dirakit dari angka mutunya
+                          sendiri. Menulisnya di sini berarti membuat versi
+                          kedua yang cepat atau lambat berselisih dengan yang
+                          dicetak Laporan PDF. */}
+                      <p className="mt-1 text-[11.5px] leading-snug text-ink-3">{p.keterangan}</p>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )}
+        </Bagian>
       )}
 
       {/* --- 8. Riwayat skor (berbayar) ------------------------------------ */}

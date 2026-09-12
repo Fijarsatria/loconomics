@@ -193,6 +193,27 @@ export interface DetailHeksagon {
   kuadran_penjelasan: string | null
   /** Sumbu datar kuadran berdiri di atas bahan apa UNTUK HEKSAGON INI. */
   cakupan_prestise: CakupanPrestise | null
+  /**
+   * Angka PERKIRAAN, tidak pernah dari pengukuran di heksagon ini sendiri.
+   *
+   * Berbayar, sama dengan `variabel` — untuk tamu ia array kosong dan
+   * 'perkiraan' muncul di `terkunci`.
+   */
+  perkiraan: PerkiraanHeksagon[]
+}
+
+/** Cermin `schemas.PerkiraanHeksagon`. `mutu` sengaja longgar: isinya berbeda
+ *  menurut metodenya, dan panel cuma menampilkan yang dikenalnya. */
+export interface PerkiraanHeksagon {
+  kode: string
+  /** Nama kolomnya, supaya `useIstilah().variabel()` bisa menamainya. */
+  kolom: string
+  nilai: number | null
+  metode: string
+  /** Kalimat dari backend: asal angkanya dan seberapa jauh ia pernah meleset. */
+  keterangan: string
+  n_sumber: number | null
+  mutu: Record<string, unknown>
 }
 
 // --- ZoneGuard (fitur 4) ---------------------------------------------------
