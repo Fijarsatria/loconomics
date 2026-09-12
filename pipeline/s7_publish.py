@@ -1759,9 +1759,17 @@ def ekspor_geojson(tujuan: Path = EKSPOR, versi: str = "baseline") -> dict[str, 
 #: daftar sumber yang ditulis tangan selalu kedaluwarsa ke arah itu.
 #:
 #: Ekspresinya konstanta modul, tidak pernah datang dari masukan pengguna.
+#:
+#: `jenis` ditambahkan 12 Sep 2026, dan ia bukan label kosmetik: ia yang
+#: memisahkan "diukur" dari "diperkirakan" di daftar yang dibaca juri. Sebuah
+#: baris berjenis `perkiraan` TIDAK pernah mengisi kolom di `hex_features`,
+#: tidak pernah menghitung skor, dan tidak pernah mewarnai peta - jadi daftar
+#: ini sekaligus jawaban atas "mana yang resmi dan mana yang bukan", dibangun
+#: dari tempat yang sama dengan yang membangun datanya.
 SUMBER_DATA: list[dict[str, str | None]] = [
     {
         "kunci": "activity",
+        "jenis": "resmi",
         "nama": "MAPID Community Maps (Activity)",
         "lisensi": "Data kompetisi MAPID",
         "url": "https://mapid.co.id/data-catalog",
@@ -1770,6 +1778,7 @@ SUMBER_DATA: list[dict[str, str | None]] = [
     },
     {
         "kunci": "misi",
+        "jenis": "resmi",
         "nama": "MAPID Mission — Menu Go, Struk Go, Properti Go",
         "lisensi": "Data kompetisi MAPID",
         "url": "https://mapid.co.id/data-catalog",
@@ -1778,14 +1787,16 @@ SUMBER_DATA: list[dict[str, str | None]] = [
     },
     {
         "kunci": "basemap",
+        "jenis": "resmi",
         "nama": "MAPID Maps",
         "lisensi": "Basemap kompetisi",
         "url": "https://geo.mapid.io/",
-        "mengisi": "Basemap peta — empat gaya, seluruh ubin",
+        "mengisi": "Basemap peta — lima gaya termasuk satelit dan gedung 3D, seluruh ubin",
         "ukur": None,
     },
     {
         "kunci": "osm",
+        "jenis": "resmi",
         "nama": "OpenStreetMap contributors",
         "lisensi": "ODbL 1.0",
         "url": "https://www.openstreetmap.org/copyright",
@@ -1794,6 +1805,7 @@ SUMBER_DATA: list[dict[str, str | None]] = [
     },
     {
         "kunci": "ors",
+        "jenis": "resmi",
         "nama": "openrouteservice",
         "lisensi": "CC BY-SA 4.0",
         "url": "https://openrouteservice.org/",
@@ -1802,6 +1814,7 @@ SUMBER_DATA: list[dict[str, str | None]] = [
     },
     {
         "kunci": "worldpop",
+        "jenis": "resmi",
         "nama": "WorldPop 2020 (UN-adjusted, constrained)",
         "lisensi": "CC BY 4.0",
         "url": "https://www.worldpop.org/",
@@ -1810,11 +1823,35 @@ SUMBER_DATA: list[dict[str, str | None]] = [
     },
     {
         "kunci": "rdtr",
+        "jenis": "resmi",
         "nama": "RDTR ATR/BPN lewat GISTARU",
         "lisensi": "Data terbuka pemerintah",
         "url": "https://gistaru.atrbpn.go.id/rdtrinteraktif/",
         "mengisi": "L01 izin komersial, L02 kelas zona, L03 risiko banjir",
         "ukur": "kelas_zona IS NOT NULL",
+    },
+    {
+        "kunci": "worldpop_umur",
+        "jenis": "resmi",
+        "nama": "WorldPop 2020 struktur umur — diolah tim data Loconomics",
+        "lisensi": "CC BY 4.0",
+        "url": "https://www.worldpop.org/",
+        "mengisi": "D02 penduduk usia produktif",
+        "ukur": "pop_usia_produktif IS NOT NULL",
+    },
+    {
+        # SATU-SATUNYA baris berjenis `perkiraan` di daftar ini, dan ia sengaja
+        # berdiri di daftar yang sama alih-alih disembunyikan di dokumen lain:
+        # yang membuat sebuah daftar sumber bisa dipercaya bukan karena isinya
+        # bagus semua, melainkan karena yang lemah ikut tercantum dengan
+        # namanya sendiri.
+        "kunci": "model_tim_ai",
+        "jenis": "perkiraan",
+        "nama": "Model tim AI Loconomics (GradientBoosting)",
+        "lisensi": "Karya tim, dilatih atas sampel MAPID + augmentasi sintetis",
+        "url": "https://github.com/syahh-coder/Loconomics-AI",
+        "mengisi": "PERKIRAAN D10 dan B07 — panel detail saja, tidak pernah masuk skor atau peta",
+        "ukur": None,
     },
 ]
 
@@ -2227,6 +2264,7 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
     sumber = [
         {
             "nama": s["nama"],
+            "jenis": s["jenis"],
             "lisensi": s["lisensi"],
             "url": s["url"],
             "mengisi": s["mengisi"],
@@ -2268,6 +2306,8 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
         "",
         "export interface SumberData {",
         "  nama: string",
+        "  /** 'resmi' = diukur dan boleh mengisi kolom; 'perkiraan' = tidak pernah. */",
+        "  jenis: string",
         "  lisensi: string",
         "  url: string",
         "  /** Variabel yang diisinya, dengan kode kanonik Kamus Data. */",
@@ -2312,7 +2352,7 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
         "",
         "export const SUMBER: SumberData[] = [",
         *(
-            f"  {{ nama: {js(s['nama'])}, lisensi: {js(s['lisensi'])}, "
+            f"  {{ nama: {js(s['nama'])}, jenis: {js(s['jenis'])}, lisensi: {js(s['lisensi'])}, "
             f"url: {js(s['url'])}, mengisi: {js(s['mengisi'])}, cakupan: {js(s['cakupan'])} }},"
             for s in sumber
         ),

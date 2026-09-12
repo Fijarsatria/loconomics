@@ -2510,7 +2510,13 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           <div className="relative mx-auto mt-24 max-w-[70rem] border-t border-[color:var(--g-ink)]/12 pt-7">
             <p className="text-center text-[11.5px] leading-relaxed text-[color:var(--g-ink-4)]">
               {teks.penutup.data}:{' '}
-              {SUMBER.map((s, i) => (
+              {/* Hanya yang RESMI. Baris ini atribusi - ia menjawab "peta ini
+                  digambar dari data siapa", dan model perkiraan tidak
+                  menyumbang satu angka pun ke peta. Mencantumkannya di sini
+                  akan membuat daftar atribusi berbohong ke arah yang paling
+                  menguntungkan kami. Daftar LENGKAPNYA, berikut yang
+                  perkiraan, ada di Pengaturan -> Sumber data. */}
+              {SUMBER.filter((s) => s.jenis !== 'perkiraan').map((s, i) => (
                 <span key={s.nama}>
                   {i > 0 && <span className="mx-1.5">·</span>}
                   <a

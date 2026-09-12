@@ -1306,6 +1306,7 @@ const K_PENGATURAN = {
   id: {
     pengaturan: 'Pengaturan',
     tutup: 'Tutup',
+    sumber: 'Sumber data',
     belumDiisi: 'belum diisi',
     tentang: {
       judul: 'Tentang kami',
@@ -1326,6 +1327,7 @@ const K_PENGATURAN = {
   en: {
     pengaturan: 'Settings',
     tutup: 'Close',
+    sumber: 'Data sources',
     belumDiisi: 'not filled in',
     tentang: {
       judul: 'About us',
@@ -1403,6 +1405,7 @@ export function MenuPengaturan({
   onNamaTempat,
   tigaDimensi,
   onTigaDimensi,
+  onSumber,
   varian = 'peta',
 }: {
   namaTempat?: string
@@ -1414,6 +1417,14 @@ export function MenuPengaturan({
    */
   tigaDimensi?: boolean
   onTigaDimensi?: (v: boolean) => void
+  /**
+   * Membuka daftar sumber data. Layarnya TIDAK dibangun di sini: isinya
+   * berasal dari `lib/ringkasan-data.ts` yang dibangkitkan pipeline, dan
+   * mengimpornya dari berkas primitif akan menyeret seluruh berkas itu ke
+   * dalam bundel pertama - termasuk ke halaman gerbang yang tidak
+   * membutuhkannya sampai ada yang menekan tombolnya.
+   */
+  onSumber?: () => void
   /**
    * `gerbang` = bilah atas halaman perkenalan. Yang berbeda cuma BAHAN dan
    * ukuran tombolnya - pil kaca setinggi tombol-tombol di sebelahnya, bukan
@@ -1610,6 +1621,34 @@ export function MenuPengaturan({
                   ))}
                 </div>
               </div>
+            )}
+            {/* Sumber data. Baris menu, bukan layar di dalam menu: isinya
+                tabel penuh yang tidak muat di popover selebar 15,5rem - dan
+                daftar sumber yang harus digulir di dalam kotak sempit adalah
+                daftar yang tidak jadi dibaca siapa pun. */}
+            {onSumber && (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  onSumber()
+                  setBuka(false)
+                }}
+                className="ungkap flex w-full cursor-pointer items-center gap-2.5 rounded-sm px-3 py-2.5 text-left text-[13.5px] transition-colors hover:bg-surface-2"
+              >
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-ink-2">
+                  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
+                    <ellipse cx="8" cy="4" rx="5.4" ry="2.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                    <path
+                      d="M2.6 4v8c0 1.2 2.4 2.2 5.4 2.2s5.4-1 5.4-2.2V4M2.6 8c0 1.2 2.4 2.2 5.4 2.2s5.4-1 5.4-2.2"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+                {tp.sumber}
+              </button>
             )}
             {(Object.keys(NILAI_PENGATURAN) as KunciPengaturan[]).map((k, i) => (
               <button

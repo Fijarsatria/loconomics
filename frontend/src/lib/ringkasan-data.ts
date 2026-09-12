@@ -13,6 +13,8 @@
 
 export interface SumberData {
   nama: string
+  /** 'resmi' = diukur dan boleh mengisi kolom; 'perkiraan' = tidak pernah. */
+  jenis: string
   lisensi: string
   url: string
   /** Variabel yang diisinya, dengan kode kanonik Kamus Data. */
@@ -49,16 +51,16 @@ export interface Temuan {
 }
 
 /** Tanggal basis data dibaca. Dinyatakan apa adanya di halamannya. */
-export const DIUKUR = "2026-09-01"
+export const DIUKUR = "2026-09-12"
 
 export const RINGKASAN = {
   heksagon: 708,
   kawasan: 6,
-  variabelTerisi: 25,
+  variabelTerisi: 26,
   variabelTotal: 43,
-  heksagonBersurvei: 25,
-  titikMisiDitarik: 988,
-  observasiMisi: 33,
+  heksagonBersurvei: 26,
+  titikMisiDitarik: 2873,
+  observasiMisi: 47,
   poiOsm: 3444,
   ruteOrs: 1549,
   kawasanJangkau: 18,
@@ -67,13 +69,15 @@ export const RINGKASAN = {
 } as const
 
 export const SUMBER: SumberData[] = [
-  { nama: "MAPID Community Maps (Activity)", lisensi: "Data kompetisi MAPID", url: "https://mapid.co.id/data-catalog", mengisi: "D12 aktivitas komunitas", cakupan: 7 },
-  { nama: "MAPID Mission — Menu Go, Struk Go, Properti Go", lisensi: "Data kompetisi MAPID", url: "https://mapid.co.id/data-catalog", mengisi: "B06–B08, C07, C08, D10, P03, dan badge keyakinan Q01–Q03", cakupan: 25 },
-  { nama: "MAPID Maps", lisensi: "Basemap kompetisi", url: "https://geo.mapid.io/", mengisi: "Basemap peta — empat gaya, seluruh ubin", cakupan: null },
-  { nama: "OpenStreetMap contributors", lisensi: "ODbL 1.0", url: "https://www.openstreetmap.org/copyright", mengisi: "C01–C06 kompetisi, D05 skor simpul, D08, D09, M01, M02", cakupan: 708 },
-  { nama: "openrouteservice", lisensi: "CC BY-SA 4.0", url: "https://openrouteservice.org/", mengisi: "D03 jarak dan D04 waktu jalan kaki, plus kawasan jangkau", cakupan: 703 },
-  { nama: "WorldPop 2020 (UN-adjusted, constrained)", lisensi: "CC BY 4.0", url: "https://www.worldpop.org/", mengisi: "D01 jumlah penduduk, dan C06 yang bergantung padanya", cakupan: 707 },
-  { nama: "RDTR ATR/BPN lewat GISTARU", lisensi: "Data terbuka pemerintah", url: "https://gistaru.atrbpn.go.id/rdtrinteraktif/", mengisi: "L01 izin komersial, L02 kelas zona, L03 risiko banjir", cakupan: 364 },
+  { nama: "MAPID Community Maps (Activity)", jenis: "resmi", lisensi: "Data kompetisi MAPID", url: "https://mapid.co.id/data-catalog", mengisi: "D12 aktivitas komunitas", cakupan: 91 },
+  { nama: "MAPID Mission — Menu Go, Struk Go, Properti Go", jenis: "resmi", lisensi: "Data kompetisi MAPID", url: "https://mapid.co.id/data-catalog", mengisi: "B06–B08, C07, C08, D10, P03, dan badge keyakinan Q01–Q03", cakupan: 26 },
+  { nama: "MAPID Maps", jenis: "resmi", lisensi: "Basemap kompetisi", url: "https://geo.mapid.io/", mengisi: "Basemap peta — lima gaya termasuk satelit dan gedung 3D, seluruh ubin", cakupan: null },
+  { nama: "OpenStreetMap contributors", jenis: "resmi", lisensi: "ODbL 1.0", url: "https://www.openstreetmap.org/copyright", mengisi: "C01–C06 kompetisi, D05 skor simpul, D08, D09, M01, M02", cakupan: 708 },
+  { nama: "openrouteservice", jenis: "resmi", lisensi: "CC BY-SA 4.0", url: "https://openrouteservice.org/", mengisi: "D03 jarak dan D04 waktu jalan kaki, plus kawasan jangkau", cakupan: 703 },
+  { nama: "WorldPop 2020 (UN-adjusted, constrained)", jenis: "resmi", lisensi: "CC BY 4.0", url: "https://www.worldpop.org/", mengisi: "D01 jumlah penduduk, dan C06 yang bergantung padanya", cakupan: 707 },
+  { nama: "RDTR ATR/BPN lewat GISTARU", jenis: "resmi", lisensi: "Data terbuka pemerintah", url: "https://gistaru.atrbpn.go.id/rdtrinteraktif/", mengisi: "L01 izin komersial, L02 kelas zona, L03 risiko banjir", cakupan: 364 },
+  { nama: "WorldPop 2020 struktur umur — diolah tim data Loconomics", jenis: "resmi", lisensi: "CC BY 4.0", url: "https://www.worldpop.org/", mengisi: "D02 penduduk usia produktif", cakupan: 708 },
+  { nama: "Model tim AI Loconomics (GradientBoosting)", jenis: "perkiraan", lisensi: "Karya tim, dilatih atas sampel MAPID + augmentasi sintetis", url: "https://github.com/syahh-coder/Loconomics-AI", mengisi: "PERKIRAAN D10 dan B07 — panel detail saja, tidak pernah masuk skor atau peta", cakupan: null },
 ]
 
 export interface KelasUsaha {
@@ -107,10 +111,10 @@ export const KELAS_USAHA: KelasUsaha[] = [
 
 /** Diturunkan dari basis data, bukan didaftar tangan. Lihat docstring pembangkitnya. */
 export const BATASAN: string[] = [
-  "18 dari 43 variabel belum punya sumber yang bisa dikutip. Nilainya dibiarkan kosong, bukan dinolkan — indeks yang bahannya kosong dinetralkan ke tengah skala, dan antarmuka menuliskan “belum terukur” alih-alih menampilkan angkanya.",
+  "17 dari 43 variabel belum punya sumber yang bisa dikutip. Nilainya dibiarkan kosong, bukan dinolkan — indeks yang bahannya kosong dinetralkan ke tengah skala, dan antarmuka menuliskan “belum terukur” alih-alih menampilkan angkanya.",
   "Zonasi RDTR baru terbit untuk 364 dari 708 heksagon. Kota Depok dan Kota Bekasi terkonfirmasi belum punya RDTR digital di GISTARU lewat dua indeks yang berbeda, jadi ZoneGuard diam untuk keduanya alih-alih menebak.",
   "Profil per jam masih kosong. Struk misi MAPID tidak membawa kolom waktu transaksi sama sekali — jamnya tercetak di dalam foto struknya, dan pembacaan foto itu belum dijalankan.",
-  "Survei lapangan menyentuh 25 dari 708 heksagon; 683 sisanya ditandai “belum dikunjungi surveyor”. Itu pernyataan tentang kunjungan, bukan tentang mutu angkanya — POI, rute, penduduk, dan zonasi tetap hasil pengukuran.",
+  "Survei lapangan menyentuh 26 dari 708 heksagon; 682 sisanya ditandai “belum dikunjungi surveyor”. Itu pernyataan tentang kunjungan, bukan tentang mutu angkanya — POI, rute, penduduk, dan zonasi tetap hasil pengukuran.",
 ]
 
 /**

@@ -87,6 +87,10 @@ const DialogPantauan = lazy(() =>
 )
 const Simulasi = lazy(() => import('./components/Simulasi'))
 const Pembuka = lazy(() => import('./components/Pembuka'))
+// Dimuat saat dibuka, bukan di bundel pertama. Isinya `lib/ringkasan-data.ts`
+// penuh - sumber, batasan, DAN keempat temuan berikut kalimatnya - dan itu
+// berkas yang tumbuh tiap kali pipeline menemukan sesuatu.
+const SumberData = lazy(() => import('./components/SumberData'))
 import type { AksiPetaRef, KendaliPeta } from './components/PetaInteraktif'
 /**
  * Peta dimuat MALAS, dan ini penghematan terbesar di seluruh berkas.
@@ -333,6 +337,7 @@ const K_APP: Record<
     kosongIsi: string
     locale: string
     tutup: string
+    sumberData: string
     diagramKuadran: string
     diagramJudul: (k: string) => string
     diagramIsi: string
@@ -385,6 +390,7 @@ const K_APP: Record<
       'Basis datanya sudah tersambung, tetapi kawasan ini belum berisi. Jalankan pipeline sampai tahap terbit untuk mengisinya.',
     locale: 'id-ID',
     tutup: 'Tutup',
+    sumberData: 'Sumber data',
     diagramKuadran: 'Diagram kuadran',
     diagramJudul: (k: string) => `Diagram kuadran · ${k}`,
     diagramIsi:
@@ -447,6 +453,7 @@ const K_APP: Record<
       'The database is connected, but this area has nothing in it yet. Run the pipeline through the publish stage to fill it.',
     locale: 'en-GB',
     tutup: 'Close',
+    sumberData: 'Data sources',
     diagramKuadran: 'Quadrant diagram',
     diagramJudul: (k: string) => `Quadrant diagram · ${k}`,
     diagramIsi:
@@ -815,6 +822,7 @@ export default function App() {
   const [saringKuadran, setSaringKuadran] = useState<NamaKuadran | null>(null)
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
   const [kuadranPenuh, setKuadranPenuh] = useState(false)
+  const [sumberTerbuka, setSumberTerbuka] = useState(false)
   // Daftar dulu, detail belakangan. Pertanyaan pertama pengguna adalah "yang mana
   // yang harus saya lihat", bukan "bagaimana lokasi ini" - dan layar kosong yang
   // menyuruh mengklik heksagon menjawab pertanyaan yang belum diajukan.
@@ -1804,6 +1812,7 @@ export default function App() {
                 onNamaTempat={setNamaTempat}
                 tigaDimensi={tigaDimensi}
                 onTigaDimensi={setTigaDimensi}
+                onSumber={() => setSumberTerbuka(true)}
               />
               {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
                   visual keduanya terbaca sebagai satu kelompok tombol. */}
@@ -2445,6 +2454,30 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* --- Sumber data --------------------------------------------------
+            Jawaban atas satu pertanyaan yang ditanyakan tiap juri dan tiap
+            calon pengguna yang serius: "angka ini dari mana". Seluruh isinya
+            dibangkitkan pipeline; tidak ada satu pun angka di sana yang
+            diketik tangan. */}
+        {sumberTerbuka && (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-4 backdrop-blur-[3px] sm:p-6"
+            onClick={() => setSumberTerbuka(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.sumberData}
+          >
+            <div
+              className="kaca-tebal melayang my-auto w-[54rem] max-w-full overflow-hidden rounded-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Suspense fallback={null}>
+                <SumberData onTutup={() => setSumberTerbuka(false)} />
+              </Suspense>
+            </div>
+          </div>
+        )}
 
         {/* --- Diagram kuadran penuh --------------------------------------- */}
         {kuadranPenuh && (
