@@ -27,6 +27,7 @@ import { api, GalatAPI } from '../lib/api'
 import { angka, jarakSingkat, rupiah } from '../lib/format'
 import { URUTAN_PROFIL } from '../types'
 import type {
+  BedahBlok as BedahBlokT,
   CommuterClock,
   DetailHeksagon,
   KonteksSimpul,
@@ -34,6 +35,7 @@ import type {
   ProfilRute,
 } from '../types'
 import BarHarga from './BarHarga'
+import BedahBlok from './BedahBlok'
 import ChartJam from './ChartJam'
 import { useSesi } from './Akun'
 import { BagianRiwayat } from './Premium'
@@ -127,6 +129,9 @@ const K = {
     zonaKosongIsi: 'Status izinnya belum bisa dipastikan. Skor tetap dihitung.',
     artinyaApa: 'Apa artinya buat saya?',
 
+    blokJudul: 'Di sisi mana, di dalam heksagon ini',
+    blokIsi:
+      'Heksagon ini bergaris tengah ±350 m — cukup luas untuk memuat sisi yang menempel jalan besar dan gang di belakangnya sekaligus. Bedah jadi tujuh blok untuk melihat keduanya terpisah.',
     hargaJudul: 'PriceLens — harga sewa',
     hargaKunciJudul: 'Rincian harga lokasi ini',
     hargaKunciIsi:
@@ -281,6 +286,9 @@ const K = {
     zonaKosongIsi: 'Its permission status cannot be confirmed. The score is still computed.',
     artinyaApa: 'What does that mean for me?',
 
+    blokJudul: 'Which side, inside this hexagon',
+    blokIsi:
+      'This hexagon is about 350 m across — wide enough to hold both the side facing the main road and the lane behind it. Split it into seven blocks to see them apart.',
     hargaJudul: 'PriceLens — rent',
     hargaKunciJudul: 'The price detail for this location',
     hargaKunciIsi:
@@ -499,6 +507,10 @@ function PanelInsight({
   onGantiProfil,
   rutaTampil = false,
   onUbahRutaTampil,
+  blok = null,
+  onBlok,
+  blokTerpilih = null,
+  onPilihBlok,
 }: {
   h3: string | null
   onBukaKuadran: () => void
@@ -518,6 +530,17 @@ function PanelInsight({
   /** Apakah rute & kawasan jangkau sedang digambar di peta. */
   rutaTampil?: boolean
   onUbahRutaTampil?: (v: boolean) => void
+  /**
+   * Hasil bedah blok yang sedang tergambar di peta, dan blok yang disorot.
+   *
+   * Dimiliki App, bukan komponen ini, karena PETA yang menggambarnya. Kalau
+   * `BedahBlok` menyimpannya sendiri, panel dan peta akan memegang dua
+   * jawaban - dan peta tidak punya cara mengetahui yang mana yang benar.
+   */
+  blok?: BedahBlokT | null
+  onBlok?: (d: BedahBlokT | null) => void
+  blokTerpilih?: string | null
+  onPilihBlok?: (h3Blok: string | null) => void
 }) {
   const t = useTeks(K)
   const ist = useIstilah()
@@ -1139,6 +1162,39 @@ function PanelInsight({
             </div>
           </div>
         </div>
+      )}
+
+      {/* --- Blok di dalam heksagon -----------------------------------------
+          Ditaruh SESUDAH skor dan ZoneGuard, SEBELUM harga.
+
+          Urutan pertanyaannya begitu: "boleh tidak di sini" lalu "seberapa
+          bagus di sini" lalu -- baru di sini -- "di sisi mana persisnya", dan
+          terakhir "berapa sewanya". Menaruhnya di bawah harga akan membuat
+          orang menimbang sewa untuk sebuah alamat yang belum ia tentukan.
+
+          GRATIS, dan itu keputusan yang disengaja: seluruh isinya data terbuka
+          (OSM, ORS, RDTR) yang sudah dipakai layer gratis, dan ia justru
+          pertanyaan yang membuat orang percaya bahwa skor heksagonnya bukan
+          angka kasar. Yang berbayar tetap yang berbayar - harga, jam, simulasi. */}
+      {onBlok && onPilihBlok && (
+        <Bagian
+          judul={t.blokJudul}
+          nada="gem"
+          ikon={<><path d="M8 1.6 13.6 4.8v6.4L8 14.4 2.4 11.2V4.8Z"/><path d="M8 5.4 10.8 7v3.2L8 11.8 5.2 10.2V7Z"/></>}
+        >
+          {!blok && <p className="mb-2.5 text-[13px] leading-snug text-ink-2">{t.blokIsi}</p>}
+          {/* `key` = h3: pilihan kelas usaha milik SATU heksagon. Tanpa ini,
+              berpindah heksagon mewarisi "Untuk jenis usaha: Kuliner cepat"
+              dari heksagon sebelumnya sementara bloknya sudah kosong. */}
+          <BedahBlok
+            key={h3}
+            h3={h3}
+            data={blok}
+            onData={onBlok}
+            terpilih={blokTerpilih}
+            onPilih={onPilihBlok}
+          />
+        </Bagian>
       )}
 
       {/* --- 2. PriceLens ---------------------------------------------------

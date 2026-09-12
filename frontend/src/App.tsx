@@ -56,6 +56,7 @@ import {
 } from './config'
 import { api } from './lib/api'
 import type {
+  BedahBlok,
   DiagramKuadran,
   Kuadran as NamaKuadran,
   ProfilRute,
@@ -784,11 +785,31 @@ export default function App() {
   const [tigaDimensi, setTigaDimensi] = useState<boolean>(AWAL.tigaDimensi ?? false)
   const [hexTerpilih, setHexTerpilih] = useState<string | null>(null)
 
+  /**
+   * Bedah blok: tujuh petak res-10 di dalam heksagon terpilih, dan yang disorot.
+   *
+   * Hidup di App, bukan di panel, karena PETA yang menggambarnya sementara
+   * TOMBOLNYA ada di panel. Dua pemakai, satu nilai - dan nilai yang disalin ke
+   * dua tempat adalah nilai yang suatu saat berselisih. Alasan yang sama persis
+   * dengan `profilRute` di bawah.
+   *
+   * Tidak disimpan ke localStorage, alasan yang sama dengan `rutaTampil`: ini
+   * pilihan per-lokasi, bukan latar kerja.
+   */
+  const [blok, setBlok] = useState<BedahBlok | null>(null)
+  const [blokTerpilih, setBlokTerpilih] = useState<string | null>(null)
+
   // Pilihan menampilkan rute berlaku untuk SATU heksagon. Berpindah heksagon
   // mengembalikannya ke mati - kalau tidak, heksagon berikutnya langsung
   // menggambar rutenya, dan gerbangnya jadi tidak ada gunanya.
+  //
+  // Blok ikut di sini, dan untuk blok ini bukan sekadar soal selera: petaknya
+  // digambar dari koordinat heksagon LAMA. Dibiarkan hidup, tujuh petak
+  // menggantung di tempat yang tidak sedang dibicarakan panel mana pun.
   useEffect(() => {
     setRutaTampil(false)
+    setBlok(null)
+    setBlokTerpilih(null)
   }, [hexTerpilih])
 
   const [saringKuadran, setSaringKuadran] = useState<NamaKuadran | null>(null)
@@ -1668,6 +1689,9 @@ export default function App() {
             gaya={gaya}
             tigaDimensi={tigaDimensi}
             terpilih={hexTerpilih}
+            blok={blok}
+            blokTerpilih={blokTerpilih}
+            onPilihBlok={setBlokTerpilih}
             saringKuadran={saringKuadran}
             dibandingkan={baki}
             onPilihHeksagon={pilihHeksagon}
@@ -2307,6 +2331,10 @@ export default function App() {
                               onGantiProfil={setProfilRute}
                               rutaTampil={rutaTampil}
                               onUbahRutaTampil={setRutaTampil}
+                              blok={blok}
+                              onBlok={setBlok}
+                              blokTerpilih={blokTerpilih}
+                              onPilihBlok={setBlokTerpilih}
                               posisi={posisi}
                               batas={batasKompas}
                               onBukaKuadran={bukaKuadranPenuh}

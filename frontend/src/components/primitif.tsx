@@ -46,6 +46,7 @@ const K_KECIL = {
     disurvei: 'sebagian angkanya dari survei lapangan',
     belumDisurvei: 'Heksagon ini belum pernah disurvei langsung',
     tanpaKuadran: 'kuadran belum dihitung',
+    memuat: 'Sedang memuat data…',
   },
   en: {
     en: true,
@@ -58,6 +59,7 @@ const K_KECIL = {
     disurvei: 'some of its numbers come from a field survey',
     belumDisurvei: 'This hexagon has never been surveyed on the ground',
     tanpaKuadran: 'quadrant not computed yet',
+    memuat: 'Loading data…',
   },
 }
 
@@ -343,7 +345,18 @@ export function Ajakan({
  * dan yang berubah cuma bentuk balok yang mirip. Kalimatnya membuat jedanya
  * punya nama.
  */
-export function Memuat({ baris = 3, teks = 'Sedang memuat data…' }: { baris?: number; teks?: string }) {
+/**
+ * Bawaannya DUA BAHASA, bukan satu string Indonesia.
+ *
+ * Sampai 12 Sep 2026 kalimatnya tertulis sebagai nilai bawaan parameter, dan
+ * itu lolos dari tsc dan dari kedua uji: pemanggil yang menyediakan `teks`
+ * sendiri memang benar, dan yang tidak menyediakannya tidak gagal - ia cuma
+ * menampilkan "Sedang memuat data…" di tengah layar berbahasa Inggris.
+ * Terlihat di potret Playwright 390 px, bukan di satu pun asersi.
+ */
+export function Memuat({ baris = 3, teks }: { baris?: number; teks?: string }) {
+  const t = useTeks(K_KECIL)
+  teks ??= t.memuat
   return (
     <div className="space-y-2 p-4" aria-live="polite" aria-busy="true">
       <p className="mb-3 flex items-center gap-2 text-[13px] text-ink-3">

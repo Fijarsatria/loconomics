@@ -34,6 +34,7 @@ import {
   ScaleControl,
   type ExpressionSpecification,
   type GeoJSONSource,
+  type Point,
   type StyleSpecification,
 } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -58,6 +59,8 @@ import {
   WARNA_RUTE_BAYANG,
   WARNA_RUTE_TUNGGAL,
   WARNA_GEDUNG,
+  WARNA_BLOK,
+  WARNA_GARIS_BLOK,
   WARNA_LAYER,
   idLabelPertama,
 } from '../lib/layer-peta'
@@ -78,7 +81,7 @@ import {
 } from '../config'
 import { api } from '../lib/api'
 import { jarakSingkat } from '../lib/format'
-import type { KonteksSimpul, PropertiHeksagon, ProfilRute, RuteJalan, SimpulTransit } from '../types'
+import type { BedahBlok, KonteksSimpul, PropertiHeksagon, ProfilRute, RuteJalan, SimpulTransit } from '../types'
 import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 
 const SUMBER = 'heksagon'
@@ -90,6 +93,19 @@ const L_PILIH = 'hex-pilih'
 const L_ANGKA = 'hex-angka'
 const L_SELUBUNG = 'selubung-basemap'
 const POLA = 'arsir-ketidakpastian'
+/**
+ * Tujuh blok res-10 di dalam heksagon terpilih.
+ *
+ * Sumber TERPISAH dari heksagon, alasan yang sama dengan `SUMBER_FOKUS`:
+ * isinya berganti tiap kali seseorang membedah sebuah heksagon, sedangkan
+ * sumber heksagon hanya berganti saat kawasannya berganti. Menyatukannya
+ * berarti mengirim ulang 708 poligon untuk menggambar tujuh.
+ */
+const SUMBER_BLOK = 'blok'
+const L_BLOK_ISI = 'blok-isi'
+const L_BLOK_GARIS = 'blok-garis'
+const L_BLOK_PILIH = 'blok-pilih'
+const L_BLOK_ANGKA = 'blok-angka'
 /** Sumber terpisah untuk lencana nomor heksagon pembanding. */
 const SUMBER_FOKUS = 'fokus'
 const L_NOMOR = 'fokus-nomor'
@@ -886,6 +902,21 @@ interface Props {
    * di peta harus sama dengan nomor kolom di bar dan di tabel komparasi.
    */
   dibandingkan: string[]
+  /**
+   * Hasil bedah blok yang sedang tergambar, dan blok yang disorot.
+   *
+   * Milik App, bukan state di sini, karena TOMBOLNYA duduk di panel detail dan
+   * PETA yang menggambarnya - dua pemakai, satu nilai. Alasan yang sama persis
+   * dengan `profilRute` di bawah.
+   *
+   * `null` = tidak ada yang dibedah, dan itu keadaan bawaannya. Blok tidak
+   * pernah muncul tanpa diminta: tujuh petak berwarna di dalam satu heksagon
+   * adalah jawaban untuk pertanyaan yang belum tentu sedang diajukan.
+   */
+  blok?: BedahBlok | null
+  blokTerpilih?: string | null
+  /** Mengklik satu blok di peta. TIDAK mengubah heksagon terpilih. */
+  onPilihBlok?: (h3Blok: string | null) => void
   onPilihHeksagon: (h3: string | null) => void
   /**
    * Klik dua kali sebuah heksagon = simpan lokasi itu.
@@ -993,6 +1024,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     terpilih,
     saringKuadran,
     dibandingkan,
+    blok = null,
+    blokTerpilih = null,
+    onPilihBlok,
     onPilihHeksagon,
     onSimpanCepat,
     profilRute = 'foot-walking',
@@ -1106,6 +1140,11 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   onSimpanRef.current = onSimpanCepat
   const onMuatRef = useRef(onMuat)
   onMuatRef.current = onMuat
+  // Alasan yang sama dengan `onPilihRef`: pendengar blok dipasang SEKALI di
+  // efek tanpa dependensi, jadi ia tidak boleh menangkap prop yang identitasnya
+  // berganti tiap render.
+  const onPilihBlokRef = useRef(onPilihBlok)
+  onPilihBlokRef.current = onPilihBlok
   /**
    * `tampil` lewat ref, BUKAN lewat dependensi efek pemuat.
    *
@@ -1309,7 +1348,27 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // kali. Nol galat; yang terlihat cuma permintaan simpan yang berlipat.
     // Pendengar berdelegasi aman dipasang sebelum layernya ada: MapLibre
     // memeriksa `getLayer` saat kejadian, bukan saat mendaftar.
+    // BLOK LEBIH DULU. Ketujuh petak duduk DI DALAM heksagon terpilih, jadi
+    // satu klik di atasnya mengenai kedua layer sekaligus - dan MapLibre
+    // menjalankan penangan berdelegasi menurut urutan PENDAFTARANNYA, bukan
+    // menurut layer mana yang di atas. Tanpa penjaga di penangan heksagon di
+    // bawah, mengklik sebuah blok ikut memilih ulang heksagonnya, dan memilih
+    // ulang heksagon mengosongkan bloknya (App menyetelnya begitu) - jadi
+    // petaknya lenyap tepat pada klik yang dimaksudkan untuk memilihnya.
+    //
+    // Diperiksa lewat `queryRenderedFeatures`, bukan lewat urutan pendaftaran,
+    // supaya benar tanpa bergantung pada baris mana yang ditulis lebih dulu.
+    const adaBlokDi = (titik: Point) =>
+      m.getLayer(L_BLOK_ISI) && m.queryRenderedFeatures(titik, { layers: [L_BLOK_ISI] }).length > 0
+
+    m.on('click', L_BLOK_ISI, (e) => {
+      const h3b = (e.features?.[0]?.properties as { h3_blok?: string } | undefined)?.h3_blok
+      if (!h3b || !onPilihBlokRef.current) return
+      onPilihBlokRef.current(h3b)
+    })
+
     m.on('click', L_ISI, (e) => {
+      if (adaBlokDi(e.point)) return
       const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
       onPilihRef.current(p?.h3_index ?? null)
     })
@@ -1318,6 +1377,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // sekaligus melompatkan peta satu tingkat zoom. Yang tersimpan benar,
     // yang terlihat pindah tempat.
     m.on('dblclick', L_ISI, (e) => {
+      if (adaBlokDi(e.point)) return
       const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
       if (!p?.h3_index || !onSimpanRef.current) return
       e.preventDefault()
@@ -1399,6 +1459,27 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       // panel, dan ini tempat keempatnya.
       if (/non-existing layer|does not exist in the map's style/i.test(pesan)) {
         console.warn('[basemap] penataan layer mendahului pemasangannya:', pesan)
+        return
+      }
+
+      // LEMBAR IKON BUKAN BASEMAP, dan ini laporan kedua dari keluarga "galat
+      // basemap palsu".
+      //
+      // Keempat gaya MAPID menaruh `sprite` di maputnik.github.io - warisan
+      // OSM Liberty yang jadi dasar gayanya, bukan pilihan kita dan bukan
+      // sumber ubin (ubinnya tetap basemap.mapid.io; lihat aturan 6). Lembar
+      // itu gagal diambil di jaringan mana pun yang memblokir github.io, dan
+      // kegagalannya terjadi SELAMA gaya dimuat - jadi ia jatuh tepat ke
+      // jendela pelaporan di bawah dan memasang pita merah "Basemap gagal
+      // dimuat" DI ATAS peta yang tergambar sempurna. Terlihat 12 Sep 2026 di
+      // potret Playwright, bukan oleh satu pun asersi.
+      //
+      // Yang hilang tanpa sprite cuma ikon POI basemap, dan itu pun sudah
+      // ditambal: `setMissingStyleImageResolver` di atas mendaftarkan satu
+      // piksel tembus pandang untuk tiap nama yang tidak ketemu. Jalan, nama
+      // tempat, heksagon, dan seluruh analisisnya utuh.
+      if (/\/sprites?[./@]/i.test(url || pesan)) {
+        console.warn('[basemap] lembar ikon gaya MAPID tidak terambil:', pesan)
         return
       }
 
@@ -1838,6 +1919,63 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             'line-opacity': 0.95,
           },
           filter: ['in', ['get', 'h3_index'], ['literal', []]],
+        })
+
+        // --- Tujuh blok di dalam heksagon terpilih -------------------------
+        //
+        // DI ATAS heksagon, TANPA beforeId. Ia cuma ada selama seseorang
+        // membedah sebuah heksagon, dan selama itu blok memang yang sedang
+        // dibaca - alasan yang sama dengan lapisan fokus di bawah.
+        //
+        // Isiannya 0,62, bukan 0,3 seperti heksagon. Heksagon harus tembus
+        // pandang karena ia menutupi seluruh kota sekaligus; blok cuma tujuh
+        // petak yang baru saja diminta, dan pertanyaannya "yang mana yang
+        // lebih baik" - pertanyaan yang dijawab warna, bukan oleh jalan di
+        // bawahnya.
+        m.addSource(SUMBER_BLOK, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] } as never,
+        })
+        m.addLayer({
+          id: L_BLOK_ISI,
+          type: 'fill',
+          source: SUMBER_BLOK,
+          paint: { 'fill-color': WARNA_BLOK, 'fill-opacity': 0.62 },
+        })
+        m.addLayer({
+          id: L_BLOK_GARIS,
+          type: 'line',
+          source: SUMBER_BLOK,
+          paint: { 'line-color': WARNA_GARIS_BLOK(gaya), 'line-width': 1 },
+        })
+        // Blok yang disorot. Filter kosong = tidak ada yang disorot; itu
+        // keadaan bawaannya, dan `setFilter` di efek bawah yang mengisinya.
+        m.addLayer({
+          id: L_BLOK_PILIH,
+          type: 'line',
+          source: SUMBER_BLOK,
+          paint: { 'line-color': GARIS_HEX(gaya), 'line-width': 2.8, 'line-opacity': 0.95 },
+          filter: ['in', ['get', 'h3_blok'], ['literal', []]],
+        })
+        // Peringkat, bukan skor. Petaknya ±130 m di layar - dua digit masuk,
+        // empat karakter ("73,6") tidak, dan yang ingin diketahui orang di
+        // dalam petak sekecil itu urutannya. Skornya ada di panel, di baris
+        // yang sama dengan petak ini.
+        m.addLayer({
+          id: L_BLOK_ANGKA,
+          type: 'symbol',
+          source: SUMBER_BLOK,
+          layout: {
+            'text-field': ['get', 'peringkat'],
+            'text-font': FONT_ANGKA,
+            'text-size': 12,
+            'text-allow-overlap': true,
+          },
+          paint: {
+            'text-color': TEKS_HEX(gaya).warna,
+            'text-halo-color': TEKS_HEX(gaya).halo,
+            'text-halo-width': 1.3,
+          },
         })
 
         // --- Lapisan fokus: garis ke stasiun + nomor heksagon pembanding ---
@@ -2585,6 +2723,72 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 
     sumber.setData({ type: 'FeatureCollection', features: fitur } as never)
   }, [terpilih, kunciBanding, dibandingkan, layer, siap])
+
+  /**
+   * Menggambar tujuh blok, dan mendekatkan kamera kalau perlu.
+   *
+   * `siap` ada di dependensinya, bukan cuma `blok`: mengganti gaya basemap
+   * membongkar seluruh sumber dan memasangnya kembali KOSONG, jadi tanpa itu
+   * tujuh petak yang sedang dibaca orang lenyap saat ia menukar ke satelit -
+   * tanpa satu pun galat. Keluarga yang sama dengan rute dan isochrone.
+   *
+   * Kameranya didekatkan HANYA kalau terlalu jauh, dan hanya saat bloknya baru
+   * muncul. Blok bergaris tengah ±130 m: di zoom 13 ketujuhnya jadi satu titik,
+   * dan tombol "bedah" terasa seperti tombol yang tidak melakukan apa pun.
+   * Menggeser kamera pada SETIAP perubahan (mis. saat orangnya cuma mengganti
+   * kelas usaha) justru merebut kendali - jadi yang dibandingkan `blok?.h3_index`,
+   * bukan objeknya.
+   */
+  const blokLalu = useRef<string | null>(null)
+  useEffect(() => {
+    const m = peta.current
+    if (!m || !siap) return
+    const sumber = m.getSource(SUMBER_BLOK) as GeoJSONSource | undefined
+    if (!sumber) return
+
+    if (!blok) {
+      sumber.setData({ type: 'FeatureCollection', features: [] } as never)
+      blokLalu.current = null
+      return
+    }
+
+    sumber.setData({
+      type: 'FeatureCollection',
+      features: blok.blok.map((b) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [b.koordinat] },
+        properties: {
+          h3_blok: b.h3_blok,
+          peringkat: String(b.peringkat),
+          // Skor untuk KELAS yang sedang dipilih, bukan skor umum - ia yang
+          // tertulis di panel, dan peta yang mewarnai menurut angka lain dari
+          // yang terbaca di sebelahnya adalah peta yang berbohong.
+          skor: b.skor,
+          dilarang: b.izin_komersial === false,
+        },
+      })),
+    } as never)
+
+    if (blokLalu.current !== blok.h3_index) {
+      blokLalu.current = blok.h3_index
+      if (m.getZoom() < 15) {
+        const diam = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        m.easeTo({ zoom: 15.4, duration: diam ? 0 : 700 })
+      }
+    }
+  }, [blok, siap])
+
+  // Blok yang disorot. Efek sendiri, bukan disatukan dengan yang di atas:
+  // menyorot satu blok tidak boleh mengirim ulang tujuh poligon.
+  useEffect(() => {
+    const m = peta.current
+    if (!m?.getLayer(L_BLOK_PILIH)) return
+    m.setFilter(L_BLOK_PILIH, [
+      'in',
+      ['get', 'h3_blok'],
+      ['literal', blokTerpilih ? [blokTerpilih] : []],
+    ])
+  }, [blokTerpilih, siap, blok])
 
   // --- Kawasan jangkau simpul tujuan ---
   //

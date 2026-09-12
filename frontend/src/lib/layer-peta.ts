@@ -482,3 +482,51 @@ export function idLabelPertama(m: MapLibreMap): string | undefined {
   return layers[terakhirBukanSymbol + 1]?.id
 }
 
+
+/**
+ * Warna tujuh blok res-10 di dalam satu heksagon.
+ *
+ * SKALA MUTLAK 0–100, bukan peringkat 1–7. Dua-duanya menggambar tujuh petak
+ * yang berbeda warna; bedanya muncul justru pada heksagon yang blok-bloknya
+ * hampir sama bagus. Diwarnai menurut peringkat, tujuh blok yang skornya
+ * 71–73 tampil seperti jurang dari gelap ke pucat, dan orang memilih blok #1
+ * karena petanya berteriak — padahal selisihnya dua poin. Diwarnai menurut
+ * skornya sendiri, ketujuhnya tampil hampir sewarna, dan itu memang
+ * jawabannya: di heksagon ini letak persisnya tidak banyak berpengaruh.
+ * Keluarga jebakan yang sama dengan "angka kosong tidak boleh tampil seperti
+ * angka terukur".
+ *
+ * Satu rona, bukan palet kuadran. Blok bukan kuadran - ia satu sumbu saja
+ * (bagus → tidak bagus), dan sumbu tunggal dibaca paling cepat dari terang ke
+ * gelap. Warna kuadran di sini justru akan menyesatkan: petak oranye di dalam
+ * heksagon biru terbaca sebagai "blok ini Jebakan Gengsi", yang tidak pernah
+ * dihitung untuk blok.
+ *
+ * Zona yang MELARANG usaha dipisahkan lebih dulu. Skornya 0, jadi tanpa cabang
+ * ini ia mendapat ujung terpucat dari rona yang sama - terbaca sebagai "paling
+ * lemah" padahal artinya "tidak boleh". Larangan itu temuan, bukan kelemahan.
+ */
+export const WARNA_BLOK: ExpressionSpecification = [
+  'case',
+  ['==', ['get', 'dilarang'], true], KUADRAN.HINDARI.warnaPeta,
+  ['==', ['get', 'skor'], null], ABU_HINDARI,
+  [
+    'interpolate', ['linear'], ['get', 'skor'],
+    0, '#eef3f1',
+    40, '#a8cfc3',
+    65, '#55b096',
+    85, '#137c65',
+    100, '#0a5b4a',
+  ],
+]
+
+/**
+ * Garis blok: lebih tipis dan lebih pucat daripada garis heksagon.
+ *
+ * Blok hidup DI DALAM heksagon yang garisnya sudah tergambar. Kalau kedua
+ * garis setebal, batas heksagon hilang di antara batas-batas bloknya dan
+ * orangnya kehilangan satu-satunya petunjuk bahwa ketujuh petak itu satu
+ * keluarga.
+ */
+export const WARNA_GARIS_BLOK = (gaya: NamaGaya) =>
+  BASEMAP_GELAP.includes(gaya) ? 'rgba(238,243,240,0.55)' : 'rgba(22,33,28,0.5)'
