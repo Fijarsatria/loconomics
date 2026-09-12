@@ -238,3 +238,42 @@ Sembilan asersi terakhir yang masuk menjaga `render.yaml`, dan alasannya layak d
 Kerangka `s1`–`s4` **bukan TODO kosong** (`s5` sudah terisi). Setiap docstring memuat keputusan yang
 sudah diambil — ambang, urutan, jebakan yang harus dihindari. Isi badannya;
 jangan mengulang analisisnya.
+---
+
+## Status per 13 September 2026 (finalisasi)
+
+Empat pekerjaan besar sejak catatan di atas. Yang menyatukan keempatnya satu
+hal: **membuat batas antara yang diukur dan yang diperkirakan bisa dilihat dari
+luar**, bukan cuma dipercaya.
+
+### Selesai dan terverifikasi
+
+| Bagian | Bukti |
+|---|---|
+| **Blok res-10 di dalam heksagon** | Jawaban atas keluhan "heksagonnya terlalu besar untuk membandingkan dua sisi jalan". Tiap heksagon dipecah jadi TUJUH anak (±130 m) di tabel BARU `blok_heksagon` — 4.956 baris, nol kolom lama berubah, dan peta bekerja persis seperti sebelumnya kalau fiturnya tidak dipanggil. Enam indikator per blok dari sumber yang sudah ada (matriks ORS, jalan OSM, RDTR), `skor_per_kelas` untuk delapan kelas usaha sehingga pesaing sekelas menurunkan peringkat untuk kelas ITU saja. Diverifikasi di peramban: 19 asersi, dua bahasa, 390 px, selamat dari pergantian gaya basemap |
+| **Lima gaya basemap + mode 3D** | Gaya kelima (satelit) dimuat langsung dari MAPID, tidak disalin ke repo — alasannya di `CLAUDE.md` aturan 6. Gedung 3D memakai `fill-extrusion` dari sumber ubin MAPID yang sama. Diverifikasi lima gaya × 2D/3D di peramban, termasuk klik heksagon dalam keadaan miring |
+| **Serah terima tim data & AI** | 40.288 heksagon res-9 dari repo tim; seluruh 708 heksagon kita ada di dalamnya. D02 diterima sebagai DATA (708/708, cakupan variabel 25 → 26 dari 43, dan tidak menggeser satu pun skor karena D02 tidak ada di satu pun `BOBOT_*`). D10 dan B07 masuk `hex_perkiraan` sebagai PERKIRAAN. Sembilan kolom lain sengaja DITOLAK, alasan per kolom di `KOLOM_TIM_AI_DILEWATI` |
+| **Uji silang model tim terhadap ukuran kita** | R² 0,62 / 0,57 yang dilaporkan diukur terhadap label yang 96,9%-nya sintetis. Diuji ulang terhadap 12 heksagon yang punya pengamatan misi MAPID sungguhan: **B07 meleset Rp14.580 (41%), D10 meleset 2,34 pada skala 1–3** — lima kali lebih besar. Angkanya disimpan di `hex_perkiraan.rincian` dan ikut tertulis di tiap kalimat perkiraan di layar |
+| **Layar "Sumber data"** | Pengaturan → Sumber data. Daftar RESMI vs PERKIRAAN, cakupan per sumber, batasan, dan keempat temuan. Seluruh isinya dari `lib/ringkasan-data.ts` yang dibangkitkan pipeline — nol angka diketik tangan. Ikut menutup lubang lama: dari empat nilai yang dibangkitkan berkas itu, hanya SUMBER yang pernah dipakai komponen |
+| **OCR foto misi (`s3_extract.py`)** | Badan modul yang sejak lama cuma kerangka. Gemini vision lewat REST, prompt dari berkas (aturan 7), cache per SHA-1 URL foto sehingga lari ulang tidak membayar dua kali |
+| **Enam jebakan baru tercatat** | Termasuk dua yang gagalnya paling diam: sprite `maputnik.github.io` yang dilaporkan sebagai kegagalan basemap, dan kalimat Indonesia yang tinggal di nilai bawaan parameter `<Memuat/>` sehingga lolos `tsc` DAN kedua uji |
+
+### Temuan yang mengubah rencana
+
+**Spanduk "DIKONTRAKAN" hampir tidak pernah memuat harga.** Dari 19 spanduk
+pertama yang dibaca A1, 18 hanya memuat nomor telepon. Modelnya membaca dengan
+benar; yang tidak ada angkanya. Artinya A1 bukan jalan menuju P05 — sumber
+harga sewa harus dicari di tempat lain, dan `perlu_review` sudah menahan
+hasilnya supaya tidak ada angka karangan yang masuk tabel observasi.
+
+Konsekuensinya A2 (struk → nominal + jam) naik jadi pekerjaan OCR yang paling
+berharga: ia satu-satunya jalan ke B01–B04 yang mengisi Commuter Clock, dan
+Commuter Clock adalah fitur BERBAYAR yang tabelnya sekarang nol baris.
+
+### Yang menghalangi pekerjaan berikutnya
+
+| Hal | Yang menghalangi | Kalau sudah ada, kerjakan |
+|---|---|---|
+| **B01–B04 masih kosong** → Commuter Clock berbayar tanpa isi | A2 (462 foto struk) belum selesai dijalankan | `python s3_extract.py --struk --pekerja 4`, lalu muat hasilnya ke `hex_hourly_profiles`. Cache-nya membuat lari ulang murah |
+| **P05 harga sewa** | Sumbernya hilang: spanduk tidak memuat harga (lihat temuan di atas) | Cari sumber lain, atau nyatakan kosong apa adanya. JANGAN mengisinya dari perkiraan model — batas itu yang sedang dijaga seluruh pekerjaan sesi ini |
+| Rute mobil & sepeda | Kuota harian ORS | Tidak berubah dari catatan sebelumnya |

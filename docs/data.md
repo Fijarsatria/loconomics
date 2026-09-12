@@ -889,3 +889,51 @@ Tiga hal yang menentukan apakah hasilnya terpakai:
   itu badge tetap `RENDAH` — jujur, tapi lemah di depan juri. Lima heksagon
   bertitik 10 lebih berharga daripada lima puluh heksagon bertitik 1
 
+## 12. Dua tabel yang ditambahkan 12 September 2026
+
+Keduanya **additif**: nol kolom lama berubah, nol baris lama disentuh, dan
+produk bekerja persis seperti sebelumnya kalau keduanya kosong.
+
+### 12.1 `blok_heksagon` — tujuh anak res-10 per heksagon
+
+4.956 baris (708 × 7). Kunci `h3_blok`, induknya `h3_induk` dengan
+`ON DELETE CASCADE`. Isinya enam indikator per blok, `usaha_per_kelas_150m` dan
+`penarik_250m` sebagai JSONB, `skor_per_kelas` untuk delapan kelas induk usaha,
+dan `peringkat_induk` — peringkat di dalam heksagonnya sendiri, satu-satunya
+perbandingan yang berarti untuk baris ini.
+
+Dibangun `s7_publish.py --blok`, dibaca `GET /hex/{h3}/blok`. Rumusnya di
+`s6_score.skor_blok()`; alasan tiap keputusannya di
+[`skoring.md`](skoring.md#skor-blok--di-dalam-satu-heksagon).
+
+Tabel ini **tidak pernah** dibaca `/hex/layer` maupun `s6_score` untuk skor
+heksagon. Blok memeringkat sisi-sisi di dalam satu heksagon; ia tidak
+menggantikan Opportunity Score heksagonnya, dan tidak boleh pernah dipakai
+memeringkat heksagon terhadap heksagon lain.
+
+### 12.2 `hex_perkiraan` — angka yang bukan pengukuran di heksagon itu
+
+Rumah bagi angka yang diturunkan dari tempat lain: prediksi model, median
+pengamatan di sekitarnya, kisaran dari spanduk yang dibaca AI di kawasan yang
+sama. Unik per `(h3_index, kode)`, dengan `metode`, `n_sumber`, `radius_m`, dan
+`rincian` JSONB yang memuat mutunya.
+
+**Kenapa tabel sendiri dan bukan sebuah kolom penanda.** Angka yang duduk di
+kolom yang sama dengan pengamatan tidak bisa dibedakan dari luar oleh siapa
+pun — bukan oleh pembaca API, bukan oleh sesi AI berikutnya, dan bukan oleh
+kita sendiri enam minggu kemudian. Tiga larangan yang ditegakkan oleh letaknya:
+
+| Larangan | Ditegakkan oleh |
+|---|---|
+| tidak pernah masuk skor | `s6_score` hanya membaca `hex_features` |
+| tidak pernah mewarnai peta | `/hex/layer` tidak menyentuh tabel ini |
+| tidak pernah menaikkan lencana keyakinan | Q01–Q03 tetap milik `n_titik_misi` |
+
+Yang boleh: panel detail, simulasi, dan laporan — **selalu berlabel
+Perkiraan**, dan selalu disertai kalimat yang menyebut seberapa jauh angkanya
+pernah meleset terhadap ukuran lapangan. Kalimat itu dirakit
+`core/aturan.kalimat_perkiraan()` dari `rincian`-nya sendiri, bukan ditulis
+tetap.
+
+Isinya sekarang: D10 dan B07 untuk 708 heksagon, `metode = 'model_gbr'`, dari
+serah terima tim AI. Asal-usulnya lengkap di [`metadata.md`](metadata.md).

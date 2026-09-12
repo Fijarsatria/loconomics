@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 277 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 283 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -37,6 +37,7 @@ dulu sebelum mengerjakannya.
 | **Menyentuh bagian yang pernah rusak** | **[docs/jebakan.md](docs/jebakan.md)** — `grep` nama berkasnya di sana lebih dulu |
 | Tahu apa yang sudah jadi & apa berikutnya | [docs/status.md](docs/status.md) |
 | Menyentuh data MAPID | **[docs/aturan-lomba.md](docs/aturan-lomba.md)** |
+| **Ditanya "angka ini dari mana"** | **[docs/metadata.md](docs/metadata.md)** — register asal-usul: mana yang diukur, mana yang diperkirakan, dan apa yang sengaja DITOLAK dari serah terima tim |
 | Menyentuh pipeline / skema DB | [docs/data.md](docs/data.md) |
 | Mencari sumber data yang belum ada | **[docs/data.md bagian 10](docs/data.md)** — sudah dipetakan & diuji, jangan riset ulang |
 | Mengubah rumus skor | [docs/skoring.md](docs/skoring.md) |
@@ -70,6 +71,15 @@ frontend/    React + Vite + MapLibre GL. Sengaja ramping; berkas baru butuh alas
                                       berwarna sesuai `WARNA_LAYER` — dibangkitkan
                                       `scripts/potret-kartu.mjs --sorot`, bukan digambar
                                       tangan. Yang disorot menjawab pertanyaan kartunya
+             components/BedahBlok.tsx   — heksagon res-9 dibedah jadi TUJUH blok
+                                      res-10 (±130 m), dipanggil saat diminta.
+                                      Jawaban atas "heksagonnya terlalu besar
+                                      untuk membandingkan sisi jalan"; grid
+                                      res-9 tidak disentuh sama sekali
+             components/SumberData.tsx  — "angka ini dari mana": daftar sumber
+                                      RESMI vs PERKIRAAN, cakupan per sumber,
+                                      dan batasannya. Seluruh isinya dari
+                                      `ringkasan-data.ts`; nol angka diketik
              lib/layer-peta.ts     — aturan pewarnaan layer, dipakai peta DAN gerbang
              lib/potret-kartu.ts   — HANYA dipakai skrip; tidak masuk bundel
              lib/kartu-gerbang.ts  — DIBUAT OTOMATIS skrip; jangan disunting
@@ -82,13 +92,17 @@ frontend/    React + Vite + MapLibre GL. Sengaja ramping; berkas baru butuh alas
                                       potret komparasi (`KARTU_BANDING`) yang
                                       dibingkai pada rutenya
 pipeline/    Python s1→s7. Satu-satunya tempat skor dihitung
+             s3_extract.py — OCR foto misi lewat Gemini vision. Prompt hidup
+                           sebagai berkas (aturan 7); hasil per foto di-cache
+                           menurut SHA-1 URL-nya, jadi lari ulang tidak
+                           membayar dua kali untuk foto yang sama
              rute_ors.py — DUA hal lewat OpenRouteService, dijalankan MANUAL:
                            rute heksagon→simpul untuk jalan kaki, mobil, dan
                            sepeda (`hex_routes`, satu kolom `profil`) dan
                            kawasan jangkau 5/10/15 menit (`catchment_areas`).
                            Backend tidak pernah memanggil ORS saat melayani
                            permintaan — ia cuma membaca kedua tabel itu
-docs/        9 dokumen + indeks. Kenapa, bukan bagaimana
+docs/        10 dokumen + indeks. Kenapa, bukan bagaimana
 ```
 
 **Pemuatan malas.** SEBAGIAN BESAR layar dimuat lewat `React.lazy` — peta
@@ -136,6 +150,7 @@ Frontend menggambar tirainya DARI daftar itu, bukan dari tebakannya sendiri.
 | Commuter Clock per jam (`/hex/{h3}/commuter-clock`) | Ember 4-slot di respons detail |
 | Simulasi usaha (`/hex/{h3}/simulasi`) | — |
 | 43 variabel + faktor skor | Skor, kuadran, ZoneGuard, RiskRadar |
+| **Perkiraan** (`hex_perkiraan`) — menjawab pertanyaan yang SAMA dengan 43 variabel | **Bedah blok** (`/hex/{h3}/blok`) — seluruhnya data terbuka |
 | Komparasi, riwayat, dinamika, pemantauan, PDF | Grid heksagon, daftar lokasi, pencarian, Konsultan AI |
 | **Nilai keempat indeks + penjelasan kuadran** (11 Sep 2026) | **Cakupan indeks & cakupan prestise** — keduanya keterangan MUTU, tidak memuat satu pun nilai |
 
@@ -206,6 +221,26 @@ Yang tetap dijaga, dan ada ujinya:
 
 Tidak ada sumber tile lain. Atribusi OpenMapTiles/OSM di style MAPID adalah
 atribusi milik MAPID atas data sumbernya — bukan tanda kita memakai tile OSM.
+
+**Lima gaya sejak 12 Sep 2026**, dan yang kelima punya aturan sendiri. MAPID
+tidak menyajikan raster satelit — `/styles/satellite/512/{z}/{x}/{y}.png` dan
+`/styles/512/satellite.json` sama-sama 404 dengan kedua kunci. Yang ada cuma
+GL style-nya, dan citranya datang dari penyedia hulu MAPID dengan token MAPID
+sendiri. Maka `satelit`:
+
+- dimuat **langsung dari `basemap.mapid.io` saat dipilih**, tidak lewat proksi
+  backend dan **tidak disalin** ke `frontend/public/basemap/` — menyalinnya
+  berarti menaruh kredensial pihak ketiga di git;
+- karena itu `GAYA_BASEMAP` di `api/meta.py` tetap berisi EMPAT, dan
+  `test_infra.py` tetap menuntut `"satellite"` TIDAK ada di daftar putih.
+  Jangan "memperbaikinya" dengan menambahkannya;
+- kunci kita tidak boleh menempel pada permintaan ke penyedia hulu itu —
+  dijaga `audit-prd.mjs`.
+
+Gaya bawaannya tetap vektor MAPID. Sprite keempat gaya vektor tinggal di
+`maputnik.github.io` (warisan OSM Liberty milik MAPID, bukan sumber tile):
+kegagalannya **bukan** kegagalan basemap, dan penangan `'error'` di
+`PetaInteraktif.tsx` sudah memisahkannya.
 
 ### 7. Prompt AI hidup sebagai berkas
 
@@ -334,6 +369,27 @@ cd pipeline && python demo_pameran.py --isi      # tambal seluruh sel kosong
 cd pipeline && python demo_pameran.py --status   # lihat keadaan, tanpa mengubah
 cd pipeline && python demo_pameran.py --copot    # kembalikan persis seperti semula
 
+# Blok res-10 di dalam heksagon: 7 anak per heksagon, 4.956 baris.
+# --kering menghitung lalu menulis JSON TANPA menyentuh basis data.
+cd pipeline && python s1_ingest.py --jalan        # jalan OSM per kawasan
+cd pipeline && python s1_ingest.py --rdtr-blok    # zonasi per blok
+cd pipeline && python rute_ors.py --blok          # matriks ORS -> menit per blok
+cd pipeline && python s7_publish.py --blok        # -> blok_heksagon
+cd pipeline && python s7_publish.py --blok --kering
+
+# Serah terima tim data & AI (repo syahh-coder/Loconomics-AI, folder hasilTrain).
+# Berkasnya ditaruh di pipeline/data/01_mentah/tim_ai/ - TIDAK di-commit
+# (pipeline/data/ di-gitignore, ketentuan B.7).
+#   D02 -> hex_features sebagai DATA (WorldPop struktur umur)
+#   D10, B07 -> hex_perkiraan sebagai PERKIRAAN, tidak pernah menyentuh skor
+# Alasan tiap kolom yang DITOLAK ada di KOLOM_TIM_AI_DILEWATI.
+cd pipeline && python s7_publish.py --tim-ai
+
+# OCR foto misi. Hasil per foto di-cache menurut SHA-1 URL-nya, jadi lari
+# ulang sesudah kuota habis atau proses mati tidak membayar dua kali.
+cd pipeline && python s3_extract.py --struk --pekerja 4   # A2: nominal + jam
+cd pipeline && python s3_extract.py --spanduk             # A1: harga sewa
+
 # Rute jalan kaki (ORS). Butuh ORS_API_KEY di backend/.env.
 cd pipeline && python rute_ors.py --status       # cakupan, tanpa memanggil ORS
 cd pipeline && python rute_ors.py                # yang belum punya rute saja
@@ -386,6 +442,9 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 | Apa pun yang berbayar | `test_akun.py` — yang penting bukan "apakah pelanggan bisa masuk", melainkan apakah tamu dan akun gratis benar-benar TIDAK menerima isinya |
 | Model / skema | `alembic upgrade head` berhasil di basis data nyata |
 | Frontend | `npx tsc -p tsconfig.app.json --noEmit` dan `npx oxlint` (**bukan** `npx tsc --noEmit`) |
+| Skor blok, `alasan_blok`, `/hex/{h3}/blok` | `test_s6_score.py` + `test_aturan.py`. Yang dijaga bukan "apakah blok muncul" melainkan apakah zona yang MELARANG tetap berskor 0 dan blok di luar radius tarik tetap NaN, bukan angka besar |
+| `hex_perkiraan`, `kalimat_perkiraan`, `SUMBER_DATA` | `test_aturan.py` (6 uji) **dan** `test_akun.py` — yang penting tamu dan akun gratis benar-benar TIDAK menerima perkiraannya, dan yang sudah bayar benar-benar menerimanya. Uji yang cuma memastikan tamu ditahan tetap hijau kalau fiturnya mati total |
+| Gaya basemap / mode 3D | `test_infra.py` (daftar putih tetap empat, `satellite` tetap di luar) **dan** peramban: kelima gaya × 2D/3D, lalu KLIK heksagonnya |
 | Palet kuadran, ekspresi pewarnaan, ambang skor | `node scripts/potret-kartu.mjs` — kartu gerbang adalah gambar yang di-commit; tanpa ini ia diam-diam memperlihatkan keadaan lama. Warna baru WAJIB hex harfiah: `var(...)` di dalam ekspresi cat membuat SELURUH layer isian gagal dipasang tanpa satu pun galat (sudah terjadi pada Hidden Gem) |
 | Kalimat di gerbang, dialog, atau pembuka | Kedua cabang kamusnya (`id` DAN `en`) — `tsc` menjaga bentuknya, potret Playwright menjaga isinya. Nama produk (PriceLens, ZoneGuard, …) tidak diterjemahkan dengan sengaja |
 | Sumbu prestise, `BAHAN_PRESTISE`, `hitung_prestise_visual()` | `test_aturan.py` DAN `audit-prd.mjs` — yang dijaga bukan "apakah sumbunya tergambar", melainkan apakah layar masih MENYEBUTKAN sumbu itu berdiri di atas bahan apa |
@@ -422,7 +481,7 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 277 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 283 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit

@@ -129,8 +129,14 @@ def main() -> int:
             cek("tamu: variabel kosong", tamu.variabel == {})
             cek("tamu: faktor kosong", tamu.faktor == [])
             cek("tamu: tingkat 'tamu'", tamu.tingkat_akun == "tamu")
-            cek("tamu: terkunci menyebut keempatnya",
-                set(tamu.terkunci) == {"variabel", "faktor", "indeks", "kuadran"})
+            cek("tamu: terkunci menyebut kelimanya",
+                set(tamu.terkunci) == {"variabel", "faktor", "indeks", "kuadran", "perkiraan"})
+            # PERKIRAAN ikut ditahan sejak 12 Sep 2026, dan penahanan itu
+            # bukan soal nilai jualnya. Angka perkiraan menjawab pertanyaan
+            # yang SAMA dengan 43 variabel - "berapa angkanya di sini" - dan
+            # batas berbayar yang berbeda untuk pertanyaan yang sama tidak bisa
+            # diterangkan ke siapa pun.
+            cek("tamu: perkiraan kosong", tamu.perkiraan == [])
             # Yang GRATIS tetap harus utuh - kalau ini kosong, produknya rusak
             # bagi semua orang, bukan cuma bagi yang belum bayar.
             cek("tamu: skor tetap ada", tamu.skor is not None)
@@ -152,6 +158,7 @@ def main() -> int:
 
             gratis = detail_heksagon(h3, db, pengguna=u)
             cek("gratis: variabel tetap kosong", gratis.variabel == {})
+            cek("gratis: perkiraan tetap kosong", gratis.perkiraan == [])
             cek("gratis: tingkat 'gratis'", gratis.tingkat_akun == "gratis")
 
             # --- Token: buka satu heksagon --------------------------------
@@ -164,6 +171,12 @@ def main() -> int:
             dibuka = detail_heksagon(h3, db, pengguna=u)
             cek("token: variabel terisi 43", len(dibuka.variabel) == 43)
             cek("token: terkunci kosong", dibuka.terkunci == [])
+            # Dan yang dibuka BENAR-BENAR terbuka. Uji yang cuma memastikan
+            # tamu ditahan akan tetap hijau kalau perkiraannya tidak pernah
+            # dikirim ke siapa pun - yaitu kalau fiturnya mati total.
+            cek("token: perkiraan ikut terbuka", len(dibuka.perkiraan) > 0)
+            cek("token: tiap perkiraan membawa mutunya",
+                all(p.keterangan and p.kolom for p in dibuka.perkiraan))
             cek("token: nilai indeks ikut terbuka", dibuka.indeks.ipt is not None)
             cek("token: tingkat tetap 'gratis'", dibuka.tingkat_akun == "gratis")
 

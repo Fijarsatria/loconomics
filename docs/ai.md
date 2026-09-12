@@ -259,7 +259,7 @@ mungkin mengirim skor tanpa badge-nya. Lihat [data.md](data.md) Q01–Q03.
 |---|---|
 | Prompt A1–A4 | **Siap**, sudah cocok dengan skema Pydantic di `s3_extract.py` |
 | Skema keluaran A1–A4 | **Siap** (`HasilSpanduk`, `HasilStruk`, `HasilPrestise`, `HasilMenu`) |
-| Pemanggil API vision | **Belum** — penyedia belum dipilih |
+| Pemanggil API vision | **Siap & jalan** (12 Sep 2026) — Gemini vision lewat REST langsung, tanpa SDK: yang dibutuhkan cuma `inline_data` base64 dan `responseMimeType: application/json`. Hasil per foto di-cache menurut SHA-1 URL fotonya |
 | A6 GapFill | **Belum** — menunggu data survei |
 | 12 alat B1–B5 | **Siap & teruji** — `GET /ai/fungsi` menyajikan skema lengkapnya |
 | Loop agentik | **Siap & teruji** — 26 asersi dengan klien tiruan |
@@ -273,3 +273,38 @@ menunggu pertanyaan pertama gagal.
 
 Model default `claude-opus-5`, bisa ditimpa lewat `LLM_MODEL` tanpa menyentuh
 kode. Perkiraan biaya tiap panggilan dicatat ke `ai_call_logs.biaya_usd`.
+
+## Temuan A1: spanduk tidak memuat harga
+
+Dijalankan 12 Sep 2026 atas foto Properti Go. Dari 19 spanduk pertama yang
+terbaca, **18 hanya memuat nomor telepon** — `"DIKONTRAKAN 0822…"`, tanpa satu
+angka harga pun. Modelnya membaca dengan benar; yang tidak ada angkanya.
+
+Ini bukan kegagalan OCR melainkan fakta lapangan, dan konsekuensinya nyata:
+**A1 bukan jalan menuju P05 (harga sewa).** Sumber harga sewa harus dicari di
+tempat lain, dan sampai ketemu, P05 tetap kosong — bukan diisi perkiraan.
+
+`perlu_review` menahan hasil yang keyakinannya rendah atau angkanya di luar
+rentang wajar, jadi yang masuk tabel observasi bukan apa pun yang model
+katakan. Itu yang membuat temuan di atas terbaca sebagai "18 perlu ditinjau"
+alih-alih sebagai 18 angka karangan yang terlanjur masuk.
+
+Akibat lanjutannya: **A2 (struk → nominal + jam) naik jadi pekerjaan OCR yang
+paling berharga.** Ia satu-satunya jalan ke B01–B04, dan B01–B04 mengisi
+Commuter Clock — fitur BERBAYAR yang tabelnya sekarang nol baris.
+
+## Model tim AI: perkiraan, bukan pengukuran
+
+Serah terima 12 Sep 2026 dari repo tim AI membawa dua
+`GradientBoostingRegressor` (D10 dan B07) berikut prediksinya untuk 40.288
+heksagon. **Keduanya tidak pernah masuk skor, peta, atau lencana keyakinan** —
+mereka tinggal di `hex_perkiraan` dan hanya tampil di panel detail, berlabel.
+
+Alasannya ada di log training tim sendiri: dari 480 titik label, 15 survei
+sungguhan dan ~465 sintetis dari formula populasi + jarak simpul + derau.
+R² 0,62 dan 0,57 yang dilaporkan diukur terhadap label sintetis itu — jadi yang
+diukurnya seberapa baik model menebak formula yang membuatnya.
+
+Diuji ulang terhadap pembanding yang tidak pernah dilihat model (12 heksagon
+dengan pengamatan misi MAPID): **B07 meleset Rp14.580 (41%), D10 meleset 2,34
+pada skala 1–3**. Rinciannya di [`metadata.md`](metadata.md) bagian 3.

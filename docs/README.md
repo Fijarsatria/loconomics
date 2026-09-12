@@ -1,6 +1,6 @@
 # Dokumentasi Loconomics
 
-Tujuh berkas berurutan yang menjawab **apa yang dibangun, kenapa begitu, dan apa
+Delapan berkas berurutan yang menjawab **apa yang dibangun, kenapa begitu, dan apa
 yang belum diputuskan** — ditambah dua katalog rujukan yang tidak dibaca
 berurutan.
 
@@ -15,6 +15,7 @@ berurutan.
 | 5 | [ai.md](ai.md) | 14 fitur AI dalam 3 lapisan, mana yang wajib | Anda mengerjakan OCR, imputasi, atau AI Consultant |
 | 6 | [arsitektur.md](arsitektur.md) | Kenapa MapLibre, kenapa modular monolith, batas free tier | Anda menyentuh backend, frontend, atau deployment |
 | 7 | [aturan-lomba.md](aturan-lomba.md) | Ketentuan panitia yang mengikat kode | **Sebelum** menulis kode apa pun yang menyentuh data MAPID |
+| 8 | [metadata.md](metadata.md) | Asal-usul tiap angka: mana yang diukur, mana yang diperkirakan, dan apa yang sengaja ditolak | Anda ditanya "angka ini dari mana", atau akan menerima data dari luar tim |
 
 Kalau waktu Anda hanya lima menit: baca **alur-sistem.md bagian 1** dan
 **aturan-lomba.md**. Yang pertama memberi gambaran, yang kedua mencegah
@@ -27,7 +28,7 @@ tidak diubah sedikit pun.
 
 | Berkas | Menjawab | Buka kalau |
 |---|---|---|
-| [jebakan.md](jebakan.md) | 277 kesalahan yang benar-benar terjadi di repo ini, sebabnya, dan perbaikannya | **Sebelum menyentuh sebuah bagian** — `grep` nama berkasnya di sana. Sebagian besar jebakannya gagal DIAM |
+| [jebakan.md](jebakan.md) | 283 kesalahan yang benar-benar terjadi di repo ini, sebabnya, dan perbaikannya | **Sebelum menyentuh sebuah bagian** — `grep` nama berkasnya di sana. Sebagian besar jebakannya gagal DIAM |
 | [status.md](status.md) | Apa yang sudah jadi berikut buktinya, dan apa yang menghalangi pekerjaan berikutnya | Anda perlu tahu di mana proyek ini berdiri, atau mau memilih pekerjaan berikutnya |
 
 ## Peta dokumen ke kode
@@ -36,6 +37,8 @@ Setiap dokumen punya pasangan kodenya. Kalau salah satu berubah, pasangannya
 harus ikut ditinjau.
 
 ```
+docs/metadata.md    ←→  pipeline/s7_publish.py    (SUMBER_DATA, KOLOM_TIM_AI_*)
+                        frontend/src/components/SumberData.tsx
 docs/data.md        ←→  backend/app/models.py     (43 kolom + 3 penanda kualitas)
                         pipeline/config.py        (KODE_KE_KOLOM)
 docs/skoring.md     ←→  pipeline/s6_score.py      (satu-satunya tempat skor dihitung)

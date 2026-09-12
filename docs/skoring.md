@@ -207,6 +207,60 @@ Rencananya: setelah data survei masuk, jalankan keduanya berdampingan
 laporkan hasilnya apa adanya. Kolom `versi` di `location_scores` memang ada untuk
 ini. Ditandai di `pipeline/config.py::VARIABEL_TAMPILAN`.
 
+## Skor blok — di dalam satu heksagon
+
+Ditambahkan 12 Sep 2026. Dihitung di `s6_score.skor_blok()`, di berkas yang
+sama dengan skor heksagon, karena aturan 1 tidak punya pengecualian.
+
+**Masalah yang dijawabnya.** Heksagon res-9 bergaris tengah ±350 m, jadi satu
+petak memuat sisi yang menempel jalan besar DAN gang buntu di belakangnya —
+dan keduanya mendapat satu Opportunity Score yang sama. Pernyataan "lokasi ini
+bagus" jadi benar untuk sepertujuh heksagonnya saja.
+
+**Yang TIDAK dilakukan: memperhalus grid.** Mengubah res-9 jadi res-10 membuang
+708 heksagon, seluruh rute ORS, dan tiap variabel yang sudah terkumpul — lalu
+menukar satu masalah dengan masalah yang sama pada skala lebih kecil, karena
+res-10 pun masih memuat dua sisi jalan. Heksagon tetap unit analisisnya; blok
+dipanggil **saat diminta**, sebagai pembanding di dalam satu heksagon.
+
+Enam indikator, seluruhnya dari sumber yang sudah ada di repo. Bobotnya di
+`pipeline/config.py::BOBOT_BLOK`:
+
+| Indikator | Bobot | Sumber |
+|---|---|---|
+| menit jalan kaki ke simpul (dibalik) | 0,30 | matriks openrouteservice, 400 pasang per permintaan |
+| jarak ke jalan utama (dibalik) | 0,20 | kelas jalan OpenStreetMap |
+| penarik keramaian dalam 250 m | 0,15 | OSM |
+| usaha dalam 150 m | 0,15 | OSM |
+| jarak halte terdekat (dibalik) | 0,10 | OSM |
+| rasio tutupan bangunan | 0,10 | OSM |
+
+Lalu dua penyesuaian: `BOBOT_BLOK_BANJIR` (0,10) dikurangkan, dan
+`BOBOT_BLOK_PESAING` (0,20) dikurangkan **hanya untuk kelas usaha yang
+diminta** — sehingga blok dengan tiga pesaing sekelas turun peringkat untuk
+kelas ITU saja dan tetap teratas untuk kelas lain.
+
+### Tiga keputusan yang paling menentukan
+
+**Normalisasinya GLOBAL, bukan per induk.** Min-max per induk akan selalu
+merentang tujuh blok ke 0..100, sehingga selisih lima meter ke jalan terbaca
+sebagai perbedaan terbesar di dunia. Dengan normalisasi atas seluruh 4.956
+blok, tujuh blok yang memang mirip tetap berskor mirip — dan itu pernyataan
+yang benar tentang heksagon itu.
+
+**Warna peta mengikuti SKOR, bukan peringkat.** Konsekuensi langsung dari
+keputusan di atas: diwarnai menurut peringkat, tujuh blok yang skornya 71–73
+tampil seperti jurang dari gelap ke pucat dan orang memilih #1 karena petanya
+berteriak — padahal selisihnya dua poin. Alasan lengkapnya di
+`frontend/src/lib/layer-peta.ts::WARNA_BLOK`.
+
+**Jarak ke jalan utama NaN, bukan angka besar, di luar radius tarik 2.600 m.**
+Di sana kita tidak tahu apakah tidak ada jalan atau kita tidak menariknya —
+dua pernyataan berbeda (aturan 4).
+
+Zona RDTR yang MELARANG usaha menolkan skor blok, persis seperti ZoneGuard pada
+heksagon. Zona yang TIDAK DIKETAHUI tidak menolkan apa pun.
+
 ## Menjalankan uji
 
 ```bash
