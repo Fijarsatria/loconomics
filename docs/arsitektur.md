@@ -344,6 +344,39 @@ dari respons sungguhan:
   mengonsumsinya sebagai konfigurasi, jadi permintaannya jatuh ke tangkapan-semua
   SPA. Itu justru buktinya terbaca
 
+**Content-Security-Policy ditambahkan 13 Sep 2026, dan ia satu-satunya header di
+sini yang ikut sampai ke GitHub Pages.** Caranya bukan lewat `_headers` — yang
+memang tidak akan pernah dibaca di sana — melainkan lewat `<meta http-equiv>`
+yang **disuntikkan saat build** oleh plugin `csp-meta` di `vite.config.ts`.
+Tiga hal yang menentukan di rancangannya, dan ketiganya pernah salah lebih dulu:
+
+1. **CSP-nya dibaca DARI `_headers`, tidak disalin.** Di Cloudflare keduanya
+   berlaku sekaligus, dan yang berlaku adalah **irisannya** — dua salinan yang
+   bergeser sedikit memblokir hal yang tidak pernah diniatkan siapa pun, tanpa
+   galat dan tanpa pesan. Satu sumber, jadi keduanya tidak bisa berselisih. Build
+   **gagal** kalau `_headers` tidak memuat tepat satu baris CSP.
+2. **`apply: 'build'`, bukan ditulis di `index.html`.** Berkas itu juga dipakai
+   `npm run dev` dan `vite preview`, dan CSP ini mengizinkan `connect-src` hanya
+   ke backend produksi. Ditulis di sana ia memblokir setiap panggilan ke
+   `localhost:8000` — terukur di peramban: enam pelanggaran, daftar lokasi kosong,
+   dan nol uji yang menangkapnya.
+3. **Asal backend build ini ikut diizinkan.** Dibaca dari `VITE_API_BASE_URL`,
+   supaya `vite build && vite preview` dengan backend lokal — cara yang
+   diwajibkan CLAUDE.md untuk menangkap jebakan #1 — tetap bekerja. Build deploy
+   mengisi variabel itu dengan URL Azure yang sudah ada di daftar, jadi ia tidak
+   menambah apa pun di terbitan publik.
+
+Diuji di peramban sebelum dipasang, bukan sesudah: skripnya menghitung
+pelanggaran CSP pada gaya `terang` dan `satelit` sekaligus, dan keduanya **nol**
+dengan peta, heksagon, label, serta panel detail tergambar lengkap.
+`audit-prd.mjs` menegaskan keduanya dari dua arah — build produksi **wajib**
+membawa `<meta>`-nya, dev server **wajib** tidak.
+
+**`X-Frame-Options` tetap hanya di Cloudflare**, karena `frame-ancestors`
+diabaikan kalau datang lewat `<meta>` dan peramban menuliskan peringatannya ke
+konsol. Itu pertukaran yang disadari: terbitan cadangan mendapat seluruh CSP
+kecuali penjagaan bingkainya.
+
 Yang perlu diperiksa setiap kali menambah folder aset di `public/`: aturan
 terakhir `_redirects` adalah `/*  ->  /index.html`, dan sebuah tangkapan-semua
 yang menelan berkas nyata gagal **diam** — ia menjawab 200 dengan HTML, dan

@@ -564,6 +564,8 @@ def hapus_pantauan(
     "/laporan/{h3_index}",
     summary="Unduh Laporan Kelayakan satu lokasi (PDF)",
     response_class=Response,
+    # Lihat `core/batas.py::penjaga_berat` - jatah CPU harian Azure F1, bukan uang.
+    dependencies=[Depends(batas.penjaga_berat)],
 )
 def laporan_pdf(
     h3_index: str,
@@ -653,6 +655,7 @@ def laporan_pdf(
     "/laporan-komparasi",
     summary="Unduh perbandingan 2-4 lokasi (PDF, Premium)",
     response_class=Response,
+    dependencies=[Depends(batas.penjaga_berat)],
 )
 def laporan_komparasi(
     pengguna: PenggunaPremium,
@@ -698,6 +701,7 @@ def laporan_komparasi(
     "/laporan-simulasi/{h3_index}",
     summary="Unduh Laporan Simulasi Usaha satu lokasi (PDF)",
     response_class=Response,
+    dependencies=[Depends(batas.penjaga_berat)],
 )
 def laporan_simulasi_pdf(
     h3_index: str,

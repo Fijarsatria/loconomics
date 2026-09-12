@@ -532,6 +532,54 @@ async function main() {
     )
   }
 
+  // -------------------------------------------------------------------- CSP
+  //
+  // DUA cabang, dan keduanya menegaskan sesuatu - tidak ada yang dilewati.
+  // `<meta>` CSP disuntikkan plugin `csp-meta` HANYA saat build, karena CSP itu
+  // mengizinkan `connect-src` cuma ke backend produksi: hadir di dev server, ia
+  // memblokir setiap panggilan ke localhost:8000 dan mematikan pengembangan
+  // lokal. Jadi build WAJIB membawanya dan dev server WAJIB tidak - dan yang
+  // membedakan keduanya bukan bendera yang bisa salah diisi melainkan
+  // keberadaan klien HMR Vite di halamannya.
+  console.log('\n[W] Content-Security-Policy')
+  const adaHmr = await page.evaluate(
+    () => !!document.querySelector('script[src*="/@vite/client"]'),
+  )
+  const metaCsp = await page.evaluate(
+    () =>
+      document
+        .querySelector('meta[http-equiv="Content-Security-Policy"]')
+        ?.getAttribute('content') ?? null,
+  )
+  if (adaHmr) {
+    cek(
+      'dev server TIDAK memasang <meta> CSP',
+      metaCsp === null,
+      '- CSP di dev memblokir localhost:8000 dan mematikan pengembangan lokal',
+    )
+  } else {
+    cek(
+      'build produksi membawa <meta> CSP',
+      metaCsp !== null,
+      '- terbitan GitHub Pages akan berjalan tanpa CSP sama sekali',
+    )
+    if (metaCsp) {
+      for (const arahan of ["default-src 'self'", "object-src 'none'", "script-src 'self'"]) {
+        cek(`CSP memuat ${arahan}`, metaCsp.includes(arahan))
+      }
+      cek(
+        'CSP tidak menyebut frame-ancestors (diabaikan di <meta>)',
+        !metaCsp.includes('frame-ancestors'),
+        '- peramban akan menuliskan peringatannya ke konsol',
+      )
+      cek(
+        'CSP mengizinkan basemap MAPID',
+        metaCsp.includes('https://basemap.mapid.io'),
+        '- petanya tidak akan punya satu pun ubin',
+      )
+    }
+  }
+
   // ------------------------------------------------------------------ galat
   console.log('\n[X] Konsol')
   const nyata = konsol.filter((k) => !/WebGL|GroupMarkerNotSet|GL Driver|swiftshader/i.test(k))

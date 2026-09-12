@@ -395,7 +395,22 @@ def test_semua_alat_dikirim_ke_model():
     ai.tanya(PermintaanAI(pertanyaan="halo"), DbTiruan(), None)
     pulihkan()
     nama = {a["name"] for a in k.tools_terakhir}
-    cek("12 alat dikirim", len(nama) == 12, f"- {len(nama)}")
+    # Jumlahnya DITURUNKAN dari kedua daftarnya, tidak ditulis 12. Angka yang
+    # dikunci di sini memaksa uji ini disunting setiap kali satu alat
+    # ditambahkan - dan uji yang rutin disunting adalah uji yang suatu saat
+    # disunting jadi cocok tanpa ada yang memikirkannya. Keluarga yang sama
+    # dengan `n_pita` di smoke_api.
+    diharapkan = len(ai.ALAT_BACKEND) + len(ai.ALAT_FRONTEND)
+    cek(f"{diharapkan} alat dikirim", len(nama) == diharapkan, f"- {len(nama)}")
+    # Yang benar-benar dijaga: tidak ada alat backend yang terdaftar tanpa
+    # pelaksananya, dan sebaliknya. Alat yang diumumkan ke model tetapi tidak
+    # punya pelaksana ditolak saat dipanggil - sesudah model memakai satu
+    # giliran untuk memanggilnya.
+    diumumkan = {a["name"] for a in ai.ALAT_BACKEND}
+    cek("tiap alat backend punya pelaksananya", diumumkan <= set(ai.REGISTRI),
+        f"- yatim: {sorted(diumumkan - set(ai.REGISTRI))}")
+    cek("tiap pelaksana diumumkan ke model", set(ai.REGISTRI) <= diumumkan,
+        f"- tidak diumumkan: {sorted(set(ai.REGISTRI) - diumumkan)}")
     cek("alat peta ikut dideklarasikan", ai.NAMA_FRONTEND <= nama)
 
 

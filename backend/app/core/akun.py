@@ -59,6 +59,9 @@ Tingkat = Literal["tamu", "gratis", "premium"]
 #: akun tetap dibaca dari basis data tiap permintaan.
 UMUR_TIKET = timedelta(days=30)
 
+#: Panjang minimum AUTH_SECRET di produksi. Lihat `_kunci()` untuk alasannya.
+PANJANG_MIN_KUNCI = 32
+
 # Parameter scrypt. n=2**14 dengan r=8, p=1 adalah anjuran umum untuk login
 # interaktif: sekitar 60-100 ms per verifikasi di mesin biasa. Cukup lambat
 # untuk membuat penebakan massal mahal, cukup cepat untuk tidak terasa saat masuk.
@@ -128,6 +131,27 @@ def _kunci() -> bytes:
     antar-mesin.
     """
     if settings.auth_secret:
+        # Panjang MINIMUM ditegakkan, bukan cuma keberadaannya. Tiket ini
+        # ditandatangani HMAC-SHA256, yang berarti kunci pendek bisa dicari
+        # secara OFFLINE: penyerang cuma butuh satu tiket sah - dan setiap
+        # pengguna memegang satu di localStorage-nya - lalu menebak kunci di
+        # mesinnya sendiri tanpa sekali pun menyentuh server kita. Tidak ada
+        # pembatas laju yang bisa melihat pencarian itu, dan tidak ada log yang
+        # mencatatnya. Yang menemukannya bisa menempa tiket untuk akun MANA PUN,
+        # termasuk akun pemilik.
+        #
+        # 32 karakter adalah lantai, bukan anjuran; yang dianjurkan pesan galat
+        # di bawah, 48 byte acak. Kenapa memeriksanya di sini alih-alih saat
+        # impor: yang mengisi kolom ini mengetiknya di dasbor Azure, dan galat
+        # saat impor di sana muncul sebagai "aplikasi gagal start" tanpa sebab
+        # yang terbaca. Di sini sebabnya masuk ke log permintaan pertama yang
+        # menyentuh tiket.
+        if settings.produksi and len(settings.auth_secret) < PANJANG_MIN_KUNCI:
+            raise RuntimeError(
+                f"AUTH_SECRET terlalu pendek ({len(settings.auth_secret)} karakter, "
+                f"minimum {PANJANG_MIN_KUNCI}). "
+                "Buat dengan: python -c \"import secrets;print(secrets.token_urlsafe(48))\""
+            )
         return settings.auth_secret.encode()
     if settings.produksi:
         raise RuntimeError(

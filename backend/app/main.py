@@ -63,7 +63,71 @@ app = FastAPI(
     # itu membelanjakan uang sungguhan.
     docs_url=None if settings.produksi else "/docs",
     redoc_url=None if settings.produksi else "/redoc",
+    # `openapi_url` ikut ditutup, dan tanpa ini dua baris di atas tidak
+    # menutup apa pun. Diukur 13 Sep 2026 pada terbitan yang sedang hidup:
+    # /docs dan /redoc menjawab 404, sementara /openapi.json menjawab 200
+    # dengan SELURUH skemanya - setiap rute, setiap parameter, setiap bentuk
+    # respons. Siapa pun bisa menempelkannya ke editor.swagger.io dan
+    # mendapatkan tombol "Try it out" yang sama persis, ke API yang sama
+    # persis. Jadi yang tersembunyi cuma halamannya, bukan yang dijaga.
+    #
+    # Ini memang obskuritas, bukan penjagaan - yang menjaga /ai/tanya tetap
+    # pembatas laju dan plafon biaya di `core/batas.py`. Tetapi obskuritas yang
+    # SETENGAH lebih buruk daripada tidak ada: ia membuat pembacanya percaya
+    # pintunya tertutup.
+    openapi_url=None if settings.produksi else "/openapi.json",
 )
+
+#: Header keamanan yang dikirim pada SETIAP respons API.
+#:
+#: Ditambahkan 13 Sep 2026 sesudah diukur: backend publik tidak mengirim satu
+#: pun dari keempatnya. Frontend sudah lama mengirimnya lewat `_headers`
+#: Cloudflare, dan itu yang membuat kekosongan di sisi API mudah terlewat -
+#: dua terbitan, satu diperiksa.
+#:
+#: Kenapa API perlu header ini padahal ia menyajikan JSON, bukan HTML:
+#:
+#:   nosniff       tanpa itu peramban boleh menebak tipe sebuah respons dan
+#:                 menjalankan JSON yang dibuat menyerupai skrip
+#:   frame DENY    API tidak pernah punya alasan tampil di dalam <iframe>;
+#:                 satu-satunya yang membutuhkannya penyerang clickjacking
+#:   no-referrer   URL API memuat kode heksagon dan parameter simulasi milik
+#:                 penggunanya. Referrer membocorkannya ke tiap tautan keluar
+#:   CORP          melarang situs lain menyedot respons ini sebagai sumber daya
+#:   HSTS          Azure sudah memaksa HTTPS, tetapi hanya SESUDAH satu
+#:                 permintaan polos pertama. HSTS mencegah yang pertama itu
+HEADER_KEAMANAN = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Resource-Policy": "same-site",
+    # `frame-ancestors 'none'` saja - respons ini bukan halaman, jadi arahan
+    # lain tidak punya arti di sini dan hanya akan jadi salinan kedua dari CSP
+    # frontend yang cepat atau lambat berselisih dengannya.
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+}
+
+
+@app.middleware("http")
+async def header_keamanan(request, panggil_berikutnya):
+    """Menempelkan `HEADER_KEAMANAN` ke tiap respons, termasuk respons GALAT.
+
+    Middleware, bukan `Depends`: dependensi tidak berjalan untuk respons yang
+    dibuat penangan galat, dan justru respons galat yang paling sering dipakai
+    menyelidiki sebuah API.
+    """
+    respons = await panggil_berikutnya(request)
+    for k, v in HEADER_KEAMANAN.items():
+        respons.headers.setdefault(k, v)
+    # HSTS HANYA di produksi. Di localhost ia mengunci peramban pengembang ke
+    # https untuk host yang tidak menyajikannya - dan kuncian itu bertahan
+    # berbulan-bulan di profil perambannya.
+    if settings.produksi:
+        respons.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return respons
+
 
 # Urutan middleware penting: yang ditambahkan terakhir berjalan paling luar.
 # GZip harus membungkus respons SETELAH CORS menempelkan header-nya.

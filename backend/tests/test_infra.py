@@ -682,6 +682,284 @@ def test_backdrop_filter_berawalan_lebih_dulu():
     )
 
 
+def test_header_keamanan_di_setiap_respons():
+    """Header keamanan hilang gagalnya DIAM - tidak ada yang merah, dan tidak
+    ada yang terlihat berubah di layar.
+
+    Diukur 13 Sep 2026 di backend PUBLIK: nol dari keempatnya dikirim.
+    Frontend sudah lama mengirimnya lewat `_headers` Cloudflare, dan itu yang
+    membuat kekosongan di sisi API mudah terlewat - dua terbitan, satu
+    diperiksa.
+    """
+    from fastapi import FastAPI
+
+    from app.main import HEADER_KEAMANAN, app
+
+    assert isinstance(app, FastAPI)
+    c = TestClient(app)
+
+    r = c.get("/health")
+    for k, v in HEADER_KEAMANAN.items():
+        cek(f"sukses membawa {k}", r.headers.get(k) == v, f"- {r.headers.get(k)!r}")
+
+    # Respons GALAT juga. Ia yang paling sering dipakai menyelidiki sebuah API,
+    # dan penangan galat membuat responsnya SENDIRI - dependensi tidak berjalan
+    # di sana, middleware berjalan.
+    rg = c.get("/hex/000000000000000")
+    cek("respons galat ikut dijaga", rg.status_code >= 400)
+    for k, v in HEADER_KEAMANAN.items():
+        cek(f"galat membawa {k}", rg.headers.get(k) == v, f"- {rg.headers.get(k)!r}")
+
+    cek("frame ditolak, bukan sekadar dibatasi", HEADER_KEAMANAN["X-Frame-Options"] == "DENY")
+    cek("referrer tidak pernah dibocorkan", HEADER_KEAMANAN["Referrer-Policy"] == "no-referrer")
+
+
+def test_hsts_hanya_di_produksi():
+    """HSTS di localhost mengunci peramban pengembang ke https untuk host yang
+    tidak menyajikannya, dan kuncian itu bertahan berbulan-bulan di profilnya.
+    """
+    from app.core.config import settings
+    from app.main import app
+
+    c = TestClient(app)
+    r = c.get("/health")
+    ada = "Strict-Transport-Security" in r.headers
+    cek(
+        "HSTS mengikuti mode produksi",
+        ada == bool(settings.produksi),
+        f"- produksi={settings.produksi} hsts={ada}",
+    )
+
+
+def test_csp_frontend_menyebut_tiap_asal_yang_dipakai():
+    """`_headers` adalah berkas konfigurasi, dan berkas konfigurasi yang belum
+    pernah dieksekusi adalah kode yang belum pernah dikompilasi (jebakan 10).
+
+    Yang dijaga di sini bukan "CSP-nya ada" melainkan bahwa ia menyebut setiap
+    asal yang benar-benar dihubungi aplikasi. Satu asal yang terlupa berarti
+    satu bagian peta yang mati tanpa galat yang terlihat pemiliknya.
+    """
+    from pathlib import Path
+
+    berkas = Path(__file__).resolve().parents[2] / "frontend" / "public" / "_headers"
+    cek("_headers ada", berkas.exists())
+    if not berkas.exists():
+        return
+    isi = berkas.read_text(encoding="utf-8")
+    baris = [b for b in isi.splitlines() if b.strip().startswith("Content-Security-Policy:")]
+    cek("CSP tertulis di _headers", len(baris) == 1, f"- {len(baris)} baris")
+    csp = baris[0] if baris else ""
+    for asal in (
+        "https://basemap.mapid.io",      # ubin, glyph, gaya MAPID
+        "https://maputnik.github.io",    # lembar ikon yang dirujuk gaya MAPID
+        "https://api.maptiler.com",      # citra satelit, hulu MAPID
+        "https://fonts.gstatic.com",     # tipografi
+        "loconomics-api.azurewebsites.net",  # backend
+    ):
+        cek(f"CSP menyebut {asal}", asal in csp)
+    for arahan in ("default-src 'self'", "object-src 'none'", "script-src 'self'", "worker-src"):
+        cek(f"CSP memuat {arahan}", arahan in csp)
+    cek("script-src TIDAK melonggarkan unsafe-inline",
+        "script-src 'self';" in csp and "script-src 'self' 'unsafe-inline'" not in csp)
+
+
+def test_produksi_menutup_seluruh_permukaan_docs():
+    """/docs, /redoc DAN /openapi.json - ketiganya, atau tidak ada gunanya.
+
+    Diukur pada terbitan yang hidup 13 Sep 2026: /docs dan /redoc menjawab 404
+    sementara /openapi.json menjawab 200 dengan seluruh skemanya. Menempelkan
+    skema itu ke editor.swagger.io memberi tombol "Try it out" yang sama persis
+    ke API yang sama persis - jadi alasan yang ditulis di `main.py` untuk
+    menyembunyikan /docs ("halaman itu mengundang orang mencoba POST /ai/tanya")
+    tidak terpenuhi sama sekali.
+
+    Dijalankan di PROSES TERPISAH karena `app` dibangun saat impor: mengubah
+    `settings.lingkungan` sesudah `app.main` diimpor tidak mengubah apa pun,
+    dan uji yang menambal setelah kejadian akan hijau untuk kode yang rusak.
+    """
+    import json
+    import os
+    import subprocess
+
+    KODE = (
+        "import json;from app.main import app;"
+        "print(json.dumps({'docs': app.docs_url, 'redoc': app.redoc_url, "
+        "'openapi': app.openapi_url}))"
+    )
+
+    def permukaan(lingkungan: str) -> dict[str, object] | None:
+        lingk = {
+            **os.environ,
+            "LINGKUNGAN": lingkungan,
+            # Panjang, supaya penjaga panjang kunci tidak ikut terpicu dan
+            # membuat uji ini gagal karena hal yang bukan urusannya.
+            "AUTH_SECRET": "u" * 64,
+        }
+        hasil = subprocess.run(
+            [sys.executable, "-c", KODE],
+            cwd=str(Path(__file__).resolve().parents[1]),
+            capture_output=True, text=True, env=lingk, timeout=180,
+        )
+        if hasil.returncode != 0:
+            cek(f"app bisa diimpor sebagai {lingkungan}", False,
+                f"- {hasil.stderr.strip()[-200:]}")
+            return None
+        return json.loads(hasil.stdout.strip().splitlines()[-1])
+
+    prod = permukaan("produksi")
+    if prod is not None:
+        for nama in ("docs", "redoc", "openapi"):
+            cek(f"produksi menutup {nama}", prod[nama] is None, f"- justru {prod[nama]!r}")
+
+    # Arah sebaliknya. Tanpa ini, tiga asersi di atas tetap hijau seandainya
+    # ketiganya dimatikan di SEMUA lingkungan - dan yang hilang bukan keamanan
+    # melainkan satu-satunya cara memeriksa API saat mengembangkannya.
+    dev = permukaan("pengembangan")
+    if dev is not None:
+        for nama in ("docs", "redoc", "openapi"):
+            cek(f"pengembangan tetap membuka {nama}", dev[nama] is not None,
+                "- ikut tertutup")
+
+
+def test_produksi_menolak_auth_secret_pendek():
+    """Kunci pendek bisa dicari OFFLINE, dan tidak ada pembatas yang melihatnya.
+
+    Tiket ditandatangani HMAC-SHA256. Penyerang cuma butuh satu tiket sah -
+    setiap pengguna memegang satu di localStorage-nya - lalu menebak kuncinya di
+    mesin sendiri tanpa menyentuh server kita sekali pun. Yang menemukannya bisa
+    menempa tiket untuk akun mana pun, termasuk akun pemilik.
+
+    Sebelum 13 Sep 2026 yang ditegakkan hanya "tidak kosong", jadi AUTH_SECRET
+    bernilai `rahasia` lolos - dan lolosnya DIAM, karena semuanya tetap bekerja.
+    """
+    from app.core import akun
+    from app.core.config import Settings
+
+    asli = akun.settings
+    try:
+        akun.settings = Settings(lingkungan="produksi", auth_secret="p" * 8)
+        try:
+            akun.buat_tiket(1)
+            cek("produksi menolak AUTH_SECRET pendek", False, "- justru berhasil")
+        except RuntimeError as e:
+            cek("produksi menolak AUTH_SECRET pendek", True)
+            cek("pesannya menyebut panjang minimumnya",
+                str(akun.PANJANG_MIN_KUNCI) in str(e), f"- {e}")
+
+        # Yang cukup panjang harus tetap lolos, kalau tidak yang diuji di atas
+        # cuma "produksi selalu menolak".
+        akun.settings = Settings(
+            lingkungan="produksi", auth_secret="q" * akun.PANJANG_MIN_KUNCI
+        )
+        tiket = akun.buat_tiket(7)
+        cek("kunci sepanjang minimum diterima", akun.baca_tiket(tiket) == 7)
+    finally:
+        akun.settings = asli
+
+
+def test_penjaga_berat_membatasi_per_akun():
+    """Endpoint PDF dibatasi, dan ember-nya per AKUN - bukan per alamat IP.
+
+    Yang dijaga di sini bukan uang melainkan jatah 60 menit CPU per hari milik
+    Azure F1: satu PDF memakan 1-3 detik CPU karena ia menggambar belasan
+    grafik, dan begitu jatah harian habis SELURUH aplikasi berhenti sampai
+    tengah malam - untuk semua orang, termasuk juri.
+
+    Per akun karena juri bisa membuka situs ini dari satu jaringan yang sama;
+    batas per IP akan memblokir seorang juri karena juri di sebelahnya baru
+    mengunduh PDF.
+    """
+    from fastapi import Depends
+    from app.core import akun as inti_akun
+
+    batas.lupakan()
+    app = FastAPI()
+    galat.pasang(app)
+
+    @app.get("/berat", dependencies=[Depends(batas.penjaga_berat)])
+    def berat() -> dict[str, bool]:
+        return {"ok": True}
+
+    klien = TestClient(app)
+    kepala = {"Authorization": f"Bearer {inti_akun.buat_tiket(101)}"}
+    kode = [klien.get("/berat", headers=kepala).status_code
+            for _ in range(batas.MAKS_BERAT + 1)]
+    cek(f"{batas.MAKS_BERAT} unduhan pertama lolos",
+        kode[:batas.MAKS_BERAT] == [200] * batas.MAKS_BERAT, f"- {kode}")
+    cek("unduhan berikutnya dijawab 429", kode[-1] == 429, f"- {kode[-1]}")
+
+    # Akun LAIN dari alamat IP yang sama tidak ikut terblokir. TestClient selalu
+    # memakai satu IP, jadi kalau ember-nya per IP baris ini menjawab 429.
+    lain = {"Authorization": f"Bearer {inti_akun.buat_tiket(102)}"}
+    cek("akun lain dari IP yang sama tidak ikut kena",
+        klien.get("/berat", headers=lain).status_code == 200)
+
+    # Tamu tetap dibatasi, hanya kuncinya beralih ke alamat IP.
+    batas.lupakan()
+    tanpa = [klien.get("/berat").status_code for _ in range(batas.MAKS_BERAT + 1)]
+    cek("tamu ikut dibatasi lewat alamat IP", tanpa[-1] == 429, f"- {tanpa[-1]}")
+    batas.lupakan()
+
+    # Dan yang paling mudah hilang tanpa suara: apakah penjaganya benar-benar
+    # TERPASANG di ketiga rute PDF. Tiga asersi di atas menguji penjaganya, dan
+    # penjaga yang sempurna di rute yang tidak memakainya menjaga nol permintaan.
+    from app.main import app as app_nyata
+
+    terpasang = {
+        r.path: any(
+            d.call is batas.penjaga_berat for d in getattr(r, "dependant").dependencies
+        )
+        for r in app_nyata.routes
+        if getattr(r, "path", "").startswith("/akun/laporan")
+    }
+    cek("ketiga rute PDF ditemukan", len(terpasang) == 3, f"- {sorted(terpasang)}")
+    for jalur, ada in sorted(terpasang.items()):
+        cek(f"{jalur} memakai penjaga_berat", ada)
+
+
+def test_csp_meta_disuntikkan_saat_build_bukan_di_sumber():
+    """CSP untuk terbitan yang tidak bisa mengirim header - dan HANYA di sana.
+
+    `_headers` cuma dibaca Cloudflare; GitHub Pages mengabaikannya sepenuhnya
+    (diukur 2 Sep 2026: nol dari empat headernya muncul). Jadi CSP yang sama
+    disalin ke `<meta http-equiv>` - tetapi disuntikkan saat BUILD oleh plugin
+    `csp-meta` di vite.config.ts, bukan ditulis di index.html.
+
+    Bedanya bukan gaya. index.html juga dipakai `npm run dev`, dan CSP ini
+    mengizinkan `connect-src` hanya ke backend PRODUKSI. Ditulis di sana, ia
+    memblokir setiap panggilan ke `http://localhost:8000` dan mematikan seluruh
+    pengembangan lokal. Sudah diukur di peramban sebelum dipindahkan: enam
+    pelanggaran, peta tanpa satu pun heksagon, dan nol uji yang menangkapnya -
+    karena tidak ada uji yang membuka peramban.
+
+    Yang dijaga di sini tiga hal, dan yang ketiga yang paling mudah hilang:
+    plugin-nya ada, ia MEMBACA `_headers` alih-alih menyalin kalimatnya, dan
+    index.html tetap BERSIH.
+    """
+    akar_fe = Path(__file__).resolve().parents[2] / "frontend"
+    konfig = akar_fe / "vite.config.ts"
+    indeks = akar_fe / "index.html"
+    cek("vite.config.ts ada", konfig.exists())
+    cek("index.html ada", indeks.exists())
+    if not (konfig.exists() and indeks.exists()):
+        return
+
+    teks = konfig.read_text(encoding="utf-8")
+    cek("plugin csp-meta ada", "name: 'csp-meta'" in teks)
+    cek("plugin dipasang di daftar plugins",
+        "cspDariHeaders()" in teks.split("plugins:")[-1].split("]")[0])
+    cek("hanya berlaku saat build", "apply: 'build'" in teks)
+    cek("CSP dibaca dari _headers, bukan disalin", "'./public/_headers'" in teks)
+    cek("frame-ancestors dibuang dari <meta>", "startsWith('frame-ancestors')" in teks)
+    # Build harus GAGAL kalau baris CSP-nya hilang. Build yang diam-diam
+    # menghilangkan penjagaan adalah build yang naik ke produksi.
+    cek("build gagal kalau _headers kehilangan CSP-nya",
+        "TEPAT SATU baris Content-Security-Policy" in teks)
+
+    cek("index.html TIDAK memuat CSP - kalau memuat, `npm run dev` mati",
+        "Content-Security-Policy" not in indeks.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

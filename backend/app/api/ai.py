@@ -276,8 +276,52 @@ def _ringkas_detail(d) -> dict[str, Any]:
     }
 
 
+def bedah_blok(
+    db: Session, h3_index: str, kelas: str | None = None, bahasa: str = "id"
+) -> dict[str, Any]:
+    """Tujuh blok res-10 di dalam satu heksagon, terurut dari yang terbaik.
+
+    Ada supaya Konsultan AI bisa menjawab pertanyaan yang paling sering
+    menyusul sesudah "lokasi mana": *di sisi mana*. Tanpa alat ini ia tahu
+    heksagon mana yang bagus tetapi tidak pernah bisa menyebut nama jalannya -
+    padahal itu yang dipakai orang mencari ruko.
+
+    Memanggil endpoint yang SAMA dengan yang dipakai panel, bukan kueri
+    sendiri: dua jalur yang membaca tabel yang sama dengan cara berbeda akan
+    berselisih peringkatnya, dan yang berselisih di sini nama jalan yang
+    diucapkan asisten.
+    """
+    from app.api.hex import blok_heksagon
+
+    hasil = blok_heksagon(h3_index, db, kelas=kelas, bahasa=bahasa)  # type: ignore[arg-type]
+    return {
+        "h3_index": hasil.h3_index,
+        "kawasan": hasil.kawasan,
+        "kelas": hasil.kelas,
+        "nama_simpul": hasil.nama_simpul,
+        "catatan": hasil.catatan,
+        "keyakinan": hasil.keyakinan.model_dump(),
+        # Tiga teratas saja. Tujuh blok berikut seluruh indikatornya membanjiri
+        # jendela konteks model untuk pertanyaan yang jawabannya satu alamat.
+        "blok": [
+            {
+                "peringkat": b.peringkat,
+                "skor": b.skor,
+                "jalan": b.nama_jalan_utama,
+                "jarak_jalan_m": b.jarak_jalan_utama_m,
+                "menit_jalan": b.menit_jalan,
+                "n_usaha_150m": b.n_usaha_150m,
+                "alasan": b.alasan,
+                "peringatan": b.peringatan,
+            }
+            for b in hasil.blok[:3]
+        ],
+    }
+
+
 REGISTRI = {
     "cari_lokasi": cari_lokasi,
+    "bedah_blok": bedah_blok,
     "bandingkan": bandingkan,
     "jelaskan_skor": jelaskan_skor,
     "cek_harga": cek_harga,
@@ -394,6 +438,22 @@ ALAT_BACKEND: list[dict[str, Any]] = [
         "ZoneGuard: apakah zona RDTR di lokasi ini mengizinkan kegiatan usaha. "
         "WAJIB dipanggil sebelum merekomendasikan lokasi tertentu kepada pengguna.",
         {"hex_id": H3},
+    ),
+    _alat(
+        "bedah_blok",
+        "Pecah satu heksagon jadi tujuh blok selebar +-130 m dan urutkan dari yang "
+        "terbaik, lengkap dengan NAMA JALANNYA. Panggil ini kalau pengguna sudah punya "
+        "satu heksagon dan bertanya 'di sisi mana', 'jalan apa', atau 'bagian mana yang "
+        "paling bagus'. Gratis untuk semua pengguna.",
+        {
+            "h3_index": H3,
+            "kelas": _p(
+                "string",
+                "Kelas induk usaha (F1, F2, R1, R2, S1, S2, K1, T1) supaya pesaing "
+                "sekelas ikut menurunkan peringkat. Kosongkan kalau belum jelas.",
+                opsional=True,
+            ),
+        },
     ),
     _alat(
         "cari_hidden_gem",

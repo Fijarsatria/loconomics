@@ -15,11 +15,35 @@
 # `curl -I` ke terbitan yang sedang hidup, dan sebutkan terbitan yang MANA.
 # Lihat docs/arsitektur.md bagian "_headers dan _redirects".
 
+# Content-Security-Policy ditambahkan 13 Sep 2026, dan DIUJI DI PERAMBAN lebih
+# dulu - CSP yang dipasang tanpa diuji adalah cara paling cepat mematikan
+# sebuah peta tanpa satu pun galat yang terlihat pemiliknya: pelanggarannya
+# dilaporkan ke konsol, dan yang membuka situs lomba tidak membuka konsol.
+# Skrip ujinya menyuntikkan header ini ke respons dokumen lalu menghitung
+# pelanggarannya; nol di kelima gaya basemap, termasuk satelit.
+#
+# Tiap asal di bawah punya alasannya, dan tidak ada yang boleh ditambahkan
+# tanpa alasan yang bisa ditulis di sini:
+#
+#   basemap.mapid.io     ubin vektor, glyph, dan gaya MAPID (aturan 6)
+#   maputnik.github.io   lembar ikon yang DIRUJUK gaya MAPID sendiri - warisan
+#                        OSM Liberty, bukan sumber tile kedua
+#   api.maptiler.com     citra satelit, penyedia hulu MAPID dengan token MAPID
+#   api.mapbox.com       idem, cadangan hulu yang sama
+#   fonts.gstatic.com    Metropolis/Noto lewat Google Fonts
+#   *.azurewebsites.net  backend Loconomics
+#
+# `style-src 'unsafe-inline'` TIDAK bisa dicabut: React menulis atribut
+# `style=` untuk hampir setiap batang, pita, dan animasi di aplikasi ini, dan
+# CSP memperlakukannya sebagai gaya sebaris. `script-src` justru tidak butuh
+# pengecualian apa pun - build Vite tidak menghasilkan satu pun skrip sebaris
+# (diperiksa: nol `<script>` tanpa `src` di dist/index.html).
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: SAMEORIGIN
   Permissions-Policy: geolocation=(), microphone=(), camera=()
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://basemap.mapid.io; img-src 'self' data: blob: https://basemap.mapid.io https://maputnik.github.io https://api.maptiler.com https://api.mapbox.com; connect-src 'self' https://loconomics-api.azurewebsites.net https://basemap.mapid.io https://maputnik.github.io https://api.maptiler.com https://api.mapbox.com; manifest-src 'self'; upgrade-insecure-requests
 
 # Gaya basemap: berkas statis yang hanya berubah kalau MAPID mengubah gayanya
 # DAN scripts/gaya-basemap.mjs dijalankan ulang. Nama berkasnya tidak ber-hash,
