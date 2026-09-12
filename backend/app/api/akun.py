@@ -694,6 +694,314 @@ def laporan_komparasi(
 
 
 
+@router.get(
+    "/laporan-simulasi/{h3_index}",
+    summary="Unduh Laporan Simulasi Usaha satu lokasi (PDF)",
+    response_class=Response,
+)
+def laporan_simulasi_pdf(
+    h3_index: str,
+    user: PenggunaWajib,
+    db: Annotated[Session, Depends(get_db)],
+    jenis_usaha: Annotated[str, Query()] = "kuliner_ringan",
+    jam_buka: Annotated[int, Query(ge=1, le=24)] = 12,
+    luas_m2: Annotated[int, Query(ge=1, le=500)] = 20,
+    pangsa_persen: Annotated[float, Query(gt=0, le=100)] = 8.0,
+    margin_persen: Annotated[float, Query(gt=0, le=100)] = 30.0,
+    sewa_bulanan_diminta: Annotated[float | None, Query(ge=0, le=5_000_000_000)] = None,
+    harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
+) -> Response:
+    """Rencana usaha satu halaman, siap dibawa ke pemberi modal.
+
+    TIDAK menghitung ulang apa pun: ia memanggil `simulasi_heksagon` yang sama
+    dengan yang dipakai layar, dengan parameter yang sama. Dua jalur yang
+    menghitung sendiri-sendiri adalah dua jalur yang cepat atau lambat
+    berselisih - dan yang berselisih di sini angka yang dibawa orang ke bank.
+
+    Berbayar lewat penjaga yang sama dengan simulasinya sendiri: `wajib_akses_
+    penuh` dipanggil di dalam `simulasi_heksagon`, jadi tidak ada pintu kedua
+    yang bisa lupa dikunci.
+    """
+    from app.api.hex import simulasi_heksagon
+
+    sim = simulasi_heksagon(
+        h3_index, db, pengguna=user,
+        jenis_usaha=jenis_usaha, jam_buka=jam_buka, luas_m2=luas_m2,
+        pangsa_persen=pangsa_persen, margin_persen=margin_persen,
+        sewa_bulanan_diminta=sewa_bulanan_diminta, harga_rata_rata=harga_rata_rata,
+    )
+    pdf = _rakit_pdf_simulasi(sim, user)
+    nama = f"Simulasi-{h3_index}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nama}"'},
+    )
+
+
+def _putusan_simulasi(sim) -> tuple[str, str, str]:
+    """Kalimat putusan simulasi, dirakit dari hasilnya sendiri.
+
+    Yang dinilai BUKAN skor lokasinya melainkan apakah rencananya menutup
+    biayanya - dua pertanyaan berbeda yang sering dikira satu. Lokasi berskor
+    90 dengan sewa yang terlalu mahal tetap rugi.
+    """
+    laba = sim.hasil.laba_kotor_bulanan
+    rasio = sim.hasil.rasio_sewa_terhadap_omzet
+    if laba is None:
+        return (
+            "Belum bisa dihitung",
+            "Angka yang menyusun simulasi ini belum lengkap untuk lokasi tersebut. "
+            "Yang kosong dibiarkan kosong, bukan ditebak.",
+            "waspada",
+        )
+    if laba <= 0:
+        return (
+            "Rencana ini belum menutup biayanya",
+            f"Dengan asumsi yang Anda isi, laba kotor bulanannya {_angka_id(laba, 'Rp', 0)} - "
+            "artinya rugi. Naikkan pangsa, turunkan sewa, atau ubah jenis usahanya, lalu "
+            "hitung lagi.",
+            "bahaya",
+        )
+    if rasio is not None and rasio > 0.30:
+        return (
+            "Jalan, tetapi sewanya berat",
+            f"Laba kotor {_angka_id(laba, 'Rp', 0)} per bulan, tetapi sewanya memakan "
+            f"{_angka_id(rasio * 100, '%', 0)} dari omzet. Di atas 30% biasanya tidak "
+            "menyisakan ruang untuk gaji dan bahan baku.",
+            "waspada",
+        )
+    return (
+        "Rencana ini masuk akal",
+        f"Laba kotor {_angka_id(laba, 'Rp', 0)} per bulan"
+        + (f", dengan sewa {_angka_id(rasio * 100, '%', 0)} dari omzet" if rasio is not None else "")
+        + ". Angka di bawah memperlihatkan seberapa salah asumsinya boleh sebelum rugi.",
+        "baik",
+    )
+
+
+def _rakit_pdf_simulasi(sim, user) -> bytes:
+    """Laporan Simulasi Usaha - satu skenario, satu lokasi.
+
+    Urutannya mengikuti pertanyaan yang benar-benar diajukan orang yang akan
+    menyewa tempat: untung tidak, dari mana angkanya, seberapa salah asumsinya
+    boleh, kapan ramainya, dan apa yang perlu diwaspadai.
+
+    `sensitivitas` naik ke halaman depan sebagai KURVA, bukan tabel. Satu angka
+    laba menjawab "kalau asumsinya benar"; kurva itu menjawab "seberapa salah
+    asumsinya boleh sebelum rugi" - dan itu pertanyaan yang sebenarnya dibawa
+    orangnya.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    from types import SimpleNamespace
+
+    from app.core import laporan as lap
+    from app.core.aturan import kode_lokasi
+
+    nama_lokasi = kode_lokasi(sim.h3_index, sim.kawasan)
+    penyangga = io.BytesIO()
+    dok = SimpleDocTemplate(
+        penyangga, pagesize=A4,
+        leftMargin=16 * mm, rightMargin=16 * mm, topMargin=14 * mm, bottomMargin=16 * mm,
+        title=f"Simulasi Usaha {nama_lokasi}", author="Loconomics",
+    )
+    g = _gaya_pdf()
+    gl = lap.gaya()
+    h, m = sim.hasil, sim.masukan
+
+    isi: list[Any] = [
+        lap.kop(
+            "Simulasi Usaha",
+            f"{m.label_usaha} &nbsp;\u00b7&nbsp; {nama_lokasi} &nbsp;\u00b7&nbsp; {sim.kawasan}",
+            dok.width, gl,
+        ),
+        Spacer(1, 10),
+        lap.putusan(*_putusan_simulasi(sim), dok.width, gl),
+        Spacer(1, 9),
+        lap.kartu_angka(
+            [
+                ("Omzet per bulan", _angka_id(h.omzet_bulanan, "Rp", 0)),
+                ("Sewa per bulan", _angka_id(h.sewa_bulanan, "Rp", 0)),
+                ("Laba kotor per bulan", _angka_id(h.laba_kotor_bulanan, "Rp", 0)),
+                ("Impas per hari", _angka_id(h.pembeli_impas_per_hari, "pembeli", 0)),
+            ],
+            dok.width, gl,
+        ),
+        Spacer(1, 10),
+        _pita_keyakinan(sim.keyakinan, dok.width, g, colors),
+        Spacer(1, 9),
+    ]
+
+    # --- Ke mana omzetnya pergi ---------------------------------------------
+    if h.omzet_bulanan:
+        sewa = max(0.0, h.sewa_bulanan or 0)
+        laba = h.laba_kotor_bulanan or 0.0
+        if laba > 0:
+            # Untung: omzet DIBEDAH jadi bagian-bagiannya. Batang bertumpuk
+            # benar di sini karena ketiganya memang menjumlah ke omzetnya.
+            sisa = max(0.0, h.omzet_bulanan - sewa - laba)
+            isi += [
+                Paragraph("1. Ke mana omzetnya pergi", g["h2"]),
+                lap.bar_tumpuk(
+                    [
+                        ("Bahan & biaya lain", sisa, colors.HexColor("#cfdad6")),
+                        ("Sewa", sewa, colors.HexColor("#E58A00")),
+                        ("Laba kotor", laba, lap.TEAL_TUA),
+                    ],
+                    dok.width,
+                ),
+                Spacer(1, 4),
+                Paragraph(
+                    f"<font color='#8a9490'>\u25a0</font> Bahan &amp; biaya lain "
+                    f"{_angka_id(sisa, 'Rp', 0)} &nbsp;&nbsp; "
+                    f"<font color='#E58A00'>\u25a0</font> Sewa {_angka_id(sewa, 'Rp', 0)} &nbsp;&nbsp; "
+                    f"<font color='#12836C'>\u25a0</font> Laba kotor {_angka_id(laba, 'Rp', 0)}",
+                    g["kecil"],
+                ),
+            ]
+        else:
+            # RUGI: batang bertumpuk tidak boleh dipakai di sini. Ia menormalkan
+            # totalnya jadi 100%, jadi sewa yang tiga kali omzet tergambar
+            # sebagai "seluruh omzet habis untuk sewa" - pernyataan yang jauh
+            # lebih ringan daripada keadaannya. Dua batang pada SKALA YANG SAMA
+            # menyatakan selisihnya apa adanya.
+            isi += [
+                Paragraph("1. Omzet tidak menutup sewanya", g["h2"]),
+                lap.bar_banding(
+                    [
+                        ("Omzet per bulan", h.omzet_bulanan, lap.TEAL_TUA),
+                        ("Sewa per bulan", sewa, colors.HexColor("#B01B1B")),
+                    ],
+                    dok.width,
+                ),
+                Spacer(1, 3),
+                Paragraph(
+                    f"<font color='#12836C'>\u25a0</font> Omzet {_angka_id(h.omzet_bulanan, 'Rp', 0)}"
+                    f" &nbsp;&nbsp; <font color='#B01B1B'>\u25a0</font> Sewa {_angka_id(sewa, 'Rp', 0)}"
+                    f" &nbsp;&nbsp; kurang {_angka_id(sewa - h.omzet_bulanan, 'Rp', 0)} per bulan",
+                    g["kecil"],
+                ),
+            ]
+
+    # --- Asumsi ------------------------------------------------------------
+    isi += [
+        Paragraph("2. Asumsi yang Anda isi", g["h2"]),
+        _tabel([
+            ["Jenis usaha", m.label_usaha],
+            ["Jam buka per hari", _angka_id(m.jam_buka, "jam", 0)],
+            ["Luas tempat", _angka_id(m.luas_m2, "m2", 0)],
+            ["Pangsa pasar yang diasumsikan", _angka_id(m.pangsa_persen, "%", 1)],
+            ["Margin kotor", _angka_id(m.margin_persen, "%", 0)],
+            ["Hari buka per bulan", _angka_id(m.hari_per_bulan, "hari", 0)],
+            ["Sewa yang diminta pemilik", _angka_id(m.sewa_bulanan_diminta, "Rp", 0)],
+        ], dok.width, colors),
+    ]
+
+    # --- Angka yang DIUKUR, bukan diisi -------------------------------------
+    tu = sim.terukur
+    isi += [
+        Paragraph("3. Angka lokasi yang dipakai", g["h2"]),
+        Paragraph(
+            "Yang di bawah ini datang dari basis data, bukan dari isian Anda. "
+            "Kosong berarti belum terukur di lokasi ini - tidak pernah diganti nol.",
+            g["kecil"],
+        ),
+        Spacer(1, 3),
+        _tabel([
+            ["Uang berpindah per jam", _angka_id(tu.belanja_per_jam, "Rp", 0)],
+            ["Belanja per struk", _angka_id(tu.nominal_median_struk, "Rp", 0)],
+            ["Harga rata-rata per porsi", _angka_id(tu.harga_median_porsi, "Rp", 0)],
+            ["Sewa per m2 per bulan", _angka_id(tu.harga_sewa_per_m2, "Rp", 0)],
+            ["Ketatnya persaingan", _angka_id(tu.indeks_kompetisi)],
+            ["Pergantian usaha", _angka_id(tu.indeks_churn)],
+        ], dok.width, colors),
+    ]
+
+    # --- Seberapa salah asumsinya boleh -------------------------------------
+    if sim.sensitivitas:
+        titik = [(t.pangsa_persen, t.laba_kotor_bulanan) for t in sim.sensitivitas]
+        isi += [
+            Paragraph("4. Seberapa salah asumsinya boleh", g["h2"]),
+            Paragraph(
+                "Laba kotor bulanan pada beberapa nilai pangsa pasar. Rumusnya sama; "
+                "yang berubah cuma satu asumsi. Garis putus-putus adalah titik impas.",
+                g["kecil"],
+            ),
+            Spacer(1, 4),
+            lap.garis_sensitivitas(titik, dok.width),
+            Spacer(1, 3),
+            _tabel(
+                [[f"Pangsa {_angka_id(t.pangsa_persen, '%', 1)}",
+                  _angka_id(t.laba_kotor_bulanan, "Rp", 0)] for t in sim.sensitivitas],
+                dok.width, colors,
+            ),
+        ]
+
+    # --- Kapan ramainya ------------------------------------------------------
+    if sim.profil_jam:
+        isi += [
+            Paragraph("5. Kapan ramainya", g["h2"]),
+            # `_grafik_jam` menuntut objek ber-`.jam` dan `.n_transaksi`;
+            # `profil_jam` simulasi membawa `.relatif` (0-1, dinormalkan ke jam
+            # tersibuk). Dijembatani di sini alih-alih melonggarkan grafiknya:
+            # grafik yang menerima dua bentuk masukan adalah grafik yang suatu
+            # saat menggambar salah satunya dengan skala yang salah.
+            _grafik_jam(
+                [SimpleNamespace(jam=j.jam, n_transaksi=j.relatif) for j in sim.profil_jam],
+                dok.width,
+            ),
+        ]
+        if sim.jam_teramai:
+            isi.append(Paragraph(
+                "Tiga jam teramai: "
+                + ", ".join(f"{j:02d}.00" for j in sim.jam_teramai),
+                g["kecil"],
+            ))
+
+    # --- Peringatan ----------------------------------------------------------
+    if sim.peringatan:
+        isi += [Paragraph("6. Yang perlu diwaspadai", g["h2"])]
+        for p in sim.peringatan:
+            isi.append(lap.putusan(
+                p.tingkat.title(), p.pesan,
+                {"BAHAYA": "bahaya", "WASPADA": "waspada"}.get(p.tingkat, "baik"),
+                dok.width, gl,
+            ))
+            isi.append(Spacer(1, 4))
+
+    # --- Rumusnya, apa adanya ------------------------------------------------
+    if sim.rumus:
+        isi += [
+            Paragraph("7. Rumus yang dipakai", g["h2"]),
+            Paragraph(
+                "Dicetak apa adanya supaya angka di atas bisa dihitung ulang tangan. "
+                "Tidak ada model tersembunyi di dalam simulasi ini.",
+                g["kecil"],
+            ),
+            Spacer(1, 3),
+            _tabel([[k, v] for k, v in sim.rumus.items()], dok.width, colors),
+        ]
+
+    isi += [
+        Spacer(1, 10),
+        Paragraph(
+            "Simulasi ini BUKAN ramalan dan BUKAN skor. Ia satu skenario atas angka lokasi "
+            "yang terukur; hasilnya tidak pernah disimpan, tidak memeringkat apa pun, dan "
+            "tidak mengubah kuadran lokasi mana pun.",
+            g["kecil"],
+        ),
+    ]
+
+    from app.core.laporan import kaki
+
+    dok.build(isi, onFirstPage=kaki, onLaterPages=kaki)
+    return penyangga.getvalue()
+
+
 def _angka_id(v, satuan: str = "", desimal: int = 2) -> str:
     """Angka bergaya Indonesia. Kosong TETAP kosong, tidak pernah jadi nol."""
     if v is None:
@@ -760,6 +1068,61 @@ def _pita_keyakinan(keyakinan, lebar, gaya, colors):
     return t
 
 
+def _putusan_lokasi(zona, sc, keyakinan) -> tuple[str, str, str]:
+    """Satu kalimat putusan untuk kepala Laporan Kelayakan.
+
+    DIRAKIT dari angka, bukan ditulis tetap - jebakan nomor 7 di
+    docs/jebakan.md: pemicu yang dihitung dari data dengan kalimat yang ditulis
+    tetap akan berbohong untuk sebagian besar kasusnya.
+
+    Urutan pemeriksaannya sama dengan urutan pertanyaan yang benar: boleh tidak
+    dulu, baru bagus tidak. Lokasi yang zonanya melarang tidak perlu tahu
+    skornya berapa.
+    """
+    if zona.status == "DILARANG":
+        return (
+            "Tidak bisa dipakai usaha",
+            "Zonasi RDTR di lokasi ini melarang kegiatan usaha. Angka di bawah tetap "
+            "dicetak untuk keperluan audit, tetapi tidak ada skor yang membatalkan "
+            "larangan tata ruang.",
+            "bahaya",
+        )
+    skor = sc.opportunity_score if sc else None
+    if skor is None:
+        return (
+            "Belum bisa dinilai",
+            "Lokasi ini belum punya Opportunity Score. Yang bisa dibaca dari dokumen ini "
+            "hanya variabel mentahnya.",
+            "waspada",
+        )
+    tipis = keyakinan.tingkat == "RENDAH"
+    ekor = (
+        " Datanya masih tipis, jadi baca angka ini sebagai arah - bukan sebagai kepastian."
+        if tipis
+        else ""
+    )
+    if skor >= 75:
+        return (
+            f"Layak dipertimbangkan serius — skor {skor:.0f} dari 100",
+            "Lokasi ini berada di kelompok teratas wilayah studi. Yang tersisa memeriksa "
+            "sewanya masuk akal dan sisi mana di dalam heksagonnya yang diambil." + ekor,
+            "baik",
+        )
+    if skor >= 50:
+        return (
+            f"Bisa jalan, dengan syarat — skor {skor:.0f} dari 100",
+            "Lokasi menengah. Ia bekerja kalau sewanya di bawah rata-rata kawasan atau "
+            "jenis usahanya tidak berebut dengan pesaing yang sudah ada." + ekor,
+            "waspada",
+        )
+    return (
+        f"Berisiko — skor {skor:.0f} dari 100",
+        "Lokasi ini di bawah kebanyakan lokasi lain di wilayah studi. Butuh alasan yang "
+        "sangat kuat di luar data untuk tetap mengambilnya." + ekor,
+        "bahaya",
+    )
+
+
 def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> bytes:
     """Laporan Kelayakan satu lokasi.
 
@@ -787,21 +1150,37 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
         leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm,
         title=f"Laporan Kelayakan {nama_lokasi}", author="Loconomics",
     )
+    from app.core import laporan as lap
+
     g = _gaya_pdf()
+    gl = lap.gaya()
+    skor_nilai = sc.opportunity_score if sc else None
+    kuadran_kode = sc.kuadran if sc else None
+
+    # Putusan di KEPALA dokumen, dirakit dari angka yang sama dengan yang
+    # dicetak di bawahnya. Laporan yang menuntut pembacanya menyusun
+    # kesimpulan sendiri dari empat tabel adalah laporan yang kesimpulannya
+    # berbeda-beda menurut siapa yang membacanya.
     isi: list[Any] = [
-        Paragraph("Laporan Kelayakan Lokasi", g["h1"]),
-        Paragraph(
-            "Loconomics &mdash; Transit-oriented Retail Recommender &nbsp;·&nbsp; "
+        lap.kop(
+            "Laporan Kelayakan Lokasi",
+            f"{nama_lokasi} &nbsp;·&nbsp; {hx.kawasan} &nbsp;·&nbsp; "
             "MAPID WebGIS Competition #2 2026",
-            g["kecil"],
+            dok.width, gl,
+        ),
+        Spacer(1, 10),
+        lap.putusan(*_putusan_lokasi(zona, sc, keyakinan), dok.width, gl),
+        Spacer(1, 9),
+        lap.kartu_angka(
+            [
+                ("Opportunity Score", _angka_id(skor_nilai, desimal=0)),
+                ("Peringkat wilayah", f"#{sc.peringkat}" if sc and sc.peringkat else "—"),
+                ("Kelompok lokasi", LABEL_KUADRAN.get(kuadran_kode, "—") if kuadran_kode else "—"),
+                ("Titik survei", str(keyakinan.n_titik_misi)),
+            ],
+            dok.width, gl,
         ),
         Spacer(1, 9),
-        Paragraph(
-            f"<b>{nama_lokasi}</b> &nbsp;·&nbsp; {hx.kawasan} &nbsp;·&nbsp; "
-            f"<font face='Courier' size='8'>{hx.h3_index}</font>",
-            g["n"],
-        ),
-        Spacer(1, 8),
         _pita_keyakinan(keyakinan, dok.width, g, colors),
         Spacer(1, 8),
         _profil_pengguna(user, hx, g, colors, dok.width),
@@ -943,7 +1322,9 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
             g["kecil"]),
     ]
 
-    dok.build(isi)
+    from app.core.laporan import kaki
+
+    dok.build(isi, onFirstPage=kaki, onLaterPages=kaki)
     return penyangga.getvalue()
 
 
@@ -969,17 +1350,52 @@ def _rakit_pdf_komparasi(baris, user) -> bytes:
         leftMargin=16 * mm, rightMargin=16 * mm, topMargin=14 * mm, bottomMargin=14 * mm,
         title="Perbandingan Lokasi Loconomics", author="Loconomics",
     )
+    from app.core import laporan as lap
+
     g = _gaya_pdf()
+    gl = lap.gaya()
 
     nama = [kode_lokasi(b.h3_index, b.kawasan) for b in baris]
+    # Pemenangnya disebut DI KEPALA, bukan ditinggalkan untuk disimpulkan
+    # pembacanya dari tabel selebar empat kolom. Dirakit dari skor yang sama
+    # dengan yang dicetak di tabel itu.
+    berskor = [b for b in baris if b.opportunity_score is not None]
+    juara = max(berskor, key=lambda b: b.opportunity_score) if berskor else None
     isi: list[Any] = [
-        Paragraph("Perbandingan Lokasi", g["h1"]),
-        Paragraph(
-            "Loconomics &mdash; Transit-oriented Retail Recommender &nbsp;·&nbsp; "
-            + " vs ".join(nama),
-            g["kecil"],
+        lap.kop(
+            "Perbandingan Lokasi",
+            " vs ".join(nama) + " &nbsp;·&nbsp; MAPID WebGIS Competition #2 2026",
+            dok.width, gl,
         ),
-        Spacer(1, 8),
+        Spacer(1, 10),
+    ]
+    if juara is not None:
+        selisih = sorted((b.opportunity_score for b in berskor), reverse=True)
+        jarak_skor = (selisih[0] - selisih[1]) if len(selisih) > 1 else None
+        isi.append(lap.putusan(
+            f"Skor tertinggi: {kode_lokasi(juara.h3_index, juara.kawasan)} "
+            f"({juara.opportunity_score:.0f} dari 100)",
+            (
+                f"Unggul {jarak_skor:.0f} poin dari yang kedua. "
+                if jarak_skor is not None and jarak_skor >= 5
+                else "Selisihnya tipis dengan yang kedua, jadi pembedanya ada di sewa dan izin. "
+                if jarak_skor is not None
+                else ""
+            )
+            + "Skor tertinggi bukan satu-satunya pertimbangan: baca juga kolom zona dan "
+              "lencana keyakinan di bawah.",
+            "baik" if (jarak_skor or 0) >= 5 else "waspada",
+            dok.width, gl,
+        ))
+        isi.append(Spacer(1, 9))
+        isi.append(lap.kartu_angka(
+            [(kode_lokasi(b.h3_index, b.kawasan),
+              f"{b.opportunity_score:.0f}" if b.opportunity_score is not None else "—")
+             for b in baris],
+            dok.width, gl,
+        ))
+    isi += [
+        Spacer(1, 9),
         _profil_pengguna(user, None, g, colors, dok.width),
         Spacer(1, 10),
     ]
@@ -1077,7 +1493,9 @@ def _rakit_pdf_komparasi(baris, user) -> bytes:
             f"{datetime.now().strftime('%d-%m-%Y %H:%M')} WIB &nbsp;·&nbsp; versi skor {VERSI_BAKU}",
             g["kecil"]),
     ]
-    dok.build(isi)
+    from app.core.laporan import kaki
+
+    dok.build(isi, onFirstPage=kaki, onLaterPages=kaki)
     return penyangga.getvalue()
 
 

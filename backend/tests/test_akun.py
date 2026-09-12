@@ -168,6 +168,63 @@ def main() -> int:
             db.flush()
             cek("terbuka sesudah dicatat", sudah_terbuka(db, u, h3))
 
+            # --- Ketiga laporan PDF ---------------------------------------
+            #
+            # Dijalankan SESUDAH token dibelanjakan, karena ketiganya berbayar
+            # dan penjaganya memang harus dilewati lewat pintu yang sah.
+            #
+            # Yang diperiksa BUKAN "PDF-nya bagus" - itu tidak bisa diuji di
+            # sini - melainkan tiga hal yang gagalnya diam: berkasnya memang
+            # PDF (bukan halaman galat yang kebetulan 200), ia memuat gambar
+            # (markah dan diagram), dan putusan simulasinya dirakit.
+            from app.api.akun import (
+                _putusan_simulasi,
+                _rakit_pdf,
+                _rakit_pdf_simulasi,
+            )
+            from app.api.hex import simulasi_heksagon
+            from app.core.laporan import MARKAH
+
+            cek("markah produk ada di repo", MARKAH.exists())
+
+            from app.api.bersama import ambil_hex
+            from app.models import LocationScore
+
+            hx_uji = ambil_hex(db, h3)
+            skor_uji = db.execute(
+                select(LocationScore).where(LocationScore.h3_index == h3)
+            ).scalars().first()
+
+            # PERAKITNYA yang dipanggil, bukan endpointnya. `laporan_pdf`
+            # memotong token, dan potongan itu menambah baris buku besar yang
+            # membuat asersi saldo di bawah gagal - uji ini menangkapnya sendiri
+            # pada percobaan pertama. Yang ingin diuji di sini perakitan
+            # PDF-nya, bukan lagi penjaganya (yang sudah diuji di atas).
+            from app.api.bersama import badge, peringatan_risiko, persentil_churn, zoneguard
+
+            p75_l, p90_l = persentil_churn(db, hx_uji.kawasan)
+            isi_kelayakan = _rakit_pdf(
+                hx_uji, skor_uji, zoneguard(hx_uji),
+                peringatan_risiko(hx_uji, p75_l, p90_l), badge(hx_uji), u,
+            )
+            cek("Laporan Kelayakan berbentuk PDF", isi_kelayakan[:5] == b"%PDF-")
+            # `/Subtype /Image`, BUKAN `/Image`. Yang kedua muncul di PDF tanpa
+            # satu pun gambar tertanam - diukur 13 Sep 2026: berkas tanpa markah
+            # tetap memuat "/Image" tiga kali, jadi asersi itu hijau untuk
+            # laporan yang logonya hilang. Yang menandai gambar SUNGGUHAN cuma
+            # objek XObject bertipe Image.
+            cek("Laporan Kelayakan menanam markah produk",
+                isi_kelayakan.count(b"/Subtype /Image") >= 1)
+
+            sim = simulasi_heksagon(h3, db, pengguna=u)
+            isi_sim = _rakit_pdf_simulasi(sim, u)
+            cek("Laporan Simulasi berbentuk PDF", isi_sim[:5] == b"%PDF-")
+            cek("Laporan Simulasi menanam markah produk",
+                isi_sim.count(b"/Subtype /Image") >= 1)
+            judul_sim, _, nada_sim = _putusan_simulasi(sim)
+            cek("putusan simulasi bernada sah", nada_sim in {"baik", "waspada", "bahaya"})
+            cek("putusan simulasi berjudul", bool(judul_sim))
+
             dibuka = detail_heksagon(h3, db, pengguna=u)
             cek("token: variabel terisi 43", len(dibuka.variabel) == 43)
             cek("token: terkunci kosong", dibuka.terkunci == [])

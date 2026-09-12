@@ -203,6 +203,20 @@ const kueri = (params: Record<string, string | number | boolean | undefined>) =>
  * jadi `res.json()` akan meledak. Amplop galatnya tetap dibaca dengan bentuk
  * yang sama supaya cabang 402 di pemanggil tidak perlu tahu bedanya.
  */
+/** Isian simulasi. Satu bentuk, dipakai permintaan JSON-nya DAN unduhan PDF-nya. */
+export interface ParamSimulasi {
+  [k: string]: string | number | boolean | undefined
+  jenis_usaha?: string
+  jam_buka?: number
+  luas_m2?: number
+  pangsa_persen?: number
+  margin_persen?: number
+  /** Sewa yang ditawarkan ke pengguna, per bulan. Dikirim hanya kalau > 0. */
+  sewa_bulanan_diminta?: number
+  /** Harga rata-rata per pembeli menurut rencana pengguna sendiri. */
+  harga_rata_rata?: number
+}
+
 async function unduhPdf(jalur: string, namaBerkas: string): Promise<void> {
   const kepala: Record<string, string> = {}
   if (tiketSekarang) kepala.Authorization = `Bearer ${tiketSekarang}`
@@ -344,20 +358,8 @@ export const api = {
     ambil<BedahBlok>(`/hex/${h3}/blok${kueri({ kelas: kelas ?? undefined })}`),
 
   /** Simulasi kelayakan usaha. BUKAN skor — lihat backend/app/core/simulasi.py. */
-  simulasi: (
-    h3: string,
-    p: {
-      jenis_usaha?: string
-      jam_buka?: number
-      luas_m2?: number
-      pangsa_persen?: number
-      margin_persen?: number
-      /** Sewa yang ditawarkan ke pengguna, per bulan. Dikirim hanya kalau > 0. */
-      sewa_bulanan_diminta?: number
-      /** Harga rata-rata per pembeli menurut rencana pengguna sendiri. */
-      harga_rata_rata?: number
-    } = {},
-  ) => ambil<SimulasiHasil>(`/hex/${h3}/simulasi${kueri(p)}`),
+  simulasi: (h3: string, p: ParamSimulasi = {}) =>
+    ambil<SimulasiHasil>(`/hex/${h3}/simulasi${kueri(p)}`),
 
   // --- PriceLens ---
   layerHarga: (p: { kawasan?: string; maks_sewa_per_m2?: number; hanya_berdata?: boolean } = {}) =>
@@ -489,6 +491,18 @@ export const api = {
     for (const x of h3) q.append('h3', x)
     return unduhPdf(`/akun/laporan-komparasi?${q.toString()}`, `Perbandingan-${h3.length}-lokasi.pdf`)
   },
+
+  /**
+   * Laporan Simulasi Usaha. Parameternya PERSIS sama dengan `simulasi()` di
+   * atas, dan itu syaratnya: backend memanggil endpoint simulasi yang sama,
+   * jadi angka di PDF tidak bisa berselisih dengan angka di layar hanya
+   * karena satu isian tidak ikut terkirim.
+   */
+  unduhSimulasi: (h3: string, namaKawasan: string, p: ParamSimulasi = {}) =>
+    unduhPdf(
+      `/akun/laporan-simulasi/${h3}${kueri(p)}`,
+      `Simulasi-Usaha-${namaKawasan.replace(/ /g, '-')}-${h3.slice(0, 8)}.pdf`,
+    ),
 
   unduhLaporan: async (h3: string, namaKawasan: string): Promise<void> => {
     const kepala: Record<string, string> = {}

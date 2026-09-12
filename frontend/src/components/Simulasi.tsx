@@ -29,7 +29,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { kodeLokasi, nomorLokasi } from '../config'
-import { api } from '../lib/api'
+import { api, type ParamSimulasi } from '../lib/api'
 import { useSesi } from './Akun'
 import { angka, rupiah } from '../lib/format'
 import type { Simulasi as HasilSimulasi } from '../types'
@@ -80,6 +80,9 @@ const K = {
     lepasBanding: 'Lepas pembanding',
     klikLain: 'Klik heksagon lain di peta untuk membandingkan',
     tutup: 'Tutup simulasi',
+    unduh: 'Unduh laporan PDF',
+    mengunduh: 'Menyiapkan PDF…',
+    gagalUnduh: 'Gagal menyiapkan laporan PDF.',
     mauBuka: 'Mau buka usaha apa di sini?',
     pilihSatu: 'Pilih satu, lalu kami hitungkan untung ruginya pakai angka lokasi ini.',
     menghitung: 'Menghitung skenario…',
@@ -182,6 +185,9 @@ const K = {
     lepasBanding: 'Drop the comparison',
     klikLain: 'Click another hexagon on the map to compare',
     tutup: 'Close the simulation',
+    unduh: 'Download PDF report',
+    mengunduh: 'Preparing the PDF…',
+    gagalUnduh: 'Could not prepare the PDF report.',
     mauBuka: 'What would you open here?',
     pilihSatu: "Pick one, and we will work out the profit and loss from this location's numbers.",
     menghitung: 'Working out the scenario…',
@@ -868,6 +874,9 @@ export default function Simulasi({
   const t = useTeks(K)
   const ist = useIstilah()
   const { akun } = useSesi()
+  /** Unduhan PDF sedang berjalan. Tombolnya dikunci supaya satu klik = satu berkas. */
+  const [mengunduh, setMengunduh] = useState(false)
+  const isianTerakhir = useRef<ParamSimulasi>({})
   const [jenis, setJenis] = useState<string | null>(
     akun?.preferensi?.jenis_usaha ?? null,
   )
@@ -907,6 +916,10 @@ export default function Simulasi({
       sewa_bulanan_diminta: sewaDiisi ?? undefined,
       harga_rata_rata: hargaDiisi ?? undefined,
     }
+    // Isian yang SAMA disimpan untuk unduhan PDF. Merakit ulang objeknya di
+    // penangan tombol berarti dua tempat yang harus sepakat - dan yang
+    // berselisih di sana adalah angka yang dibawa orang ke pemberi modal.
+    isianTerakhir.current = p
     const t = setTimeout(() => {
       Promise.all([
         api.simulasi(h3, p),
@@ -1071,6 +1084,28 @@ export default function Simulasi({
           )
         )}
         {hasil && <Badge badge={hasil.keyakinan} />}
+        {/* Unduh PDF hanya muncul kalau ADA hasilnya. Tombol yang bisa ditekan
+            sebelum ada yang dihitung cuma menghasilkan laporan kosong. */}
+        {hasil && (
+          <button
+            onClick={() => {
+              setMengunduh(true)
+              api
+                .unduhSimulasi(h3, hasil.kawasan, isianTerakhir.current)
+                .catch((e: Error) => setGalat(e.message || t.gagalUnduh))
+                .finally(() => setMengunduh(false))
+            }}
+            disabled={mengunduh}
+            aria-label={t.unduh}
+            title={mengunduh ? t.mengunduh : t.unduh}
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-wait disabled:opacity-50"
+          >
+            <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden className="shrink-0">
+              <path d="M7 1.8v7.4M3.8 6.4 7 9.6l3.2-3.2M2.4 11.8h9.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            PDF
+          </button>
+        )}
         <button
           onClick={onTutup}
           aria-label={t.tutup}
