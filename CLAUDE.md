@@ -106,10 +106,19 @@ docs/        10 dokumen + indeks. Kenapa, bukan bagaimana
 ```
 
 **Pemuatan malas.** SEBAGIAN BESAR layar dimuat lewat `React.lazy` — peta
-(MapLibre, 962 KB), gerbang, pembuka, simulasi, dan kedua dialog premium. Bundel
-pertama 1.314 KB → 329 KB. Satu impor statis baru ke salah satunya menghapus
+(MapLibre, 983 KB), gerbang (203 KB), pembuka, simulasi, layar Sumber Data, dan
+kedua dialog premium. Satu impor statis baru ke salah satunya menghapus
 penghematan itu **tanpa ada yang memberi tahu**: periksa `npx vite build`
 sesudah menyentuh impor di `App.tsx`.
+
+Bundel pertama **427 KB** per 13 Sep 2026 (bukan 329 KB seperti tertulis di
+sini sampai hari itu — angkanya basi, bukan regresi baru). Yang menahannya di
+angka itu satu hal yang sudah dilaporkan build sendiri: `Premium.tsx`
+di-`lazy` DAN diimpor statis oleh `App.tsx` dan `PanelInsight.tsx`
+(`BagianRiwayat`, `MenuKawasan`), jadi `INEFFECTIVE_DYNAMIC_IMPORT` dan
+seluruh modulnya tetap ikut bundel pertama. Memperbaikinya berarti memindahkan
+kedua ekspor itu keluar dari `Premium.tsx` — pekerjaan yang berdiri sendiri,
+belum dikerjakan.
 
 Rincian tiap folder ada di `pipeline/README.md` dan `docs/arsitektur.md`.
 

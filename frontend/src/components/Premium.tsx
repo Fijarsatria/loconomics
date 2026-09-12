@@ -391,10 +391,16 @@ export function MenuKawasan({
 
   return (
     <div ref={wadah} className="relative shrink-0">
+      {/* `aria-label` menyebut APA yang dipilih tombol ini, bukan cuma nilainya
+          sekarang. Tanpa itu pembaca layar mendengar "Semua kawasan, tombol" -
+          yang memberitahu isi tombolnya tetapi tidak pernah memberitahu tombol
+          itu memilih apa. Pemilih Layer di bilah yang sama sudah begini
+          (`label="Layer"` di App.tsx); keduanya harus sepakat. */}
       <button
         onClick={() => setBuka((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={buka}
+        aria-label={tk.kawasan}
         className={`flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors ${
           buka
             ? 'border-line-2 bg-surface'
