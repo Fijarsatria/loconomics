@@ -525,6 +525,20 @@ class RuteJalan(BaseModel):
     koordinat: list[list[float]]
 
 
+class KontribusiBlok(BaseModel):
+    """Satu indikator dan berapa besar ia mengangkat (atau menekan) skor blok."""
+
+    kode: str = Field(description="Kunci bobot, mis. menit_jalan_inv")
+    nama: str = Field(description="Nama indikatornya dalam bahasa orang")
+    #: Sumbangan ke skor MENTAH (0-1 sebelum dinormalkan lagi). Negatif berarti
+    #: menekan - sejauh ini hanya risiko banjir.
+    nilai: float
+    #: Sumbangan sebagai PANGSA dari jumlah seluruh sumbangan positif, 0-1.
+    #: Ada supaya batang di layar bisa dibandingkan antar-indikator tanpa
+    #: pembacanya perlu tahu bobot mana yang 0,30 dan mana yang 0,10.
+    pangsa: float
+
+
 class BlokDalamHeksagon(BaseModel):
     """Satu blok (anak H3 res-10) di dalam heksagon yang sedang dilihat.
 
@@ -562,6 +576,13 @@ class BlokDalamHeksagon(BaseModel):
     risiko_banjir: float | None = None
     alasan: list[str] = Field(default_factory=list)
     peringatan: list[str] = Field(default_factory=list)
+    #: Sumbangan tiap indikator ke skor blok ini, sudah berlabel bahasa orang.
+    #:
+    #: DIHITUNG PIPELINE, dibaca apa adanya di sini (aturan 1). Tanpa ini panel
+    #: blok cuma bisa menyebut angka akhirnya, dan pertanyaan yang sebenarnya
+    #: diajukan - "kenapa blok ini 96 dan yang sebelah 84" - tidak punya
+    #: jawaban selain membandingkan enam kolom mentah sendiri.
+    kontribusi: list[KontribusiBlok] = Field(default_factory=list)
 
 
 class BedahBlok(BaseModel):

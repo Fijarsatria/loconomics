@@ -464,6 +464,12 @@ class BlokHeksagon(Base):
     skor_blok: Mapped[float | None] = mapped_column(Float, index=True)
     #: Skor per kelas induk usaha, {"F1": 72.4, ...} - memuat penalti pesaing sekelas.
     skor_per_kelas: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    #: Sumbangan tiap indikator ke skor mentah blok ini, dari `s6_score`.
+    #:
+    #: Disimpan, bukan dihitung ulang saat melayani: aritmetika skor tinggal di
+    #: pipeline (aturan 1), dan backend yang menghitung ulang bobotnya sendiri
+    #: akan berselisih dengan pipeline pada hari seseorang menggeser satu bobot.
+    kontribusi: Mapped[dict | None] = mapped_column(JSONB)
     #: 1 = blok terbaik di heksagon induknya.
     peringkat_induk: Mapped[int | None] = mapped_column(Integer)
     dihitung_pada: Mapped[datetime] = mapped_column(

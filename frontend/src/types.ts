@@ -401,6 +401,18 @@ export interface BlokDalamHeksagon {
   risiko_banjir: number | null
   alasan: string[]
   peringatan: string[]
+  /** Sumbangan tiap indikator ke skor blok ini. Dihitung pipeline, bukan di sini. */
+  kontribusi: KontribusiBlok[]
+}
+
+/** Satu indikator dan berapa besar ia mengangkat (atau menekan) skor blok. */
+export interface KontribusiBlok {
+  kode: string
+  nama: string
+  /** Sumbangan ke skor mentah. Negatif berarti menekan - sejauh ini hanya banjir. */
+  nilai: number
+  /** Sumbangan sebagai pangsa dari seluruh sumbangan positif, 0-1. */
+  pangsa: number
 }
 
 export interface BedahBlok {

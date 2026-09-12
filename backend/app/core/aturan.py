@@ -825,6 +825,46 @@ TEPI_JALAN_M = 25
 JAUH_JALAN_M = 250
 
 
+#: Nama awam tiap kunci bobot blok (id, en). Kembaran `pipeline/config.py::
+#: BOBOT_BLOK` ditambah risiko banjir; kesamaannya dijaga `test_aturan.py`.
+NAMA_KONTRIBUSI_BLOK: dict[str, tuple[str, str]] = {
+    "menit_jalan_inv": ("Dekat ke simpul transit", "Close to the transit node"),
+    "jarak_jalan_utama_m_inv": ("Menempel jalan utama", "On a main road"),
+    "n_penarik_250m": ("Penarik keramaian di sekitarnya", "Nearby crowd generators"),
+    "n_usaha_150m": ("Usaha lain di sekitarnya", "Other businesses nearby"),
+    "jarak_halte_m_inv": ("Dekat halte", "Close to a transit stop"),
+    "rasio_tutupan_bangunan": ("Kepadatan bangunan", "Built-up density"),
+    "risiko_banjir_inv": ("Risiko banjir", "Flood risk"),
+}
+
+
+def kontribusi_blok(mentah: dict | None, bahasa: Bahasa) -> list[dict]:
+    """`blok_heksagon.kontribusi` -> daftar berlabel, urut dari yang terbesar.
+
+    TIDAK menghitung apa pun: pangsanya pembagian dua angka yang sudah jadi,
+    dan pembagian itu tidak memeringkat blok mana pun (aturan 1). Yang
+    menghitung sumbangannya `pipeline/s6_score.skor_blok`.
+
+    Yang NEGATIF ikut dikirim dan tidak diubah tandanya. Risiko banjir menekan
+    skor, dan menyembunyikannya berarti daftar sumbangan yang jumlahnya tidak
+    pernah cocok dengan skornya.
+    """
+    if not mentah:
+        return []
+    en = bahasa == "en"
+    positif = sum(v for v in mentah.values() if v > 0) or 1.0
+    baris = [
+        {
+            "kode": k,
+            "nama": NAMA_KONTRIBUSI_BLOK.get(k, (k, k))[1 if en else 0],
+            "nilai": round(float(v), 4),
+            "pangsa": round(float(v) / positif, 4),
+        }
+        for k, v in mentah.items()
+    ]
+    return sorted(baris, key=lambda b: -abs(b["nilai"]))
+
+
 def alasan_blok(
     b: dict,
     saudara: list[dict],

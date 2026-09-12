@@ -348,13 +348,25 @@ def skor_blok(ind: pd.DataFrame) -> pd.DataFrame:
     tidak.
     """
     mentah = pd.Series(0.0, index=ind.index)
+    # KONTRIBUSI tiap indikator disimpan, bukan cuma jumlahnya.
+    #
+    # Tanpa ini panel blok cuma bisa menyebutkan angka akhirnya, dan pertanyaan
+    # yang benar-benar diajukan orang - "kenapa blok ini 96 dan yang sebelah
+    # 84?" - tidak punya jawaban selain membandingkan enam kolom mentah
+    # sendiri. Dihitung DI SINI dan bukan di backend karena aturan 1 tidak
+    # punya pengecualian: aritmetika skor tinggal di s6_score.
+    sumbangan: dict[str, pd.Series] = {}
     for kunci, w in BOBOT_BLOK.items():
         kolom = kunci.removesuffix("_inv")
         nilai = _norm_blok(ind[kolom], kolom)
         if kunci.endswith("_inv"):
             nilai = 1 - nilai
-        mentah = mentah + w * nilai.fillna(0.5)
-    mentah = mentah - BOBOT_BLOK_BANJIR * _norm_blok(ind["risiko_banjir"], "risiko_banjir").fillna(0.5)
+        bagian = w * nilai.fillna(0.5)
+        sumbangan[kunci] = bagian
+        mentah = mentah + bagian
+    banjir = BOBOT_BLOK_BANJIR * _norm_blok(ind["risiko_banjir"], "risiko_banjir").fillna(0.5)
+    sumbangan["risiko_banjir_inv"] = -banjir
+    mentah = mentah - banjir
 
     dilarang = ind["izin_komersial"].eq(False)
     keluar = pd.DataFrame(index=ind.index)
@@ -370,6 +382,15 @@ def skor_blok(ind: pd.DataFrame) -> pd.DataFrame:
             .round(1)
             .mask(dilarang, 0.0)
         )
+    # Kontribusi dinyatakan sebagai PANGSA dari total bobotnya, supaya angka di
+    # layar bisa dibandingkan antar-indikator tanpa pembaca perlu tahu bobot
+    # mana yang 0,30 dan mana yang 0,10. Yang tersimpan sudah bulat tiga
+    # desimal - sisanya derau.
+    kunci_urut = list(BOBOT_BLOK) + ["risiko_banjir_inv"]
+    keluar["kontribusi"] = [
+        {k: round(float(sumbangan[k].iloc[i]), 4) for k in kunci_urut}
+        for i in range(len(ind))
+    ]
     keluar["skor_per_kelas"] = [
         {k: float(per_kelas[k].iloc[i]) for k in KELAS_INDUK} for i in range(len(ind))
     ]

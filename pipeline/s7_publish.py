@@ -1789,6 +1789,7 @@ def _baris_blok(df: pd.DataFrame) -> list[dict]:
             "risiko_banjir": _bersih(r["risiko_banjir"]),
             "skor_blok": _bersih(r["skor_blok"]),
             "skor_per_kelas": json.dumps(r["skor_per_kelas"]),
+            "kontribusi": json.dumps(r.get("kontribusi")),
             "peringkat_induk": int(r["peringkat_induk"]),
         })
     return baris
@@ -1812,14 +1813,15 @@ def muat_blok(db: Session, df: pd.DataFrame) -> int:
             jarak_jalan_terdekat_m, n_usaha_150m, usaha_per_kelas_150m,
             n_penarik_250m, penarik_250m, jarak_halte_m, n_bangunan,
             rasio_tutupan_bangunan, izin_komersial, kelas_zona, pangsa_zona_usaha,
-            risiko_banjir, skor_blok, skor_per_kelas, peringkat_induk
+            risiko_banjir, skor_blok, skor_per_kelas, kontribusi, peringkat_induk
         ) VALUES (
             :h3_blok, :h3_induk, ST_GeomFromText(:wkt, 4326), :lat, :lon, :menit_jalan,
             :jarak_jalan_m, :jarak_jalan_utama_m, :nama_jalan_utama, :kelas_jalan_utama,
             :jarak_jalan_terdekat_m, :n_usaha_150m, CAST(:usaha_per_kelas_150m AS jsonb),
             :n_penarik_250m, CAST(:penarik_250m AS jsonb), :jarak_halte_m, :n_bangunan,
             :rasio_tutupan_bangunan, :izin_komersial, :kelas_zona, :pangsa_zona_usaha,
-            :risiko_banjir, :skor_blok, CAST(:skor_per_kelas AS jsonb), :peringkat_induk
+            :risiko_banjir, :skor_blok, CAST(:skor_per_kelas AS jsonb),
+            CAST(:kontribusi AS jsonb), :peringkat_induk
         )
         """
     )

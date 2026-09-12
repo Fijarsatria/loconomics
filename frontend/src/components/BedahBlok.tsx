@@ -39,6 +39,11 @@ import { angka, jarakSingkat } from '../lib/format'
 import type { BedahBlok as BedahBlokT, BlokDalamHeksagon } from '../types'
 import { Badge, Memuat, Rinci } from './primitif'
 
+/** Tanda minus tipografis (U+2212), bukan hubung. Ditulis sebagai konstanta
+ *  supaya ia tidak perlu ditempel sebagai escape di dalam teks JSX - di sana
+ *  escape unicode tidak pernah ditafsirkan. */
+const MINUS = '−'
+
 /** Nilai `kelas` yang berarti "tanpa kelas usaha tertentu". */
 const UMUM = '_umum'
 
@@ -74,6 +79,15 @@ const K = {
     kolHalte: 'Jarak halte terdekat',
     kosong: '—',
     petunjuk: 'Klik satu blok untuk menyorotnya di peta.',
+    kenapa: 'Kenapa skornya segini',
+    menekan: 'menekan skor',
+    dataBlok: 'Data blok ini',
+    kZona: 'Zona RDTR',
+    kBangunan: 'Bangunan terpetakan',
+    kTutupan: 'Tutupan bangunan',
+    kPesaing: 'Pesaing sekelas dalam 150 m',
+    kSkorUmum: 'Skor tanpa kelas usaha',
+    takAda: 'belum ada data',
   },
   en: {
     buka: 'Split into 7 blocks (±130 m)',
@@ -103,6 +117,15 @@ const K = {
     kolHalte: 'Nearest transit stop',
     kosong: '—',
     petunjuk: 'Click a block to highlight it on the map.',
+    kenapa: 'Why this score',
+    menekan: 'pushes the score down',
+    dataBlok: 'This block\u2019s data',
+    kZona: 'RDTR zoning',
+    kBangunan: 'Buildings mapped',
+    kTutupan: 'Built-up ratio',
+    kPesaing: 'Same-type competitors within 150 m',
+    kSkorUmum: 'Score without a business type',
+    takAda: 'no data yet',
   },
 }
 
@@ -424,7 +447,91 @@ function Blok({
           <p className="mt-0.5 text-[12px] leading-snug text-jebakan">{b.peringatan[0]}</p>
         )}
       </button>
+
+      {/* Rincian dibuka HANYA untuk blok yang sedang dipilih.
+          Tujuh blok yang semuanya terbuka berarti empat puluh sembilan baris
+          angka sekaligus, dan daftar sepanjang itu berhenti bisa dibandingkan -
+          yang justru satu-satunya gunanya. */}
+      {aktif && <RincianBlok b={b} t={t} />}
     </li>
+  )
+}
+
+/**
+ * Kenapa skor blok ini segitu, dan data mentahnya.
+ *
+ * Sumbangan tiap indikator DIHITUNG PIPELINE (`s6_score.skor_blok`) dan dibaca
+ * apa adanya di sini - aturan 1. Batangnya memakai `pangsa`, bukan `nilai`,
+ * supaya bisa dibandingkan antar-indikator tanpa pembacanya perlu tahu bobot
+ * mana yang 0,30 dan mana yang 0,10.
+ */
+function RincianBlok({ b, t }: { b: BlokDalamHeksagon; t: typeof K.id }) {
+  const sisa = b.alasan.slice(2)
+  return (
+    <div className="mt-1.5 rounded-lg border border-line bg-surface-2/60 px-2.5 py-2.5">
+      {b.kontribusi.length > 0 && (
+        <>
+          <p className="eyebrow mb-1.5">{t.kenapa}</p>
+          <ul className="flex flex-col gap-1">
+            {b.kontribusi.map((k) => (
+              <li key={k.kode} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-ink-2">{k.nama}</span>
+                <span className="h-[7px] w-[46%] shrink-0 overflow-hidden rounded-full bg-ground-2">
+                  <span
+                    className={`block h-full rounded-full ${k.nilai < 0 ? 'bg-bahaya' : 'bg-gem'}`}
+                    style={{ width: `${Math.min(100, Math.abs(k.pangsa) * 100)}%` }}
+                  />
+                </span>
+                <span className="tabular w-[3.2rem] shrink-0 text-right text-[11.5px] text-ink-3">
+                  {k.nilai < 0 ? '\u2212' : ''}
+                  {Math.round(Math.abs(k.pangsa) * 100)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+          {b.kontribusi.some((k) => k.nilai < 0) && (
+            <p className="mt-1 text-[11px] text-ink-3">
+              {/* Dalam TEKS JSX, escape unicode BUKAN escape - ia ditulis apa
+                  adanya. Ia hanya ditafsirkan di dalam literal string, jadi
+                  tandanya dipasang sebagai ekspresi. */}
+              <span className="text-bahaya">{MINUS}</span> {t.menekan}
+            </p>
+          )}
+        </>
+      )}
+
+      <p className="eyebrow mb-1.5 mt-3">{t.dataBlok}</p>
+      <ul className="flex flex-col gap-0.5 text-[12px]">
+        {[
+          [t.kZona, b.kelas_zona ?? t.takAda],
+          [t.kBangunan, `${b.n_bangunan}`],
+          [
+            t.kTutupan,
+            b.rasio_tutupan_bangunan == null
+              ? t.takAda
+              : `${angka(b.rasio_tutupan_bangunan * 100, 0)} %`,
+          ],
+          [t.kPesaing, b.n_pesaing_150m == null ? t.takAda : `${b.n_pesaing_150m}`],
+          [t.kSkorUmum, angka(b.skor_umum, 1) ?? t.takAda],
+        ].map(([label, nilai]) => (
+          <li key={label} className="flex items-baseline justify-between gap-3">
+            <span className="text-ink-3">{label}</span>
+            <span className="tabular text-right text-ink-2">{nilai}</span>
+          </li>
+        ))}
+      </ul>
+
+      {/* Sisa alasan yang tidak muat di baris ringkasnya. Kalimatnya dari
+          backend - yang sama dengan yang dicetak Laporan PDF. */}
+      {sisa.length > 0 && (
+        <p className="mt-2 text-[11.5px] leading-snug text-ink-3">{sisa.join(' \u00b7 ')}</p>
+      )}
+      {b.peringatan.length > 1 && (
+        <p className="mt-1 text-[11.5px] leading-snug text-jebakan">
+          {b.peringatan.slice(1).join(' \u00b7 ')}
+        </p>
+      )}
+    </div>
   )
 }
 

@@ -41,6 +41,7 @@ from app.core.aturan import (
     PENJELASAN_KUADRAN_EN,
     alasan_blok,
     kalimat,
+    kontribusi_blok,
     kalimat_perkiraan,
     pilih,
     cakupan_indeks,
@@ -398,7 +399,8 @@ def blok_heksagon(
                 "nama_jalan_utama", "kelas_jalan_utama", "n_usaha_150m", "usaha_per_kelas_150m",
                 "n_penarik_250m", "penarik_250m", "jarak_halte_m", "n_bangunan",
                 "rasio_tutupan_bangunan", "izin_komersial", "kelas_zona", "pangsa_zona_usaha",
-                "risiko_banjir", "skor_blok", "skor_per_kelas", "peringkat_induk",
+                "risiko_banjir", "skor_blok", "skor_per_kelas", "kontribusi",
+                "peringkat_induk",
             )},
             "koordinat": json.loads(gj)["coordinates"][0],
         }
@@ -448,6 +450,7 @@ def blok_heksagon(
                 risiko_banjir=m["risiko_banjir"],
                 alasan=alasan,
                 peringatan=peringatan,
+                kontribusi=kontribusi_blok(m["kontribusi"], bahasa),
             )
         )
 
