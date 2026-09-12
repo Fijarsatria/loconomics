@@ -75,6 +75,19 @@ const K = {
     kosongRiwayat: 'Belum ada percakapan tersimpan. Yang Anda tanyakan di sini disimpan di peramban ini saja.',
     hapus: 'Hapus percakapan ini',
     sedang: 'sedang dibuka',
+    cari: 'Cari di percakapan',
+    takAdaCocok: (q: string) => `Tidak ada percakapan yang memuat “${q}”.`,
+    ubahJudul: 'Ubah judul',
+    judulPercakapan: 'Judul percakapan',
+    simpanJudul: 'Simpan judul',
+    kelompok: {
+      hariIni: 'Hari ini',
+      kemarin: 'Kemarin',
+      pekan: '7 hari terakhir',
+      bulan: '30 hari terakhir',
+      lama: 'Lebih lama',
+    },
+    nPesan: (n: number) => `${n} pesan`,
     langkah: (n: number) => `${n} langkah dijalankan`,
     sumber: 'Sumber angka',
     tertinggi: 'tertinggi di wilayah studi',
@@ -126,6 +139,19 @@ const K = {
     kosongRiwayat: 'Nothing saved yet. What you ask here stays in this browser.',
     hapus: 'Delete this conversation',
     sedang: 'open now',
+    cari: 'Search conversations',
+    takAdaCocok: (q: string) => `No conversation contains “${q}”.`,
+    ubahJudul: 'Rename',
+    judulPercakapan: 'Conversation title',
+    simpanJudul: 'Save title',
+    kelompok: {
+      hariIni: 'Today',
+      kemarin: 'Yesterday',
+      pekan: 'Previous 7 days',
+      bulan: 'Previous 30 days',
+      lama: 'Older',
+    },
+    nPesan: (n: number) => `${n} messages`,
     langkah: (n: number) => `${n} steps taken`,
     sumber: 'Where the numbers come from',
     tertinggi: 'highest in the study area',
@@ -215,6 +241,37 @@ function tulisArsip(d: Percakapan[]) {
 }
 
 /** "3 mnt", "2 jam", "5 hr" - cukup untuk membedakan, tanpa jam dinding. */
+/**
+ * Percakapan dikelompokkan menurut UMUR, bukan diurut rata begitu saja.
+ *
+ * Daftar datar sepanjang tiga puluh baris menuntut pembacanya mengingat kapan
+ * ia bertanya; kelompok "Hari ini / Kemarin / 7 hari terakhir" menjawabnya
+ * sebelum ditanya. Pola yang sama dipakai setiap asisten yang pernah dipakai
+ * pembacanya, jadi ia tidak perlu dipelajari.
+ */
+type KunciKelompok = 'hariIni' | 'kemarin' | 'pekan' | 'bulan' | 'lama'
+
+const URUTAN_KELOMPOK: KunciKelompok[] = ['hariIni', 'kemarin', 'pekan', 'bulan', 'lama']
+
+function kelompokUmur(waktu: number, sekarang = Date.now()): KunciKelompok {
+  // Dibandingkan menurut HARI KALENDER, bukan menurut selisih jam: percakapan
+  // pukul 23.50 tadi malam adalah "kemarin" bagi pembacanya, bukan "hari ini"
+  // hanya karena baru lewat sepuluh menit.
+  const awalHariIni = new Date(sekarang).setHours(0, 0, 0, 0)
+  const hari = Math.floor((awalHariIni - new Date(waktu).setHours(0, 0, 0, 0)) / 86_400_000)
+  if (hari <= 0) return 'hariIni'
+  if (hari === 1) return 'kemarin'
+  if (hari <= 7) return 'pekan'
+  if (hari <= 30) return 'bulan'
+  return 'lama'
+}
+
+/** Cuplikan pesan terakhir, untuk membedakan dua percakapan berjudul mirip. */
+function cuplikan(p: { pesan: { teks: string }[] }): string {
+  const t = p.pesan[p.pesan.length - 1]?.teks ?? ''
+  return t.replace(/\s+/g, ' ').slice(0, 90)
+}
+
 function usia(waktu: number, bahasa: Bahasa): string {
   const detik = Math.max(0, (Date.now() - waktu) / 1000)
   const satuan: [number, string, string][] = [
@@ -376,6 +433,10 @@ function PanelAI({
   const [status, setStatus] = useState<StatusAI | null>(null)
   const [arsip, setArsip] = useState<Percakapan[]>(bacaArsip)
   const [lihatRiwayat, setLihatRiwayat] = useState(false)
+  /** Pencarian di dalam laci riwayat. Judul DAN isi pesannya ikut dicari. */
+  const [cariRiwayat, setCariRiwayat] = useState('')
+  /** Id percakapan yang judulnya sedang disunting, plus teks sementaranya. */
+  const [suntingJudul, setSuntingJudul] = useState<{ id: string; teks: string } | null>(null)
   const akhir = useRef<HTMLDivElement>(null)
   /**
    * Id percakapan yang sedang dibuka.
@@ -512,6 +573,14 @@ function PanelAI({
     setLihatRiwayat(false)
   }
 
+  function ubahJudul(id: string, judul: string) {
+    const bersih = judul.trim().slice(0, 80)
+    if (!bersih) return
+    const baru = bacaArsip().map((p) => (p.id === id ? { ...p, judul: bersih } : p))
+    tulisArsip(baru)
+    setArsip(baru)
+  }
+
   function hapusPercakapan(id: string) {
     const baru = bacaArsip().filter((p) => p.id !== id)
     tulisArsip(baru)
@@ -529,6 +598,11 @@ function PanelAI({
    */
   function bukaLaci() {
     setArsip(bacaArsip())
+    // Pencarian lama dikosongkan. Laci yang dibuka kembali masih menyaring
+    // menurut kata yang diketik setengah jam lalu tampak KOSONG, dan yang
+    // terbaca "riwayat saya hilang" - bukan "saringannya masih hidup".
+    setCariRiwayat('')
+    setSuntingJudul(null)
     setLihatRiwayat(true)
   }
 
@@ -589,39 +663,146 @@ function PanelAI({
           Menutupi percakapan, tidak menggesernya: daftar yang mendorong isi ke
           bawah membuat posisi gulir percakapan hilang tiap kali dibuka. */}
       {lihatRiwayat && (
-        <div className="ai-laci scroll-tipis absolute inset-x-0 top-[3.05rem] bottom-0 z-10 overflow-y-auto bg-surface px-2.5 py-2">
-          {arsip.length === 0 ? (
-            <p className="px-1.5 py-6 text-center text-[13px] leading-relaxed text-ink-3">
-              {t.kosongRiwayat}
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {arsip.map((p) => (
-                <li key={p.id} className="group flex items-center gap-1">
-                  <button
-                    onClick={() => bukaPercakapan(p)}
-                    className="min-w-0 flex-1 cursor-pointer rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
-                  >
-                    <span className="block truncate text-[13.5px] leading-snug text-ink">{p.judul}</span>
-                    <span className="mt-0.5 block text-[11.5px] text-ink-3">
-                      {usia(p.waktu, bahasa)}
-                      {idSesi === p.id ? ` · ${t.sedang}` : ''}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => hapusPercakapan(p.id)}
-                    title={t.hapus}
-                    aria-label={t.hapus}
-                    className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 opacity-0 transition-all hover:bg-surface-2 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
-                      <path d="M2.6 2.6 9.4 9.4M9.4 2.6 2.6 9.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="ai-laci absolute inset-x-0 top-[3.05rem] bottom-0 z-10 flex flex-col bg-surface">
+          {/* Kepala laci yang TIDAK ikut menggulir: tombol percakapan baru dan
+              kotak cari harus tetap terjangkau sesudah tiga puluh baris. */}
+          <div className="shrink-0 space-y-2 border-b border-line/70 px-2.5 py-2.5">
+            <button
+              onClick={percakapanBaru}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-lg bg-ink px-3 py-2 text-[13.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.01]"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className="shrink-0">
+                <path d="M7 2.4v9.2M2.4 7h9.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              {t.baru}
+            </button>
+            {arsip.length > 3 && (
+              <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5">
+                <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden className="shrink-0 text-ink-3">
+                  <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M9.2 9.2 12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                <input
+                  value={cariRiwayat}
+                  onChange={(e) => setCariRiwayat(e.target.value)}
+                  placeholder={t.cari}
+                  aria-label={t.cari}
+                  className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-3"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="scroll-tipis min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+            {(() => {
+              const q = cariRiwayat.trim().toLowerCase()
+              // Judul DAN isi pesan ikut dicari: yang diingat orang dari
+              // percakapan lama biasanya kalimat yang ia ketik, bukan judul
+              // yang dibuatkan untuknya.
+              const cocok = q
+                ? arsip.filter(
+                    (p) =>
+                      p.judul.toLowerCase().includes(q) ||
+                      p.pesan.some((m) => m.teks.toLowerCase().includes(q)),
+                  )
+                : arsip
+              if (arsip.length === 0) {
+                return (
+                  <p className="px-1.5 py-6 text-center text-[13px] leading-relaxed text-ink-3">
+                    {t.kosongRiwayat}
+                  </p>
+                )
+              }
+              if (cocok.length === 0) {
+                return (
+                  <p className="px-1.5 py-6 text-center text-[13px] leading-relaxed text-ink-3">
+                    {t.takAdaCocok(cariRiwayat.trim())}
+                  </p>
+                )
+              }
+              return URUTAN_KELOMPOK.map((k) => {
+                const isi = cocok.filter((p) => kelompokUmur(p.waktu) === k)
+                if (isi.length === 0) return null
+                return (
+                  <section key={k} className="mb-2">
+                    <h4 className="eyebrow px-1.5 py-1.5">{t.kelompok[k]}</h4>
+                    <ul className="space-y-0.5">
+                      {isi.map((p) => (
+                        <li key={p.id} className="group flex items-start gap-1">
+                          {suntingJudul?.id === p.id ? (
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault()
+                                ubahJudul(p.id, suntingJudul.teks)
+                                setSuntingJudul(null)
+                              }}
+                              className="min-w-0 flex-1 px-1.5 py-1"
+                            >
+                              <input
+                                autoFocus
+                                value={suntingJudul.teks}
+                                onChange={(e) => setSuntingJudul({ id: p.id, teks: e.target.value })}
+                                onBlur={() => {
+                                  ubahJudul(p.id, suntingJudul.teks)
+                                  setSuntingJudul(null)
+                                }}
+                                aria-label={t.judulPercakapan}
+                                className="w-full rounded-md border border-ink-3 bg-surface px-2 py-1 text-[13.5px] outline-none"
+                              />
+                            </form>
+                          ) : (
+                            <button
+                              onClick={() => bukaPercakapan(p)}
+                              className={`min-w-0 flex-1 cursor-pointer rounded-md px-2.5 py-2 text-left transition-colors ${
+                                idSesi === p.id ? 'bg-gem-soft/60' : 'hover:bg-surface-2'
+                              }`}
+                            >
+                              <span className="block truncate text-[13.5px] leading-snug text-ink">
+                                {p.judul}
+                              </span>
+                              {/* Cuplikan pesan terakhir. Dua percakapan
+                                  berjudul mirip tidak bisa dibedakan dari
+                                  judulnya saja - dan judulnya dibuatkan, bukan
+                                  ditulis orangnya. */}
+                              <span className="mt-0.5 block truncate text-[11.5px] leading-snug text-ink-3">
+                                {cuplikan(p)}
+                              </span>
+                              <span className="mt-0.5 block text-[11px] text-ink-3">
+                                {usia(p.waktu, bahasa)} · {t.nPesan(p.pesan.length)}
+                                {idSesi === p.id ? ` · ${t.sedang}` : ''}
+                              </span>
+                            </button>
+                          )}
+                          <span className="flex shrink-0 flex-col gap-0.5 pt-1.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                            <button
+                              onClick={() => setSuntingJudul({ id: p.id, teks: p.judul })}
+                              title={t.ubahJudul}
+                              aria-label={t.ubahJudul}
+                              className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+                            >
+                              <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                                <path d="M8.1 1.9 10.1 3.9 4.2 9.8 1.6 10.4 2.2 7.8Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => hapusPercakapan(p.id)}
+                              title={t.hapus}
+                              aria-label={t.hapus}
+                              className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-bahaya"
+                            >
+                              <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                                <path d="M2.6 2.6 9.4 9.4M9.4 2.6 2.6 9.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )
+              })
+            })()}
+          </div>
         </div>
       )}
 
