@@ -1392,6 +1392,252 @@ def muat_perkiraan(db: Session, baris: list[dict]) -> int:
     return len(baris)
 
 
+# --- Hasil OCR struk (A2) ---------------------------------------------------
+#
+# Tujuh variabel yang seluruhnya 0/708 sebelum ini, jadi tidak ada satu pun
+# kolom yang bisa memuat dua definisi sekaligus - keluarga jebakan "variabel
+# yang jadi nyata separuh" tidak berlaku di sini, dan itu disengaja: B06
+# (pangsa digital) SENGAJA tidak disentuh walaupun A2 membacanya juga, karena
+# ia sudah punya sumber dari misi dan menggabungkan keduanya berarti satu kolom
+# dengan dua asal yang tidak bisa dibedakan siapa pun sesudahnya.
+EMBER_JAM = {
+    "puncak_pagi": range(5, 10),    # B01 05-09
+    "puncak_siang": range(11, 15),  # B02 11-14
+    "puncak_sore": range(16, 20),   # B03 16-19
+    "puncak_malam": range(19, 24),  # B04 19-23
+}
+
+
+def _hasil_ocr_a2() -> list[dict]:
+    """Hasil A2 dari CACHE, bukan dari ringkasan `ocr_a2.json`.
+
+    `s3_extract.jalankan()` menulis ringkasannya sekali di AKHIR, jadi lari
+    yang terputus di tengah - dan lari atas 462 foto lewat CDN yang sering
+    menolak memang sering terputus - meninggalkan ringkasan yang jauh lebih
+    pendek daripada yang sebenarnya sudah dibaca dan DIBAYAR. Cache-nya
+    sebaliknya ditulis per foto, jadi ia selalu mewakili keadaan sekarang.
+
+    Koordinatnya tidak ada di cache (ia cuma menyimpan jawaban model), jadi
+    dijahit ulang dari `mapid_misi.json` lewat SHA-1 URL fotonya - kunci yang
+    sama persis dengan yang dipakai `s3_extract._ekstrak`.
+    """
+    import hashlib
+
+    from config import CACHE_AI, OCR_CONFIDENCE_MIN
+
+    misi_berkas = DATA_MENTAH / "mapid_misi.json"
+    if not misi_berkas.exists():
+        raise SystemExit(f"{misi_berkas} tidak ada. Jalankan `s1_ingest.py --misi` lebih dulu.")
+    misi = json.loads(misi_berkas.read_text(encoding="utf-8"))
+
+    keluar: list[dict] = []
+    for f in misi.get("struckgo", []):
+        p = f.get("properties") or {}
+        url = (p.get("foto_struk") or "").strip()
+        if not url:
+            continue
+        berkas = CACHE_AI / "a2" / f"{hashlib.sha1(url.encode()).hexdigest()}.json"
+        if not berkas.exists():
+            continue
+        rekam = json.loads(berkas.read_text(encoding="utf-8"))
+        hasil = rekam.get("hasil") or {}
+        koord = ((f.get("geometry") or {}).get("coordinates") or [None, None])
+        keluar.append({
+            "foto_url": url,
+            "lon": koord[0],
+            "lat": koord[1],
+            "hasil": hasil,
+            # Ambang keyakinan ditegakkan DI SINI, bukan diwarisi dari berkas
+            # ringkasan: `perlu_review` hanya ada di ringkasan, dan yang kita
+            # baca sekarang cache mentahnya.
+            "perlu_review": float(hasil.get("confidence") or 0) < OCR_CONFIDENCE_MIN,
+        })
+    return keluar
+
+
+def baca_ocr_struk() -> pd.DataFrame:
+    """`ocr_a2.json` -> DataFrame siap `s4_spatial.profil_jam`.
+
+    Yang DIBUANG di sini, dan tiap pembuangan dilaporkan pemanggilnya:
+    hasil yang `perlu_review`, yang jamnya tidak terbaca, dan yang jatuh di
+    luar 708 heksagon kita. Struk tanpa jam tidak boleh masuk sama sekali -
+    aturan prompt A2 - karena jam adalah satu-satunya hal yang membuat data
+    ini berbeda dari yang sudah kita punya.
+    """
+    baris = _hasil_ocr_a2()
+    if not baris:
+        return pd.DataFrame(columns=["h3_index", "jam", "total_nominal", "akhir_pekan"])
+
+    import h3 as _h3
+
+    from config import H3_RESOLUSI
+
+    keluar = []
+    for b in baris:
+        if b.get("perlu_review"):
+            continue
+        h = b.get("hasil") or {}
+        waktu = h.get("waktu_terbaca")
+        nominal = h.get("total_nominal")
+        if not waktu or nominal is None or b.get("lat") is None:
+            continue
+        # Struk nol rupiah tidak ada. Nol di sini berarti totalnya TIDAK
+        # TERBACA dan model menuliskannya sebagai angka alih-alih mengosongkan
+        # - dan nol yang lolos akan menarik turun median nominal serta membuat
+        # sebuah heksagon tampak seperti tempat orang membeli tanpa membayar
+        # (aturan 4).
+        if float(nominal) <= 0:
+            continue
+        try:
+            jam = int(str(waktu).split(":")[0])
+        except (ValueError, IndexError):
+            continue
+        if not 0 <= jam <= 23:
+            continue
+        # Akhir pekan dibaca dari tanggal struknya kalau ada. Kosong bukan
+        # "hari kerja": ia dibiarkan NaN supaya B05 dihitung hanya dari struk
+        # yang benar-benar bertanggal.
+        akhir = None
+        tgl = h.get("tanggal_terbaca")
+        if tgl:
+            try:
+                akhir = pd.Timestamp(tgl).dayofweek >= 5
+            except (ValueError, TypeError):
+                akhir = None
+        keluar.append({
+            "h3_index": _h3.latlng_to_cell(b["lat"], b["lon"], H3_RESOLUSI),
+            "jam": jam,
+            "total_nominal": float(nominal),
+            "akhir_pekan": akhir,
+            "n_mentah": 1,
+        })
+    return pd.DataFrame(keluar)
+
+
+def variabel_dari_struk(struk: pd.DataFrame, profil: pd.DataFrame) -> pd.DataFrame:
+    """B01-B05, B09, B10, D11 dari struk yang jamnya terbaca.
+
+    B01-B04 adalah PANGSA, jadi penyebutnya struk di dalam jam operasional -
+    bukan seluruh struk. Struk pukul 02.00 tidak mengurangi pangsa pagi sebuah
+    heksagon; ia cuma di luar jam yang diukur Commuter Clock.
+    """
+    from config import JAM_OPERASIONAL
+    from s4_spatial import belanja_per_jam
+
+    if struk.empty:
+        return pd.DataFrame()
+
+    dalam = struk[struk["jam"].isin(JAM_OPERASIONAL)]
+    hasil = pd.DataFrame(index=sorted(set(struk["h3_index"])))
+    hasil.index.name = "h3_index"
+
+    n_jam = dalam.groupby("h3_index").size()
+    for kolom, rentang in EMBER_JAM.items():
+        n = dalam[dalam["jam"].isin(rentang)].groupby("h3_index").size()
+        # Heksagon yang punya struk TAPI tidak satu pun di ember ini bernilai
+        # NOL - itu temuan. Yang tidak punya struk sama sekali tidak muncul di
+        # `n_jam`, jadi ia tetap NaN.
+        hasil[kolom] = (n.reindex(n_jam.index).fillna(0) / n_jam).round(4)
+
+    # B05 hanya dari struk yang bertanggal. Kelipatan, bukan pangsa: 1,0 berarti
+    # akhir pekan sama ramai dengan hari kerja, dan nilainya BOLEH melewati 1.
+    bertanggal = struk[struk["akhir_pekan"].notna()]
+    if not bertanggal.empty:
+        g = bertanggal.groupby(["h3_index", "akhir_pekan"]).size().unstack(fill_value=0)
+        if True in g.columns and False in g.columns:
+            # Dua hari akhir pekan lawan lima hari kerja - dibagi jumlah harinya,
+            # bukan dibandingkan mentah. Tanpa itu tiap lokasi akan tampak sepi
+            # di akhir pekan hanya karena akhir pekan lebih pendek.
+            hasil["rasio_weekend"] = ((g[True] / 2) / (g[False] / 5)).replace(
+                [float("inf"), -float("inf")], pd.NA
+            ).round(3)
+
+    hasil["nominal_median_struk"] = struk.groupby("h3_index")["total_nominal"].median().round(0)
+    # D11 transaksi per JAM OPERASIONAL yang berisi - satuan yang sama dengan
+    # B10, supaya keduanya bisa dibaca berdampingan.
+    jam_berisi = dalam.groupby("h3_index")["jam"].nunique()
+    hasil["intensitas_transaksi"] = (n_jam / jam_berisi).round(2)
+
+    if not profil.empty:
+        hasil["belanja_per_jam"] = belanja_per_jam(profil)
+
+    return hasil
+
+
+#: Sejauh apa sebuah struk masih boleh mewakili kawasan. Lima kilometer kira-
+#: kira jangkauan satu simpul transit beserta lingkungan yang berorientasi
+#: padanya; di luar itu ia kota yang lain.
+RADIUS_KAWASAN_M = 5000
+
+#: Di bawah ini pangsa per jamnya derau, bukan pola. Sepuluh struk yang tersebar
+#: di 18 jam operasional sudah tipis; lebih sedikit lagi berarti satu struk
+#: menggeser sebuah ember sepuluh persen.
+MIN_STRUK_PERKIRAAN = 10
+
+
+def perkiraan_jam_kawasan(struk: pd.DataFrame, kawasan_hex: pd.Series) -> list[dict]:
+    """B01-B04 tingkat KAWASAN untuk heksagon yang tidak punya struknya sendiri.
+
+    Dari 163 struk yang jamnya terbaca, hanya 7 jatuh di dalam 708 heksagon
+    kita - misi disebar se-Jabodetabek, bukan di grid kita. Membuangnya berarti
+    membuang 156 pengamatan sungguhan; memakainya sebagai nilai heksagon
+    berarti mengaku mengukur tempat yang tidak pernah didatangi siapa pun.
+
+    Jalan ketiga: pola JAM-nya - bukan nominalnya - diperlakukan sebagai ciri
+    KAWASAN, dan disimpan sebagai perkiraan berlabel. Itu pernyataan yang bisa
+    dipertanggungjawabkan: "di sekitar simpul ini, transaksi memuncak sore",
+    bukan "heksagon ini memuncak sore".
+
+    Heksagon yang PUNYA strukya sendiri dilewati - perkiraan tidak pernah boleh
+    berdiri di sebelah pengukuran untuk hal yang sama.
+    """
+    import h3 as _h3
+
+    from config import JAM_OPERASIONAL, PUSAT
+
+    if struk.empty:
+        return []
+
+    lat = struk["h3_index"].map(lambda c: _h3.cell_to_latlng(c)[0]).to_numpy()
+    lon = struk["h3_index"].map(lambda c: _h3.cell_to_latlng(c)[1]).to_numpy()
+    nama_kawasan = list(PUSAT)
+    jarak = np.stack([
+        np.hypot((lat - la) * 111_320, (lon - lo) * 111_320 * np.cos(np.radians(la)))
+        for la, lo in PUSAT.values()
+    ])
+    terdekat = jarak.argmin(axis=0)
+    milik = pd.Series([nama_kawasan[i] for i in terdekat], index=struk.index)
+    milik = milik.where(jarak.min(axis=0) <= RADIUS_KAWASAN_M)
+
+    punya_sendiri = set(struk.loc[struk["h3_index"].isin(kawasan_hex.index), "h3_index"])
+    baris: list[dict] = []
+    for kawasan in nama_kawasan:
+        bagian = struk[milik.eq(kawasan) & struk["jam"].isin(JAM_OPERASIONAL)]
+        if len(bagian) < MIN_STRUK_PERKIRAAN:
+            continue
+        pangsa = {
+            kolom: round(float(bagian["jam"].isin(rentang).mean()), 4)
+            for kolom, rentang in EMBER_JAM.items()
+        }
+        sasaran = [h for h in kawasan_hex[kawasan_hex.eq(kawasan)].index
+                   if h not in punya_sendiri]
+        rincian = json.dumps({
+            "kawasan": kawasan,
+            "n_struk": int(len(bagian)),
+            "n_jam_terisi": int(bagian["jam"].nunique()),
+            "pangsa": pangsa,
+        }, ensure_ascii=False)
+        for kolom, nilai in pangsa.items():
+            kode = {v: k for k, v in KODE_KE_KOLOM.items()}[kolom]
+            for h3 in sasaran:
+                baris.append({
+                    "h3_index": h3, "kode": kode, "nilai": nilai,
+                    "metode": "kawasan", "n_sumber": int(len(bagian)),
+                    "radius_m": RADIUS_KAWASAN_M, "rincian": rincian,
+                })
+    return baris
+
+
 def bangun_blok(heksagon: pd.Series) -> pd.DataFrame:
     """Seluruh blok (anak H3 res-10) beserta indikator dan skornya.
 
@@ -2511,6 +2757,11 @@ if __name__ == "__main__":
         help="Bersama --blok: hitung lalu tulis ke data/03_olahan/blok.json, TANPA basis data",
     )
     p.add_argument(
+        "--ocr",
+        action="store_true",
+        help="Hasil OCR struk (A2) -> hex_hourly_profiles + B01-B05, B09, B10, D11",
+    )
+    p.add_argument(
         "--tim-ai",
         action="store_true",
         help="Serah terima tim AI: D02 -> hex_features (data), D10/B07 -> hex_perkiraan (perkiraan)",
@@ -2521,9 +2772,57 @@ if __name__ == "__main__":
     if not any([arg.muat, arg.ekspor, arg.cakupan, arg.isi_d04, arg.penduduk,
                 arg.bangunan, arg.osm, arg.misi, arg.survei, arg.rdtr, arg.transit,
                 arg.gapfill, arg.kosongkan, arg.hitung_ulang, arg.grid, arg.blok,
-                arg.tim_ai]):
+                arg.tim_ai, arg.ocr]):
         p.print_help()
         raise SystemExit(0)
+
+    # --- Hasil OCR struk ---------------------------------------------------
+    #
+    # Transaksinya sendiri dan SEBELUM --hitung-ulang: B09 dan D11 masuk IAE,
+    # jadi memuatnya tanpa menghitung ulang meninggalkan skor yang tidak lagi
+    # cocok dengan variabel yang menyusunnya - dan selisih itu tidak akan
+    # memunculkan satu pun galat.
+    if arg.ocr:
+        print("Memuat hasil OCR struk (A2)...")
+        struk = baca_ocr_struk()
+        print(f"  struk berjam terbaca  {len(struk)}")
+        if struk.empty:
+            print("  (tidak ada yang bisa dimuat)")
+        else:
+            with sessionmaker(bind=_mesin())() as db:
+                hex_df = pd.read_sql(
+                    "SELECT * FROM hex_features", db.connection()
+                ).set_index("h3_index")
+                # Struk di luar 708 heksagon kita DIBUANG, dan jumlahnya
+                # dilaporkan: misi disaring per poligon, tapi foto bisa saja
+                # bergeser koordinatnya.
+                milik_kita = struk[struk["h3_index"].isin(hex_df.index)]
+                print(f"  di dalam 708 heksagon {len(milik_kita)} "
+                      f"({len(struk) - len(milik_kita)} di luar, dibuang)")
+                print(f"  heksagon tersentuh    {milik_kita['h3_index'].nunique()}")
+                if milik_kita.empty:
+                    print("  (tidak ada yang jatuh di wilayah studi)")
+                else:
+                    from s4_spatial import profil_jam
+
+                    profil = profil_jam(milik_kita, hex_df)
+                    print(f"  baris profil jam      {muat_profil_jam(db, profil)}")
+                    var = variabel_dari_struk(milik_kita, profil)
+                    print(f"  variabel diperbarui   {muat_variabel(db, var)}")
+                    for kol in var.columns:
+                        print(f"    {kol:<24} {int(var[kol].notna().sum())} heksagon")
+                    db.commit()
+
+                # PERKIRAAN tingkat kawasan dari struk yang jatuh DI LUAR grid.
+                # Transaksinya sendiri supaya kegagalan di sini tidak ikut
+                # membatalkan pengukuran yang sudah tersimpan di atas.
+                perk = perkiraan_jam_kawasan(struk, hex_df["kawasan"])
+                if perk:
+                    print(f"  perkiraan jam kawasan {muat_perkiraan(db, perk)} baris "
+                          f"({len({b['h3_index'] for b in perk})} heksagon)")
+                    db.commit()
+                else:
+                    print("  perkiraan jam kawasan 0 (tidak ada kawasan yang cukup strukya)")
 
     # --- Serah terima tim AI ----------------------------------------------
     #

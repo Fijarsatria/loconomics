@@ -1051,6 +1051,10 @@ def cakupan_prestise(fitur: "list") -> dict[str, object]:
 #: Nama awam variabel yang punya perkiraan. Sengaja hanya yang dipakai - daftar
 #: lengkap 43 variabel sudah hidup di `api/bersama.py::SEMUA_VARIABEL`.
 NAMA_PERKIRAAN: dict[str, tuple[str, str]] = {
+    "B01": ("Pangsa transaksi pagi (05-09)", "Share of morning transactions (05-09)"),
+    "B02": ("Pangsa transaksi siang (11-14)", "Share of midday transactions (11-14)"),
+    "B03": ("Pangsa transaksi sore (16-19)", "Share of afternoon transactions (16-19)"),
+    "B04": ("Pangsa transaksi malam (19-23)", "Share of evening transactions (19-23)"),
     "B07": ("Harga rata-rata per porsi", "Average price per portion"),
     "D10": ("Tingkat keramaian terkoreksi", "Corrected busyness level"),
 }
@@ -1063,12 +1067,20 @@ NAMA_PERKIRAAN: dict[str, tuple[str, str]] = {
 #: akan tampil sebagai baris "B07" tanpa nama. Kesamaannya dijaga
 #: `tests/test_aturan.py`.
 KODE_PERKIRAAN: dict[str, str] = {
+    "B01": "puncak_pagi",
+    "B02": "puncak_siang",
+    "B03": "puncak_sore",
+    "B04": "puncak_malam",
     "B07": "harga_median_porsi",
     "D10": "skor_ramai_terkoreksi",
 }
 
 #: Satuan, untuk kalimatnya saja. Angkanya sendiri dikirim apa adanya.
 SATUAN_PERKIRAAN: dict[str, tuple[str, str]] = {
+    "B01": ("pangsa 0-1", "0-1 share"),
+    "B02": ("pangsa 0-1", "0-1 share"),
+    "B03": ("pangsa 0-1", "0-1 share"),
+    "B04": ("pangsa 0-1", "0-1 share"),
     "B07": ("rupiah per porsi", "rupiah per portion"),
     "D10": ("skala 1-3", "1-3 scale"),
 }
@@ -1124,16 +1136,26 @@ def kalimat_perkiraan(kode: str, metode: str, rincian: dict, bahasa: Bahasa) -> 
                 else f"Its cross-validated R² is {r2:.2f}, but measured against those synthetic labels."
             )
     elif metode in {"sekitar", "kawasan", "jabodetabek"}:
-        n = rincian.get("n_sumber") or rincian.get("n_label")
+        n = rincian.get("n_struk") or rincian.get("n_sumber") or rincian.get("n_label")
         lingkup = {
             "sekitar": ("heksagon di sekitarnya", "the surrounding hexagons"),
             "kawasan": ("kawasan yang sama", "the same area"),
             "jabodetabek": ("seluruh Jabodetabek", "the whole of Jabodetabek"),
         }[metode]
+        nama_kawasan = rincian.get("kawasan")
+        tempat = nama_kawasan or lingkup[0]
+        tempat_en = nama_kawasan or lingkup[1]
         bagian.append(
-            f"Median dari pengamatan di {lingkup[0]}" + (f", {n} titik." if n else ".")
+            f"Pola dari pengamatan di sekitar {tempat}" + (f", {n} struk." if n else ".")
             if not en
-            else f"Median of the observations in {lingkup[1]}" + (f", {n} points." if n else ".")
+            else f"A pattern from the observations around {tempat_en}" + (f", {n} receipts." if n else ".")
+        )
+        bagian.append(
+            "Ia menggambarkan KAWASANNYA, bukan heksagon ini - tidak ada satu pun "
+            "transaksi yang tercatat di sini."
+            if not en
+            else "It describes the AREA, not this hexagon — not a single transaction was "
+            "recorded here."
         )
 
     # Selisih terhadap ukuran SUNGGUHAN. Ini bagian yang paling perlu ada.

@@ -111,7 +111,19 @@ const DAFTAR = [
  */
 const BANDING = [
   { berkas: 'banding-a', kawasan: 'Harjamukti', gaya: 'terang', layer: 'opportunity', lebar: 900, tinggi: 520, mutu: 0.8, pilih: 'skor', banyak: 18, tepi: { atas: 0.14, bawah: 0.14, kiri: 0.26, kanan: 0.08 } },
-  { berkas: 'banding-b', kawasan: 'Manggarai', gaya: 'terang', layer: 'pricelens', lebar: 900, tinggi: 520, mutu: 0.8, pilih: 'sewa-murah', banyak: 12, tepi: { atas: 0.14, bawah: 0.14, kiri: 0.1, kanan: 0.1 } },
+  // GemFinder, bukan PriceLens, sejak 13 Sep 2026. `harga_sewa_median` (P05)
+  // kosong di 708 dari 708 heksagon - spanduk "DIKONTRAKAN" di lapangan hampir
+  // tidak pernah mencantumkan harga, jadi A1 tidak membukanya (lihat
+  // docs/ai.md). Pilihan 'sewa-murah' karena itu tidak akan pernah cocok
+  // dengan satu heksagon pun, dan akibatnya dua lapis: potret ini DILEWATI
+  // sehingga WebP lamanya tertinggal sebagai gambar basi, DAN `KARTU_BANDING`
+  // tinggal satu entri sehingga `GerbangPeta` menyembunyikan seluruh bagian
+  // komparasi (ia menuntut >= 2). Satu kolom kosong menghapus satu bagian
+  // halaman, tanpa satu pun galat.
+  //
+  // Manggarai punya 15 heksagon ber-`hidden_gem_score` - selisih layer dengan
+  // banding-a tetap terjaga, dan kali ini didukung data yang benar-benar ada.
+  { berkas: 'banding-b', kawasan: 'Manggarai', gaya: 'terang', layer: 'hidden_gem', lebar: 900, tinggi: 520, mutu: 0.8, pilih: 'gem', banyak: 15, tepi: { atas: 0.14, bawah: 0.14, kiri: 0.1, kanan: 0.1 } },
 ]
 
 /**
