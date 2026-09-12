@@ -391,16 +391,22 @@ export function MenuKawasan({
 
   return (
     <div ref={wadah} className="relative shrink-0">
-      {/* `aria-label` menyebut APA yang dipilih tombol ini, bukan cuma nilainya
-          sekarang. Tanpa itu pembaca layar mendengar "Semua kawasan, tombol" -
-          yang memberitahu isi tombolnya tetapi tidak pernah memberitahu tombol
-          itu memilih apa. Pemilih Layer di bilah yang sama sudah begini
-          (`label="Layer"` di App.tsx); keduanya harus sepakat. */}
+      {/* Namanya menyebut APA yang dipilih tombol ini DAN nilainya sekarang.
+          Tanpa `aria-label` pembaca layar cuma mendengar "Semua kawasan,
+          tombol" - isi tombolnya, tetapi tidak pernah apa yang dipilihnya.
+
+          Bentuk "Kawasan: Semua kawasan", bukan "Kawasan" saja, dan itu bukan
+          selera: `aria-label` MENGGANTI nama aksesibilitas, jadi menuliskannya
+          "Kawasan" saja membuat tombol ini berhenti bisa ditemukan lewat
+          nilainya - dan `audit-prd.mjs` mencarinya persis begitu
+          (`getByRole('button', { name: /Semua kawasan/i })`). Terjadi 13 Sep
+          2026: auditnya langsung timeout. Pemilih Basemap di primitif.tsx
+          sudah memakai bentuk gabungan yang sama. */}
       <button
         onClick={() => setBuka((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={buka}
-        aria-label={tk.kawasan}
+        aria-label={`${tk.kawasan}: ${label}`}
         className={`flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors ${
           buka
             ? 'border-line-2 bg-surface'

@@ -130,9 +130,23 @@ async function main() {
   )
   cek('ubin datang dari basemap.mapid.io',
     dijawab('basemap.mapid.io/data/mapidtiles/').length > 0)
+  // "Nol ubin dari penyedia lain" benar untuk KEEMPAT gaya vektor, dan audit
+  // ini memang berjalan pada gaya bawaan. Yang perlu dicatat supaya asersi ini
+  // tidak dibaca lebih luas daripada yang dijaganya: gaya SATELIT (12 Sep
+  // 2026) memuat citranya dari penyedia hulu MAPID dengan token MAPID sendiri
+  // - itu isi style MAPID, bukan sumber tile kedua yang kita tambahkan, dan
+  // aturan 6 tidak dilanggar olehnya.
+  //
+  // Maka dua asersi, bukan satu. Yang pertama menjaga gaya yang sedang diaudit
+  // bersih; yang kedua menjaga hal yang harus benar pada gaya MANA PUN, dan
+  // itu yang sesungguhnya berkonsekuensi: kunci KITA tidak boleh menempel pada
+  // permintaan ke host mana pun selain basemap.mapid.io.
   const lain = net.filter((n) =>
     /api\.mapbox\.com|api\.maptiler\.com|tile\.openstreetmap|basemaps\.cartocdn/.test(n.url))
-  cek('nol ubin dari penyedia lain', lain.length === 0, `- ${lain.length}`)
+  cek('nol ubin penyedia lain pada gaya vektor yang diaudit', lain.length === 0, `- ${lain.length}`)
+  const bocorKeHulu = kunciUbin ? lain.filter((n) => n.url.includes(kunciUbin)) : []
+  cek('kunci basemap kita tidak menempel ke penyedia hulu', bocorKeHulu.length === 0,
+    `- ${bocorKeHulu.length}`)
   cek('atribusi MAPID tampil di peta',
     (await page.content()).includes('MAPID Maps'))
 

@@ -277,6 +277,6 @@ Commuter Clock adalah fitur BERBAYAR yang tabelnya sekarang nol baris.
 
 | Hal | Yang menghalangi | Kalau sudah ada, kerjakan |
 |---|---|---|
-| **B01–B04 baru 7 dari 708** | Bukan OCR-nya yang kurang — 310 struk sudah terbaca, tetapi hanya 9 yang jatuh DI DALAM 708 heksagon kita. Misi disebar se-Jabodetabek | Lanjutkan `python s3_extract.py --struk --pekerja 10` sampai 462 (cache membuatnya murah), lalu `python s7_publish.py --ocr --hitung-ulang`. Yang benar-benar menambah cakupan: survei struk DI DALAM kawasan pilot |
+| **B01–B04 baru 7 dari 708** | Bukan OCR-nya yang kurang — 330 dari 462 struk sudah terbaca, tetapi hanya 9 yang jatuh DI DALAM 708 heksagon kita. Misi disebar se-Jabodetabek. Sisa 132 foto berhenti di **kuota Gemini (HTTP 429)**, bukan di bug | Lanjutkan `python s3_extract.py --struk --pekerja 10` besok — cache per SHA-1 membuat lari ulang tidak membayar ulang untuk 330 yang sudah dibaca. Tetapi yang benar-benar menambah cakupan B01–B04 bukan lebih banyak pembacaan foto, melainkan **survei struk DI DALAM kawasan pilot** |
 | **P05 harga sewa** | Sumbernya hilang: spanduk tidak memuat harga (lihat temuan di atas) | Cari sumber lain, atau nyatakan kosong apa adanya. JANGAN mengisinya dari perkiraan model — batas itu yang sedang dijaga seluruh pekerjaan sesi ini |
 | Rute mobil & sepeda | Kuota harian ORS | Tidak berubah dari catatan sebelumnya |
