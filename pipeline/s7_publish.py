@@ -1548,9 +1548,16 @@ def variabel_dari_struk(struk: pd.DataFrame, profil: pd.DataFrame) -> pd.DataFra
             # Dua hari akhir pekan lawan lima hari kerja - dibagi jumlah harinya,
             # bukan dibandingkan mentah. Tanpa itu tiap lokasi akan tampak sepi
             # di akhir pekan hanya karena akhir pekan lebih pendek.
-            hasil["rasio_weekend"] = ((g[True] / 2) / (g[False] / 5)).replace(
-                [float("inf"), -float("inf")], pd.NA
-            ).round(3)
+            # `np.nan`, BUKAN `pd.NA`. Keduanya terbaca "kosong" di layar,
+            # tetapi `pd.NA` tidak punya `__round__` - jadi `.round(3)` di
+            # bawahnya melempar TypeError begitu ada satu heksagon yang
+            # strukya seluruhnya akhir pekan (pembagi nol -> inf -> kosong).
+            # Tidak muncul pada 166 struk pertama, muncul pada 310.
+            hasil["rasio_weekend"] = (
+                ((g[True] / 2) / (g[False] / 5))
+                .replace([np.inf, -np.inf], np.nan)
+                .round(3)
+            )
 
     hasil["nominal_median_struk"] = struk.groupby("h3_index")["total_nominal"].median().round(0)
     # D11 transaksi per JAM OPERASIONAL yang berisi - satuan yang sama dengan

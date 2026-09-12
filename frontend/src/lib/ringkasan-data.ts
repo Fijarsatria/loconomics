@@ -56,7 +56,7 @@ export const DIUKUR = "2026-09-13"
 export const RINGKASAN = {
   heksagon: 708,
   kawasan: 6,
-  variabelTerisi: 33,
+  variabelTerisi: 34,
   variabelTotal: 43,
   heksagonBersurvei: 26,
   titikMisiDitarik: 2873,
@@ -65,7 +65,7 @@ export const RINGKASAN = {
   ruteOrs: 1549,
   kawasanJangkau: 30,
   simpul: 6,
-  profilJam: 5,
+  profilJam: 7,
 } as const
 
 export const SUMBER: SumberData[] = [
@@ -111,7 +111,7 @@ export const KELAS_USAHA: KelasUsaha[] = [
 
 /** Diturunkan dari basis data, bukan didaftar tangan. Lihat docstring pembangkitnya. */
 export const BATASAN: string[] = [
-  "10 dari 43 variabel belum punya sumber yang bisa dikutip. Nilainya dibiarkan kosong, bukan dinolkan — indeks yang bahannya kosong dinetralkan ke tengah skala, dan antarmuka menuliskan “belum terukur” alih-alih menampilkan angkanya.",
+  "9 dari 43 variabel belum punya sumber yang bisa dikutip. Nilainya dibiarkan kosong, bukan dinolkan — indeks yang bahannya kosong dinetralkan ke tengah skala, dan antarmuka menuliskan “belum terukur” alih-alih menampilkan angkanya.",
   "Zonasi RDTR baru terbit untuk 364 dari 708 heksagon. Kota Depok dan Kota Bekasi terkonfirmasi belum punya RDTR digital di GISTARU lewat dua indeks yang berbeda, jadi ZoneGuard diam untuk keduanya alih-alih menebak.",
   "Survei lapangan menyentuh 26 dari 708 heksagon; 682 sisanya ditandai “belum dikunjungi surveyor”. Itu pernyataan tentang kunjungan, bukan tentang mutu angkanya — POI, rute, penduduk, dan zonasi tetap hasil pengukuran.",
 ]

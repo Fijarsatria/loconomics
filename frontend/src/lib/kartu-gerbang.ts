@@ -425,8 +425,8 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 122,
     "kuadran": {
-      "JEBAKAN_GENGSI": 29,
-      "PEMENANG_JELAS": 51,
+      "JEBAKAN_GENGSI": 30,
+      "PEMENANG_JELAS": 50,
       "HIDDEN_GEM": 38,
       "HINDARI": 4
     },
@@ -454,8 +454,18 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         12.3
       ],
       "sel": [
+        255,
+        107.1,
+        285.8,
+        137.8,
+        263.8,
+        143.9,
+        292.4,
+        116.4,
         246,
         266.6,
+        237.3,
+        229.8,
         380.4,
         288.2,
         387.1,
@@ -506,8 +516,6 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         220.7,
         259.3,
         223.7,
-        237.3,
-        229.8,
         265.9,
         202.2,
         243.9,
@@ -686,14 +694,6 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         128.6,
         277,
         101,
-        255,
-        107.1,
-        285.8,
-        137.8,
-        263.8,
-        143.9,
-        292.4,
-        116.4,
         402.5,
         282.1,
         409.1,
@@ -715,8 +715,8 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 97,
     "kuadran": {
-      "JEBAKAN_GENGSI": 9,
       "HIDDEN_GEM": 23,
+      "JEBAKAN_GENGSI": 9,
       "PEMENANG_JELAS": 65
     },
     "sorotan": {
@@ -743,6 +743,8 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         13
       ],
       "sel": [
+        272.7,
+        233.7,
         177.2,
         197.9,
         249.4,
@@ -757,8 +759,6 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         256.4,
         242.4,
         262.9,
-        272.7,
-        233.7,
         186.5,
         236.8,
         193.5,
@@ -952,7 +952,7 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         {
           "x": 358.9,
           "y": 230.6,
-          "c": "#8bb9f9"
+          "c": "#8ab9f9"
         },
         {
           "x": 356.6,
@@ -982,7 +982,7 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         {
           "x": 403.2,
           "y": 156.1,
-          "c": "#90bcf9"
+          "c": "#8fbcf9"
         },
         {
           "x": 277.4,
@@ -1318,10 +1318,10 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
+      "JEBAKAN_GENGSI": 23,
       "HINDARI": 75,
-      "JEBAKAN_GENGSI": 24,
       "HIDDEN_GEM": 23,
-      "PEMENANG_JELAS": 5
+      "PEMENANG_JELAS": 6
     },
     "sorotan": {
       "nilai": "—",
@@ -1347,6 +1347,10 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         12.3
       ],
       "sel": [
+        365.2,
+        76.6,
+        380.6,
+        92,
         409,
         260.6,
         221.9,
@@ -1595,10 +1599,6 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         159.5,
         428.9,
         196.3,
-        365.2,
-        76.6,
-        380.6,
-        92,
         402.4,
         282.1
       ],
@@ -1618,9 +1618,9 @@ export const KARTU_GERBANG: KartuGerbang[] = [
     "tinggi": 380,
     "n": 127,
     "kuadran": {
-      "HIDDEN_GEM": 15,
       "HINDARI": 84,
       "JEBAKAN_GENGSI": 23,
+      "HIDDEN_GEM": 15,
       "PEMENANG_JELAS": 5
     },
     "sorotan": {
@@ -1647,6 +1647,14 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         12.3
       ],
       "sel": [
+        349.8,
+        61.3,
+        367.4,
+        134.9,
+        396.1,
+        107.3,
+        435.7,
+        174.8,
         316.6,
         168.6,
         365.2,
@@ -1883,14 +1891,6 @@ export const KARTU_GERBANG: KartuGerbang[] = [
         202.4,
         415.8,
         239.2,
-        349.8,
-        61.3,
-        367.4,
-        134.9,
-        396.1,
-        107.3,
-        435.7,
-        174.8,
         327.8,
         67.4,
         411.5,
@@ -1924,13 +1924,13 @@ export const KARTU_GERBANG: KartuGerbang[] = [
           "c": "#15803d"
         },
         {
-          "x": 316.6,
-          "y": 168.6,
+          "x": 279.2,
+          "y": 159.3,
           "c": "#4c93f7"
         },
         {
-          "x": 279.2,
-          "y": 159.3,
+          "x": 316.6,
+          "y": 168.6,
           "c": "#4c93f7"
         },
         {
@@ -2006,6 +2006,14 @@ export const KARTU_BANDING: KartuGerbang[] = [
         81.2
       ],
       "sel": [
+        789.4,
+        -709,
+        905.6,
+        -221.9,
+        1095.4,
+        -404.4,
+        1357.5,
+        42.2,
         569.9,
         0.9,
         891.4,
@@ -2242,14 +2250,6 @@ export const KARTU_BANDING: KartuGerbang[] = [
         224.6,
         1225.8,
         468.1,
-        789.4,
-        -709,
-        905.6,
-        -221.9,
-        1095.4,
-        -404.4,
-        1357.5,
-        42.2,
         643.5,
         -668.6,
         1197.4,
@@ -2283,13 +2283,13 @@ export const KARTU_BANDING: KartuGerbang[] = [
           "c": "#4c93f7"
         },
         {
-          "x": 569.9,
-          "y": 0.9,
+          "x": 322,
+          "y": -60.2,
           "c": "#4c93f7"
         },
         {
-          "x": 322,
-          "y": -60.2,
+          "x": 569.9,
+          "y": 0.9,
           "c": "#4c93f7"
         },
         {
@@ -2400,8 +2400,18 @@ export const KARTU_BANDING: KartuGerbang[] = [
         81.3
       ],
       "sel": [
+        253.7,
+        -418.2,
+        458,
+        -214.7,
+        311.9,
+        -174.3,
+        501.9,
+        -356.9,
         194.4,
         638.3,
+        136.3,
+        394.4,
         1084.8,
         781.8,
         1128.8,
@@ -2452,8 +2462,6 @@ export const KARTU_BANDING: KartuGerbang[] = [
         334.5,
         282.3,
         354,
-        136.3,
-        394.4,
         326.2,
         211.8,
         180.2,
@@ -2632,14 +2640,6 @@ export const KARTU_BANDING: KartuGerbang[] = [
         -276.1,
         399.8,
         -458.6,
-        253.7,
-        -418.2,
-        458,
-        -214.7,
-        311.9,
-        -174.3,
-        501.9,
-        -356.9,
         1230.8,
         741.4,
         1274.8,

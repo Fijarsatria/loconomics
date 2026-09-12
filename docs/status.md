@@ -256,6 +256,9 @@ luar**, bukan cuma dipercaya.
 | **Uji silang model tim terhadap ukuran kita** | R² 0,62 / 0,57 yang dilaporkan diukur terhadap label yang 96,9%-nya sintetis. Diuji ulang terhadap 12 heksagon yang punya pengamatan misi MAPID sungguhan: **B07 meleset Rp14.580 (41%), D10 meleset 2,34 pada skala 1–3** — lima kali lebih besar. Angkanya disimpan di `hex_perkiraan.rincian` dan ikut tertulis di tiap kalimat perkiraan di layar |
 | **Layar "Sumber data"** | Pengaturan → Sumber data. Daftar RESMI vs PERKIRAAN, cakupan per sumber, batasan, dan keempat temuan. Seluruh isinya dari `lib/ringkasan-data.ts` yang dibangkitkan pipeline — nol angka diketik tangan. Ikut menutup lubang lama: dari empat nilai yang dibangkitkan berkas itu, hanya SUMBER yang pernah dipakai komponen |
 | **OCR foto misi (`s3_extract.py`)** | Badan modul yang sejak lama cuma kerangka. Gemini vision lewat REST, prompt dari berkas (aturan 7), cache per SHA-1 URL foto sehingga lari ulang tidak membayar dua kali |
+| **Commuter Clock berhenti kosong** | A2 membaca 310 struk (294 dipakai, 6 perlu review, 0 gagal). Tujuh heksagon kita punya profil jam SUNGGUHAN, dan 454 heksagon punya pola jam tingkat KAWASAN sebagai perkiraan berlabel. Cakupan variabel **25 → 34 dari 43** sepanjang sesi ini |
+| **Kawasan jangkau lengkap** | `ISOCHRONE_MENIT` diperluas jadi lima pita 3 Sep 2026 di ketiga tempat yang menyebutnya, tetapi pipelinenya tidak pernah dijalankan ulang — basis data menyimpan tiga selama sepuluh hari. Ditangkap `smoke_api` (yang memang berjalan atas data produksi), ditambal, 114 asersi hijau |
+| **Terbit dan terverifikasi di publik** | GitHub Pages DAN Cloudflare Pages, keduanya diuji dengan mengKLIK petanya — bukan `curl` halaman depan. 9 asersi per situs: peta tergambar, backend Azure menjawab, panel detail terisi, bedah blok dan layar Sumber Data hidup, nol galat konsol |
 | **Enam jebakan baru tercatat** | Termasuk dua yang gagalnya paling diam: sprite `maputnik.github.io` yang dilaporkan sebagai kegagalan basemap, dan kalimat Indonesia yang tinggal di nilai bawaan parameter `<Memuat/>` sehingga lolos `tsc` DAN kedua uji |
 
 ### Temuan yang mengubah rencana
@@ -274,6 +277,6 @@ Commuter Clock adalah fitur BERBAYAR yang tabelnya sekarang nol baris.
 
 | Hal | Yang menghalangi | Kalau sudah ada, kerjakan |
 |---|---|---|
-| **B01–B04 masih kosong** → Commuter Clock berbayar tanpa isi | A2 (462 foto struk) belum selesai dijalankan | `python s3_extract.py --struk --pekerja 4`, lalu muat hasilnya ke `hex_hourly_profiles`. Cache-nya membuat lari ulang murah |
+| **B01–B04 baru 7 dari 708** | Bukan OCR-nya yang kurang — 310 struk sudah terbaca, tetapi hanya 9 yang jatuh DI DALAM 708 heksagon kita. Misi disebar se-Jabodetabek | Lanjutkan `python s3_extract.py --struk --pekerja 10` sampai 462 (cache membuatnya murah), lalu `python s7_publish.py --ocr --hitung-ulang`. Yang benar-benar menambah cakupan: survei struk DI DALAM kawasan pilot |
 | **P05 harga sewa** | Sumbernya hilang: spanduk tidak memuat harga (lihat temuan di atas) | Cari sumber lain, atau nyatakan kosong apa adanya. JANGAN mengisinya dari perkiraan model — batas itu yang sedang dijaga seluruh pekerjaan sesi ini |
 | Rute mobil & sepeda | Kuota harian ORS | Tidak berubah dari catatan sebelumnya |
