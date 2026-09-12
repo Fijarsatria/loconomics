@@ -537,6 +537,11 @@ export interface Kesiapan {
 
 export interface StatusAI {
   siap: boolean
+  /**
+   * Tidak siap karena jatah penyedianya habis, BUKAN karena belum tersambung.
+   * Bedanya menentukan: yang ini pulih sendiri, jadi kotak ketik tetap hidup.
+   */
+  dibatasi?: boolean
   model: string | null
   n_alat_backend: number
   n_alat_peta: number

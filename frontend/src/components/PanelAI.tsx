@@ -397,6 +397,23 @@ function PanelAI({
   }, [])
 
   /**
+   * Status disegarkan lagi tiap dua menit SELAMA sedang dibatasi.
+   *
+   * Jatah penyedia pulih sendiri, dan pita "sedang dibatasi" yang hanya
+   * diambil sekali saat panel dipasang akan tetap terpampang sampai orangnya
+   * memuat ulang halaman - memberitahukan keadaan yang sudah tidak benar lagi.
+   * Tidak dijalankan saat sehat: memanggil /ai/status tiap dua menit untuk
+   * mendengar "masih sehat" adalah lalu lintas yang tidak membeli apa pun.
+   */
+  useEffect(() => {
+    if (status?.dibatasi !== true) return
+    const id = setInterval(() => {
+      api.statusAI().then(setStatus).catch(() => {})
+    }, 120_000)
+    return () => clearInterval(id)
+  }, [status?.dibatasi])
+
+  /**
    * Percakapan disimpan tiap kali isinya berubah, bukan saat panel ditutup.
    *
    * Tidak ada "saat panel ditutup" yang bisa diandalkan: tab bisa ditutup,
@@ -515,7 +532,21 @@ function PanelAI({
     setLihatRiwayat(true)
   }
 
-  const mati = status !== null && !status.siap
+  /**
+   * MATI hanya untuk yang strukturil.
+   *
+   * `siap: false` punya dua sebab yang menuntut antarmuka berbeda. Belum
+   * tersambung ke penyedia (tidak ada kunci) memang mematikan kotak ketik -
+   * pertanyaan apa pun tidak akan pernah sampai ke mana-mana. Tetapi "jatah
+   * hariannya habis" pulih sendiri, dan mematikan kotak ketik di sana membuat
+   * orangnya tidak bisa mencoba lagi walaupun jatahnya sudah pulih semenit
+   * kemudian. Terjadi 13 Sep 2026 dan langsung dilaporkan pemilik repo
+   * sebagai "Loconomics AI kok kayak gabisa ngetik".
+   */
+  const dibatasi = status?.dibatasi === true
+  const mati = status !== null && !status.siap && !dibatasi
+  /** Ada sesuatu yang perlu diberitahukan - entah mati, entah cuma dibatasi. */
+  const berkabar = status !== null && !status.siap
 
   return (
     <div className="relative flex h-full flex-col">
@@ -667,8 +698,15 @@ function PanelAI({
                   membuat teks backend terbaca sebagai instruksi untuk
                   pembacanya, dan ia akan mengulanginya untuk setiap sebab
                   berikutnya. */}
-              {mati && (
-                <p className="mt-3 w-full rounded-sm border border-line bg-surface-2 px-2.5 py-2 text-left text-[13.5px] leading-snug text-ink-2">
+              {berkabar && (
+                <p
+                  className={`mt-3 w-full rounded-sm border px-2.5 py-2 text-left text-[13.5px] leading-snug ${
+                    dibatasi
+                      ? 'border-jebakan/40 bg-jebakan-soft text-jebakan'
+                      : 'border-line bg-surface-2 text-ink-2'
+                  }`}
+                  role={dibatasi ? 'status' : undefined}
+                >
                   {status?.pesan}
                 </p>
               )}

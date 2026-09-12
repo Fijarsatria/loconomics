@@ -30,8 +30,10 @@
  * yang berfungsi — itu sebabnya proyek ini memakai MapLibre GL, bukan Leaflet.
  */
 /**
- * Kelima gaya basemap resmi MAPID - sama dengan daftar di halaman basemap
- * MAPID sendiri (Light, Street 3D, Street 2D, Dark, Satellite).
+ * Gaya basemap resmi MAPID yang DITAWARKAN di pemilih. MAPID menerbitkan
+ * lima (Light, Street 3D, Street 2D, Dark, Satellite); yang kedua dan ketiga
+ * identik kecuali satu layer, jadi hanya satu yang ditawarkan - lihat
+ * `GAYA_PINDAH` di bawah.
  *
  * SATELIT KEMBALI 12 September 2026, keputusan pemilik repo, dan cara
  * memasangnya yang membedakannya dari pencabutan 29 Agustus.
@@ -63,10 +65,36 @@ export interface GayaBasemap {
 
 export const GAYA_BASEMAP: Record<string, GayaBasemap> = {
   terang: { id: 'light', label: 'Terang', labelEn: 'Light' },
-  dasar: { id: 'basic', label: 'Jalan 3D', labelEn: 'Street 3D', gedung3d: 'building-3d' },
-  jalan: { id: 'street-2d-building', label: 'Jalan 2D', labelEn: 'Street 2D' },
+  dasar: { id: 'basic', label: 'Jalan', labelEn: 'Street', gedung3d: 'building-3d' },
   gelap: { id: 'dark', label: 'Gelap', labelEn: 'Dark' },
   satelit: { id: 'satellite', label: 'Satelit', labelEn: 'Satellite', langsung: true },
+}
+
+/**
+ * `street-2d-building` DIKELUARKAN dari pemilih 13 Sep 2026.
+ *
+ * Kedua berkas gayanya identik kecuali SATU layer: `basic` membawa
+ * `building-3d`, `street-2d-building` tidak. Diberi label "Jalan 3D" dan
+ * "Jalan 2D", keduanya terbaca sebagai sakelar 2D/3D - padahal sakelar 2D/3D
+ * yang sebenarnya adalah tombol 3D di tumpukan zoom, yang bekerja di SETIAP
+ * gaya. Jadi ada dua sumbu yang mengaku mengerjakan hal yang sama, dan yang
+ * satu tidak berfungsi. Dilaporkan pemilik repo: "bedanya peta jalan 3d dan 2d
+ * itu apa?".
+ *
+ * Dengan 3D menyala keduanya tampil sama persis, dan dengan 3D mati `basic`
+ * menyembunyikan layer 3D-nya sehingga tampil sama persis juga. Pilihan yang
+ * tidak pernah mengubah apa pun bukan pilihan.
+ *
+ * Berkasnya TETAP di `public/basemap/` dan tetap didukung `urlGaya` - yang
+ * dicabut cuma tawarannya. Pilihan tersimpan yang menunjuk ke sana dipetakan
+ * ke `dasar` oleh `gayaSah()` di bawah.
+ */
+const GAYA_PINDAH: Record<string, string> = { jalan: 'dasar' }
+
+/** Nama gaya yang sah sekarang; yang sudah dipensiunkan dipetakan, bukan dibuang. */
+export function gayaSah(nama: string | undefined | null): string {
+  if (nama && nama in GAYA_BASEMAP) return nama
+  return (nama && GAYA_PINDAH[nama]) || 'dasar'
 }
 
 export type NamaGaya = keyof typeof GAYA_BASEMAP

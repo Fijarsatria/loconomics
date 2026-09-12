@@ -53,7 +53,9 @@ import {
   nomorLokasi,
   type NamaGaya,
   type NamaLayer,
+  gayaSah,
 } from './config'
+import { BASEMAP_GELAP } from './lib/layer-peta'
 import { api } from './lib/api'
 import type {
   BedahBlok,
@@ -418,7 +420,7 @@ const K_APP: Record<
     daftarSekarang: 'Sign Up sekarang',
     ajakanLangganan: 'Pemantauan bagian dari Loconomics Premium.',
     ajakanMasuk: 'Buat akun dulu untuk mulai memantau lokasi.',
-    basemap: { terang: 'Terang', dasar: 'Jalan 3D', jalan: 'Jalan 2D', gelap: 'Gelap', satelit: 'Satelit' },
+    basemap: { terang: 'Terang', dasar: 'Jalan', gelap: 'Gelap', satelit: 'Satelit' },
     tigaDimensiNyala: 'Kembali ke peta datar',
     tigaDimensiMati: 'Tampilan 3D - gedung berdiri',
   },
@@ -482,7 +484,7 @@ const K_APP: Record<
     daftarSekarang: 'Sign up now',
     ajakanLangganan: 'Watching locations is part of Loconomics Premium.',
     ajakanMasuk: 'Create an account first to start watching locations.',
-    basemap: { terang: 'Light', dasar: 'Street 3D', jalan: 'Street 2D', gelap: 'Dark', satelit: 'Satellite' },
+    basemap: { terang: 'Light', dasar: 'Street', gelap: 'Dark', satelit: 'Satellite' },
     tigaDimensiNyala: 'Back to the flat map',
     tigaDimensiMati: '3D view - standing buildings',
   },
@@ -767,7 +769,7 @@ export default function App() {
    * yang tidak pernah membukanya tidak melihat satu pun perubahan.
    */
   const [namaTempat, setNamaTempat] = useState<string>(AWAL.namaTempat ?? 'normal')
-  const { tema } = useTema()
+  const { tema, gantiTema } = useTema()
   /**
    * Apakah rute & kawasan jangkau digambar untuk heksagon yang dipilih.
    *
@@ -787,7 +789,12 @@ export default function App() {
   // dan menukar basemapnya ke terang. Build produksi menjalankannya sekali -
   // orang yang kembali dengan tema terang membuka peta hitam di bawah panel
   // putih. Terlihat 11 Sep 2026 di `vite preview`, bukan di dev.
-  const [gaya, setGaya] = useState<NamaGaya>(AWAL.gaya ?? (tema === 'terang' ? 'dasar' : 'gelap'))
+  const [gaya, setGaya] = useState<NamaGaya>(
+    // `gayaSah` MEMETAKAN gaya yang sudah dipensiunkan, tidak membuangnya:
+    // orang yang terakhir memakai "Jalan 2D" harus mendarat di "Jalan",
+    // bukan dilempar ke bawaan yang tidak pernah ia pilih.
+    (AWAL.gaya ? (gayaSah(AWAL.gaya) as NamaGaya) : undefined) ?? (tema === 'terang' ? 'dasar' : 'gelap'),
+  )
   /** Mode 3D. Bawaannya datar: peta analitik dibaca dari atas, 3D dipilih sadar. */
   const [tigaDimensi, setTigaDimensi] = useState<boolean>(AWAL.tigaDimensi ?? false)
   const [hexTerpilih, setHexTerpilih] = useState<string | null>(null)
@@ -818,6 +825,28 @@ export default function App() {
     setBlok(null)
     setBlokTerpilih(null)
   }, [hexTerpilih])
+
+  /**
+   * Memilih basemap ikut menyetel TEMA - arah kebalikan dari efek di atas, dan
+   * dengan filosofi yang sama persis: titik berangkat, bukan kunci.
+   *
+   * Tanpa ini keduanya terasa tidak nyambung (dilaporkan pemilik repo): peta
+   * gelap di bawah chrome terang terbaca sebagai dua produk yang ditempel, dan
+   * satu-satunya cara menyelaraskannya adalah menemukan sakelar tema yang
+   * tersembunyi di menu lain.
+   *
+   * Tidak bisa berputar: menyetel tema menjalankan efek di atas, dan efek itu
+   * mengembalikan gaya yang SAMA untuk setiap kombinasi yang dihasilkan di
+   * sini - satelit dibiarkan, gelap sudah gelap, terang bukan gelap.
+   */
+  const gantiGaya = useCallback(
+    (g: NamaGaya) => {
+      setGaya(g)
+      const petaGelap = BASEMAP_GELAP.includes(g)
+      if ((petaGelap ? 'gelap' : 'terang') !== tema) gantiTema()
+    },
+    [tema, gantiTema],
+  )
 
   const [saringKuadran, setSaringKuadran] = useState<NamaKuadran | null>(null)
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
@@ -2096,7 +2125,7 @@ export default function App() {
                       nilai: k as NamaGaya,
                       label: t.basemap[k] ?? g.label,
                     }))}
-                    onUbah={setGaya}
+                    onUbah={gantiGaya}
                     buka={panelKiri === 'basemap'}
                     onBuka={(v) => setPanelKiri(v ? 'basemap' : 'tidak')}
                   />

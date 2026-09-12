@@ -411,7 +411,7 @@ function aturGedung3D(m: MapLibreMap, gaya: NamaGaya, nyala: boolean) {
       },
     })
   } else if (bawaan && idGedung === bawaan) {
-    // Gedung bawaan gaya Jalan 3D baru muncul di zoom 17. Diturunkan ke 14
+    // Gedung bawaan gaya Jalan (MAPID `basic`) baru muncul di zoom 17. Diturunkan ke 14
     // supaya mode 3D langsung terlihat di zoom kerja kawasan, bukan hanya
     // saat orang sudah menempel ke satu atap.
     m.setLayerZoomRange(bawaan, 14, 24)
@@ -1084,6 +1084,8 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   /** Dibaca efek pemuatan heksagon, yang sengaja tidak bergantung padanya. */
   const tigaDimensiRef = useRef(tigaDimensi)
   tigaDimensiRef.current = tigaDimensi
+  /** Kamera sebelum 3D dinyalakan, untuk dikembalikan saat dimatikan. */
+  const kameraDatar = useRef<{ pitch: number; bearing: number; zoom: number } | null>(null)
   /**
    * Himpunan fokus, dibaca dari dalam callback gelombang yang identitasnya
    * harus tetap. Sama alasannya dengan `layerKini`: kalau gelombangnya ikut
@@ -1637,15 +1639,43 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     tigaSebelum.current = tigaDimensi
     const diam = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     if (tigaDimensi) {
+      // Kamera SEBELUM dimiringkan disimpan, supaya mematikan 3D benar-benar
+      // mengembalikan tampilan yang tadi - bukan sekadar meratakannya ke utara
+      // dan meninggalkan zoom yang terlanjur didekatkan.
+      kameraDatar.current = {
+        pitch: m.getPitch(),
+        bearing: m.getBearing(),
+        zoom: m.getZoom(),
+      }
       m.easeTo({
         pitch: 58,
-        bearing: Math.abs(m.getBearing()) > 0.5 ? m.getBearing() : -18,
+        // TETAP -18, tidak pernah dibaca dari kamera.
+        //
+        // Dulu di sini `Math.abs(m.getBearing()) > 0.5 ? m.getBearing() : -18`,
+        // dengan niat menghormati arah yang sudah diputar orangnya. Yang
+        // terjadi sebaliknya: mematikan 3D beranimasi 700 ms menuju bearing 0,
+        // dan satu klik DI TENGAH animasi itu membaca sudut setengah jalan
+        // (mis. -9) lalu mempertahankannya. Hasilnya "saya klik lagi, malah 3D
+        // dari sudut pandang berbeda" - dilaporkan pemilik repo 13 Sep 2026.
+        // Sudut yang sama setiap kali membuat tombol ini jadi sakelar, bukan
+        // undian.
+        bearing: -18,
         // Gedung baru terlihat mulai zoom 14; di bawahnya "3D" cuma peta miring.
         zoom: Math.max(m.getZoom(), 15.2),
         duration: diam ? 0 : 900,
       })
     } else {
-      m.easeTo({ pitch: 0, bearing: 0, duration: diam ? 0 : 700 })
+      const k = kameraDatar.current
+      m.easeTo({
+        pitch: 0,
+        bearing: 0,
+        // Zoom dikembalikan HANYA kalau 3D yang mendekatkannya. Kalau orangnya
+        // sendiri yang memperbesar selagi 3D menyala, mengembalikannya akan
+        // membuang pekerjaannya.
+        ...(k && m.getZoom() > k.zoom + 0.01 && m.getZoom() <= 15.3 ? { zoom: k.zoom } : {}),
+        duration: diam ? 0 : 700,
+      })
+      kameraDatar.current = null
     }
   }, [tigaDimensi, siap, gaya])
 

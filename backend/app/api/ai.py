@@ -565,6 +565,16 @@ def status() -> dict[str, Any]:
     dibatasi = penyedia_penuh()
     return {
         "siap": siap,
+        # DUA keadaan "tidak siap" yang menuntut antarmuka BERBEDA, dan
+        # menyamakannya sempat mematikan kotak ketik Konsultan AI (13 Sep 2026).
+        #
+        #   belum tersambung  - strukturil. Tidak ada kunci; mengetik pertanyaan
+        #                       tidak akan pernah menghasilkan apa pun.
+        #   sedang dibatasi   - sementara. Kuncinya ada, jatahnya habis, dan ia
+        #                       pulih sendiri. Menonaktifkan kotak ketik di sini
+        #                       salah: orangnya tidak bisa mencoba lagi walaupun
+        #                       jatahnya sudah pulih semenit kemudian.
+        "dibatasi": dibatasi,
         "model": model_aktif() if siap else None,
         "n_alat_backend": len(ALAT_BACKEND),
         "n_alat_peta": len(ALAT_FRONTEND),

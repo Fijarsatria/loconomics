@@ -31,13 +31,13 @@
  *   orangnya membandingkan dua blok bersebelahan.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { api, GalatAPI } from '../lib/api'
 import { useTeks } from '../lib/bahasa'
 import { angka, jarakSingkat } from '../lib/format'
 import type { BedahBlok as BedahBlokT, BlokDalamHeksagon } from '../types'
-import { Badge, Memuat, Menu, Rinci } from './primitif'
+import { Badge, Memuat, Rinci } from './primitif'
 
 /** Nilai `kelas` yang berarti "tanpa kelas usaha tertentu". */
 const UMUM = '_umum'
@@ -109,6 +109,107 @@ const K = {
 /** Di bawah ini selisihnya tidak layak dipakai memilih; di atas yang kedua ia menentukan. */
 const RENTANG_SEMPIT = 5
 const RENTANG_LEBAR = 15
+
+/**
+ * Pemilih kelas usaha, SELEBAR panel.
+ *
+ * `Menu` di `primitif.tsx` sengaja tidak dipakai di sini walaupun isinya sama:
+ * ia dibuat untuk BILAH ATAS - pil yang lebarnya mengikuti isinya, labelnya
+ * disembunyikan di bawah 2xl, catatannya di bawah lg, dan daftarnya
+ * berjangkar ke kanan. Di dalam panel selebar 26rem, di bawah tombol yang
+ * selebar penuh, ia berdiri pendek dan bertepi kanan - "bar nya kayak ga rapih
+ * dengan bar utamanya", dilaporkan pemilik repo 13 Sep 2026.
+ *
+ * Yang di sini mengikuti tombol di atasnya: lebar penuh, sudut yang sama,
+ * daftar yang juga selebar penuh.
+ */
+function PilihKelas({
+  label,
+  nilai,
+  opsi,
+  onUbah,
+}: {
+  label: string
+  nilai: string
+  opsi: { nilai: string; label: string; catatan?: string }[]
+  onUbah: (v: string) => void
+}) {
+  const [buka, setBuka] = useState(false)
+  const wadah = useRef<HTMLDivElement>(null)
+  const terpilih = opsi.find((o) => o.nilai === nilai)
+
+  useEffect(() => {
+    if (!buka) return
+    const luar = (e: MouseEvent) => {
+      if (!wadah.current?.contains(e.target as Node)) setBuka(false)
+    }
+    const kunci = (e: KeyboardEvent) => e.key === 'Escape' && setBuka(false)
+    document.addEventListener('mousedown', luar)
+    document.addEventListener('keydown', kunci)
+    return () => {
+      document.removeEventListener('mousedown', luar)
+      document.removeEventListener('keydown', kunci)
+    }
+  }, [buka])
+
+  return (
+    <div ref={wadah} className="relative">
+      <p className="eyebrow mb-1.5">{label}</p>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={buka}
+        aria-label={`${label}: ${terpilih?.label ?? ''}`}
+        onClick={() => setBuka((v) => !v)}
+        className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-[13.5px] transition-colors ${
+          buka ? 'border-ink-3 bg-surface' : 'border-line bg-surface-2 hover:border-ink-3'
+        }`}
+      >
+        <span className="min-w-0">
+          <span className="block truncate font-medium text-ink">{terpilih?.label ?? '—'}</span>
+          {terpilih?.catatan && (
+            <span className="block truncate text-[11.5px] text-ink-3">{terpilih.catatan}</span>
+          )}
+        </span>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 10 10"
+          aria-hidden
+          className={`shrink-0 text-ink-3 transition-transform duration-200 ease-liquid ${buka ? 'rotate-180' : ''}`}
+        >
+          <path d="M1 3.5 5 7.5 9 3.5" stroke="currentColor" strokeWidth="1.7" fill="none" />
+        </svg>
+      </button>
+      {buka && (
+        <ul
+          role="listbox"
+          aria-label={label}
+          className="kaca-tebal melayang absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[15rem] overflow-auto rounded-lg p-1"
+        >
+          {opsi.map((o) => (
+            <li key={o.nilai}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={o.nilai === nilai}
+                onClick={() => {
+                  onUbah(o.nilai)
+                  setBuka(false)
+                }}
+                className={`w-full cursor-pointer rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                  o.nilai === nilai ? 'bg-gem-soft text-gem' : 'text-ink-2 hover:bg-surface-2'
+                }`}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 export default function BedahBlok({
   h3,
@@ -234,7 +335,7 @@ export default function BedahBlok({
       </button>
 
       <div className="mt-3">
-        <Menu label={t.kelasLabel} nilai={kelas} opsi={opsi} onUbah={gantiKelas} />
+        <PilihKelas label={t.kelasLabel} nilai={kelas} opsi={opsi} onUbah={gantiKelas} />
       </div>
 
       {kalimatRentang && (
