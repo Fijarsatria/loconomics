@@ -399,6 +399,54 @@ def test_semua_alat_dikirim_ke_model():
     cek("alat peta ikut dideklarasikan", ai.NAMA_FRONTEND <= nama)
 
 
+def test_status_jujur_saat_penyedia_menolak():
+    """`/ai/status` ada PERSIS supaya panel AI tidak mengundang pertanyaan yang
+    sudah pasti gagal. Sampai 13 Sep 2026 ia cuma menjawab "kuncinya
+    terpasang?" - jadi sepanjang jatah harian Gemini habis (dipakai OCR foto
+    misi), backend publik tetap menjawab `siap: true` dan setiap pengunjung
+    menemukannya lewat pertanyaan yang gagal.
+    """
+    from app.core.llm import (
+        penyedia_penuh,
+        tandai_penyedia_penuh,
+        tandai_penyedia_pulih,
+        tersedia,
+    )
+
+    tandai_penyedia_pulih()
+    cek("bersih: penyedia tidak ditandai penuh", not penyedia_penuh())
+    awal = tersedia()
+
+    tandai_penyedia_penuh()
+    cek("ditandai penuh -> penyedia_penuh() true", penyedia_penuh())
+    cek("ditandai penuh -> tersedia() false", tersedia() is False)
+
+    tandai_penyedia_pulih()
+    cek("pulih -> penyedia_penuh() false", not penyedia_penuh())
+    cek("pulih -> tersedia() kembali seperti semula", tersedia() == awal)
+
+
+def test_status_membedakan_belum_tersambung_dari_dibatasi():
+    """Dua sebab berbeda, dua kalimat berbeda.
+
+    Menyamakannya membuat pemilik backend mencari kunci yang sebenarnya sudah
+    terpasang, dan membuat pengunjung mengira fiturnya memang tidak pernah jadi.
+    """
+    from app.api.ai import status
+    from app.core.llm import tandai_penyedia_penuh, tandai_penyedia_pulih
+
+    tandai_penyedia_penuh()
+    dibatasi = status()
+    cek("dibatasi: siap false", dibatasi["siap"] is False)
+    cek("dibatasi: pesan menyebut jatah/dibatasi",
+        "dibatasi" in (dibatasi["pesan"] or "").lower())
+    cek("dibatasi: pesan TIDAK menyuruh menyambungkan",
+        "belum tersambung" not in (dibatasi["pesan"] or "").lower())
+    cek("dibatasi: pesan menenangkan soal sisa produk",
+        "tidak terpengaruh" in (dibatasi["pesan"] or "").lower())
+    tandai_penyedia_pulih()
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

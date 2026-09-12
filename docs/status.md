@@ -273,6 +273,23 @@ Konsekuensinya A2 (struk → nominal + jam) naik jadi pekerjaan OCR yang paling
 berharga: ia satu-satunya jalan ke B01–B04 yang mengisi Commuter Clock, dan
 Commuter Clock adalah fitur BERBAYAR yang tabelnya sekarang nol baris.
 
+### Catatan operasional yang menentukan menjelang penjurian
+
+**OCR dan Konsultan AI berbagi satu kunci Gemini, jadi satu jatah harian.**
+Membaca 330 foto struk menghabiskannya pada 13 Sep 2026, dan Konsultan AI di
+situs publik ikut mati sampai jatahnya pulih (tengah malam Pasifik). Jangan
+menjalankan pekerjaan AI **batch** menjelang penjurian — yang mati duluan
+justru yang dilihat orang.
+
+Sejak itu `/ai/status` ikut jujur: ia melaporkan `siap: false` dengan kalimat
+yang menyebut jatah habis, alih-alih mengundang pertanyaan yang sudah pasti
+gagal. Kalau perlu jaminan penuh, pisahkan kuncinya — satu untuk batch, satu
+untuk produk.
+
+`ai_call_logs` sekarang benar-benar terisi: **330 panggilan A2, 6 perlu
+tinjauan manusia (1,8%), keyakinan rata-rata 0,948, $0,36**. Itu jawaban
+berangka untuk pertanyaan juri "berapa banyak yang perlu koreksi manusia?".
+
 ### Yang menghalangi pekerjaan berikutnya
 
 | Hal | Yang menghalangi | Kalau sudah ada, kerjakan |

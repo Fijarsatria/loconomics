@@ -54,6 +54,7 @@ from app.core.llm import (
     biaya_usd,
     klien,
     model_aktif,
+    penyedia_penuh,
     tersedia,
 )
 from app.models import AICallLog, HexFeature
@@ -556,6 +557,12 @@ def status() -> dict[str, Any]:
     """Dipanggil frontend saat memuat, supaya panel AI bisa menampilkan keadaan
     sebenarnya alih-alih menunggu pertanyaan pertama gagal."""
     siap = tersedia()
+    # DUA sebab yang berbeda, dan kalimatnya harus berbeda juga. "Belum
+    # tersambung" untuk backend yang memang belum diberi kunci; "sedang
+    # dibatasi" untuk kunci yang terpasang tetapi jatahnya habis. Menyamakan
+    # keduanya membuat pemilik backend mencari kunci yang sebenarnya sudah ada,
+    # dan membuat pengunjung mengira fiturnya memang tidak pernah jadi.
+    dibatasi = penyedia_penuh()
     return {
         "siap": siap,
         "model": model_aktif() if siap else None,
@@ -566,7 +573,17 @@ def status() -> dict[str, Any]:
         # diisi di backend/.env" adalah instruksi untuk orang yang punya
         # backend-nya. Sebabnya tetap sampai ke yang perlu: core/llm.py
         # mencatatnya ke log server pada percobaan pertama.
-        "pesan": None if siap else "Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh.",
+        "pesan": (
+            None
+            if siap
+            else (
+                "Konsultan AI sedang dibatasi penyedia modelnya - jatah hariannya "
+                "habis. Ia kembali sendiri tanpa perlu dinyalakan ulang. Bagian lain "
+                "di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh."
+                if dibatasi
+                else "Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh."
+            )
+        ),
     }
 
 

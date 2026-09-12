@@ -325,9 +325,20 @@ class _Pesan:
 
         if data is None:
             log.error("Seluruh model Gemini gagal: %s", urutan)
+            # Dicatat supaya `/ai/status` ikut tahu. Tanpa ini panel Konsultan
+            # AI tetap mengaku siap sepanjang jatah harian habis, dan setiap
+            # pengunjung menemukannya lewat pertanyaan yang gagal.
+            from app.core.llm import tandai_penyedia_penuh
+
+            tandai_penyedia_penuh()
             raise RuntimeError(
                 "Penyedia model sedang sibuk di semua modelnya. Coba lagi sebentar lagi."
             )
+
+        # Berhasil: penanda "penyedia penuh" dicabut, apa pun keadaan sebelumnya.
+        from app.core.llm import tandai_penyedia_pulih
+
+        tandai_penyedia_pulih()
 
         kandidat = (data.get("candidates") or [{}])[0]
         alasan = str(kandidat.get("finishReason") or "STOP").upper()

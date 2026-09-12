@@ -1423,7 +1423,13 @@ def _hasil_ocr_a2() -> list[dict]:
     """
     import hashlib
 
-    from config import CACHE_AI, OCR_CONFIDENCE_MIN
+    from config import CACHE_AI
+    # Aturan "boleh dipakai atau tidak" DIPINJAM dari `s3_extract`, tidak
+    # ditulis ulang. Menyalinnya sempat membuat dua angka yang berselisih di
+    # layar yang sama: log AI menghitung 1 yang perlu ditinjau sementara lari
+    # OCR-nya melaporkan 6 - karena salinannya cuma memeriksa keyakinan,
+    # sedangkan aslinya juga memeriksa apakah nominalnya masuk akal.
+    from s3_extract import perlu_review as _perlu_review
 
     misi_berkas = DATA_MENTAH / "mapid_misi.json"
     if not misi_berkas.exists():
@@ -1447,12 +1453,64 @@ def _hasil_ocr_a2() -> list[dict]:
             "lon": koord[0],
             "lat": koord[1],
             "hasil": hasil,
-            # Ambang keyakinan ditegakkan DI SINI, bukan diwarisi dari berkas
-            # ringkasan: `perlu_review` hanya ada di ringkasan, dan yang kita
-            # baca sekarang cache mentahnya.
-            "perlu_review": float(hasil.get("confidence") or 0) < OCR_CONFIDENCE_MIN,
+            "model": rekam.get("model"),
+            "biaya_usd": rekam.get("biaya_usd"),
+            "perlu_review": _perlu_review(rekam),
         })
     return keluar
+
+
+def muat_log_ai(db: Session, baris: list[dict], fitur: str) -> int:
+    """Satu baris `ai_call_logs` per foto yang benar-benar dibaca model.
+
+    Ada karena kepala `s3_extract.py` menjanjikannya ("Setiap panggilan dicatat
+    ke tabel ai_call_logs") dan tabelnya tidak pernah bertambah - 330 foto
+    dibaca dan dibayar, nol tercatat. Tabel itu bukan hiasan: `docs/ai.md`
+    menyebutnya alat untuk menjawab pertanyaan juri "berapa banyak yang perlu
+    koreksi manusia?" dengan angka alih-alih dengan perkiraan.
+
+    Dicatat dari CACHE, bukan saat memanggil. Satu berkas cache = satu
+    panggilan sungguhan yang pernah dibayar, jadi hitungannya sama - dan
+    menuliskannya di sini membuatnya bisa diulang tanpa kuota.
+
+    Idempoten lewat `input_ref` (URL foto): menjalankan `--ocr` dua kali tidak
+    melipatduakan hitungan yang akan dibaca juri.
+    """
+    if not baris:
+        return 0
+    ada = {
+        r[0] for r in db.execute(
+            text("SELECT input_ref FROM ai_call_logs WHERE fitur = :f"), {"f": fitur}
+        )
+    }
+    baru_saja = [b for b in baris if b["foto_url"] not in ada]
+    if not baru_saja:
+        return 0
+    sisip = text(
+        "INSERT INTO ai_call_logs (fitur, model, input_ref, output_ringkas, "
+        "confidence, perlu_review, biaya_usd) VALUES (:fitur, :model, :input_ref, "
+        ":output_ringkas, :confidence, :perlu_review, :biaya_usd)"
+    )
+    for bagian in _potong([
+        {
+            "fitur": fitur,
+            "model": b.get("model"),
+            "input_ref": b["foto_url"],
+            # Ringkas, bukan lengkap: tabel ini untuk MENGHITUNG, dan
+            # menyimpan seluruh keluaran model berarti menyimpan salinan
+            # kedua data misi di tabel yang tidak dijaga aturan 2.
+            "output_ringkas": json.dumps(
+                {k: (b["hasil"] or {}).get(k) for k in ("total_nominal", "waktu_terbaca", "harga_nominal")},
+                ensure_ascii=False,
+            ),
+            "confidence": (b["hasil"] or {}).get("confidence"),
+            "perlu_review": bool(b.get("perlu_review")),
+            "biaya_usd": b.get("biaya_usd"),
+        }
+        for b in baru_saja
+    ]):
+        db.execute(sisip, bagian)
+    return len(baru_saja)
 
 
 def baca_ocr_struk() -> pd.DataFrame:
@@ -2791,12 +2849,16 @@ if __name__ == "__main__":
     # memunculkan satu pun galat.
     if arg.ocr:
         print("Memuat hasil OCR struk (A2)...")
+        mentah = _hasil_ocr_a2()
         struk = baca_ocr_struk()
+        print(f"  foto terbaca model     {len(mentah)}")
         print(f"  struk berjam terbaca  {len(struk)}")
         if struk.empty:
             print("  (tidak ada yang bisa dimuat)")
         else:
             with sessionmaker(bind=_mesin())() as db:
+                print(f"  panggilan AI dicatat  {muat_log_ai(db, mentah, 'A2')}")
+                db.commit()
                 hex_df = pd.read_sql(
                     "SELECT * FROM hex_features", db.connection()
                 ).set_index("h3_index")

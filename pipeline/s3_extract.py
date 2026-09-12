@@ -23,7 +23,11 @@ Aturan yang berlaku untuk keempatnya:
     JSON tidak valid -> ulang maksimal 2x dengan pesan kesalahan dikembalikan ke model.
   - confidence < 0.7 -> masuk antrean verifikasi manusia, TIDAK dipakai langsung.
   - Seluruh hasil di-cache ke CACHE_AI. JANGAN PERNAH memanggil ulang API saat demo.
-  - Setiap panggilan dicatat ke tabel ai_call_logs (input, output, confidence, biaya).
+  - Setiap panggilan dicatat ke tabel ai_call_logs (input, output, confidence,
+    biaya) - tetapi PENCATATANNYA dilakukan `s7_publish.py --ocr` dari cache,
+    bukan oleh modul ini saat memanggil. Satu berkas cache = satu panggilan
+    yang pernah dibayar, jadi hitungannya sama, dan memisahkannya membuat
+    modul ini tidak perlu tahu soal basis data sama sekali.
 """
 
 import argparse

@@ -49,8 +49,55 @@ def model_aktif() -> str:
     return MODEL_GEMINI if settings.llm_provider.lower() == "gemini" else MODEL_DEFAULT
 
 
+#: Sampai kapan penyedia dianggap sedang menolak. Epoch detik; 0 = tidak.
+_penuh_sampai: float = 0.0
+
+#: Lima belas menit. Bukan sampai kuota harian benar-benar pulih (tengah malam
+#: Pasifik), karena kita tidak bisa membedakan "jatah harian habis" dari
+#: "sedang ramai sesaat" tanpa mencoba lagi - dan menyembunyikan Konsultan AI
+#: sampai besok karena satu ledakan lalu lintas lebih merugikan daripada
+#: menampilkannya. Sesudah jendela ini status kembali optimistis, dan
+#: percobaan berikutnya yang menguji ulang keadaannya.
+JENDELA_PENUH_DETIK = 15 * 60
+
+
+def tandai_penyedia_penuh() -> None:
+    """Dipanggil klien saat SELURUH modelnya menolak (429/503).
+
+    Ada supaya `/ai/status` berhenti berbohong. Tanpa ini status cuma menjawab
+    "kuncinya terpasang?" - dan itu tetap `true` sepanjang jatah harian habis,
+    jadi panel Konsultan AI mengundang orang bertanya lalu gagal pada
+    pertanyaan pertama. Itu persis keadaan yang endpoint ini dibuat untuk
+    mencegah. Terjadi 13 Sep 2026: jatah Gemini habis dipakai OCR foto misi,
+    dan `/ai/status` di backend publik tetap menjawab `siap: true`.
+    """
+    global _penuh_sampai
+    import time
+
+    _penuh_sampai = time.time() + JENDELA_PENUH_DETIK
+
+
+def tandai_penyedia_pulih() -> None:
+    """Dipanggil klien pada panggilan yang BERHASIL."""
+    global _penuh_sampai
+    _penuh_sampai = 0.0
+
+
+def penyedia_penuh() -> bool:
+    import time
+
+    return _penuh_sampai > time.time()
+
+
 def tersedia() -> bool:
-    """Apakah AI Consultant bisa dipakai sekarang. Dipakai endpoint /ai/status."""
+    """Apakah AI Consultant bisa dipakai sekarang. Dipakai endpoint /ai/status.
+
+    DUA syarat, bukan satu: kuncinya terpasang, DAN penyedianya tidak sedang
+    menolak seluruh modelnya. Yang kedua ditambahkan 13 Sep 2026 - lihat
+    `tandai_penyedia_penuh`.
+    """
+    if penyedia_penuh():
+        return False
     try:
         klien()
     except LLMBelumSiap:
