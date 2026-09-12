@@ -348,6 +348,51 @@ export interface SimpulTransit {
  */
 export type ProfilRute = 'foot-walking' | 'driving-car' | 'cycling-regular'
 
+/**
+ * Satu blok (anak H3 res-10, ±130 m) di dalam heksagon. Cerminan
+ * `schemas.BlokDalamHeksagon`. Seluruhnya data terbuka; skornya milik pipeline.
+ */
+export interface BlokDalamHeksagon {
+  h3_blok: string
+  peringkat: number
+  skor: number | null
+  skor_umum: number | null
+  lat: number
+  lon: number
+  koordinat: [number, number][]
+  menit_jalan: number | null
+  jarak_jalan_m: number | null
+  jarak_jalan_utama_m: number | null
+  nama_jalan_utama: string | null
+  kelas_jalan_utama: string | null
+  n_usaha_150m: number
+  n_pesaing_150m: number | null
+  usaha_per_kelas_150m: Record<string, number>
+  n_penarik_250m: number
+  penarik_250m: Record<string, number>
+  jarak_halte_m: number | null
+  n_bangunan: number
+  rasio_tutupan_bangunan: number | null
+  /** null = belum ada RDTR digital, BUKAN dilarang. */
+  izin_komersial: boolean | null
+  kelas_zona: string | null
+  pangsa_zona_usaha: number | null
+  risiko_banjir: number | null
+  alasan: string[]
+  peringatan: string[]
+}
+
+export interface BedahBlok {
+  h3_index: string
+  kawasan: string
+  kelas: string | null
+  kelas_tersedia: Record<string, string>
+  nama_simpul: string | null
+  blok: BlokDalamHeksagon[]
+  keyakinan: BadgeKeyakinan
+  catatan: string
+}
+
 /** Urutan tampil di tombol moda. Satu daftar, dipakai panel dan peta. */
 export const URUTAN_PROFIL: readonly ProfilRute[] = ['foot-walking', 'driving-car', 'cycling-regular']
 

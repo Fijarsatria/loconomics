@@ -1150,6 +1150,230 @@ def hitung_penanda_kualitas() -> None:
     raise NotImplementedError
 
 
+# ---------------------------------------------------------------------------
+# Blok di dalam heksagon (H3 res-10)
+# ---------------------------------------------------------------------------
+#
+# Pertanyaan yang dijawab bagian ini BERBEDA dari seluruh berkas di atasnya.
+# Heksagon menjawab "kawasan kecil mana yang layak"; blok menjawab "di dalam
+# heksagon yang sudah dipilih, SISI mana yang layak" - blok dekat pintu stasiun
+# atau blok di belakangnya, tepi jalan raya atau gang.
+#
+# Dua keputusan yang menentukan seluruh bagian ini:
+#
+# 1. HANYA data terbuka. Tidak satu pun indikator blok memakai titik misi
+#    MAPID. Satu blok selebar ±130 m, dan "1 titik survei di blok ini" hampir
+#    sama dengan menunjuk letak satu baris survei - aturan 2 repo ini.
+#
+# 2. JARAK DAN RADIUS, bukan isi sel. Terukur 12 Sep 2026: hanya 19,5% sel
+#    res-10 memuat satu POI pun. Menghitung isi sel akan membuat empat dari
+#    lima blok bernilai nol karena pemetaan OSM-nya, bukan karena lokasinya.
+#    "Berapa usaha dalam 150 m" tetap bermakna di blok mana pun.
+
+#: Lintang acuan proyeksi ekuirektangular. Keenam kawasan pilot terbentang
+#: -6,18..-6,39; pada lintang acuan -6,28 selisih skala bujurnya di bawah 0,05%,
+#: jauh di bawah ketelitian titik OSM itu sendiri.
+LAT_ACUAN_BLOK = -6.28
+_M_LAT = 110_574.0
+_M_LON = 111_320.0 * float(np.cos(np.radians(LAT_ACUAN_BLOK)))
+
+#: Radius indikator blok, meter. Dipilih menurut jarak yang benar-benar
+#: ditempuh orang di trotoar, bukan menurut ukuran sel:
+#:   usaha & pesaing  150 m - satu deret ruko ke kiri-kanan; pembeli yang sama
+#:   penarik keramaian 250 m - sekolah/pasar/kantor di ujung jalan yang sama
+USAHA_BLOK_M = 150
+PENARIK_BLOK_M = 250
+
+#: Radius tarik jalan & halte di s1 (RADIUS_M). Blok yang pusatnya dekat tepi
+#: disc tarikan bisa punya jalan terdekat di LUAR disc - jaraknya akan terbaca
+#: lebih jauh daripada kenyataannya. Yang lebih jauh daripada sisa jarak ke
+#: tepi disc dinyatakan KOSONG, bukan angka yang salah.
+RADIUS_TARIK_M = 2600
+
+
+def _xy(lat, lon) -> np.ndarray:
+    """(lat, lon) derajat -> (x, y) meter, ekuirektangular di LAT_ACUAN_BLOK."""
+    lat = np.asarray(lat, dtype=float)
+    lon = np.asarray(lon, dtype=float)
+    return np.column_stack(((lon - 106.85) * _M_LON, (lat - LAT_ACUAN_BLOK) * _M_LAT))
+
+
+def blok_dari_heksagon(semua_hex, resolusi: int) -> pd.DataFrame:
+    """Anak-anak H3 tiap heksagon -> satu baris per blok.
+
+    Anak H3 tidak menempel sempurna di dalam induknya (H3 bukan hierarki yang
+    bersarang tepat), jadi tepi luar tujuh blok sedikit melampaui batas
+    heksagon induk. Itu sifat H3 dan diterima: yang dibandingkan antarblok di
+    dalam satu induk, dan ketujuhnya kena sifat yang sama.
+    """
+    baris = []
+    for induk in semua_hex:
+        for anak in sorted(h3.cell_to_children(induk, resolusi)):
+            la, lo = h3.cell_to_latlng(anak)
+            baris.append(
+                {
+                    "h3_blok": anak,
+                    "h3_induk": induk,
+                    "lat": la,
+                    "lon": lo,
+                    "luas_m2": h3.cell_area(anak, unit="m^2"),
+                }
+            )
+    return pd.DataFrame(baris, columns=["h3_blok", "h3_induk", "lat", "lon", "luas_m2"]).set_index("h3_blok")
+
+
+def _hitung_dalam_radius(pusat: np.ndarray, titik: np.ndarray, radius: float) -> np.ndarray:
+    """Berapa titik dalam `radius` meter dari tiap pusat. Nol yang SAH (OSM
+    menanyai seluruh wilayah, jadi tidak ada = tidak terpetakan di sana)."""
+    from scipy.spatial import cKDTree
+
+    if len(titik) == 0:
+        return np.zeros(len(pusat), dtype=int)
+    pohon = cKDTree(titik)
+    return np.array([len(x) for x in pohon.query_ball_point(pusat, r=radius)], dtype=int)
+
+
+def indikator_blok(
+    blok: pd.DataFrame,
+    *,
+    poi: pd.DataFrame,
+    konteks: pd.DataFrame,
+    henti: pd.DataFrame,
+    jalan: pd.DataFrame,
+    bangunan: pd.DataFrame,
+    rdtr_blok: dict[str, list],
+    ors_blok: dict[str, dict],
+    pusat_kawasan: dict[str, tuple[float, float]],
+    kawasan_induk: pd.Series,
+) -> pd.DataFrame:
+    """Seluruh indikator blok. Murni DataFrame - tanpa basis data, tanpa jaringan.
+
+    Masukan:
+      blok          keluaran `blok_dari_heksagon`
+      poi           `s2_clean.poi_dari_osm`   (lat, lon, kelas_induk)
+      konteks       `s2_clean.konteks_bertitik_dari_osm` (jenis, lat, lon)
+      henti         `s2_clean.henti_dari_osm` (lat, lon)
+      jalan         `s2_clean.jalan_dari_osm` (nama, kelas, utama, koordinat)
+      bangunan      `s2_clean.bangunan_bertitik_dari_osm` (lat, lon, luas_m2)
+      rdtr_blok     `s1_ingest.tarik_rdtr_blok` - blok -> daftar zona berpangsa
+      ors_blok      `rute_ors.matriks_blok` - blok -> {menit, jarak_m}
+      pusat_kawasan config.PUSAT; kawasan_induk: h3_induk -> nama kawasan
+
+    Setiap kolom yang sumbernya tidak menjangkau sebuah blok dibiarkan KOSONG.
+    """
+    from shapely import STRtree
+    from shapely.geometry import LineString
+
+    hasil = pd.DataFrame(index=blok.index)
+    pusat = _xy(blok["lat"], blok["lon"])
+
+    # --- Sisa jarak ke tepi disc tarikan ---------------------------------------
+    kaw = blok["h3_induk"].map(kawasan_induk)
+    pusat_kaw = np.array([pusat_kawasan.get(k, (np.nan, np.nan)) for k in kaw], dtype=float)
+    ke_pusat = np.hypot(*(pusat - _xy(pusat_kaw[:, 0], pusat_kaw[:, 1])).T)
+    sisa_disc = RADIUS_TARIK_M - ke_pusat
+
+    # --- 1. Waktu jalan kaki ke stasiun (ORS matrix) -------------------------
+    hasil["menit_jalan"] = [
+        (ors_blok.get(b) or {}).get("menit") for b in blok.index
+    ]
+    hasil["jarak_jalan_m"] = [
+        (ors_blok.get(b) or {}).get("jarak_m") for b in blok.index
+    ]
+
+    # --- 2. Jalan utama & jalan terdekat ---------------------------------------
+    hasil["jarak_jalan_utama_m"] = np.nan
+    hasil["nama_jalan_utama"] = None
+    hasil["kelas_jalan_utama"] = None
+    hasil["jarak_jalan_terdekat_m"] = np.nan
+    if not jalan.empty:
+        garis = [
+            LineString(_xy([la for _, la in k], [lo for lo, _ in k]))
+            for k in jalan["koordinat"]
+        ]
+        from shapely.geometry import Point
+
+        titik_blok = [Point(x, y) for x, y in pusat]
+        for kolom_jarak, saring in (("jarak_jalan_terdekat_m", None), ("jarak_jalan_utama_m", True)):
+            idx = np.arange(len(garis)) if saring is None else np.flatnonzero(jalan["utama"].to_numpy())
+            if len(idx) == 0:
+                continue
+            pohon = STRtree([garis[i] for i in idx])
+            ke, jarak = pohon.query_nearest(titik_blok, return_distance=True, all_matches=False)
+            dekat = np.full(len(titik_blok), np.nan)
+            pilih = np.full(len(titik_blok), -1)
+            dekat[ke[0]] = jarak
+            pilih[ke[0]] = idx[ke[1]]
+            # Jalan yang lebih jauh daripada sisa disc tarikan tidak bisa
+            # dipercaya: jalan yang sebenarnya terdekat mungkin di luar disc.
+            tak_pasti = dekat > np.maximum(sisa_disc, 0)
+            dekat[tak_pasti] = np.nan
+            hasil[kolom_jarak] = np.round(dekat, 1)
+            if saring:
+                hasil["nama_jalan_utama"] = [
+                    (jalan["nama"].iloc[p] if p >= 0 and not tp else None)
+                    for p, tp in zip(pilih, tak_pasti)
+                ]
+                hasil["kelas_jalan_utama"] = [
+                    (jalan["kelas"].iloc[p] if p >= 0 and not tp else None)
+                    for p, tp in zip(pilih, tak_pasti)
+                ]
+
+    # --- 3. Usaha & pesaing sekelas dalam 150 m --------------------------------
+    xy_poi = _xy(poi["lat"], poi["lon"]) if not poi.empty else np.empty((0, 2))
+    hasil["n_usaha_150m"] = _hitung_dalam_radius(pusat, xy_poi, USAHA_BLOK_M)
+    for kelas in KELAS_INDUK:
+        pilih = poi["kelas_induk"].eq(kelas).to_numpy() if not poi.empty else np.zeros(0, bool)
+        hasil[f"n_{kelas}_150m"] = _hitung_dalam_radius(pusat, xy_poi[pilih], USAHA_BLOK_M)
+
+    # --- 4. Penarik keramaian dalam 250 m --------------------------------------
+    jenis_penarik = ("sekolah", "rumah_sakit", "pasar", "ibadah", "kantor")
+    total = np.zeros(len(pusat), dtype=int)
+    for j in jenis_penarik:
+        sub = konteks[konteks["jenis"].eq(j)] if not konteks.empty else konteks
+        n = _hitung_dalam_radius(pusat, _xy(sub["lat"], sub["lon"]) if len(sub) else np.empty((0, 2)), PENARIK_BLOK_M)
+        hasil[f"n_{j}_250m"] = n
+        total = total + n
+    hasil["n_penarik_250m"] = total
+
+    # --- 5. Halte / titik henti angkutan terdekat ------------------------------
+    hasil["jarak_halte_m"] = np.nan
+    if not henti.empty:
+        from scipy.spatial import cKDTree
+
+        jarak, _ = cKDTree(_xy(henti["lat"], henti["lon"])).query(pusat)
+        jarak = np.where(jarak > np.maximum(sisa_disc, 0), np.nan, jarak)
+        hasil["jarak_halte_m"] = np.round(jarak, 1)
+
+    # --- 6. Tutupan bangunan di dalam blok -------------------------------------
+    if not bangunan.empty:
+        sel = [h3.latlng_to_cell(la, lo, h3.get_resolution(blok.index[0])) for la, lo in zip(bangunan["lat"], bangunan["lon"])]
+        per_sel = pd.DataFrame({"sel": sel, "luas": bangunan["luas_m2"].to_numpy()}).groupby("sel")["luas"].agg(["sum", "size"])
+        luas = per_sel["sum"].reindex(blok.index)
+        hasil["n_bangunan"] = per_sel["size"].reindex(blok.index).fillna(0).astype(int)
+        # Nol yang SAH: footprint ditarik untuk seluruh disc, jadi blok tanpa
+        # satu pun titik tengah bangunan memang tidak terbangun di OSM.
+        hasil["rasio_tutupan_bangunan"] = (luas.fillna(0) / blok["luas_m2"]).round(4)
+    else:
+        hasil["n_bangunan"] = 0
+        hasil["rasio_tutupan_bangunan"] = np.nan
+
+    # --- 7. Zonasi RDTR per blok (DKI saja) -------------------------------------
+    lahan = dimensi_lahan(rdtr_blok, semua_hex=blok.index)
+    hasil["izin_komersial"] = lahan["zona_izin_komersial"].astype(object)
+    hasil["kelas_zona"] = lahan["kelas_zona"]
+    hasil["risiko_banjir"] = lahan["risiko_banjir"]
+    pangsa_usaha = {}
+    for b, zona in rdtr_blok.items():
+        tot = sum(float(z.get("pangsa") or 0) for z in zona)
+        if tot > 0:
+            pangsa_usaha[b] = round(
+                sum(float(z.get("pangsa") or 0) for z in zona if z.get("KODZON") in ZONA_USAHA) / tot, 4
+            )
+    hasil["pangsa_zona_usaha"] = pd.Series(pangsa_usaha).reindex(blok.index)
+    return hasil
+
+
 if __name__ == "__main__":
     print(f"Kawasan   : {len(KAWASAN_PILOT)} pilot")
     print(f"Resolusi  : H3 res-{H3_RESOLUSI}")

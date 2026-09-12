@@ -32,11 +32,13 @@ from app.api.bersama import (
 )
 from app.core.aturan import (
     JAM_OPERASIONAL,
+    KELAS_USAHA,
     MEMUTAR_MENCOLOK,
     BAHASA_BAWAAN,
     Bahasa,
     PENJELASAN_KUADRAN,
     PENJELASAN_KUADRAN_EN,
+    alasan_blok,
     kalimat,
     pilih,
     cakupan_indeks,
@@ -55,8 +57,10 @@ from app.core.simulasi import (
 from app.core.cache import ber_cache
 from app.core.galat import KesalahanAPI
 from app.core.database import get_db
-from app.models import HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
+from app.models import BlokHeksagon, HexFeature, HexHourlyProfile, LocationScore, ScoreFactor
 from app.schemas import (
+    BedahBlok,
+    BlokDalamHeksagon,
     CakupanPrestise,
     CommuterClock,
     DetailHeksagon,
@@ -327,6 +331,125 @@ def commuter_clock(
         dominasi=dominasi,  # type: ignore[arg-type]
         keyakinan=badge(hx),
         catatan=catatan,
+    )
+
+
+@router.get(
+    "/{h3_index}/blok",
+    response_model=BedahBlok,
+    summary="Tujuh blok di dalam satu heksagon, dibandingkan berdampingan",
+)
+@ber_cache("blok", ttl=900)
+def blok_heksagon(
+    h3_index: str,
+    db: Annotated[Session, Depends(get_db)],
+    kelas: Annotated[
+        str | None,
+        Query(description="Kelas induk usaha (F1, F2, R1, R2, S1, S2, K1, T1). Kosong = skor umum."),
+    ] = None,
+    bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
+) -> BedahBlok:
+    """Jawaban untuk "di dalam heksagon yang sudah saya pilih, sisi mana yang layak?".
+
+    GRATIS dan aman di-cache: isinya sama untuk siapa pun, seluruhnya dari data
+    terbuka, dan hanya berubah saat pipeline dijalankan (`s7_publish --blok`).
+    Kelas dan bahasa ikut jadi kunci cache karena keduanya parameter.
+
+    Blok berzona terlarang TETAP dikirim - berskor 0 dan berperingatan - supaya
+    orang melihat bahwa sisi itu dikecualikan dan kenapa, bukan cuma melihat
+    enam blok dan bertanya ke mana yang ketujuh.
+    """
+    if kelas is not None and kelas not in KELAS_USAHA:
+        raise KesalahanAPI(
+            f"Kelas usaha '{kelas}' tidak dikenal.", {"tersedia": sorted(KELAS_USAHA)}
+        )
+    hx = ambil_hex(db, h3_index)
+
+    baris = db.execute(
+        select(BlokHeksagon, func.ST_AsGeoJSON(BlokHeksagon.geom, 6).label("gj"))
+        .where(BlokHeksagon.h3_induk == h3_index)
+    ).all()
+
+    simpul = db.execute(
+        text(
+            """
+            SELECT n.nama FROM transport_nodes n, hex_features h
+            WHERE h.h3_index = :h3
+            ORDER BY n.geom <-> ST_Centroid(h.geom) LIMIT 1
+            """
+        ),
+        {"h3": h3_index},
+    ).scalar()
+
+    mentah = [
+        {
+            **{k: getattr(b, k) for k in (
+                "h3_blok", "lat", "lon", "menit_jalan", "jarak_jalan_m", "jarak_jalan_utama_m",
+                "nama_jalan_utama", "kelas_jalan_utama", "n_usaha_150m", "usaha_per_kelas_150m",
+                "n_penarik_250m", "penarik_250m", "jarak_halte_m", "n_bangunan",
+                "rasio_tutupan_bangunan", "izin_komersial", "kelas_zona", "pangsa_zona_usaha",
+                "risiko_banjir", "skor_blok", "skor_per_kelas", "peringkat_induk",
+            )},
+            "koordinat": json.loads(gj)["coordinates"][0],
+        }
+        for b, gj in baris
+    ]
+    # Urutan tampil = skor pipeline untuk kelas yang diminta. Mengurutkan skor
+    # yang sudah jadi bukan menghitung skor (aturan 1): angkanya tetap milik s6.
+    skor_dari = (lambda m: (m["skor_per_kelas"] or {}).get(kelas)) if kelas else (lambda m: m["skor_blok"])
+    urut = sorted(mentah, key=lambda m: (skor_dari(m) is None, -(skor_dari(m) or 0), m["h3_blok"]))
+
+    blok: list[BlokDalamHeksagon] = []
+    peringkat = 0
+    skor_sebelum: float | None = None
+    for i, m in enumerate(urut, 1):
+        s = skor_dari(m)
+        # Skor sama -> peringkat sama (metode "min"), persis seperti
+        # `peringkat_induk` yang dihitung pipeline.
+        if s is None or s != skor_sebelum:
+            peringkat = i
+        skor_sebelum = s
+        alasan, peringatan = alasan_blok(m, mentah, simpul, kelas, bahasa)
+        blok.append(
+            BlokDalamHeksagon(
+                h3_blok=m["h3_blok"],
+                peringkat=peringkat,
+                skor=s,
+                skor_umum=m["skor_blok"],
+                lat=m["lat"],
+                lon=m["lon"],
+                koordinat=m["koordinat"],
+                menit_jalan=m["menit_jalan"],
+                jarak_jalan_m=m["jarak_jalan_m"],
+                jarak_jalan_utama_m=m["jarak_jalan_utama_m"],
+                nama_jalan_utama=m["nama_jalan_utama"],
+                kelas_jalan_utama=m["kelas_jalan_utama"],
+                n_usaha_150m=m["n_usaha_150m"],
+                n_pesaing_150m=(int((m["usaha_per_kelas_150m"] or {}).get(kelas, 0)) if kelas else None),
+                usaha_per_kelas_150m=m["usaha_per_kelas_150m"] or {},
+                n_penarik_250m=m["n_penarik_250m"],
+                penarik_250m=m["penarik_250m"] or {},
+                jarak_halte_m=m["jarak_halte_m"],
+                n_bangunan=m["n_bangunan"],
+                rasio_tutupan_bangunan=m["rasio_tutupan_bangunan"],
+                izin_komersial=m["izin_komersial"],
+                kelas_zona=m["kelas_zona"],
+                pangsa_zona_usaha=m["pangsa_zona_usaha"],
+                risiko_banjir=m["risiko_banjir"],
+                alasan=alasan,
+                peringatan=peringatan,
+            )
+        )
+
+    return BedahBlok(
+        h3_index=h3_index,
+        kawasan=hx.kawasan,
+        kelas=kelas,
+        kelas_tersedia={k: (en if bahasa == "en" else id_) for k, (id_, en) in KELAS_USAHA.items()},
+        nama_simpul=simpul,
+        blok=blok,
+        keyakinan=badge(hx),
+        catatan=kalimat("blok_catatan", bahasa),
     )
 
 

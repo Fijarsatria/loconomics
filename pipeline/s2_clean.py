@@ -333,27 +333,50 @@ def konteks_dari_osm(elemen: list[dict]) -> pd.DataFrame:
     masuk `business_pois`, dan itu dijamin `kelas_dari_tag` yang menolaknya.
     """
     baris = []
+    for jenis, lat, lon in _konteks_bertitik(elemen):
+        baris.append({"h3_index": h3.latlng_to_cell(lat, lon, H3_RESOLUSI), "jenis": jenis})
+    return pd.DataFrame(baris, columns=["h3_index", "jenis"])
+
+
+def _jenis_konteks(tag: dict) -> list[str]:
+    """Aturan penggolongan konteks - SATU tempat, dipakai heksagon dan blok."""
+    jenis = []
+    if tag.get("office"):
+        jenis.append("kantor")
+    cocok = KONTEKS_OSM.get(("amenity", tag.get("amenity", "")))
+    if cocok:
+        jenis.append(cocok)
+    if tag.get("amenity") == "place_of_worship" and tag.get("religion") == "muslim":
+        jenis.append("ibadah")
+    return jenis
+
+
+def _konteks_bertitik(elemen: list[dict]):
+    """(jenis, lat, lon) per elemen konteks. Satu elemen bisa menyumbang dua."""
     for e in elemen:
         tag = e.get("tags") or {}
         if not tag:
             continue
-        jenis = []
-        if tag.get("office"):
-            jenis.append("kantor")
-        cocok = KONTEKS_OSM.get(("amenity", tag.get("amenity", "")))
-        if cocok:
-            jenis.append(cocok)
-        if tag.get("amenity") == "place_of_worship" and tag.get("religion") == "muslim":
-            jenis.append("ibadah")
+        jenis = _jenis_konteks(tag)
         if not jenis:
             continue
         titik = _titik_osm(e)
         if titik is None:
             continue
-        lat, lon = titik
-        sel = h3.latlng_to_cell(lat, lon, H3_RESOLUSI)
-        baris.extend({"h3_index": sel, "jenis": j} for j in jenis)
-    return pd.DataFrame(baris, columns=["h3_index", "jenis"])
+        for j in jenis:
+            yield j, titik[0], titik[1]
+
+
+def konteks_bertitik_dari_osm(elemen: list[dict]) -> pd.DataFrame:
+    """Kembaran `konteks_dari_osm` yang MEMPERTAHANKAN koordinatnya.
+
+    Heksagon cukup tahu "ada di sel mana"; blok tidak - satu blok selebar
+    ±130 m, dan yang ditanyakan di sana "berapa penarik keramaian dalam radius
+    250 m", jarak yang menembus batas sel. Penggolongannya lewat
+    `_jenis_konteks` yang sama, jadi sekolah di heksagon dan sekolah di blok
+    tidak bisa diam-diam berbeda definisi.
+    """
+    return pd.DataFrame(list(_konteks_bertitik(elemen)), columns=["jenis", "lat", "lon"])
 
 
 def snap_ke_geometri(lat: float, lon: float, jaringan_jalan, bangunan):
@@ -489,6 +512,28 @@ def bangunan_dari_osm(elemen: list[dict]) -> pd.DataFrame:
     mengubah hasilnya jauh lebih sedikit daripada ketidakpastian pemetaan OSM
     itu sendiri.
     """
+    bertitik = bangunan_bertitik_dari_osm(elemen)
+    if bertitik.empty:
+        return pd.DataFrame(columns=["h3_index", "luas_m2"])
+    return pd.DataFrame(
+        {
+            "h3_index": [
+                h3.latlng_to_cell(la, lo, H3_RESOLUSI)
+                for la, lo in zip(bertitik["lat"], bertitik["lon"])
+            ],
+            "luas_m2": bertitik["luas_m2"],
+        },
+        columns=["h3_index", "luas_m2"],
+    )
+
+
+def bangunan_bertitik_dari_osm(elemen: list[dict]) -> pd.DataFrame:
+    """(lat, lon, luas_m2) per bangunan - titik tengah cincinnya ikut disimpan.
+
+    Dipakai dua kali: heksagon memetakannya ke sel res-9, blok ke sel res-10.
+    Satu fungsi yang menghitung luas dan titik tengah, supaya M01 heksagon dan
+    tutupan bangunan blok tidak bisa berselisih karena rumus yang berbeda.
+    """
     baris = []
     for e in elemen:
         geom = e.get("geometry")
@@ -500,13 +545,52 @@ def bangunan_dari_osm(elemen: list[dict]) -> pd.DataFrame:
         titik = bersihkan_koordinat(lat, lon)
         if titik is None:
             continue
+        baris.append({"lat": titik[0], "lon": titik[1], "luas_m2": round(luas, 2)})
+    return pd.DataFrame(baris, columns=["lat", "lon", "luas_m2"])
+
+
+#: Kelas jalan yang dihitung "jalan utama" - tempat toko terlihat oleh arus
+#: yang lewat. `unclassified`/`residential`/`living_street`/`pedestrian` tetap
+#: ditarik, tetapi masuk hitungan jalan TERDEKAT, bukan jalan utama.
+KELAS_JALAN_UTAMA = frozenset({
+    "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+    "secondary", "secondary_link", "tertiary", "tertiary_link",
+})
+
+
+def jalan_dari_osm(elemen: list[dict]) -> pd.DataFrame:
+    """Ruas jalan Overpass `out geom` -> (nama, kelas, utama, koordinat).
+
+    `koordinat` daftar (lon, lat) apa adanya. Ruas tanpa geometri atau dengan
+    kurang dari dua titik dibuang - ruas satu titik tidak punya panjang untuk
+    diukur jaraknya. Nama boleh kosong: banyak gang di OSM tidak bernama, dan
+    gang tak bernama tetap gang.
+    """
+    baris = []
+    for e in elemen:
+        if e.get("type") != "way":
+            continue
+        geom = e.get("geometry") or []
+        titik = [
+            (float(t["lon"]), float(t["lat"]))
+            for t in geom
+            if isinstance(t, dict) and "lat" in t and "lon" in t
+        ]
+        if len(titik) < 2:
+            continue
+        tag = e.get("tags") or {}
+        kelas = (tag.get("highway") or "").strip()
+        if not kelas:
+            continue
         baris.append(
             {
-                "h3_index": h3.latlng_to_cell(titik[0], titik[1], H3_RESOLUSI),
-                "luas_m2": round(luas, 2),
+                "nama": (tag.get("name") or "").strip()[:120] or None,
+                "kelas": kelas,
+                "utama": kelas in KELAS_JALAN_UTAMA,
+                "koordinat": titik,
             }
         )
-    return pd.DataFrame(baris, columns=["h3_index", "luas_m2"])
+    return pd.DataFrame(baris, columns=["nama", "kelas", "utama", "koordinat"])
 
 # ---------------------------------------------------------------------------
 # API misi MAPID -> baris observasi

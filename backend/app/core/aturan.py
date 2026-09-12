@@ -693,6 +693,79 @@ KALIMAT: dict[str, tuple[str, str]] = {
         " {n} jalur alternatif tersedia.",
         " {n} alternative routes are available.",
     ),
+
+    # --- Blok di dalam heksagon --------------------------------------------
+    "blok_menit": (
+        "{menit} menit jalan kaki ke {nama}",
+        "{menit} min walk to {nama}",
+    ),
+    "blok_menit_tercepat": (
+        "Tercepat ke {nama} di heksagon ini ({menit} menit)",
+        "Quickest to {nama} in this hexagon ({menit} min)",
+    ),
+    "blok_tepi_jalan": (
+        "Di tepi {jalan}",
+        "Right on {jalan}",
+    ),
+    "blok_dekat_jalan": (
+        "{jarak} m dari {jalan}",
+        "{jarak} m from {jalan}",
+    ),
+    "blok_jalan_tanpa_nama": ("jalan utama", "a main road"),
+    "blok_jauh_jalan": (
+        "Jauh dari jalan utama ({jarak} m) - arus lewat sedikit",
+        "Far from a main road ({jarak} m) - little passing traffic",
+    ),
+    "blok_usaha": (
+        "{n} usaha dalam 150 m",
+        "{n} businesses within 150 m",
+    ),
+    "blok_usaha_nol": (
+        "Belum ada usaha terpetakan dalam 150 m",
+        "No mapped businesses within 150 m yet",
+    ),
+    "blok_pesaing": (
+        "{n} pesaing sekelas dalam 150 m",
+        "{n} same-type competitors within 150 m",
+    ),
+    "blok_pesaing_nol": (
+        "Tanpa pesaing sekelas dalam 150 m",
+        "No same-type competitors within 150 m",
+    ),
+    "blok_penarik": (
+        "{n} penarik keramaian dalam 250 m",
+        "{n} crowd generators within 250 m",
+    ),
+    "blok_halte": (
+        "Halte/henti angkutan {jarak} m",
+        "Transit stop {jarak} m away",
+    ),
+    "blok_zona_usaha": (
+        "{pangsa}% bidangnya berzona Perdagangan & Jasa",
+        "{pangsa}% of its land is zoned Trade & Services",
+    ),
+    "blok_zona_dilarang": (
+        "Zonasi RDTR blok ini bukan untuk tempat usaha - skornya dinolkan",
+        "This block's RDTR zoning is not for business - its score is zeroed",
+    ),
+    "blok_zona_tidak_diketahui": (
+        "Belum ada RDTR digital untuk blok ini - cek izin ke dinas setempat",
+        "No digital RDTR for this block yet - check permits with the local office",
+    ),
+    "blok_banjir": (
+        "Masuk kawasan rawan banjir menurut RDTR",
+        "Inside a flood-prone area according to the RDTR",
+    ),
+    "blok_catatan": (
+        "Tujuh blok (±130 m) di dalam heksagon ini, dinilai dari data terbuka: waktu "
+        "jalan kaki sungguhan ke stasiun (OpenRouteService), jalan dan usaha "
+        "OpenStreetMap, dan zonasi RDTR ATR/BPN. Skor blok membandingkan sisi-sisi "
+        "heksagon yang sama; ia tidak menggantikan Opportunity Score heksagonnya.",
+        "Seven blocks (±130 m) inside this hexagon, rated from open data: real walking "
+        "time to the station (OpenRouteService), OpenStreetMap streets and businesses, "
+        "and ATR/BPN RDTR zoning. The block score compares sides of the same hexagon; "
+        "it does not replace the hexagon's Opportunity Score.",
+    ),
 }
 
 
@@ -715,6 +788,106 @@ def rp(n: float, bahasa: Bahasa = BAHASA_BAWAAN) -> str:
     """
     utuh = f"{n:,.0f}"
     return "Rp" + (utuh if bahasa == "en" else utuh.replace(",", "."))
+
+
+# ---------------------------------------------------------------------------
+# Blok di dalam heksagon - aturan TAMPILAN
+# ---------------------------------------------------------------------------
+# Skornya dihitung `pipeline/s6_score.skor_blok`. Yang di sini hanya memilih
+# kalimat yang menyertainya - tidak satu pun mengubah urutan blok.
+
+#: Delapan kelas induk usaha, nama (id, en). Kembaran `pipeline/config.py::
+#: KELAS_INDUK` - kesamaannya dijaga `tests/test_aturan.py`.
+KELAS_USAHA: dict[str, tuple[str, str]] = {
+    "F1": ("Kuliner Duduk", "Sit-down food"),
+    "F2": ("Kuliner Cepat/Informal", "Quick & informal food"),
+    "R1": ("Ritel Kebutuhan Harian", "Everyday retail"),
+    "R2": ("Ritel Non-Pangan", "Non-food retail"),
+    "S1": ("Jasa Personal", "Personal services"),
+    "S2": ("Kesehatan", "Health"),
+    "K1": ("Keuangan", "Finance"),
+    "T1": ("Transportasi", "Transport"),
+}
+
+#: Jenis usaha simulasi -> kelas induk pesaingnya. Dipakai antarmuka untuk
+#: memilih kelas bawaan dari rencana usaha yang sudah diisi orangnya, supaya
+#: pemilik kedai kopi tidak perlu tahu bahwa kopi masuk "Kuliner Cepat".
+JENIS_KE_KELAS: dict[str, str] = {
+    "kuliner_ringan": "F2", "warung_makan": "F1", "restoran": "F1", "bakery": "F2",
+    "retail_kecil": "R1", "minimarket": "R1", "fesyen": "R2", "elektronik": "R2",
+    "bangunan": "R2", "jasa": "S1", "kecantikan": "S1", "kesehatan": "S2",
+    "pendidikan": "S1", "otomotif": "T1", "hiburan": "S1", "logistik": "S1",
+}
+
+#: Jarak yang dihitung "di tepi" jalan - kira-kira satu muka ruko plus trotoar.
+TEPI_JALAN_M = 25
+#: Di atas ini blok dinyatakan jauh dari arus jalan utama.
+JAUH_JALAN_M = 250
+
+
+def alasan_blok(
+    b: dict,
+    saudara: list[dict],
+    nama_simpul: str | None,
+    kelas: str | None,
+    bahasa: Bahasa = BAHASA_BAWAAN,
+) -> tuple[list[str], list[str]]:
+    """Kalimat keunggulan dan peringatan untuk SATU blok, dibanding saudaranya.
+
+    Keunggulan disebut hanya kalau memang pembeda - "tercepat ke stasiun"
+    hanya untuk blok yang benar-benar tercepat, bukan untuk ketujuhnya. Kalimat
+    yang muncul di setiap baris berhenti dibaca sebagai alasan.
+    """
+    alasan: list[str] = []
+    peringatan: list[str] = []
+    nama = nama_simpul or ("stasiun" if bahasa != "en" else "the station")
+
+    menit = b.get("menit_jalan")
+    semua_menit = [s["menit_jalan"] for s in saudara if s.get("menit_jalan") is not None]
+    if menit is not None:
+        if semua_menit and menit <= min(semua_menit) and len(semua_menit) > 1:
+            alasan.append(kalimat("blok_menit_tercepat", bahasa, nama=nama, menit=f"{menit:.0f}"))
+        else:
+            alasan.append(kalimat("blok_menit", bahasa, nama=nama, menit=f"{menit:.0f}"))
+
+    jarak = b.get("jarak_jalan_utama_m")
+    jalan = b.get("nama_jalan_utama") or kalimat("blok_jalan_tanpa_nama", bahasa)
+    if jarak is not None:
+        if jarak <= TEPI_JALAN_M:
+            alasan.append(kalimat("blok_tepi_jalan", bahasa, jalan=jalan))
+        elif jarak >= JAUH_JALAN_M:
+            peringatan.append(kalimat("blok_jauh_jalan", bahasa, jarak=f"{jarak:.0f}"))
+        else:
+            alasan.append(kalimat("blok_dekat_jalan", bahasa, jarak=f"{jarak:.0f}", jalan=jalan))
+
+    if kelas:
+        n = int((b.get("usaha_per_kelas_150m") or {}).get(kelas, 0))
+        alasan.append(
+            kalimat("blok_pesaing_nol", bahasa) if n == 0 else kalimat("blok_pesaing", bahasa, n=n)
+        )
+    n_usaha = int(b.get("n_usaha_150m") or 0)
+    alasan.append(
+        kalimat("blok_usaha_nol", bahasa) if n_usaha == 0 else kalimat("blok_usaha", bahasa, n=n_usaha)
+    )
+    n_penarik = int(b.get("n_penarik_250m") or 0)
+    if n_penarik:
+        alasan.append(kalimat("blok_penarik", bahasa, n=n_penarik))
+    halte = b.get("jarak_halte_m")
+    if halte is not None and halte <= 150:
+        alasan.append(kalimat("blok_halte", bahasa, jarak=f"{halte:.0f}"))
+
+    izin = b.get("izin_komersial")
+    if izin is False:
+        peringatan.append(kalimat("blok_zona_dilarang", bahasa))
+    elif izin is None:
+        peringatan.append(kalimat("blok_zona_tidak_diketahui", bahasa))
+    elif b.get("pangsa_zona_usaha") is not None:
+        alasan.append(
+            kalimat("blok_zona_usaha", bahasa, pangsa=f"{100 * b['pangsa_zona_usaha']:.0f}")
+        )
+    if (b.get("risiko_banjir") or 0) >= 0.5:
+        peringatan.append(kalimat("blok_banjir", bahasa))
+    return alasan, peringatan
 
 # ---------------------------------------------------------------------------
 # Kejujuran keempat indeks

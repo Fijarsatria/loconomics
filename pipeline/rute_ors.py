@@ -679,6 +679,140 @@ def status(db) -> None:
     print(f"  total pita catchment_areas: {iso}\n")
 
 
+URL_MATRIKS = "https://api.openrouteservice.org/v2/matrix/{profil}"
+
+#: Sumber per permintaan matriks. ORS gratis menerima sampai 3.500 pasangan
+#: sumber x tujuan; 400 menyisakan ruang lebar dan membuat satu kegagalan
+#: jaringan cuma membuang sepotong kecil, bukan satu kawasan.
+MATRIKS_PER_PERMINTAAN = 400
+
+#: Kecepatan jalan kaki untuk PENGGAL tempel (titik blok -> ruas terdekat).
+#: Sama dengan `menit_penggal()` untuk jalan kaki, supaya menit blok dan menit
+#: heksagon menggambarkan perjalanan yang dihitung dengan cara yang sama.
+METER_PER_MENIT_KAKI = 80.0
+
+
+def _minta_matriks(sumber: list[tuple[float, float]], tujuan: tuple[float, float]) -> dict | str:
+    """Satu permintaan matriks jalan kaki: banyak sumber -> satu simpul."""
+    lokasi = [[x, y] for x, y in sumber] + [[tujuan[0], tujuan[1]]]
+    badan = {
+        "locations": lokasi,
+        "sources": list(range(len(sumber))),
+        "destinations": [len(sumber)],
+        "metrics": ["duration", "distance"],
+        # `resolve_locations` mengembalikan jarak TEMPEL tiap titik ke ruas
+        # terdekat. Matriks menghitung dari titik hasil tempel, jadi tanpa ini
+        # blok yang pusatnya di tengah kompleks tanpa jalan terbaca "0 menit"
+        # lebih dekat daripada kenyataannya - jebakan yang sama dengan rute
+        # yang lebih pendek daripada garis lurusnya.
+        "resolve_locations": True,
+    }
+    req = urllib.request.Request(
+        URL_MATRIKS.format(profil=PROFIL_JALAN),
+        data=json.dumps(badan).encode(),
+        headers={
+            "Authorization": settings.ors_api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return f"HTTP {e.code}: {e.read()[:200].decode('utf-8', 'replace')}"
+    except (OSError, json.JSONDecodeError) as e:
+        return f"{type(e).__name__}: {e}"
+
+
+def matriks_blok(db) -> int:
+    """Waktu jalan kaki tiap BLOK (anak H3 res-10) ke simpul heksagon induknya.
+
+    Satu matriks per potongan, bukan satu rute per blok: 4.956 blok lewat
+    directions menghabiskan dua setengah hari kuota, lewat matriks belasan
+    permintaan. Yang hilang cuma geometri jalurnya - dan blok memang tidak
+    menggambar jalur; yang ditanyakan cuma berapa menit.
+
+    Simpul tujuan = simpul yang SAMA dengan rute utama heksagon induknya, jadi
+    tujuh blok satu heksagon selalu diukur ke stasiun yang sama dan bisa
+    dibandingkan satu sama lain.
+
+    Keluaran mentah ke `data/01_mentah/ors_blok.json`; s7 yang memuatnya.
+    Disinggahkan per potongan, jadi yang putus di tengah melanjutkan.
+    """
+    import h3
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from config import DATA_MENTAH, H3_RESOLUSI_BLOK
+
+    induk = [
+        dict(r)
+        for r in db.execute(
+            text(
+                """
+                SELECT h.h3_index, s.id AS simpul_id, ST_X(s.geom) AS sx, ST_Y(s.geom) AS sy
+                FROM hex_features h
+                CROSS JOIN LATERAL (
+                    SELECT n.id, n.geom FROM transport_nodes n
+                    ORDER BY n.geom <-> ST_Centroid(h.geom) LIMIT 1
+                ) s
+                ORDER BY s.id, h.h3_index
+                """
+            )
+        ).mappings()
+    ]
+    berkas = DATA_MENTAH / "ors_blok.json"
+    hasil: dict[str, dict] = json.loads(berkas.read_text(encoding="utf-8")) if berkas.exists() else {}
+
+    per_simpul: dict[int, dict] = {}
+    for r in induk:
+        g = per_simpul.setdefault(r["simpul_id"], {"tujuan": (r["sx"], r["sy"]), "blok": []})
+        for anak in sorted(h3.cell_to_children(r["h3_index"], H3_RESOLUSI_BLOK)):
+            if anak not in hasil:
+                la, lo = h3.cell_to_latlng(anak)
+                g["blok"].append((anak, lo, la))
+
+    sisa = sum(len(g["blok"]) for g in per_simpul.values())
+    print(f"  Matriks blok: {len(hasil)} tersimpan, {sisa} tersisa")
+    for simpul_id, g in per_simpul.items():
+        for i in range(0, len(g["blok"]), MATRIKS_PER_PERMINTAAN):
+            potong = g["blok"][i : i + MATRIKS_PER_PERMINTAAN]
+            d = _minta_matriks([(lo, la) for _, lo, la in potong], g["tujuan"])
+            if isinstance(d, str):
+                if d.startswith("HTTP 403") and "uota" in d:
+                    berkas.write_text(json.dumps(hasil), encoding="utf-8")
+                    print(f"\n  KUOTA ORS HABIS. {len(hasil)} blok tersimpan; jalankan ulang besok.")
+                    return 3
+                print(f"    simpul {simpul_id} potongan {i}: {d}")
+                continue
+            durasi = d.get("durations") or []
+            jarak = d.get("distances") or []
+            sumber = d.get("sources") or []
+            for k, (anak, lo, la) in enumerate(potong):
+                dur = durasi[k][0] if k < len(durasi) and durasi[k] else None
+                jar = jarak[k][0] if k < len(jarak) and jarak[k] else None
+                tempel = (sumber[k] or {}).get("snapped_distance") if k < len(sumber) else None
+                if dur is None or jar is None:
+                    # Tidak tertempel ke jaringan sama sekali. KOSONG, bukan nol
+                    # dan bukan garis lurus - blok ini tetap tampil, hanya tanpa
+                    # angka menit.
+                    hasil[anak] = {"simpul_id": simpul_id, "menit": None, "jarak_m": None}
+                    continue
+                penggal = float(tempel or 0.0)
+                hasil[anak] = {
+                    "simpul_id": simpul_id,
+                    "menit": round(dur / 60.0 + penggal / METER_PER_MENIT_KAKI, 2),
+                    "jarak_m": round(jar + penggal, 1),
+                }
+            berkas.write_text(json.dumps(hasil), encoding="utf-8")
+            print(f"    simpul {simpul_id}: {min(i + len(potong), len(g['blok']))}/{len(g['blok'])}")
+            time.sleep(3.0)
+
+    ada = sum(1 for v in hasil.values() if v.get("menit") is not None)
+    print(f"\n  {ada} dari {len(hasil)} blok punya waktu jalan kaki -> {berkas.name}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Rute jalan kaki heksagon -> simpul, lewat ORS.")
     ap.add_argument(
@@ -714,6 +848,11 @@ def main() -> int:
             "dan simpulnya, lalu nomori ulang menurut durasi. Tanpa memanggil ORS."
         ),
     )
+    ap.add_argument(
+        "--blok",
+        action="store_true",
+        help="waktu jalan kaki tiap blok (anak H3 res-10) ke simpulnya, lewat ORS matrix",
+    )
     a = ap.parse_args()
 
     global PROFIL
@@ -735,6 +874,12 @@ def main() -> int:
             jahit_ulang(db)
             status(db)
             return 0
+
+        if a.blok:
+            if not settings.ors_api_key:
+                print("ORS_API_KEY kosong di backend/.env. Isi dulu.")
+                return 1
+            return matriks_blok(db)
 
         if a.isochrone:
             if not settings.ors_api_key:

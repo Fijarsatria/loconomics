@@ -67,6 +67,13 @@ CRS = "EPSG:4326"
 H3_RESOLUSI = 9  # ±0,10 km², lebar ±350 m
 ISOCHRONE_MENIT = [5, 10, 15, 30, 60]
 
+#: Resolusi BLOK - satuan kedua, di BAWAH heksagon, untuk menjawab "blok mana di
+#: dalam heksagon ini". Res-10 = 7 anak per heksagon, ±15.000 m² dan lebar
+#: ±130 m: kira-kira satu blok jalan di Jabodetabek. Res-11 (49 anak, ±2.100 m²)
+#: sudah diukur dan ditolak: median bangunannya 2 per sel dan hanya 4,4% sel
+#: memuat satu POI, jadi yang dibandingkan di sana derau, bukan lokasi.
+H3_RESOLUSI_BLOK = 10
+
 # Moda yang dicakup. Pelabuhan dan bandara sengaja dikecualikan karena pola
 # belanja penumpangnya berbeda fundamental dari komuter harian.
 MODA = ["KRL", "MRT", "LRT", "BRT", "TERMINAL"]
@@ -516,6 +523,39 @@ BOBOT_HIDDEN_GEM = {"residual": 0.40, "iptt": 0.30, "peluang_x_prestise": 0.30}
 
 SENSITIVITAS_GESER = 0.10
 SENSITIVITAS_RHO_MIN = 0.85
+
+# --- Bobot skor BLOK (docs/skoring.md bagian "Blok di dalam heksagon") -------
+# Skor blok BUKAN pengganti Opportunity Score heksagon. Heksagon menjawab
+# "kawasan kecil mana"; blok menjawab "sisi mana di dalamnya". Karena itu
+# indikatornya hanya yang BERBEDA antarblok dalam jarak ratusan meter - bukan
+# penduduk WorldPop (piksel 92 m, 1,8 piksel per blok) dan bukan data misi.
+#
+# Urutan bobotnya mengikuti apa yang paling menentukan nasib toko di dekat
+# stasiun, dari yang paling kuat buktinya:
+#   akses ke stasiun   0,30  menit jalan kaki SUNGGUHAN (ORS), bukan garis lurus
+#   tepi jalan utama   0,20  toko di jalan utama dilihat arus yang lewat
+#   penarik keramaian  0,15  sekolah, pasar, RS, masjid, kantor dalam 250 m
+#   keramaian usaha    0,15  deret usaha dalam 150 m menandakan orang berbelanja
+#   halte pengumpan    0,10  angkot/bus yang menurunkan orang di dekatnya
+#   blok terbangun     0,10  lahan kosong/taman tidak punya muka toko
+# Sufiks _inv: makin kecil makin baik.
+BOBOT_BLOK = {
+    "menit_jalan_inv": 0.30,
+    "jarak_jalan_utama_m_inv": 0.20,
+    "n_penarik_250m": 0.15,
+    "n_usaha_150m": 0.15,
+    "jarak_halte_m_inv": 0.10,
+    "rasio_tutupan_bangunan": 0.10,
+}
+
+#: Penalti pesaing SEKELAS dalam 150 m - hanya pada skor per jenis usaha.
+#: Skor umum tidak memuatnya: tanpa tahu usahanya apa, deret warung makan di
+#: sebelah bisa berarti pesaing atau berarti tempat orang biasa jajan.
+BOBOT_BLOK_PESAING = 0.20
+
+#: Penalti risiko banjir RDTR. Kecil, dan hanya bermakna di DKI - di luar DKI
+#: nilainya kosong lalu netral, jadi tidak menggeser urutan antarblok di sana.
+BOBOT_BLOK_BANJIR = 0.10
 
 
 # --- Ambang fitur produk ---------------------------------------------------

@@ -303,6 +303,11 @@ MAPID_MISI = "https://server.mapid.io/web/competition/{}"
 #: 404-nya tidak menyebut nama misi yang benar.
 JENIS_MISI = ("menugo", "struckgo", "propertigo", "activities")
 
+#: Awal rentang tanggal `activities`. Jauh sebelum kompetisi dibuka, supaya
+#: aktivitas warga yang lebih tua di wilayah yang sama ikut terbaca - D12
+#: menghitung kegiatan komunitas, bukan kegiatan lomba.
+AKTIVITAS_SEJAK = "2020-01-01"
+
 #: Poligon Jabodetabek. Sengaja lebih luas daripada keenam kawasan pilot: satu
 #: kueri untuk seluruh wilayah jauh lebih murah daripada enam kueri bertumpang
 #: tindih, dan yang di luar kawasan gugur sendiri saat dipetakan ke heksagon.
@@ -345,6 +350,15 @@ def _misi_sehalaman(jenis: str, kunci: str, offset: int) -> dict:
     # kesalahan yang membuat orang mengira paginasinya rusak.
     if jenis != "activities":
         badan["offset"] = offset
+    else:
+        # TANPA rentang tanggal, `activities` diam-diam dipotong di 60 baris -
+        # `success: true`, tanpa `hasMore`, tanpa satu pun tanda bahwa ada
+        # sisanya. Diukur 11 Sep 2026 atas poligon yang sama: 60 tanpa tanggal,
+        # 1.686 dengan 2026-01-01..2026-09-12. Pipeline membaca 60 selama
+        # berminggu-minggu, termasuk seluruh aktivitas survei tim yang masuk
+        # sesudah itu. Kedua kunci wajib berpasangan; satu saja diabaikan.
+        badan["start_date"] = AKTIVITAS_SEJAK
+        badan["end_date"] = time.strftime("%Y-%m-%d")
 
     req = urllib.request.Request(
         MAPID_MISI.format(jenis),
@@ -1093,6 +1107,138 @@ def tarik_osm_bangunan() -> Path:
 
 
 # ---------------------------------------------------------------------------
+# Blok di dalam heksagon: jaringan jalan dan zonasi per blok
+# ---------------------------------------------------------------------------
+
+#: Kelas jalan yang ditarik. Sengaja TANPA `service` dan `footway`: keduanya
+#: mendominasi jumlah ruas (jalan masuk parkir, lorong mal) tetapi tidak pernah
+#: jadi "muka" sebuah toko yang dilihat orang lewat. `residential` dan
+#: `living_street` ikut karena di Jabodetabek gang perumahan justru tempat
+#: warung hidup - dan membedakan gang dari jalan utama adalah seluruh gunanya.
+KELAS_JALAN_OSM = (
+    "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|"
+    "secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|pedestrian"
+)
+
+
+def tarik_osm_jalan() -> Path:
+    """Ruas jalan OSM di sekitar keenam kawasan - bahan indikator "tepi jalan" blok.
+
+    Per kawasan, disinggahkan, radius sama dengan simpul (RADIUS_M): blok
+    terjauh berpusat ±2.360 m dari pusat kawasannya, dan yang ditanyakan cuma
+    ruas TERDEKAT dari pusat blok, jadi 2.600 m sudah menutup semuanya.
+    `out geom` membawa titik tiap ruas plus tagnya (nama, kelas) sekaligus.
+    """
+    print("  Memeriksa cermin Overpass:")
+    _cermin_sedunia()
+    print("\n  Jaringan jalan per kawasan:")
+    data = _per_kawasan(
+        lambda lat, lon: (
+            f"[out:json][timeout:280];"
+            f'way["highway"~"^({KELAS_JALAN_OSM})$"](around:{RADIUS_M},{lat},{lon});'
+            f"out geom;"
+        ),
+        "jalan",
+        jeda=4.0,
+    )
+    jalur = _tulis("osm_jalan.json", data)
+    print(f"\n  {len(data['elements'])} ruas jalan -> {jalur.name}")
+    return jalur
+
+
+def _potong_ke_blok(induk: str, fitur: list[dict], resolusi: int) -> dict[str, list[dict]]:
+    """Poligon RDTR satu heksagon -> pangsa zona untuk tiap anak blok-nya.
+
+    Kembaran `_potong_ke_heksagon`, dengan satu bedanya: yang dipotong anak H3
+    satu tingkat di bawah heksagonnya. Poligonnya sudah ditarik untuk heksagon
+    induk, jadi tidak ada kueri tambahan per blok - 364 kueri, bukan 2.548.
+    Geometrinya tetap dibuang sesudah luasnya dihitung, alasan yang sama.
+    """
+    import h3
+    from shapely.geometry import Polygon, shape
+
+    poligon = []
+    for f in fitur:
+        cincin = (f.get("geometry") or {}).get("rings")
+        if not cincin:
+            continue
+        try:
+            poli = shape({"type": "Polygon", "coordinates": cincin})
+            if not poli.is_valid:
+                poli = poli.buffer(0)
+        except Exception:
+            continue
+        poligon.append((poli, f.get("attributes") or {}))
+
+    keluar: dict[str, list[dict]] = {}
+    for anak in h3.cell_to_children(induk, resolusi):
+        blok = Polygon([(lo, la) for la, lo in h3.cell_to_boundary(anak)])
+        if not blok.is_valid or blok.area <= 0:
+            continue
+        zona = []
+        for poli, a in poligon:
+            try:
+                luas = blok.intersection(poli).area
+            except Exception:
+                continue
+            if luas <= 0:
+                continue
+            zona.append({
+                "KODZON": a.get("KODZON"),
+                "NAMZON": a.get("NAMZON"),
+                "KRB_03": a.get("KRB_03"),
+                "pangsa": round(luas / blok.area, 6),
+            })
+        keluar[anak] = zona
+    return keluar
+
+
+def tarik_rdtr_blok() -> Path:
+    """Zonasi RDTR per BLOK (anak H3 resolusi `H3_RESOLUSI_BLOK`), DKI saja.
+
+    Hanya heksagon yang SUDAH terbukti berzona di `rdtr_dki.json` yang ditanya
+    ulang - heksagon Depok, Bekasi, dan Harjamukti menjawab kosong di sana, dan
+    menanyakannya lagi tidak akan mengubah jawaban GISTARU. Disinggahkan per
+    heksagon induk supaya penarikan yang putus melanjutkan, bukan mengulang.
+    """
+    from config import H3_RESOLUSI_BLOK
+
+    per_hex = DATA_MENTAH / "rdtr_dki.json"
+    if not per_hex.exists():
+        raise SystemExit("rdtr_dki.json belum ada. Jalankan dulu:  python s1_ingest.py --rdtr")
+    berzona = sorted(s for s, v in json.loads(per_hex.read_text(encoding="utf-8")).items() if v)
+    grid = set(_grid_pilot())
+    berzona = [s for s in berzona if s in grid]
+
+    kandang = DATA_MENTAH / "_singgah"
+    kandang.mkdir(parents=True, exist_ok=True)
+    berkas = kandang / "rdtr_blok.json"
+    hasil: dict[str, dict] = json.loads(berkas.read_text(encoding="utf-8")) if berkas.exists() else {}
+    sisa = [s for s in berzona if s not in hasil]
+    print(f"  RDTR per blok: {len(hasil)} induk tersinggahkan, {len(sisa)} tersisa dari {len(berzona)}")
+
+    for i, sel in enumerate(sisa, 1):
+        try:
+            hasil[sel] = _potong_ke_blok(sel, _rdtr_di_heksagon(sel), H3_RESOLUSI_BLOK)
+        except (OSError, http.client.HTTPException, json.JSONDecodeError, RuntimeError) as e:
+            print(f"    {sel} dilewati - {_sebab(e)}")
+            continue
+        if i % 20 == 0 or i == len(sisa):
+            berkas.write_text(json.dumps(hasil, ensure_ascii=False), encoding="utf-8")
+            print(f"    {i}/{len(sisa)}")
+        time.sleep(0.35)
+
+    berkas.write_text(json.dumps(hasil, ensure_ascii=False), encoding="utf-8")
+    # Diratakan jadi blok -> zona, bentuk yang dibaca s4. Induknya tidak perlu
+    # disimpan: ia bisa diturunkan dari blok kapan saja lewat h3.cell_to_parent.
+    datar = {blok: zona for anak in hasil.values() for blok, zona in anak.items()}
+    jalur = _tulis("rdtr_blok.json", datar)
+    ada = sum(1 for v in datar.values() if v)
+    print(f"\n  {ada} dari {len(datar)} blok punya zona RDTR -> {jalur.name}")
+    return jalur
+
+
+# ---------------------------------------------------------------------------
 # Data sekunder
 # ---------------------------------------------------------------------------
 
@@ -1246,10 +1392,15 @@ if __name__ == "__main__":
     p.add_argument("--rute", action="store_true", help="Relasi rute angkutan umum OSM -> D05")
     p.add_argument("--henti", action="store_true",
                    help="Titik henti angkutan umum berkoordinat -> D05")
+    p.add_argument("--jalan", action="store_true",
+                   help="Ruas jalan OSM -> indikator tepi jalan tiap blok")
+    p.add_argument("--rdtr-blok", action="store_true",
+                   help="Zonasi RDTR dipotong per blok (anak H3 res-10), DKI saja")
     arg = p.parse_args()
 
     if not any([arg.simpul, arg.poi, arg.poi_luar, arg.bangunan, arg.semua_osm,
-                arg.misi, arg.rdtr, arg.inarisk, arg.rute, arg.henti]):
+                arg.misi, arg.rdtr, arg.inarisk, arg.rute, arg.henti,
+                arg.jalan, arg.rdtr_blok]):
         p.print_help()
         print(f"\nWilayah: {', '.join(KAWASAN_PILOT)}")
         print(f"BBOX   : {BBOX}")
@@ -1274,3 +1425,7 @@ if __name__ == "__main__":
         tarik_rute_transit()
     if arg.henti or arg.semua_osm:
         tarik_henti_transit()
+    if arg.jalan:
+        tarik_osm_jalan()
+    if arg.rdtr_blok:
+        tarik_rdtr_blok()

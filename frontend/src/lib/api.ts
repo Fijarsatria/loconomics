@@ -13,6 +13,7 @@
 import { API_BASE } from '../config'
 import type {
   Akun,
+  BedahBlok,
   ButirPantauan,
   CommuterClock,
   DetailHeksagon,
@@ -334,6 +335,13 @@ export const api = {
 
   /** Commuter Clock — 18 titik jam, captive vs choice rider. */
   commuterClock: (h3: string) => ambil<CommuterClock>(`/hex/${h3}/commuter-clock`),
+
+  /**
+   * Tujuh blok di dalam satu heksagon. GRATIS: data terbuka, skor pipeline.
+   * `kelas` = kelas induk usaha (F1..T1) supaya pesaing sekelas ikut dihitung.
+   */
+  blokHeksagon: (h3: string, kelas?: string | null) =>
+    ambil<BedahBlok>(`/hex/${h3}/blok${kueri({ kelas: kelas ?? undefined })}`),
 
   /** Simulasi kelayakan usaha. BUKAN skor — lihat backend/app/core/simulasi.py. */
   simulasi: (

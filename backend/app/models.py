@@ -34,6 +34,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -408,6 +409,107 @@ class ScoreFactor(Base):
     nilai_normalisasi: Mapped[float | None] = mapped_column(Float)
     persentil: Mapped[float | None] = mapped_column(Float)  # untuk narasi "persentil 78"
     kontribusi: Mapped[float | None] = mapped_column(Float)  # bobot x nilai_normalisasi
+
+
+class BlokHeksagon(Base):
+    """Blok di DALAM heksagon - anak H3 resolusi 10, tujuh per heksagon.
+
+    Menjawab pertanyaan yang tidak bisa dijawab heksagon: "di dalam lokasi yang
+    sudah saya pilih, sisi mana yang paling layak". Satu heksagon res-9 selebar
+    ±350 m bisa memuat blok di muka stasiun dan blok di gang belakangnya, dan
+    rata-rata keduanya menyembunyikan justru perbedaan yang dicari penyewa.
+
+    SELURUH indikatornya dari data TERBUKA (OSM, OpenRouteService, RDTR). Tidak
+    satu pun dari misi MAPID: satu blok selebar ±130 m, dan agregat misi di
+    satuan sekecil itu hampir sama dengan menunjuk satu baris survei (aturan 2).
+
+    Dihitung offline oleh `pipeline/s7_publish.py --blok`; skornya oleh
+    `s6_score.skor_blok` (aturan 1). Backend hanya membaca.
+    """
+
+    __tablename__ = "blok_heksagon"
+
+    h3_blok: Mapped[str] = mapped_column(String(20), primary_key=True)
+    h3_induk: Mapped[str] = mapped_column(
+        ForeignKey("hex_features.h3_index", ondelete="CASCADE"), index=True, nullable=False
+    )
+    geom: Mapped[str] = mapped_column(Geometry("POLYGON", srid=4326), nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+
+    #: Jalan kaki SUNGGUHAN ke simpul heksagon induknya (ORS matrix), menit.
+    menit_jalan: Mapped[float | None] = mapped_column(Float)
+    jarak_jalan_m: Mapped[float | None] = mapped_column(Float)
+    #: Jalan utama terdekat (trunk..tertiary). KOSONG kalau tidak bisa
+    #: dipastikan - jalan terdekat yang sebenarnya mungkin di luar area tarikan.
+    jarak_jalan_utama_m: Mapped[float | None] = mapped_column(Float)
+    nama_jalan_utama: Mapped[str | None] = mapped_column(String(120))
+    kelas_jalan_utama: Mapped[str | None] = mapped_column(String(24))
+    jarak_jalan_terdekat_m: Mapped[float | None] = mapped_column(Float)
+    #: Usaha OSM dalam 150 m, total dan per kelas induk {"F1": n, ...}.
+    n_usaha_150m: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    usaha_per_kelas_150m: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    #: Penarik keramaian dalam 250 m, total dan per jenis {"sekolah": n, ...}.
+    n_penarik_250m: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    penarik_250m: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    jarak_halte_m: Mapped[float | None] = mapped_column(Float)
+    n_bangunan: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rasio_tutupan_bangunan: Mapped[float | None] = mapped_column(Float)
+    #: Zonasi RDTR per blok. None = tidak diketahui (di luar DKI), BUKAN dilarang.
+    izin_komersial: Mapped[bool | None] = mapped_column(Boolean)
+    kelas_zona: Mapped[str | None] = mapped_column(String(60))
+    pangsa_zona_usaha: Mapped[float | None] = mapped_column(Float)
+    risiko_banjir: Mapped[float | None] = mapped_column(Float)
+
+    skor_blok: Mapped[float | None] = mapped_column(Float, index=True)
+    #: Skor per kelas induk usaha, {"F1": 72.4, ...} - memuat penalti pesaing sekelas.
+    skor_per_kelas: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    #: 1 = blok terbaik di heksagon induknya.
+    peringkat_induk: Mapped[int | None] = mapped_column(Integer)
+    dihitung_pada: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class HexPerkiraan(Base):
+    """PERKIRAAN pendukung per heksagon - terpisah dari `hex_features` dengan sengaja.
+
+    Ini rumah bagi angka yang bukan hasil pengukuran di heksagon itu sendiri:
+    median harga porsi dari survei di SEKITARNYA, kisaran sewa dari spanduk
+    yang dibaca AI di kawasan yang sama, pola jam dari struk-struk di sekitar
+    simpul transit. Semuanya diturunkan dari data sungguhan, tetapi bukan
+    pengamatan DI heksagon itu - jadi ia tidak boleh duduk di kolom yang sama
+    dengan pengamatan (docs/data.md 10.8: angka yang duduk di kolom yang sama
+    tidak bisa dibedakan dari luar oleh siapa pun).
+
+    Tiga larangan yang ditegakkan oleh letaknya:
+      - TIDAK PERNAH masuk skor. `s6_score` hanya membaca `hex_features`.
+      - TIDAK PERNAH menggambar peta. `/hex/layer` tidak membaca tabel ini.
+      - TIDAK PERNAH menaikkan lencana keyakinan. Q01-Q03 tetap milik survei.
+    Yang boleh: panel detail, simulasi, dan laporan - selalu berlabel Perkiraan.
+    """
+
+    __tablename__ = "hex_perkiraan"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    h3_index: Mapped[str] = mapped_column(
+        ForeignKey("hex_features.h3_index", ondelete="CASCADE"), index=True, nullable=False
+    )
+    #: Kode variabel yang diperkirakan (P05, B07, B09) atau JAM untuk pola jam.
+    kode: Mapped[str] = mapped_column(String(8), nullable=False)
+    nilai: Mapped[float | None] = mapped_column(Float)
+    #: Rincian yang tidak muat di satu angka - kuartil, atau pangsa per jam.
+    rincian: Mapped[dict | None] = mapped_column(JSONB)
+    #: Cara memperkirakannya: sekitar | kawasan | jabodetabek.
+    metode: Mapped[str] = mapped_column(String(24), nullable=False)
+    #: Berapa pengamatan sungguhan yang menyusunnya, dan dalam radius berapa.
+    n_sumber: Mapped[int | None] = mapped_column(Integer)
+    radius_m: Mapped[int | None] = mapped_column(Integer)
+    dihitung_pada: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (UniqueConstraint("h3_index", "kode", name="uq_perkiraan_hex_kode"),)
 
 
 class AICallLog(Base):

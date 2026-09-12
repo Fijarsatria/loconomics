@@ -1269,6 +1269,157 @@ def muat_bangunan(db: Session, sumber: Path | None = None) -> dict[str, int]:
     }
 
 
+def _bangunan_bertitik() -> pd.DataFrame:
+    """Seluruh footprint (lat, lon, luas) dari petak singgahan, dedup (tipe, id).
+
+    Sama dengan cara `muat_bangunan` membaca - petak satu per satu, bukan berkas
+    gabungan 145 MB - karena alasan memori yang sama.
+    """
+    from s2_clean import bangunan_bertitik_dari_osm
+
+    petak = sorted((DATA_MENTAH / "_singgah").glob("bangunan_*.json")) or [DATA_MENTAH / "osm_bangunan.json"]
+    terlihat: set[tuple[str, int]] = set()
+    potongan = []
+    for f in petak:
+        if not f.exists():
+            continue
+        elemen = json.loads(f.read_text(encoding="utf-8")).get("elements", [])
+        segar = []
+        for e in elemen:
+            kunci = (e.get("type"), e.get("id"))
+            if kunci not in terlihat:
+                terlihat.add(kunci)
+                segar.append(e)
+        potongan.append(bangunan_bertitik_dari_osm(segar))
+        del elemen, segar
+    return pd.concat(potongan, ignore_index=True) if potongan else pd.DataFrame(columns=["lat", "lon", "luas_m2"])
+
+
+def bangun_blok(heksagon: pd.Series) -> pd.DataFrame:
+    """Seluruh blok (anak H3 res-10) beserta indikator dan skornya.
+
+    `heksagon`: h3_index -> kawasan, untuk seluruh heksagon yang diskor.
+
+    Murni membaca berkas mentah - tidak menulis apa pun ke mana pun. Pemisahan
+    itu yang membuat `--blok --kering` bisa dijalankan tanpa basis data yang
+    boleh ditulisi: hasilnya bisa diperiksa dulu sebagai berkas sebelum ada
+    satu baris pun yang berubah.
+    """
+    from config import H3_RESOLUSI_BLOK, PUSAT
+    from s2_clean import henti_dari_osm, jalan_dari_osm, konteks_bertitik_dari_osm, poi_dari_osm
+    from s4_spatial import blok_dari_heksagon, indikator_blok
+    from s6_score import skor_blok
+
+    wajib = {
+        "osm_poi.json": "python s1_ingest.py --poi",
+        "osm_henti.json": "python s1_ingest.py --henti",
+        "osm_jalan.json": "python s1_ingest.py --jalan",
+        "rdtr_blok.json": "python s1_ingest.py --rdtr-blok",
+        "ors_blok.json": "python rute_ors.py --blok",
+    }
+    for nama, perintah in wajib.items():
+        if not (DATA_MENTAH / nama).exists():
+            raise SystemExit(f"{nama} belum ada. Jalankan dulu:  {perintah}")
+
+    baca = lambda nama: json.loads((DATA_MENTAH / nama).read_text(encoding="utf-8"))  # noqa: E731
+    elemen_poi = baca("osm_poi.json").get("elements", [])
+
+    blok = blok_dari_heksagon(heksagon.index, H3_RESOLUSI_BLOK)
+    ind = indikator_blok(
+        blok,
+        poi=poi_dari_osm(elemen_poi),
+        konteks=konteks_bertitik_dari_osm(elemen_poi),
+        henti=henti_dari_osm(baca("osm_henti.json").get("elements", [])),
+        jalan=jalan_dari_osm(baca("osm_jalan.json").get("elements", [])),
+        bangunan=_bangunan_bertitik(),
+        rdtr_blok=baca("rdtr_blok.json"),
+        ors_blok=baca("ors_blok.json"),
+        pusat_kawasan=PUSAT,
+        kawasan_induk=heksagon,
+    )
+    ind["h3_induk"] = blok["h3_induk"]
+    skor = skor_blok(ind)
+    return blok.join(ind.drop(columns=["h3_induk"])).join(skor.drop(columns=["h3_induk"]))
+
+
+def _baris_blok(df: pd.DataFrame) -> list[dict]:
+    """DataFrame blok -> baris siap INSERT, dengan JSON per kelas/jenis."""
+    import h3
+
+    from config import KELAS_INDUK
+
+    penarik = ("sekolah", "rumah_sakit", "pasar", "ibadah", "kantor")
+    baris = []
+    for b, r in df.iterrows():
+        cincin = [(lo, la) for la, lo in h3.cell_to_boundary(b)]
+        cincin.append(cincin[0])
+        wkt = "POLYGON((" + ", ".join(f"{x:.7f} {y:.7f}" for x, y in cincin) + "))"
+        izin = r["izin_komersial"]
+        baris.append({
+            "h3_blok": b,
+            "h3_induk": r["h3_induk"],
+            "wkt": wkt,
+            "lat": round(float(r["lat"]), 7),
+            "lon": round(float(r["lon"]), 7),
+            "menit_jalan": _bersih(r["menit_jalan"]),
+            "jarak_jalan_m": _bersih(r["jarak_jalan_m"]),
+            "jarak_jalan_utama_m": _bersih(r["jarak_jalan_utama_m"]),
+            "nama_jalan_utama": _bersih(r["nama_jalan_utama"]),
+            "kelas_jalan_utama": _bersih(r["kelas_jalan_utama"]),
+            "jarak_jalan_terdekat_m": _bersih(r["jarak_jalan_terdekat_m"]),
+            "n_usaha_150m": int(r["n_usaha_150m"]),
+            "usaha_per_kelas_150m": json.dumps({k: int(r[f"n_{k}_150m"]) for k in KELAS_INDUK}),
+            "n_penarik_250m": int(r["n_penarik_250m"]),
+            "penarik_250m": json.dumps({j: int(r[f"n_{j}_250m"]) for j in penarik}),
+            "jarak_halte_m": _bersih(r["jarak_halte_m"]),
+            "n_bangunan": int(r["n_bangunan"]),
+            "rasio_tutupan_bangunan": _bersih(r["rasio_tutupan_bangunan"]),
+            # `is True`/`is False`, bukan truthiness: None harus tetap None.
+            "izin_komersial": True if izin is True else False if izin is False else None,
+            "kelas_zona": (_bersih(r["kelas_zona"]) or None) and str(r["kelas_zona"])[:60],
+            "pangsa_zona_usaha": _bersih(r["pangsa_zona_usaha"]),
+            "risiko_banjir": _bersih(r["risiko_banjir"]),
+            "skor_blok": _bersih(r["skor_blok"]),
+            "skor_per_kelas": json.dumps(r["skor_per_kelas"]),
+            "peringkat_induk": int(r["peringkat_induk"]),
+        })
+    return baris
+
+
+def muat_blok(db: Session, df: pd.DataFrame) -> int:
+    """Tulis seluruh blok ke `blok_heksagon`. Hapus-lalu-isi, satu transaksi.
+
+    Hapus-lalu-isi aman di SINI (tidak seperti transport_nodes): tidak ada
+    tabel lain yang menunjuk `blok_heksagon`, jadi tidak ada cascade yang bisa
+    membawa serta data lain. Diperiksa, bukan diasumsikan - grep `blok_heksagon`
+    di models.py hanya menemukan tabelnya sendiri.
+    """
+    baris = _baris_blok(df)
+    db.execute(text("DELETE FROM blok_heksagon"))
+    sisip = text(
+        """
+        INSERT INTO blok_heksagon (
+            h3_blok, h3_induk, geom, lat, lon, menit_jalan, jarak_jalan_m,
+            jarak_jalan_utama_m, nama_jalan_utama, kelas_jalan_utama,
+            jarak_jalan_terdekat_m, n_usaha_150m, usaha_per_kelas_150m,
+            n_penarik_250m, penarik_250m, jarak_halte_m, n_bangunan,
+            rasio_tutupan_bangunan, izin_komersial, kelas_zona, pangsa_zona_usaha,
+            risiko_banjir, skor_blok, skor_per_kelas, peringkat_induk
+        ) VALUES (
+            :h3_blok, :h3_induk, ST_GeomFromText(:wkt, 4326), :lat, :lon, :menit_jalan,
+            :jarak_jalan_m, :jarak_jalan_utama_m, :nama_jalan_utama, :kelas_jalan_utama,
+            :jarak_jalan_terdekat_m, :n_usaha_150m, CAST(:usaha_per_kelas_150m AS jsonb),
+            :n_penarik_250m, CAST(:penarik_250m AS jsonb), :jarak_halte_m, :n_bangunan,
+            :rasio_tutupan_bangunan, :izin_komersial, :kelas_zona, :pangsa_zona_usaha,
+            :risiko_banjir, :skor_blok, CAST(:skor_per_kelas AS jsonb), :peringkat_induk
+        )
+        """
+    )
+    for bagian in _potong(baris):
+        db.execute(sisip, bagian)
+    return len(baris)
+
+
 def isi_penduduk_dari_worldpop(db: Session, berkas: Path | None = None) -> dict[str, int]:
     """D01 `pop_100m` dari raster WorldPop, plus C06 yang bergantung padanya.
 
@@ -2212,14 +2363,63 @@ if __name__ == "__main__":
         action="store_true",
         help="Hitung ulang skor dari isi hex_features sekarang, lalu muat",
     )
+    p.add_argument(
+        "--blok",
+        action="store_true",
+        help="Blok di dalam heksagon (anak H3 res-10): indikator + skor -> blok_heksagon",
+    )
+    p.add_argument(
+        "--kering",
+        action="store_true",
+        help="Bersama --blok: hitung lalu tulis ke data/03_olahan/blok.json, TANPA basis data",
+    )
     p.add_argument("--versi", default="baseline")
     arg = p.parse_args()
 
     if not any([arg.muat, arg.ekspor, arg.cakupan, arg.isi_d04, arg.penduduk,
                 arg.bangunan, arg.osm, arg.misi, arg.survei, arg.rdtr, arg.transit,
-                arg.gapfill, arg.kosongkan, arg.hitung_ulang, arg.grid]):
+                arg.gapfill, arg.kosongkan, arg.hitung_ulang, arg.grid, arg.blok]):
         p.print_help()
         raise SystemExit(0)
+
+    # --- Blok -------------------------------------------------------------
+    # Transaksinya SENDIRI dan berjalan sebelum yang lain: ia hanya membaca
+    # daftar heksagon, dan menulis tabel yang tidak dibaca langkah lain mana pun.
+    if arg.blok:
+        print("Membangun blok di dalam heksagon...")
+        if arg.kering:
+            # Daftar heksagon diturunkan dari PUSAT, bukan dibaca dari basis
+            # data - mode kering tidak menyentuh koneksi apa pun. Grid yang sama
+            # diverifikasi identik dengan hex_features (s1_ingest._grid_pilot).
+            import h3 as _h3
+
+            from config import CINCIN_PILOT, H3_RESOLUSI, PUSAT
+
+            peta: dict[str, str] = {}
+            for nama, (la, lo) in PUSAT.items():
+                for s in _h3.grid_disk(_h3.latlng_to_cell(la, lo, H3_RESOLUSI), CINCIN_PILOT):
+                    peta.setdefault(s, nama)
+            heksagon = pd.Series(peta)
+        else:
+            with sessionmaker(bind=_mesin())() as db:
+                heksagon = pd.read_sql(
+                    "SELECT h3_index, kawasan FROM hex_features", db.connection()
+                ).set_index("h3_index")["kawasan"]
+        blok = bangun_blok(heksagon)
+        print(f"  blok           {len(blok)}")
+        print(f"  punya menit    {int(blok['menit_jalan'].notna().sum())}")
+        print(f"  jalan utama    {int(blok['jarak_jalan_utama_m'].notna().sum())}")
+        print(f"  berzona RDTR   {int(blok['kelas_zona'].notna().sum())}")
+        print(f"  dilarang zona  {int(blok['izin_komersial'].eq(False).sum())}")
+        if arg.kering:
+            tujuan = DATA_OLAHAN / "blok.json"
+            tujuan.parent.mkdir(parents=True, exist_ok=True)
+            tujuan.write_text(json.dumps(_baris_blok(blok), ensure_ascii=False), encoding="utf-8")
+            print(f"  -> {tujuan} (basis data tidak disentuh)")
+        else:
+            with sessionmaker(bind=_mesin())() as db:
+                print(f"  dimuat         {muat_blok(db, blok)}")
+                db.commit()
 
     # --- Grid ---------------------------------------------------------------
     #

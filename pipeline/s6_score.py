@@ -12,12 +12,16 @@ import numpy as np
 import pandas as pd
 
 from config import (
+    BOBOT_BLOK,
+    BOBOT_BLOK_BANJIR,
+    BOBOT_BLOK_PESAING,
     BOBOT_HIDDEN_GEM,
     BOBOT_IAE,
     BOBOT_IBR,
     BOBOT_IKP,
     BOBOT_IPT,
     BOBOT_PELUANG,
+    KELAS_INDUK,
     KODE_KE_KOLOM,
     SENSITIVITAS_GESER,
 )
@@ -300,3 +304,78 @@ def skor_lengkap(df: pd.DataFrame) -> pd.DataFrame:
     hasil["opportunity_score"] = peluang
     hasil["peringkat"] = peluang.rank(ascending=False, method="min").astype("Int64")
     return hasil
+
+
+# ---------------------------------------------------------------------------
+# Skor BLOK di dalam heksagon
+# ---------------------------------------------------------------------------
+
+#: Indikator blok berekor panjang - hitungan dan jarak. Ditransformasi log(1+x)
+#: sebelum min-max karena alasan yang sama dengan BEREKOR_PANJANG: selisih 10 m
+#: dan 60 m ke jalan utama jauh lebih berarti daripada 410 m dan 460 m.
+BEREKOR_PANJANG_BLOK = {
+    "jarak_jalan_utama_m", "jarak_halte_m", "n_penarik_250m", "n_usaha_150m",
+    *(f"n_{k}_150m" for k in KELAS_INDUK),
+}
+
+
+def _norm_blok(s: pd.Series, nama: str) -> pd.Series:
+    x = pd.to_numeric(s, errors="coerce").astype(float)
+    if nama in BEREKOR_PANJANG_BLOK:
+        x = np.log1p(x.clip(lower=0))
+    lo, hi = x.min(), x.max()
+    if pd.isna(lo) or pd.isna(hi) or hi == lo:
+        return pd.Series(np.where(x.isna(), np.nan, 0.5), index=s.index)
+    return (x - lo) / (hi - lo)
+
+
+def skor_blok(ind: pd.DataFrame) -> pd.DataFrame:
+    """Skor 0-100 tiap blok, umum dan per kelas induk usaha, plus peringkat di
+    dalam heksagon induknya.
+
+    `ind` berindeks h3_blok dan memuat kolom `h3_induk` + keluaran
+    `s4_spatial.indikator_blok`.
+
+    Normalisasinya atas SELURUH blok wilayah studi, bukan per induk. Sebabnya
+    terukur di keputusan yang ditolak: min-max per induk membuat tujuh blok
+    yang nyaris sama selalu direntang 0..100, sehingga selisih lima meter ke
+    jalan terbaca sebagai perbedaan terbesar di dunia. Dengan normalisasi
+    global, tujuh blok yang memang mirip tetap berskor mirip - dan itu
+    pernyataan yang benar tentang heksagon itu.
+
+    Kosong dinetralkan 0,5 (aturan 4). Zona RDTR yang MELARANG menolkan skor
+    blok, persis seperti ZoneGuard pada heksagon; zona yang tidak diketahui
+    tidak.
+    """
+    mentah = pd.Series(0.0, index=ind.index)
+    for kunci, w in BOBOT_BLOK.items():
+        kolom = kunci.removesuffix("_inv")
+        nilai = _norm_blok(ind[kolom], kolom)
+        if kunci.endswith("_inv"):
+            nilai = 1 - nilai
+        mentah = mentah + w * nilai.fillna(0.5)
+    mentah = mentah - BOBOT_BLOK_BANJIR * _norm_blok(ind["risiko_banjir"], "risiko_banjir").fillna(0.5)
+
+    dilarang = ind["izin_komersial"].eq(False)
+    keluar = pd.DataFrame(index=ind.index)
+    keluar["h3_induk"] = ind["h3_induk"]
+    keluar["skor_blok"] = (_norm_blok(mentah, "mentah") * 100).round(1).mask(dilarang, 0.0)
+
+    per_kelas: dict[str, pd.Series] = {}
+    for kelas in KELAS_INDUK:
+        kolom = f"n_{kelas}_150m"
+        pesaing = _norm_blok(ind[kolom], kolom).fillna(0.5)
+        per_kelas[kelas] = (
+            (_norm_blok(mentah - BOBOT_BLOK_PESAING * pesaing, "mentah") * 100)
+            .round(1)
+            .mask(dilarang, 0.0)
+        )
+    keluar["skor_per_kelas"] = [
+        {k: float(per_kelas[k].iloc[i]) for k in KELAS_INDUK} for i in range(len(ind))
+    ]
+    # Peringkat DI DALAM induknya - itu satu-satunya perbandingan yang
+    # dijanjikan fitur ini. 1 = blok terbaik heksagon itu.
+    keluar["peringkat_induk"] = (
+        keluar.groupby("h3_induk")["skor_blok"].rank(ascending=False, method="min").astype(int)
+    )
+    return keluar

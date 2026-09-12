@@ -493,6 +493,61 @@ class RuteJalan(BaseModel):
     koordinat: list[list[float]]
 
 
+class BlokDalamHeksagon(BaseModel):
+    """Satu blok (anak H3 res-10) di dalam heksagon yang sedang dilihat.
+
+    Seluruh isinya dari data TERBUKA - tidak satu pun dari misi MAPID, jadi
+    tidak ada yang bisa merekonstruksi baris survei (aturan 2). Skornya
+    dihitung `pipeline/s6_score.skor_blok`; backend hanya membaca.
+    """
+
+    h3_blok: str
+    #: 1 = blok terbaik di heksagon ini, menurut kelas usaha yang diminta
+    #: (atau skor umum kalau tidak ada kelas).
+    peringkat: int
+    skor: float | None = None
+    skor_umum: float | None = None
+    lat: float
+    lon: float
+    #: Cincin batas blok, [lon, lat], tertutup.
+    koordinat: list[list[float]]
+    menit_jalan: float | None = Field(default=None, description="Jalan kaki sungguhan ke stasiun (ORS)")
+    jarak_jalan_m: float | None = None
+    jarak_jalan_utama_m: float | None = None
+    nama_jalan_utama: str | None = None
+    kelas_jalan_utama: str | None = None
+    n_usaha_150m: int = 0
+    n_pesaing_150m: int | None = Field(default=None, description="Usaha sekelas dalam 150 m, kalau kelas diminta")
+    usaha_per_kelas_150m: dict[str, int] = Field(default_factory=dict)
+    n_penarik_250m: int = 0
+    penarik_250m: dict[str, int] = Field(default_factory=dict)
+    jarak_halte_m: float | None = None
+    n_bangunan: int = 0
+    rasio_tutupan_bangunan: float | None = None
+    izin_komersial: bool | None = Field(default=None, description="None = tidak diketahui, BUKAN dilarang")
+    kelas_zona: str | None = None
+    pangsa_zona_usaha: float | None = None
+    risiko_banjir: float | None = None
+    alasan: list[str] = Field(default_factory=list)
+    peringatan: list[str] = Field(default_factory=list)
+
+
+class BedahBlok(BaseModel):
+    """Tujuh blok di dalam satu heksagon, siap dibandingkan berdampingan."""
+
+    h3_index: str
+    kawasan: str
+    kelas: str | None = None
+    kelas_tersedia: dict[str, str] = Field(default_factory=dict)
+    nama_simpul: str | None = None
+    blok: list[BlokDalamHeksagon]
+    # Aturan 3: skor apa pun membawa lencana. Skor blok berdiri di atas data
+    # terbuka, jadi lencana yang dibawanya lencana HEKSAGON induknya - pengakuan
+    # berapa survei lapangan yang menyentuh kawasan kecil ini, apa adanya.
+    keyakinan: BadgeKeyakinan
+    catatan: str
+
+
 class KonteksSimpul(BaseModel):
     """Hubungan satu heksagon dengan stasiun terdekatnya, untuk digambar di peta.
 
