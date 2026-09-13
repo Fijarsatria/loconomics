@@ -262,7 +262,8 @@ mungkin mengirim skor tanpa badge-nya. Lihat [data.md](data.md) Q01–Q03.
 | Pemanggil API vision | **Siap & jalan** (12 Sep 2026) — Gemini vision lewat REST langsung, tanpa SDK: yang dibutuhkan cuma `inline_data` base64 dan `responseMimeType: application/json`. Hasil per foto di-cache menurut SHA-1 URL fotonya |
 | A6 GapFill | **Belum** — menunggu data survei |
 | 13 alat B1–B5 | **Siap & teruji** — `GET /ai/fungsi` menyajikan skema lengkapnya |
-| Loop agentik | **Siap & teruji** — 50 asersi dengan klien tiruan, termasuk batas putaran dan panggilan penutup tanpa alat |
+| Loop agentik | **Siap & teruji** — 58 asersi dengan klien tiruan, termasuk batas putaran, panggilan penutup tanpa alat, dan penolakan cakupan |
+| Cakupan percakapan & anti-suntikan | **Siap & teruji** (13 Sep 2026) — pertanyaan di luar topik atau percobaan suntikan (lewat pesan, riwayat, atau hasil alat) dijawab TANPA satu pun panggilan alat, ditandai `TANDA_TOLAK_CAKUPAN` yang disembunyikan dari pengguna dan dikecualikan dari `perlu_review`. Dibuktikan Gemini sungguhan: 5/5 percobaan 0 alat, 4-9 detik, prompt sistem tidak bocor |
 | Jalur eksekusi aksi peta | **Siap** — tersambung ujung ke ujung sampai frontend |
 | `POST /ai/tanya` | **Siap.** Butuh `LLM_API_KEY` di `backend/.env` |
 
