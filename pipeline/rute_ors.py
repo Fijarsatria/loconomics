@@ -92,6 +92,20 @@ PROFIL_SEPEDA = "cycling-regular"
 #: meneruskan.
 PROFIL = PROFIL_JALAN
 
+
+def kunci_ors() -> str:
+    """Kunci ORS untuk profil yang SEDANG ditarik.
+
+    Profil mobil memakai kuncinya sendiri (`ORS_API_KEY_MOBIL`) kalau diisi.
+    Kuota gratis ORS 2.000 permintaan per hari PER AKUN, dan penarikan mobil
+    pernah berhenti di 369 dari 708 heksagon - Manggarai dan Tanah Abang nol -
+    karena berbagi jatah dengan rute jalan kaki. Kunci dari akun lain membuat
+    keduanya tidak saling menghabiskan. Kosong = kembali ke kunci utama.
+    """
+    if PROFIL == "driving-car" and settings.ors_api_key_mobil:
+        return settings.ors_api_key_mobil
+    return settings.ors_api_key
+
 #: Batas ORS 40/menit. 1,7 dtk memberi ~35/menit - cukup di bawah batas supaya
 #: satu permintaan yang kebetulan lambat tidak mendorong yang berikutnya lewat.
 JEDA_DETIK = 1.7
@@ -237,7 +251,7 @@ def minta_isochrone(lon: float, lat: float) -> list[dict] | str:
         URL_ISO.format(profil=PROFIL),
         data=json.dumps(badan).encode(),
         headers={
-            "Authorization": settings.ors_api_key,
+            "Authorization": kunci_ors(),
             "Content-Type": "application/json",
             "User-Agent": "Loconomics/1.0 (MAPID WebGIS Competition)",
         },
@@ -418,7 +432,7 @@ def minta_rute(awal: tuple[float, float], akhir: tuple[float, float]) -> list[di
         URL_ORS.format(profil=PROFIL),
         data=json.dumps(badan).encode(),
         headers={
-            "Authorization": settings.ors_api_key,
+            "Authorization": kunci_ors(),
             "Content-Type": "application/json",
             "User-Agent": "Loconomics/1.0 (MAPID WebGIS Competition)",
         },
@@ -711,7 +725,7 @@ def _minta_matriks(sumber: list[tuple[float, float]], tujuan: tuple[float, float
         URL_MATRIKS.format(profil=PROFIL_JALAN),
         data=json.dumps(badan).encode(),
         headers={
-            "Authorization": settings.ors_api_key,
+            "Authorization": kunci_ors(),
             "Content-Type": "application/json",
             "Accept": "application/json",
         },

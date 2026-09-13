@@ -6,7 +6,7 @@
  *   SesiProvider    keadaan sesi + PEMILIK kedua dialognya
  *   TombolAkun      tombol di bilah atas (peta maupun gerbang)
  *   DialogAkun      masuk / daftar
- *   DialogLangganan langganan, token, dan layar QRIS
+ *   DialogLangganan langganan dan layar QRIS
  *
  * KENAPA DIALOGNYA MILIK PROVIDER, bukan milik tombol. Yang membuka dialog
  * langganan bukan cuma tombol akun: tirai di panel detail membukanya, tombol
@@ -27,6 +27,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,10 +35,11 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { useTeks } from '../lib/bahasa'
+import { useBahasa, useTeks } from '../lib/bahasa'
 
 import { api, GalatAPI, setTiket, adaTiket } from '../lib/api'
 import { KAWASAN_PILOT } from '../config'
+import { JENIS_USAHA, KELOMPOK_JENIS } from '../lib/jenis-usaha'
 import { PapanNama, useTutupHalus } from './primitif'
 import type { Akun, KatalogPaket, Tingkat } from '../types'
 
@@ -53,13 +55,10 @@ interface IsiSesi {
   premium: boolean
   /** true selama tiket tersimpan sedang divalidasi ke backend saat memuat. */
   memuat: boolean
-  /** Heksagon yang sudah dibuka dengan token oleh akun ini. */
-  terbuka: Set<string>
   masuk: (identitas: string, sandi: string) => Promise<void>
   daftar: (p: { nama_pengguna: string; email: string; sandi: string }) => Promise<void>
   keluar: () => void
   segarkan: () => Promise<void>
-  tandaiTerbuka: (h3: string) => void
   /**
    * Naik satu setiap kali daftar lokasi tersimpan berubah, dari mana pun.
    * Peta memakainya untuk menyegarkan pin tanpa harus tahu SIAPA yang
@@ -105,27 +104,30 @@ export function useSesi(): IsiSesi {
   return s
 }
 
+type Alur =
+  | { langkah: 'akun'; alasan: AlasanKunci }
+  | { langkah: 'paket'; alasan: AlasanKunci; rayakan: boolean }
+  | { langkah: 'usaha'; pesan: string | null; rayakan: boolean }
+
+/** Diumumkan saat orangnya menekan "Simpan & buka peta". Didengar `App`. */
+export const PERISTIWA_BUKA_PETA = 'loconomics:buka-peta'
+export interface DetailBukaPeta {
+  kawasan: string | null
+}
+
 export function SesiProvider({ anak }: { anak: ReactNode }) {
   const [akun, setAkun] = useState<Akun | null>(null)
   const [memuat, setMemuat] = useState(adaTiket())
-  const [terbuka, setTerbuka] = useState<Set<string>>(new Set())
-
-  const [dialogAkun, setDialogAkun] = useState<{ alasan: AlasanKunci } | null>(null)
-  const [dialogPaket, setDialogPaket] = useState<{ alasan: AlasanKunci; rayakan: boolean } | null>(
-    null,
-  )
-  const [dialogPreferensi, setDialogPreferensi] = useState(false)
-
-  const muatTerbuka = useCallback(async () => {
-    try {
-      setTerbuka(new Set(await api.heksagonTerbuka()))
-    } catch {
-      // Daftar pembukaan cuma optimasi tampilan: tanpa itu, tirai tetap muncul
-      // dan backend tetap mengirim isi penuh untuk heksagon yang sudah dibayar.
-      // Gagal di sini tidak boleh menghentikan apa pun.
-      setTerbuka(new Set())
-    }
-  }, [])
+  /**
+   * SATU alur untuk ketiga layar - masuk/daftar, paket, dan preferensi usaha.
+   *
+   * Sampai 13 Sep 2026 ketiganya tiga dialog terpisah dengan tirainya sendiri,
+   * jadi berpindah dari "Daftar" ke "Pilih paket" ke "Preferensi usaha" berarti
+   * tirai lama lenyap dan tirai baru muncul pada bingkai yang sama: kedipan,
+   * tanpa transisi apa pun. Pemilik repo melaporkannya. Sekarang tirainya satu
+   * dan tetap berdiri; yang berganti cuma isinya, lewat `Panggung`.
+   */
+  const [alur, setAlur] = useState<Alur | null>(null)
 
   // Validasi tiket tersimpan, sekali saat memuat. Tiket yang kedaluwarsa atau
   // akunnya dinonaktifkan mendarat di 401 dan langsung dibuang - lebih baik
@@ -141,7 +143,6 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
       .then((a) => {
         if (batal) return
         setAkun(a)
-        void muatTerbuka()
       })
       .catch(() => {
         if (batal) return
@@ -152,15 +153,14 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
     return () => {
       batal = true
     }
-  }, [muatTerbuka])
+  }, [])
 
   const pakaiSesi = useCallback(
     (s: { tiket: string; akun: Akun }) => {
       setTiket(s.tiket)
       setAkun(s.akun)
-      void muatTerbuka()
     },
-    [muatTerbuka],
+    [],
   )
 
   const masuk = useCallback(
@@ -180,7 +180,6 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
   const keluar = useCallback(() => {
     setTiket(null)
     setAkun(null)
-    setTerbuka(new Set())
   }, [])
 
   const segarkan = useCallback(async () => {
@@ -190,10 +189,6 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
       keluar()
     }
   }, [keluar])
-
-  const tandaiTerbuka = useCallback((h3: string) => {
-    setTerbuka((s) => (s.has(h3) ? s : new Set(s).add(h3)))
-  }, [])
 
   const [sinyalSimpan, setSinyalSimpan] = useState(0)
   const catatSimpan = useCallback(() => setSinyalSimpan((n) => n + 1), [])
@@ -225,18 +220,21 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
   }, [premiumKini, sinyalSimpan])
 
   const mintaMasuk = useCallback((alasan: AlasanKunci = null) => {
-    setDialogAkun({ alasan })
+    setAlur({ langkah: 'akun', alasan })
   }, [])
 
-  const mintaPreferensi = useCallback(() => setDialogPreferensi(true), [])
+  const mintaPreferensi = useCallback(
+    () => setAlur({ langkah: 'usaha', pesan: null, rayakan: false }),
+    [],
+  )
 
   const mintaLangganan = useCallback(
     (alasan: AlasanKunci = null) => {
       // Belum masuk? Masuk dulu. Menampilkan etalase harga kepada orang yang
       // belum punya akun berakhir di jalan buntu: ia menekan "Bayar", lalu
       // baru diminta mendaftar, dan kehilangan konteks kenapa ia di sini.
-      if (!akun) setDialogAkun({ alasan: alasan ?? 'Masuk dulu untuk berlangganan.' })
-      else setDialogPaket({ alasan, rayakan: false })
+      if (!akun) setAlur({ langkah: 'akun', alasan: alasan ?? 'Masuk dulu untuk berlangganan.' })
+      else setAlur({ langkah: 'paket', alasan, rayakan: false })
     },
     [akun],
   )
@@ -247,12 +245,10 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
       tingkat: akun ? akun.tingkat : 'tamu',
       premium: akun?.tingkat === 'premium',
       memuat,
-      terbuka,
       masuk,
       daftar,
       keluar,
       segarkan,
-      tandaiTerbuka,
       sinyalSimpan,
       catatSimpan,
       tersimpan,
@@ -260,34 +256,61 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
       mintaLangganan,
       mintaPreferensi,
     }),
-    [akun, memuat, terbuka, masuk, daftar, keluar, segarkan, tandaiTerbuka, sinyalSimpan, catatSimpan, tersimpan, mintaMasuk, mintaLangganan, mintaPreferensi],
+    [akun, memuat, masuk, daftar, keluar, segarkan, sinyalSimpan, catatSimpan, tersimpan, mintaMasuk, mintaLangganan, mintaPreferensi],
   )
 
   return (
     <Konteks.Provider value={nilai}>
       {anak}
-      {dialogAkun && (
-        <DialogAkun
-          alasan={dialogAkun.alasan}
-          onTutup={() => setDialogAkun(null)}
-          onBerhasil={(baru) => {
-            setDialogAkun(null)
-            // Sesudah MENDAFTAR, langsung tawarkan Premium - permintaan
-            // eksplisit pemilik repo. Sesudah MASUK, jangan: orang yang kembali
-            // ke akunnya sedang menuju sesuatu, dan etalase harga di tengah
-            // jalan itu terbaca sebagai penghalang, bukan sebagai tawaran.
-            if (baru) setDialogPaket({ alasan: null, rayakan: true })
-          }}
-        />
+      {alur && (
+        <TiraiAlur
+          kunci={alur.langkah}
+          judul={alur.langkah === 'akun' ? 'Akun Loconomics' : 'Loconomics Premium'}
+          // Penanda tahap hanya untuk alur PENDAFTARAN. Orang yang membuka
+          // preferensi dari menu akun tidak sedang menempuh tiga langkah apa pun.
+          tahap={alur.langkah === 'akun' || !alur.rayakan ? null : alur.langkah === 'paket' ? 1 : 2}
+          onTutup={() => setAlur(null)}
+        >
+          {alur.langkah === 'akun' ? (
+            <DialogAkun
+              alasan={alur.alasan}
+              onTutup={() => setAlur(null)}
+              onBerhasil={(baru) => {
+                // Sesudah MENDAFTAR, langsung tawarkan Premium - permintaan
+                // eksplisit pemilik repo. Sesudah MASUK, jangan: orang yang
+                // kembali ke akunnya sedang menuju sesuatu, dan etalase harga
+                // di tengah jalan terbaca sebagai penghalang.
+                setAlur(baru ? { langkah: 'paket', alasan: null, rayakan: true } : null)
+              }}
+            />
+          ) : alur.langkah === 'paket' ? (
+            <DialogLangganan
+              alasan={alur.alasan}
+              rayakan={alur.rayakan}
+              onTutup={() => setAlur(null)}
+              onLanjut={(pesan) => setAlur({ langkah: 'usaha', pesan, rayakan: alur.rayakan })}
+            />
+          ) : (
+            <DialogPreferensi
+              pesan={alur.pesan}
+              onTutup={() => setAlur(null)}
+              onSelesai={(hasil) => {
+                setAlur(null)
+                // "Simpan & buka peta" benar-benar MEMBUKA peta. Sebelum 13 Sep
+                // 2026 tombol ini cuma menutup dialog - dari halaman gerbang
+                // orangnya tetap di gerbang, dan pemilik repo melaporkannya
+                // sebagai bug. Provider tidak memiliki peta, jadi ia MENGUMUMKAN;
+                // App yang memiliki peta yang mendengarkan.
+                if (hasil) {
+                  window.dispatchEvent(
+                    new CustomEvent<DetailBukaPeta>(PERISTIWA_BUKA_PETA, { detail: hasil }),
+                  )
+                }
+              }}
+            />
+          )}
+        </TiraiAlur>
       )}
-      {dialogPaket && (
-        <DialogLangganan
-          alasan={dialogPaket.alasan}
-          rayakan={dialogPaket.rayakan}
-          onTutup={() => setDialogPaket(null)}
-        />
-      )}
-      {dialogPreferensi && <DialogPreferensi onTutup={() => setDialogPreferensi(false)} />}
     </Konteks.Provider>
   )
 }
@@ -305,6 +328,14 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
  * atas", bukan "seluruh layar". Jebakan ini sudah pernah kena di repo ini dan
  * tercatat di CLAUDE.md.
  */
+/**
+ * Diisi `TiraiAlur`. Selama ada, `Tirai` TIDAK memasang tirainya sendiri: ia
+ * cuma melaporkan lebar yang ia inginkan lalu merender isinya. Dengan begitu
+ * ketiga dialog tetap ditulis seolah berdiri sendiri, dan tetap bisa dipakai
+ * berdiri sendiri, sementara di dalam alur tirainya satu.
+ */
+const PanggungKonteks = createContext<((lebar: string) => void) | null>(null)
+
 function Tirai({
   judul,
   onTutup,
@@ -314,6 +345,29 @@ function Tirai({
   judul: string
   onTutup: () => void
   lebar?: string
+  children: ReactNode
+}) {
+  const lapor = useContext(PanggungKonteks)
+  useEffect(() => {
+    lapor?.(lebar)
+  }, [lapor, lebar])
+  if (lapor) return <>{children}</>
+  return (
+    <TiraiDasar judul={judul} onTutup={onTutup} lebar={lebar}>
+      {children}
+    </TiraiDasar>
+  )
+}
+
+function TiraiDasar({
+  judul,
+  onTutup,
+  lebar,
+  children,
+}: {
+  judul: string
+  onTutup: () => void
+  lebar: string
   children: ReactNode
 }) {
   useEffect(() => {
@@ -338,14 +392,14 @@ function Tirai({
       // krem-putih, dan tirai putih 45% di atas halaman gerbang yang hitam
       // mengubah seluruh layar jadi abu-abu susu - terlihat begitu di potret.
       // Tirai gelap benar di kedua tema.
-      className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-[4px] sm:p-6"
+      className="tirai-latar fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-[4px] sm:p-6"
       onClick={onTutup}
       role="dialog"
       aria-modal="true"
       aria-label={judul}
     >
       <div
-        className="kaca-tebal melayang my-auto w-full overflow-hidden rounded-xl"
+        className="kaca-tebal melayang tirai-panel my-auto w-full overflow-hidden rounded-xl"
         style={{ maxWidth: lebar }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -353,6 +407,143 @@ function Tirai({
       </div>
     </div>,
     document.body,
+  )
+}
+
+/**
+ * Tirai yang TETAP BERDIRI selama alurnya berjalan; yang berganti isinya.
+ *
+ * Lebarnya ikut dianimasikan (`tirai-panel` punya transisi `max-width`), jadi
+ * perpindahan dari formulir daftar yang sempit ke etalase paket yang lebar
+ * terbaca sebagai satu kartu yang melebar - bukan dua kartu yang bergantian.
+ */
+function TiraiAlur({
+  kunci,
+  judul,
+  tahap,
+  onTutup,
+  children,
+}: {
+  kunci: string
+  judul: string
+  tahap: number | null
+  onTutup: () => void
+  children: ReactNode
+}) {
+  const [lebar, setLebar] = useState('26.5rem')
+  return (
+    <PanggungKonteks.Provider value={setLebar}>
+      <TiraiDasar judul={judul} onTutup={onTutup} lebar={lebar}>
+        {tahap !== null && <Tahapan aktif={tahap} />}
+        <Panggung kunci={kunci}>{children}</Panggung>
+      </TiraiDasar>
+    </PanggungKonteks.Provider>
+  )
+}
+
+/**
+ * Isi lama keluar ke kiri sambil memudar, isi baru masuk dari kanan, dan tinggi
+ * kartunya berpindah halus di antara keduanya.
+ *
+ * Isi yang KELUAR dirender ulang dari elemen yang ditangkap, dengan `key` yang
+ * sama seperti saat ia masih aktif - jadi React mempertahankan komponennya,
+ * lengkap dengan keadaannya, selama 300 ms ia memudar. Tanpa kunci yang sama,
+ * yang memudar adalah salinan baru yang sudah lupa isiannya.
+ */
+function Panggung({ kunci, children }: { kunci: string; children: ReactNode }) {
+  const lapor = useContext(PanggungKonteks)
+  const [kunciLalu, setKunciLalu] = useState(kunci)
+  const [isiLalu, setIsiLalu] = useState<ReactNode>(children)
+  const [keluar, setKeluar] = useState<{ kunci: string; isi: ReactNode } | null>(null)
+
+  // Dihitung SAAT RENDER, bukan di efek. Versi pertama memasang lapisan keluar
+  // dari `useLayoutEffect`, dan itu satu komit terlambat: komit pertama sudah
+  // membuang isi lama, komit kedua memasangnya lagi sebagai komponen BARU -
+  // yang lupa isiannya, dan yang efeknya melaporkan lebar lama SESUDAH isi
+  // baru melaporkan lebarnya. Terukur di potret: langkah preferensi tetap
+  // selebar etalase paket. Menyetel keadaan saat render membuat React merender
+  // ulang sebelum komit, jadi komit pertama sudah memuat kedua lapisan.
+  if (kunci !== kunciLalu) {
+    setKeluar({ kunci: kunciLalu, isi: isiLalu })
+    setKunciLalu(kunci)
+    setIsiLalu(children)
+  } else if (children !== isiLalu) {
+    setIsiLalu(children)
+  }
+
+  useEffect(() => {
+    if (!keluar) return
+    const id = window.setTimeout(() => setKeluar(null), 320)
+    return () => window.clearTimeout(id)
+  }, [keluar])
+
+  const aktif = useRef<HTMLDivElement>(null)
+  const [tinggi, setTinggi] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const el = aktif.current
+    if (!el) return
+    setTinggi(el.offsetHeight)
+    const ro = new ResizeObserver(() => setTinggi(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [kunci])
+
+  // SATU larik berkunci, dengan pembungkus yang bentuknya sama untuk kedua
+  // keadaan - supaya React mencocokkan lapisan lewat `key` dan mempertahankan
+  // komponennya saat ia berpindah dari "aktif" ke "keluar".
+  const lapisan = [
+    ...(keluar ? [{ kunci: keluar.kunci, isi: keluar.isi, keluar: true }] : []),
+    { kunci, isi: children, keluar: false },
+  ]
+  return (
+    <div className="panggung" style={{ height: tinggi ?? undefined }}>
+      {lapisan.map((l) => (
+        <div
+          key={l.kunci}
+          ref={l.keluar ? undefined : aktif}
+          className={l.keluar ? 'panggung-keluar' : keluar ? 'panggung-masuk' : undefined}
+          aria-hidden={l.keluar || undefined}
+          inert={l.keluar || undefined}
+        >
+          {/* Lapisan yang keluar tidak lagi berhak menentukan lebar kartu. */}
+          <PanggungKonteks.Provider value={l.keluar ? diamLebar : lapor}>{l.isi}</PanggungKonteks.Provider>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const diamLebar = () => {}
+
+const K_ALUR = {
+  id: { label: 'Langkah pendaftaran', tahap: ['Akun', 'Paket', 'Usaha'] },
+  en: { label: 'Sign-up steps', tahap: ['Account', 'Plan', 'Business'] },
+}
+
+/** Tiga titik bernomor dengan garis yang terisi saat langkahnya dilewati. */
+function Tahapan({ aktif }: { aktif: number }) {
+  const t = useTeks(K_ALUR)
+  return (
+    <ol className="alur-tahap" aria-label={t.label}>
+      {t.tahap.map((nama, i) => (
+        <li
+          key={nama}
+          data-keadaan={i < aktif ? 'lewat' : i === aktif ? 'kini' : 'nanti'}
+          aria-current={i === aktif ? 'step' : undefined}
+        >
+          <span className="alur-titik">
+            {i < aktif ? (
+              <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden>
+                <path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              i + 1
+            )}
+          </span>
+          <span className="alur-nama">{nama}</span>
+        </li>
+      ))}
+    </ol>
   )
 }
 
@@ -736,7 +927,6 @@ const K_BAYAR = {
     locale: 'id-ID',
     gagalPaket: 'Gagal memuat daftar paket.',
     premiumAktif: 'Loconomics Premium aktif. Seluruh fitur terbuka.',
-    tokenMasuk: (n: number) => `Token masuk. Saldo Anda sekarang ${n}.`,
     gagalAktivasi: 'Aktivasi gagal. Coba lagi.',
     selamatDatang: 'Selamat datang di Premium',
     judulDialog: 'Loconomics Premium',
@@ -746,8 +936,6 @@ const K_BAYAR = {
     alasanRayakan:
       'Akun gratis sudah bisa melihat peta, skor, dan zonasi. Premium yang membuka 43 variabel, komparasi, pemantauan, dan Laporan Kelayakan.',
     alasanBiasa: 'Satu langganan membuka semuanya. Tanpa ikatan — berhenti kapan saja.',
-    tabLangganan: 'Langganan',
-    tabToken: 'Token satuan',
     memuatPaket: 'Memuat paket…',
     gratis: 'Gratis',
     gratisCatatan: 'Sudah aktif di akun Anda. Tanpa batas waktu.',
@@ -759,16 +947,6 @@ const K_BAYAR = {
     ],
     berlakuHari: (n: number) =>
       `Berlaku ${n} hari, otomatis berakhir — tidak ada tagihan berulang.`,
-    tokenPembuka: (n: number) => (
-      <>
-        Untuk yang butuh satu-dua lokasi saja. 1 token membuka seluruh variabel satu heksagon{' '}
-        <strong className="font-semibold text-ink">selamanya</strong>; {n} token untuk satu
-        Laporan Kelayakan.
-      </>
-    ),
-    perLokasi: (rp: string) => `≈ ${rp} per lokasi`,
-    lebihMurah: (rp: string) =>
-      `Berlangganan ${rp} sebulan membuka semuanya tanpa hitungan token — lebih murah begitu Anda melihat lebih dari sepuluh lokasi.`,
     pembayaran: 'Pembayaran',
     kodeQris: 'Kode pembayaran tampil di sini',
     paket: 'Paket',
@@ -779,6 +957,20 @@ const K_BAYAR = {
     belumTerpasang: 'Gerbang pembayaran belum terpasang di lingkungan ini.',
     masukSebagai: 'Masuk sebagai',
     palingHemat: 'Paling hemat',
+    lanjutGratis: 'Lanjut dengan akun gratis',
+    lanjutGratisCatatan: 'Premium bisa dibuka kapan saja dari menu akun.',
+    akunGratisSiap: 'Akun gratis Anda aktif. Peta, skor, zonasi, dan Loconomics AI sudah bisa dipakai.',
+    akunSiapJudul: 'Akun Anda siap',
+    tanyaUsaha: 'Usaha apa yang Anda rencanakan?',
+    tanyaKawasan: 'Di kawasan mana Anda mencari lokasi?',
+    tanyaAnggaran: 'Berapa anggaran sewa per bulan?',
+    opsional: 'opsional',
+    ringkasan: 'Peta dibuka dengan',
+    belumDipilih: 'Belum ada yang dipilih — semuanya boleh dilewati.',
+    perBulanPendek: '/bln',
+    anggaranLain: 'Nominal lain',
+    juta: (n: number) => `${n} jt`,
+    kelompok: { 'Makanan & minuman': 'Makanan & minuman', Ritel: 'Ritel', Jasa: 'Jasa' } as Record<string, string>,
 
     premiumAktifJudul: 'Premium aktif',
     disetelUntuk: 'Sebentar — Loconomics mau disetel untuk siapa?',
@@ -794,18 +986,11 @@ const K_BAYAR = {
     preferensi: 'Preferensi usaha',
     preferensiPesan:
       'Kriteria ini menyaring rekomendasi dan menyetel bawaan simulasi. Tidak ada skor yang berubah karenanya.',
-    jenis: [
-      { label: 'Kopi & jajanan', contoh: 'kedai kopi, roti bakar' },
-      { label: 'Warung makan', contoh: 'nasi, mi ayam, soto' },
-      { label: 'Kelontong & ATK', contoh: 'sembako, fotokopi' },
-      { label: 'Jasa', contoh: 'barbershop, laundry' },
-    ],
   },
   en: {
     locale: 'en-GB',
     gagalPaket: 'Could not load the plans.',
     premiumAktif: 'Loconomics Premium is active. Everything is open.',
-    tokenMasuk: (n: number) => `Tokens added. Your balance is now ${n}.`,
     gagalAktivasi: 'Activation failed. Try again.',
     selamatDatang: 'Welcome to Premium',
     judulDialog: 'Loconomics Premium',
@@ -815,8 +1000,6 @@ const K_BAYAR = {
     alasanRayakan:
       'A free account already sees the map, the scores, and the zoning. Premium is what opens the 43 variables, comparison, watching, and the Feasibility Report.',
     alasanBiasa: 'One subscription opens everything. No lock-in — stop whenever you like.',
-    tabLangganan: 'Subscription',
-    tabToken: 'Single tokens',
     memuatPaket: 'Loading plans…',
     gratis: 'Free',
     gratisCatatan: 'Already active on your account. No time limit.',
@@ -827,16 +1010,6 @@ const K_BAYAR = {
       'The location list, search, and Loconomics AI',
     ],
     berlakuHari: (n: number) => `Valid for ${n} days, then it simply ends — no recurring charge.`,
-    tokenPembuka: (n: number) => (
-      <>
-        For anyone who needs only one or two locations. 1 token opens every variable of one
-        hexagon <strong className="font-semibold text-ink">forever</strong>; {n} tokens for one
-        Feasibility Report.
-      </>
-    ),
-    perLokasi: (rp: string) => `≈ ${rp} per location`,
-    lebihMurah: (rp: string) =>
-      `A ${rp} monthly subscription opens everything without counting tokens — cheaper the moment you look at more than ten locations.`,
     pembayaran: 'Payment',
     kodeQris: 'The payment code appears here',
     paket: 'Plan',
@@ -847,6 +1020,20 @@ const K_BAYAR = {
     belumTerpasang: 'No payment gateway is wired up in this environment.',
     masukSebagai: 'Signed in as',
     palingHemat: 'Best value',
+    lanjutGratis: 'Continue with a free account',
+    lanjutGratisCatatan: 'Premium can be opened any time from the account menu.',
+    akunGratisSiap: 'Your free account is active. The map, scores, zoning, and Loconomics AI are ready.',
+    akunSiapJudul: 'Your account is ready',
+    tanyaUsaha: 'What business are you planning?',
+    tanyaKawasan: 'Which area are you looking in?',
+    tanyaAnggaran: 'What is your monthly rent budget?',
+    opsional: 'optional',
+    ringkasan: 'The map opens with',
+    belumDipilih: 'Nothing picked yet — every question can be skipped.',
+    perBulanPendek: '/mo',
+    anggaranLain: 'Other amount',
+    juta: (n: number) => `${n}M`,
+    kelompok: { 'Makanan & minuman': 'Food & drink', Ritel: 'Retail', Jasa: 'Services' } as Record<string, string>,
 
     premiumAktifJudul: 'Premium is active',
     disetelUntuk: 'One moment — who should Loconomics be set up for?',
@@ -862,12 +1049,6 @@ const K_BAYAR = {
     preferensi: 'Business preferences',
     preferensiPesan:
       'These criteria filter the recommendations and set the simulation defaults. No score changes because of them.',
-    jenis: [
-      { label: 'Coffee & snacks', contoh: 'coffee shop, toast' },
-      { label: 'Rice & noodle stall', contoh: 'rice, chicken noodles, soto' },
-      { label: 'Grocery & stationery', contoh: 'staples, photocopying' },
-      { label: 'Services', contoh: 'barbershop, laundry' },
-    ],
   },
 }
 
@@ -877,20 +1058,21 @@ function DialogLangganan({
   alasan,
   rayakan,
   onTutup,
+  onLanjut,
 }: {
   alasan: AlasanKunci
   /** Dibuka tepat sesudah mendaftar: sapaannya berbeda. */
   rayakan: boolean
   onTutup: () => void
+  /** Pindah ke langkah preferensi usaha. `pesan` = kalimat keadaan akunnya. */
+  onLanjut: (pesan: string | null) => void
 }) {
   const t = useTeks(K_BAYAR)
   const { akun, segarkan } = useSesi()
   const [katalog, setKatalog] = useState<KatalogPaket | null>(null)
-  const [tab, setTab] = useState<'langganan' | 'token'>('langganan')
   const [pilih, setPilih] = useState<string | null>(null)
   const [sibuk, setSibuk] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
-  const [sukses, setSukses] = useState<string | null>(null)
 
   useEffect(() => {
     api
@@ -907,14 +1089,11 @@ function DialogLangganan({
     setSibuk(true)
     setGalat(null)
     try {
-      if (tab === 'langganan') {
-        await api.berlangganan(pilih)
-        setSukses(t.premiumAktif)
-      } else {
-        const a = await api.beliToken(pilih)
-        setSukses(t.tokenMasuk(a.saldo_token))
-      }
+      await api.berlangganan(pilih)
       await segarkan()
+      // Sesudah langganan aktif, langkah berikutnya BUKAN tanda centang: ia
+      // menanyakan usaha apa dan di mana, lalu membuka peta ke sana.
+      onLanjut(t.premiumAktif)
     } catch (err) {
       setGalat(err instanceof GalatAPI ? err.message : t.gagalAktivasi)
     } finally {
@@ -922,22 +1101,7 @@ function DialogLangganan({
     }
   }
 
-  if (sukses) {
-    // Sesudah langganan aktif, layar ini BUKAN sekadar tanda centang: ia
-    // menanyakan usaha apa dan di mana, lalu menyetel peta ke sana. Ditanyakan
-    // di sini karena inilah satu-satunya saat orangnya sudah pasti berhenti
-    // dan membaca - sesudah ini ia akan langsung menuju petanya.
-    return (
-      <Tirai judul={t.selamatDatang} onTutup={onTutup} lebar="34rem">
-        <OnboardingUsaha pesan={sukses} onSelesai={onTutup} />
-      </Tirai>
-    )
-  }
-
-  const paketTerpilih =
-    tab === 'langganan'
-      ? katalog?.langganan.find((p) => p.kode === pilih)
-      : katalog?.token.find((p) => p.kode === pilih)
+  const paketTerpilih = katalog?.langganan.find((p) => p.kode === pilih)
   const harga = paketTerpilih?.harga_rp ?? null
 
   return (
@@ -961,29 +1125,9 @@ function DialogLangganan({
           <div className="flex flex-col gap-6 p-6 sm:p-7 lg:flex-row">
             {/* --- Kiri: pilihan paket ---------------------------------- */}
             <div className="min-w-0 flex-1">
-              <div className="mb-4 inline-flex rounded-full bg-surface-2 p-1">
-                {/* `k`, bukan `t`: `t` sudah dipakai cabang kamus komponen ini,
-                    dan nama yang sama untuk dua benda adalah cara paling
-                    pendek membuat satu kalimat diam-diam hilang. */}
-                {(['langganan', 'token'] as const).map((k) => (
-                  <button
-                    key={k}
-                    onClick={() => {
-                      setTab(k)
-                      setPilih(null)
-                    }}
-                    className={`cursor-pointer rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors ${
-                      tab === k ? 'bg-ink text-surface' : 'text-ink-2 hover:text-ink'
-                    }`}
-                  >
-                    {k === 'langganan' ? t.tabLangganan : t.tabToken}
-                  </button>
-                ))}
-              </div>
-
               {!katalog ? (
                 <p className="text-[13.5px] text-ink-3">{t.memuatPaket}</p>
-              ) : tab === 'langganan' ? (
+              ) : (
                 <div className="space-y-3">
                   {/* Tingkat GRATIS ditulis sebagai kartu, bukan disembunyikan.
                       Orang yang baru mendaftar berhak melihat apa yang SUDAH ia
@@ -1025,31 +1169,29 @@ function DialogLangganan({
                     />
                   ))}
                 </div>
-              ) : (
-                <>
-                  <p className="mb-3 text-[13px] leading-snug text-ink-2">
-                    {t.tokenPembuka(katalog.biaya_token.laporan ?? 2)}
-                  </p>
-                  <div className="space-y-3">
-                    {katalog.token.map((p) => (
-                      <KartuPaket
-                        key={p.kode}
-                        dipilih={pilih === p.kode}
-                        onPilih={() => setPilih(p.kode)}
-                        judul={`${p.nama} — ${p.token} token`}
-                        harga={rp(p.harga_rp, t.locale)}
-                        catatan={t.perLokasi(rp(Math.round(p.harga_rp / p.token), t.locale))}
-                      />
-                    ))}
-                  </div>
-                  <p className="mt-3.5 rounded-sm bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-2">
-                    {t.lebihMurah(rp(katalog.langganan[0]?.harga_rp ?? 25000, t.locale))}
-                  </p>
-                </>
+              )}
+
+              {/* Jalan keluar yang TIDAK membayar, dan sama terlihatnya dengan
+                  yang membayar. Sesudah mendaftar, akun gratis tetap menempuh
+                  langkah preferensi usaha - jawabannya berguna untuk semua
+                  orang, bukan cuma untuk pelanggan. */}
+              {rayakan && (
+                <button
+                  onClick={() => onLanjut(t.akunGratisSiap)}
+                  className="group mt-4 flex w-full cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-line-2 px-4 py-3 text-left transition-colors hover:border-ink/40 hover:bg-surface-2/60"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[13.5px] font-semibold text-ink">{t.lanjutGratis}</span>
+                    <span className="block text-[12px] leading-snug text-ink-3">{t.lanjutGratisCatatan}</span>
+                  </span>
+                  <svg width="18" height="18" viewBox="0 0 20 20" className="shrink-0 text-ink-3 transition-transform duration-300 ease-jelly group-hover:translate-x-1" aria-hidden>
+                    <path d="M4 10h11m-4-4 4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               )}
             </div>
 
-            {/* --- Kanan: pembayaran ------------------------------------ */}
+                        {/* --- Kanan: pembayaran ------------------------------------ */}
             <div className="w-full shrink-0 lg:w-[19rem]">
               <div className="rounded-md border border-line bg-surface-2/60 p-5">
                 <h3 className="eyebrow mb-3">{t.pembayaran}</h3>
@@ -1116,7 +1258,6 @@ function DialogLangganan({
                 <p className="mt-3 text-center text-[12px] text-ink-3">
                   {t.masukSebagai}{' '}
                   <strong className="font-semibold text-ink-2">{akun.nama_pengguna}</strong>
-                  {akun.saldo_token > 0 && ` · ${akun.saldo_token} token`}
                 </p>
               )}
             </div>
@@ -1205,7 +1346,6 @@ const K_TOMBOL = {
     daftarPanjang: 'Daftar untuk akses semua fitur',
     premium: 'Premium',
     gratis: 'Gratis',
-    token: 'token',
     selamanya: 'Berlaku selamanya.',
     aktifSampai: (t: string) => `Aktif sampai ${t}.`,
     langgananAktif: 'Langganan aktif.',
@@ -1213,8 +1353,6 @@ const K_TOMBOL = {
     perBulan: '/bln',
     preferensi: 'Preferensi usaha',
     preferensiCatatan: 'Jenis usaha, kawasan incaran, dan anggaran sewa',
-    beliToken: 'Beli token satuan',
-    beliTokenCatatan: 'Buka satu lokasi tanpa berlangganan',
     keluar: 'Keluar',
     keluarCatatan: (n: string) => `Sesi ${n} diakhiri`,
     tanggal: 'id-ID',
@@ -1225,7 +1363,6 @@ const K_TOMBOL = {
     daftarPanjang: 'Sign up for full access',
     premium: 'Premium',
     gratis: 'Free',
-    token: 'tokens',
     selamanya: 'Valid forever.',
     aktifSampai: (t: string) => `Active until ${t}.`,
     langgananAktif: 'Subscription active.',
@@ -1233,8 +1370,6 @@ const K_TOMBOL = {
     perBulan: '/mo',
     preferensi: 'Business preferences',
     preferensiCatatan: 'Business type, target areas, and rent budget',
-    beliToken: 'Buy single tokens',
-    beliTokenCatatan: 'Unlock one location without subscribing',
     keluar: 'Sign out',
     keluarCatatan: (n: string) => `End ${n}’s session`,
     tanggal: 'en-GB',
@@ -1378,9 +1513,6 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
                   Admin
                 </span>
               )}
-              <span className="tabular ml-auto text-[12px] text-ink-3">
-                {akun.saldo_token} {t.token}
-              </span>
             </div>
 
             {premium ? (
@@ -1420,16 +1552,6 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
               label={t.preferensi}
               catatan={t.preferensiCatatan}
             />
-            {!premium && (
-              <BarisMenu
-                onClick={() => {
-                  setBuka(false)
-                  mintaLangganan(null)
-                }}
-                label={t.beliToken}
-                catatan={t.beliTokenCatatan}
-              />
-            )}
             <BarisMenu
               onClick={() => {
                 setBuka(false)
@@ -1556,34 +1678,47 @@ function SarangKecil({ pudar }: { pudar?: boolean } = {}) {
 // Onboarding usaha
 // ---------------------------------------------------------------------------
 
-/** Sama dengan JENIS_USAHA di backend. Dijaga manual - lihat Simulasi.tsx.
- *  Labelnya tinggal di `K_BAYAR.jenis`, berurutan sama dengan larik ini. */
-const JENIS_ONBOARDING = ['kuliner_ringan', 'warung_makan', 'retail_kecil', 'jasa']
+/** Pilihan cepat anggaran sewa, rupiah per bulan. Bukan saringan: cuma jalan
+ *  pintas mengisi kolomnya, dan kolomnya tetap menerima angka apa pun. */
+const PRESET_ANGGARAN = [5, 10, 15, 25]
 
 /**
  * Tiga pertanyaan, seluruhnya boleh dilewati.
  *
+ * Dirombak 13 Sep 2026 atas laporan pemilik repo: layar ini masih memegang
+ * EMPAT jenis usaha - sisa sebelum simulasi diperluas jadi enam belas - dan
+ * tampil sebagai satu formulir panjang tanpa hierarki. Sekarang daftarnya dari
+ * `lib/jenis-usaha.ts` yang SAMA dengan simulasi, dikelompokkan dalam tiga
+ * tab, dan tiap pertanyaan bernomor supaya terbaca sebagai langkah.
+ *
  * Yang dijawab menyetel dua hal nyata: jenis usaha jadi bawaan panel simulasi,
  * kawasan memindahkan peta ke sana. Yang TIDAK berubah karenanya: satu pun
- * skor, peringkat, atau kuadran - itu tetap milik pipeline, dan preferensi
- * pengguna tidak pernah boleh menyentuhnya.
+ * skor, peringkat, atau kuadran - itu milik pipeline, dan preferensi pengguna
+ * tidak pernah boleh menyentuhnya.
  */
 function OnboardingUsaha({
   pesan,
-  onSelesai,
   judul,
+  onSelesai,
+  onLewati,
 }: {
   pesan: string
-  onSelesai: () => void
-  /** Berbeda saat dibuka sebagai preferensi biasa, bukan sesudah berlangganan. */
-  judul?: string
+  judul: string
+  /** Sesudah disimpan. `kawasan` dipakai App untuk membuka peta ke sana. */
+  onSelesai: (hasil: DetailBukaPeta) => void
+  onLewati: () => void
 }) {
   const t = useTeks(K_BAYAR)
+  const { bahasa } = useBahasa()
+  const ing = bahasa === 'en'
   const { akun, segarkan } = useSesi()
   const [jenis, setJenis] = useState<string | null>(akun?.preferensi?.jenis_usaha ?? null)
+  const [kelompok, setKelompok] = useState<string>(
+    JENIS_USAHA.find((j) => j.nilai === jenis)?.kelompok ?? KELOMPOK_JENIS[0],
+  )
   const [kawasan, setKawasan] = useState<string | null>(akun?.preferensi?.kawasan ?? null)
-  const [budget, setBudget] = useState<string>(
-    akun?.preferensi?.budget_sewa_bulanan ? String(akun.preferensi.budget_sewa_bulanan) : '',
+  const [budget, setBudget] = useState<number | null>(
+    akun?.preferensi?.budget_sewa_bulanan ?? null,
   )
   const [sibuk, setSibuk] = useState(false)
 
@@ -1593,117 +1728,254 @@ function OnboardingUsaha({
       await api.simpanPreferensi({
         jenis_usaha: jenis,
         kawasan,
-        budget_sewa_bulanan: budget ? Number(budget.replace(/\D/g, '')) || null : null,
+        budget_sewa_bulanan: budget,
       })
       await segarkan()
     } catch {
-      // Preferensi gagal disimpan tidak boleh menahan orang di layar ini -
-      // langganannya SUDAH aktif, dan itu yang penting. Ia bisa mengisinya
-      // lagi nanti dari menu akun.
-    } finally {
-      setSibuk(false)
-      onSelesai()
+      // Preferensi yang gagal disimpan tidak boleh menahan orang di layar ini:
+      // ia tetap dibawa ke peta, dan bisa mengisinya lagi dari menu akun.
     }
+    onSelesai({ kawasan })
   }
 
+  const jenisTerpilih = JENIS_USAHA.find((j) => j.nilai === jenis)
+  const ringkas = [
+    jenisTerpilih ? (ing ? jenisTerpilih.labelEn : jenisTerpilih.label) : null,
+    kawasan,
+    budget ? `${rp(budget, t.locale)}${t.perBulanPendek}` : null,
+  ].filter(Boolean) as string[]
+
   return (
-    <div className="p-6 sm:p-7">
-      <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gem-soft">
-          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
-            <path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="var(--color-gem)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    <div className="flex max-h-[84vh] flex-col">
+      {/* --- Kepala --------------------------------------------------------- */}
+      <div className="flex items-start gap-3.5 border-b border-line/70 px-6 pb-4 pt-5 sm:px-7">
+        <span className="onb-lencana grid h-11 w-11 shrink-0 place-items-center rounded-full">
+          <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden>
+            <path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
         <div className="min-w-0">
-          <h2 className="papan text-[19px] leading-tight">{judul ?? t.premiumAktifJudul}</h2>
+          <h2 className="papan text-[19px] leading-tight">{judul}</h2>
           <p className="mt-1 text-[13px] leading-snug text-ink-2">{pesan}</p>
         </div>
       </div>
 
-      <div className="mt-6 border-t border-line/70 pt-5">
+      <div className="scroll-tipis min-h-0 flex-1 overflow-y-auto px-6 py-5 sm:px-7">
         <p className="text-[14.5px] font-semibold text-ink">{t.disetelUntuk}</p>
         <p className="mt-1 text-[12.5px] leading-snug text-ink-3">{t.disetelIsi}</p>
 
-        <p className="eyebrow mt-5 mb-2">{t.rencanaUsaha}</p>
-        <div className="grid grid-cols-2 gap-2">
-          {JENIS_ONBOARDING.map((nilai, i) => (
-            <button
-              key={nilai}
-              onClick={() => setJenis(jenis === nilai ? null : nilai)}
-              className={`cursor-pointer rounded-sm border p-2.5 text-left transition-colors ${
-                jenis === nilai ? 'border-gem bg-gem-soft/40' : 'border-line hover:border-line-2'
-              }`}
-            >
-              <span className="block text-[13px] font-semibold text-ink">{t.jenis[i].label}</span>
-              <span className="block text-[11px] leading-snug text-ink-3">{t.jenis[i].contoh}</span>
-            </button>
-          ))}
-        </div>
+        {/* --- 1. Jenis usaha ------------------------------------------------ */}
+        <PertanyaanOnboarding nomor={1} judul={t.tanyaUsaha} terjawab={!!jenis}>
+          <div role="tablist" className="onb-tab">
+            {KELOMPOK_JENIS.map((k) => (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={kelompok === k}
+                onClick={() => setKelompok(k)}
+                className="onb-tab-butir"
+              >
+                {t.kelompok[k] ?? k}
+                {JENIS_USAHA.some((j) => j.kelompok === k && j.nilai === jenis) && (
+                  <span className="onb-tab-titik" aria-hidden />
+                )}
+              </button>
+            ))}
+          </div>
+          <div key={kelompok} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {JENIS_USAHA.filter((j) => j.kelompok === kelompok).map((j, i) => {
+              const dipilih = jenis === j.nilai
+              return (
+                <button
+                  key={j.nilai}
+                  aria-pressed={dipilih}
+                  onClick={() => setJenis(dipilih ? null : j.nilai)}
+                  className="onb-kartu group"
+                  style={{ animationDelay: `${i * 35}ms` }}
+                >
+                  <span className="onb-ikon">
+                    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden>
+                      <path d={j.glif} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  <span className="mt-2 block text-[13px] font-semibold leading-tight text-ink">
+                    {ing ? j.labelEn : j.label}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-3">
+                    {ing ? j.contohEn : j.contoh}
+                  </span>
+                  <span className="onb-centang" aria-hidden>
+                    <svg width="10" height="10" viewBox="0 0 24 24">
+                      <path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </PertanyaanOnboarding>
 
-        <p className="eyebrow mt-5 mb-2">{t.kawasanIncaran}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {KAWASAN_PILOT.map((k) => (
-            <button
-              key={k.nama}
-              onClick={() => setKawasan(kawasan === k.nama ? null : k.nama)}
-              className={`cursor-pointer rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
-                kawasan === k.nama
-                  ? 'border-ink bg-ink text-surface'
-                  : 'border-line text-ink-2 hover:border-line-2 hover:text-ink'
-              }`}
-            >
-              {k.nama}
-            </button>
-          ))}
-        </div>
+        {/* --- 2. Kawasan ---------------------------------------------------- */}
+        <PertanyaanOnboarding nomor={2} judul={t.tanyaKawasan} terjawab={!!kawasan}>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {KAWASAN_PILOT.map((k) => {
+              const dipilih = kawasan === k.nama
+              return (
+                <button
+                  key={k.nama}
+                  aria-pressed={dipilih}
+                  onClick={() => setKawasan(dipilih ? null : k.nama)}
+                  className="onb-kawasan"
+                >
+                  <span className="onb-moda" data-moda={k.moda}>
+                    {k.moda}
+                  </span>
+                  <span className="min-w-0 truncate text-[13px] font-semibold text-ink">{k.nama}</span>
+                </button>
+              )
+            })}
+          </div>
+        </PertanyaanOnboarding>
 
-        <p className="eyebrow mt-5 mb-2">{t.anggaran}</p>
-        <div className="relative">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] text-ink-3">
-            Rp
-          </span>
-          <input
-            inputMode="numeric"
-            value={budget ? Number(budget.replace(/\D/g, '') || 0).toLocaleString(t.locale) : ''}
-            onChange={(e) => setBudget(e.target.value)}
-            placeholder={t.contohAnggaran}
-            className={`${KELAS_INPUT} pl-9`}
-          />
-        </div>
+        {/* --- 3. Anggaran --------------------------------------------------- */}
+        <PertanyaanOnboarding nomor={3} judul={t.tanyaAnggaran} catatan={t.opsional} terjawab={!!budget}>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_ANGGARAN.map((jt) => {
+              const nilai = jt * 1_000_000
+              const dipilih = budget === nilai
+              return (
+                <button
+                  key={jt}
+                  aria-pressed={dipilih}
+                  onClick={() => setBudget(dipilih ? null : nilai)}
+                  className="onb-pil"
+                >
+                  {t.juta(jt)}
+                  <span className="text-ink-3">{t.perBulanPendek}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="relative mt-2.5">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] text-ink-3">Rp</span>
+            <input
+              inputMode="numeric"
+              aria-label={t.anggaranLain}
+              value={budget ? budget.toLocaleString(t.locale) : ''}
+              onChange={(e) => {
+                const n = Number(e.target.value.replace(/\D/g, ''))
+                setBudget(n > 0 ? n : null)
+              }}
+              placeholder={t.contohAnggaran}
+              className={`${KELAS_INPUT} pl-9`}
+            />
+          </div>
+        </PertanyaanOnboarding>
       </div>
 
-      <div className="mt-6 flex gap-2">
-        <button
-          onClick={onSelesai}
-          className="cursor-pointer rounded-full border border-line px-4 py-2.5 text-[13.5px] font-medium text-ink-2 transition-colors hover:bg-surface-2"
-        >
-          {t.lewati}
-        </button>
-        <button
-          onClick={simpan}
-          disabled={sibuk}
-          className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-6 py-2.5 text-[14px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.015] disabled:opacity-60"
-        >
-          {sibuk && <Pusaran />}
-          {sibuk ? t.menyimpan : t.simpanBuka}
-        </button>
+      {/* --- Kaki ------------------------------------------------------------ */}
+      <div className="border-t border-line/70 px-6 py-4 sm:px-7">
+        <div className="mb-3 flex min-h-[1.6rem] flex-wrap items-center gap-1.5 text-[12px]">
+          {ringkas.length > 0 ? (
+            <>
+              <span className="text-ink-3">{t.ringkasan}</span>
+              {ringkas.map((r) => (
+                <span key={r} className="onb-ringkas">
+                  {r}
+                </span>
+              ))}
+            </>
+          ) : (
+            <span className="text-ink-3">{t.belumDipilih}</span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onLewati}
+            className="cursor-pointer rounded-full border border-line px-4 py-2.5 text-[13.5px] font-medium text-ink-2 transition-colors hover:bg-surface-2"
+          >
+            {t.lewati}
+          </button>
+          <button
+            onClick={simpan}
+            disabled={sibuk}
+            className="group flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-6 py-2.5 text-[14px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.015] disabled:opacity-60"
+          >
+            {sibuk && <Pusaran />}
+            {sibuk ? t.menyimpan : t.simpanBuka}
+            {!sibuk && (
+              <svg width="16" height="16" viewBox="0 0 20 20" className="transition-transform duration-300 ease-jelly group-hover:translate-x-0.5" aria-hidden>
+                <path d="M4 10h11m-4-4 4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
-/**
- * Preferensi yang bisa dibuka kapan saja, bukan cuma sekali saat berlangganan.
- *
- * Isi ulangnya memakai komponen yang sama dengan onboarding - kalau dipisah
- * jadi dua formulir, keduanya cepat atau lambat akan berbeda dalam hal yang
- * tidak disengaja.
- */
-export function DialogPreferensi({ onTutup }: { onTutup: () => void }) {
-  const t = useTeks(K_BAYAR)
+/** Satu pertanyaan bernomor. Nomornya berganti jadi centang begitu dijawab. */
+function PertanyaanOnboarding({
+  nomor,
+  judul,
+  catatan,
+  terjawab,
+  children,
+}: {
+  nomor: number
+  judul: string
+  catatan?: string
+  terjawab: boolean
+  children: ReactNode
+}) {
   return (
-    <Tirai judul={t.preferensi} onTutup={onTutup} lebar="34rem">
-      <OnboardingUsaha judul={t.preferensi} pesan={t.preferensiPesan} onSelesai={onTutup} />
+    <section className="onb-tanya mt-6" data-terjawab={terjawab || undefined}>
+      <h3 className="mb-2.5 flex items-center gap-2 text-[13.5px] font-semibold text-ink">
+        <span className="onb-nomor" aria-hidden>
+          {terjawab ? (
+            <svg width="10" height="10" viewBox="0 0 24 24">
+              <path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            nomor
+          )}
+        </span>
+        {judul}
+        {catatan && <span className="text-[11.5px] font-normal text-ink-3">({catatan})</span>}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * Preferensi usaha: langkah ketiga alur pendaftaran, DAN layar yang bisa dibuka
+ * kapan saja dari menu akun. Satu komponen untuk keduanya - kalau dipisah jadi
+ * dua formulir, keduanya cepat atau lambat berbeda dalam hal yang tidak
+ * disengaja. Persis itu yang terjadi pada daftar jenis usahanya.
+ */
+export function DialogPreferensi({
+  pesan,
+  onTutup,
+  onSelesai,
+}: {
+  /** Kalimat keadaan akun dari langkah sebelumnya; kosong = dibuka dari menu. */
+  pesan: string | null
+  onTutup: () => void
+  onSelesai: (hasil: DetailBukaPeta) => void
+}) {
+  const t = useTeks(K_BAYAR)
+  const { premium } = useSesi()
+  const judul = pesan === null ? t.preferensi : premium ? t.premiumAktifJudul : t.akunSiapJudul
+  return (
+    <Tirai judul={judul} onTutup={onTutup} lebar="40rem">
+      <OnboardingUsaha
+        judul={judul}
+        pesan={pesan ?? t.preferensiPesan}
+        onSelesai={onSelesai}
+        onLewati={onTutup}
+      />
     </Tirai>
   )
 }

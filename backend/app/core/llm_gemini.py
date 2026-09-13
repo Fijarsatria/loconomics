@@ -111,11 +111,41 @@ def lama_menunggu(rinci: str) -> float | None:
 def batas_harian(rinci: str) -> bool:
     """Apakah 429-nya jatah HARIAN, bukan hambatan per menit.
 
-    Google menamai metriknya, dan yang harian selalu memuat "PerDay" atau
-    "per day". Yang per menit tidak - itu yang kita temui 13 Sep 2026, lengkap
-    dengan `limit: 20` dan saran mencoba lagi dua detik kemudian.
+    Dibaca dari `details[].violations[].quotaId` lebih dulu - diukur 13 Sep
+    2026, jatah harian bernama `GenerateRequestsPerDayPerProjectPerModel-FreeTier`
+    sementara KALIMAT pesannya tidak menyebut "per day" sama sekali. Membaca
+    kalimatnya saja membuat jatah harian yang habis tampil sebagai "coba lagi
+    dua detik lagi". Kalimat tetap diperiksa sebagai cadangan.
     """
+    try:
+        badan = json.loads(rinci)
+    except (ValueError, TypeError):
+        badan = {}
+    for d in (badan.get("error", {}) or {}).get("details", []) or []:
+        for v in d.get("violations", []) or []:
+            if "perday" in str(v.get("quotaId", "")).lower():
+                return True
     return "perday" in rinci.replace(" ", "").lower()
+
+
+#: Berapa lama pasangan (kunci, model) yang jatah HARIANNYA habis dilewati
+#: sebelum dicoba lagi. Sejam, bukan sampai tengah malam Pasifik: menghitung
+#: zona waktu Pasifik di Windows menuntut paket tzdata, dan satu 429 per jam
+#: yang cepat jauh lebih murah daripada satu dependensi baru.
+JEDA_HARIAN_DETIK = 60 * 60
+
+#: Pasangan (urutan kunci, model) -> kapan boleh dicoba lagi. Milik PROSES,
+#: bukan permintaan: yang membuat perpindahan kunci "cepat" adalah tidak
+#: mengetuk pintu yang sudah diketahui tertutup pada setiap pertanyaan.
+#: Kuncinya URUTAN, bukan nilai kunci API - nilai kunci tidak pernah boleh
+#: jadi bagian dari apa pun yang bisa masuk log.
+_dilewati_sampai: dict[tuple[int, str], float] = {}
+
+
+def lupakan_jatah() -> None:
+    """Kosongkan catatan pasangan yang dilewati. Dipakai uji."""
+    _dilewati_sampai.clear()
+
 
 #: Tarif Gemini Flash per Juni 2026, USD per juta token. Dipakai `biaya_usd`.
 TARIF_MASUK = 0.30
@@ -288,8 +318,14 @@ def _isi_gemini(messages: list[dict]) -> list[dict]:
 
 
 class _Pesan:
-    def __init__(self, kunci: str) -> None:
-        self._kunci = kunci
+    def __init__(self, kunci: str | list[str]) -> None:
+        # Beberapa kunci, dicoba berurutan. Kunci kedua ada untuk satu hal:
+        # jatah gratis Gemini dihitung PER PROYEK Google, jadi kunci dari
+        # proyek lain membawa jatahnya sendiri. Kunci kedua dari proyek yang
+        # SAMA tidak menambah apa pun - dan itu tidak bisa diketahui sebelum
+        # dicoba, jadi keduanya tetap dicoba.
+        daftar = [kunci] if isinstance(kunci, str) else list(kunci)
+        self._kunci = [k for k in daftar if k]
 
     def create(
         self,
@@ -323,65 +359,99 @@ class _Pesan:
         # kunci yang ditolak akan salah lagi berapa kali pun diulang, dan
         # mengulangnya cuma memperlambat pesan galat yang benar.
         data = None
-        # Lamanya-menunggu TERBESAR yang diminta penyedianya di seluruh model,
-        # dan apakah salah satunya menyebut jatah harian. Dipakai di bawah untuk
-        # menandai penyedia penuh selama yang ia minta - bukan lima belas menit
-        # untuk hambatan dua detik.
+        # Lamanya-menunggu TERKECIL yang diminta penyedianya, dan apakah SEMUA
+        # penolakan menyebut jatah harian. Dipakai di bawah untuk memutuskan
+        # apakah menunggu sebentar masuk akal, dan kalimat mana yang tampil.
         minta_tunggu: float | None = None
-        harian = False
-        for m in urutan:
-            req = urllib.request.Request(
-                URL.format(model=m),
-                data=muatan,
-                headers={"Content-Type": "application/json", "X-goog-api-key": self._kunci},
-                method="POST",
-            )
-            for percobaan in range(2):
-                try:
-                    with urllib.request.urlopen(req, timeout=90) as r:
-                        data = json.load(r)
-                    if m != model:
-                        log.warning("Gemini: %s penuh, dilayani %s", model, m)
-                    break
-                except urllib.error.HTTPError as e:
-                    rinci = e.read().decode("utf-8", "replace")[:800]
-                    sementara = e.code in (429, 500, 502, 503, 504)
-                    if e.code == 429:
-                        harian = harian or batas_harian(rinci)
-                        diminta = lama_menunggu(rinci)
-                        if diminta is not None:
-                            minta_tunggu = max(minta_tunggu or 0.0, diminta)
-                    if sementara and percobaan == 0:
-                        # Tidur selama yang DIMINTA penyedianya, bukan 1,2 detik
-                        # tetap. Terukur: hambatan per menit meminta ~2 detik,
-                        # dan tidur 1,2 detik bangun tepat sebelum ia lewat -
-                        # jadi percobaan kedua membentur batas yang sama dan
-                        # seluruh permintaan gagal karena setengah detik.
-                        diminta = lama_menunggu(rinci) if e.code == 429 else None
-                        time.sleep(min(max(diminta or 1.2, 1.2), TUNGGU_MAKS_DETIK))
-                        continue
-                    if sementara or e.code == 404:
-                        # Habis jatahnya di model ini - pindah ke berikutnya.
-                        # 404 ikut: nama model bisa ditarik Google kapan saja,
-                        # dan itu tidak boleh mematikan Konsultan AI.
-                        log.warning("Gemini %s pada %s, pindah model", e.code, m)
+        harian = True
+        ada_tolakan = False
+
+        def pasangan() -> list[tuple[int, str]]:
+            """Model dulu, lalu kunci. Model terbaik dari kunci mana pun lebih
+            berharga daripada model cadangan dari kunci pertama."""
+            sekarang = time.time()
+            return [
+                (ik, m)
+                for m in urutan
+                for ik in range(len(self._kunci))
+                if _dilewati_sampai.get((ik, m), 0.0) <= sekarang
+            ]
+
+        for putaran in range(2):
+            for ik, m in pasangan():
+                req = urllib.request.Request(
+                    URL.format(model=m),
+                    data=muatan,
+                    headers={"Content-Type": "application/json", "X-goog-api-key": self._kunci[ik]},
+                    method="POST",
+                )
+                for percobaan in range(2):
+                    try:
+                        with urllib.request.urlopen(req, timeout=90) as r:
+                            data = json.load(r)
+                        if (ik, m) != (0, model):
+                            log.warning("Gemini dilayani kunci #%d, model %s", ik + 1, m)
                         break
-                    # 400 / 403: permintaan atau kuncinya yang salah, dan itu
-                    # akan salah lagi di model mana pun. Berhenti di sini.
-                    #
-                    # Rincinya ke LOG. Yang keluar ke pemanggil kalimat generik -
-                    # balasan galat Google memuat nama proyek dan kadang potongan
-                    # permintaan, dan aturan 8 melarang keduanya sampai ke layar.
-                    log.error("Gemini menolak (%s) pada %s: %s", e.code, m, rinci)
-                    raise RuntimeError("Penyedia model menolak permintaan ini.") from e
-                except (urllib.error.URLError, TimeoutError) as e:
-                    if percobaan == 0:
-                        time.sleep(1.2)
-                        continue
-                    log.warning("Gemini tidak terjangkau pada %s: %s", m, e)
+                    except urllib.error.HTTPError as e:
+                        rinci = e.read().decode("utf-8", "replace")[:4000]
+                        if e.code == 429:
+                            # Pindah ke pasangan berikutnya SEKETIKA, tanpa
+                            # tidur: kunci lain atau model lain hampir selalu
+                            # lebih cepat daripada menunggu yang ini pulih.
+                            ada_tolakan = True
+                            if batas_harian(rinci):
+                                _dilewati_sampai[(ik, m)] = time.time() + JEDA_HARIAN_DETIK
+                            else:
+                                harian = False
+                                diminta = lama_menunggu(rinci) or 2.0
+                                _dilewati_sampai[(ik, m)] = time.time() + diminta
+                                minta_tunggu = diminta if minta_tunggu is None else min(minta_tunggu, diminta)
+                            log.warning("Gemini 429 pada kunci #%d model %s", ik + 1, m)
+                            break
+                        if e.code in (500, 502, 503, 504):
+                            if percobaan == 0:
+                                time.sleep(1.2)
+                                continue
+                            harian = False
+                            ada_tolakan = True
+                            log.warning("Gemini %s pada kunci #%d model %s", e.code, ik + 1, m)
+                            break
+                        if e.code == 404:
+                            # Nama model ditarik Google - berlaku untuk semua kunci.
+                            for k in range(len(self._kunci)):
+                                _dilewati_sampai[(k, m)] = time.time() + JEDA_HARIAN_DETIK
+                            break
+                        if e.code == 403 or "API_KEY_INVALID" in rinci:
+                            # KUNCI ini yang ditolak, bukan permintaannya. Kunci
+                            # lain masih layak dicoba.
+                            log.error("Gemini menolak kunci #%d (%s)", ik + 1, e.code)
+                            for mm in urutan:
+                                _dilewati_sampai[(ik, mm)] = time.time() + JEDA_HARIAN_DETIK
+                            break
+                        # 400 lainnya: permintaannya yang salah, dan akan salah
+                        # lagi di kunci dan model mana pun. Rincinya ke LOG
+                        # (aturan 8) - balasan Google memuat nama proyek.
+                        log.error("Gemini menolak (%s) pada %s: %s", e.code, m, rinci[:400])
+                        raise RuntimeError("Penyedia model menolak permintaan ini.") from e
+                    except (urllib.error.URLError, TimeoutError) as e:
+                        if percobaan == 0:
+                            time.sleep(1.2)
+                            continue
+                        harian = False
+                        ada_tolakan = True
+                        log.warning("Gemini tidak terjangkau pada %s: %s", m, e)
+                        break
+                if data is not None:
                     break
             if data is not None:
                 break
+            # Putaran kedua HANYA kalau ada pasangan yang cuma diminta menunggu
+            # sebentar. Jatah harian yang habis tidak pulih dalam sepuluh detik,
+            # dan menidurkan permintaan untuknya cuma memperlambat kabar buruk.
+            if putaran == 0 and minta_tunggu is not None and minta_tunggu <= TUNGGU_MAKS_DETIK:
+                time.sleep(max(minta_tunggu, 0.5))
+                continue
+            break
 
         if data is None:
             log.error("Seluruh model Gemini gagal: %s", urutan)
@@ -464,5 +534,5 @@ def _pakai(data: dict) -> Pemakaian:
 class KlienGemini:
     """Cukup meniru `anthropic.Anthropic` untuk dipakai `api/ai.py`."""
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str | list[str]) -> None:
         self.messages = _Pesan(api_key)

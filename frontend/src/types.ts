@@ -581,7 +581,7 @@ export interface PropertiHeksagon {
 }
 
 
-// --- Akun, langganan, token ------------------------------------------------
+// --- Akun dan langganan ----------------------------------------------------
 
 /**
  * Tingkat akses. Selalu dibaca dari respons backend, tidak pernah disimpulkan
@@ -610,7 +610,6 @@ export interface Akun {
   nama_tampilan: string | null
   peran: string
   tingkat: 'gratis' | 'premium'
-  saldo_token: number
   dibuat_pada: string | null
   langganan: RingkasLangganan | null
   /** Diisi saat onboarding premium. Menyetel bawaan simulasi dan saringan peta. */
@@ -632,29 +631,11 @@ export interface PaketLangganan {
   rincian: string[]
 }
 
-export interface PaketToken {
-  kode: string
-  nama: string
-  token: number
-  harga_rp: number
-}
-
 export interface KatalogPaket {
   langganan: PaketLangganan[]
-  token: PaketToken[]
-  biaya_token: Record<string, number>
   mata_uang: string
   pembayaran_aktif: boolean
   catatan_pembayaran: string
-}
-
-export interface MutasiToken {
-  jumlah: number
-  keperluan: string
-  catatan: string | null
-  h3_index: string | null
-  saldo_sesudah: number
-  dibuat_pada: string
 }
 
 export interface ButirPantauan {

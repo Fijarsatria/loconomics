@@ -76,7 +76,6 @@ const K = {
     ajakanPremium: 'Bagian ini terbuka untuk pelanggan Loconomics Premium.',
     ajakanMasuk: 'Buat akun dulu, lalu buka seluruh kedalaman datanya.',
     gabung: 'Gabung Loconomics Premium',
-    atauToken: 'atau buka lokasi ini saja dengan 1 token',
     peringkat: (n: number) => ` · peringkat ${n}`,
     lihatKuadran: 'Lihat posisinya di diagram kuadran',
 
@@ -102,10 +101,6 @@ const K = {
     laporanMasuk: 'Buat akun dulu untuk mengunduh Laporan Kelayakan.',
     laporanOke: 'Laporan Kelayakan terunduh.',
     laporanGagal: 'Gagal mengunduh laporan.',
-    bukaOke: 'Lokasi ini terbuka permanen untuk akun Anda.',
-    bukaGagal: 'Gagal membuka lokasi.',
-    membuka: 'Membuka…',
-    bukaToken: (sisa: number) => `Buka lokasi ini saja — 1 token (${sisa} tersisa)`,
     simulasiJudul: 'Simulasi usaha di sini',
     simulasiIsi: 'Omzet, sewa, dan titik impas dari angka heksagon ini',
 
@@ -239,7 +234,6 @@ const K = {
     ajakanPremium: 'This section is open to Loconomics Premium subscribers.',
     ajakanMasuk: 'Create an account first, then open the full depth of the data.',
     gabung: 'Join Loconomics Premium',
-    atauToken: 'or open just this location with 1 token',
     peringkat: (n: number) => ` · rank ${n}`,
     lihatKuadran: 'See where it sits on the quadrant diagram',
 
@@ -265,10 +259,6 @@ const K = {
     laporanMasuk: 'Create an account first to download the Feasibility Report.',
     laporanOke: 'Feasibility Report downloaded.',
     laporanGagal: 'Could not download the report.',
-    bukaOke: 'This location is now permanently open for your account.',
-    bukaGagal: 'Could not open the location.',
-    membuka: 'Opening…',
-    bukaToken: (sisa: number) => `Open just this location — 1 token (${sisa} left)`,
     simulasiJudul: 'Simulate a business here',
     simulasiIsi: "Revenue, rent, and break-even from this hexagon's numbers",
 
@@ -558,8 +548,6 @@ function PanelInsight({
     mintaMasuk,
     akun,
     segarkan,
-    tandaiTerbuka,
-    terbuka,
     catatSimpan,
     tersimpan,
   } = useSesi()
@@ -618,7 +606,7 @@ function PanelInsight({
     // belum boleh, keduanya tidak diminta sama sekali - dua permintaan yang
     // sudah pasti dijawab 401 cuma membebani jaringan dan mengotori konsol.
     // Backend tetap penjaganya; ini sekadar tidak mengetuk pintu yang terkunci.
-    const bolehDalam = premium || terbuka.has(h3)
+    const bolehDalam = premium
     Promise.allSettled([
       api.detailHeksagon(h3),
       bolehDalam ? api.kartuHarga(h3) : Promise.reject(new Error('terkunci')),
@@ -661,7 +649,7 @@ function PanelInsight({
     // penjelasan kuadran, catatan pola jam, peringatan simulasi. Menukar
     // bahasa tanpa meminta ulang meninggalkan kalimat lama di layar yang
     // seluruh sisanya sudah berganti.
-  }, [h3, premium, terbuka, profilRute, ist.bahasa])
+  }, [h3, premium, profilRute, ist.bahasa])
 
   if (!h3) return <Ajakan judul={t.pilihJudul} anak={t.pilihIsi} />
   if (memuat) return <Memuat baris={5} />
@@ -683,11 +671,9 @@ function PanelInsight({
 
   // Dibaca dari BACKEND, bukan dari `premium` di frontend.
   //
-  // Keduanya biasanya sepakat, tetapi ada satu keadaan penting di mana tidak:
-  // akun gratis yang sudah membelanjakan token untuk heksagon INI. Backend
-  // tahu itu dan mengirim isi penuhnya dengan `terkunci: []`; `premium` di
-  // frontend tetap false. Kalau tirainya digambar dari `premium`, orang yang
-  // sudah membayar tetap melihat tirai di atas data yang sudah ia beli.
+  // Backend yang memutuskan apa yang ditahan (aturan 2b), jadi tirainya
+  // digambar dari daftar `terkunci` yang ia kirim - bukan dari tebakan
+  // frontend soal tingkat akun.
   const dipantau = tersimpan.has(skor.h3_index)
   const terkunci = detail.terkunci.length > 0
 
@@ -966,7 +952,7 @@ function PanelInsight({
               setAksiPesan(t.laporanOke)
               await segarkan()
             } catch (e) {
-              if (e instanceof GalatAPI && (e.kode === 'BUTUH_PREMIUM' || e.kode === 'TOKEN_TIDAK_CUKUP'))
+              if (e instanceof GalatAPI && e.kode === 'BUTUH_PREMIUM')
                 mintaLangganan(e.message)
               else setAksiPesan(e instanceof GalatAPI ? e.message : t.laporanGagal)
             } finally {
@@ -984,30 +970,6 @@ function PanelInsight({
           />
         </TombolBulat>
       </div>
-
-      {/* Jalan keluar kedua untuk akun gratis: bayar satu lokasi ini saja. */}
-      {akun && !premium && terkunci && (
-        <button
-          onClick={async () => {
-            setAksiSibuk('token')
-            try {
-              await api.bukaHeksagon(h3)
-              tandaiTerbuka(h3)
-              await segarkan()
-              setDetail(await api.detailHeksagon(h3))
-              setAksiPesan(t.bukaOke)
-            } catch (e) {
-              if (e instanceof GalatAPI && e.kode === 'TOKEN_TIDAK_CUKUP') mintaLangganan(e.message)
-              else setAksiPesan(e instanceof GalatAPI ? e.message : t.bukaGagal)
-            } finally {
-              setAksiSibuk(null)
-            }
-          }}
-          className="flex w-full cursor-pointer items-center justify-center gap-1.5 border-b border-line bg-surface-2/60 px-4 py-2 text-[11.5px] font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-        >
-          {aksiSibuk === 'token' ? t.membuka : t.bukaToken(akun.saldo_token)}
-        </button>
-      )}
 
       {aksiPesan && (
         <p
@@ -1217,16 +1179,6 @@ function PanelInsight({
             labelAksi={t.gabung}
             baris={4}
             onBuka={ajakanBuka}
-            aksiKedua={
-              akun ? (
-                <button
-                  onClick={ajakanBuka}
-                  className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
-                >
-                  {t.atauToken}
-                </button>
-              ) : undefined
-            }
           />
         ) : harga ? (
           <>
@@ -1427,16 +1379,6 @@ function PanelInsight({
             labelAksi={t.gabung}
             baris={4}
             onBuka={ajakanBuka}
-            aksiKedua={
-              akun ? (
-                <button
-                  onClick={ajakanBuka}
-                  className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
-                >
-                  {t.atauToken}
-                </button>
-              ) : undefined
-            }
           />
         ) : (
         <>
@@ -1529,14 +1471,6 @@ function PanelInsight({
             labelAksi={t.gabung}
             baris={4}
             onBuka={ajakanBuka}
-            aksiKedua={
-              <button
-                onClick={ajakanBuka}
-                className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
-              >
-                {t.atauToken}
-              </button>
-            }
           />
         </Bagian>
       ) : (
@@ -1787,16 +1721,6 @@ function PanelInsight({
                 labelAksi={t.gabung}
                 baris={3}
                 onBuka={ajakanBuka}
-                aksiKedua={
-                  akun ? (
-                    <button
-                      onClick={ajakanBuka}
-                      className="cursor-pointer text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2"
-                    >
-                      {t.atauToken}
-                    </button>
-                  ) : undefined
-                }
               />
               {frasaPrestise(detail.cakupan_prestise, 'lokasi', ist.bahasa) && (
                 <p className="mt-2.5 border-t border-line/60 pt-2 text-[11.5px] leading-snug text-ink-3">

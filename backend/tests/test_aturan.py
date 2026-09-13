@@ -587,14 +587,14 @@ def test_jenis_usaha_python_dan_frontend_sama():
 
     from app.core.simulasi import JENIS_USAHA
 
-    ts = (AKAR / "frontend" / "src" / "components" / "Simulasi.tsx").read_text(
+    ts = (AKAR / "frontend" / "src" / "lib" / "jenis-usaha.ts").read_text(
         encoding="utf-8"
     )
 
     blok = re.search(
-        r"const BAWAAN: Record<string, \{[^}]*\}> = \{(.*?)\n\}", ts, re.S
+        r"export const BAWAAN: Record<string, \{[^}]*\}> = \{(.*?)\n\}", ts, re.S
     )
-    assert blok, "blok BAWAAN tidak ketemu di frontend/src/components/Simulasi.tsx"
+    assert blok, "blok BAWAAN tidak ketemu di frontend/src/lib/jenis-usaha.ts"
 
     fe = {
         m.group(1): (int(m.group(2)), int(m.group(3)), int(m.group(4)))
@@ -608,7 +608,7 @@ def test_jenis_usaha_python_dan_frontend_sama():
     # Kunci yang dipakai TOMBOL, bukan cuma yang punya bawaan. Keduanya harus
     # sama; kalau tombolnya ada tanpa bawaan, penggesernya berangkat dari nilai
     # global dan itu justru kesalahan yang sedang dicegah di sini.
-    blok_jenis = re.search(r"const JENIS = \[(.*?)\n\] as const", ts, re.S)
+    blok_jenis = re.search(r"export const JENIS_USAHA = \[(.*?)\n\] as const", ts, re.S)
     assert blok_jenis, "blok JENIS tidak ketemu"
     tombol = set(re.findall(r"nilai:\s*'([^']+)'", blok_jenis.group(1)))
 

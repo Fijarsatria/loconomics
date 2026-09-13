@@ -26,7 +26,7 @@ Yang TIDAK dilakukan di sini, sengaja:
     data setiap kali dipakai, jadi akun yang dicabut langsung kehilangan akses
     tanpa perlu daftar pencabutan tersendiri.
   - tidak ada penyimpanan sesi di server. Tiket menandatangani id akun saja;
-    seluruh keadaan lain - tingkat, sisa token - dibaca segar dari basis data
+    seluruh keadaan lain - tingkat, langganan - dibaca segar dari basis data
     tiap permintaan. Tingkat yang basi adalah tingkat yang salah.
 """
 
@@ -49,7 +49,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.galat import ButuhPremium, TidakTerautentikasi
-from app.models import PremiumUnlock, Subscription, User
+from app.models import Subscription, User
 
 log = logging.getLogger("loconomics.akun")
 
@@ -80,11 +80,8 @@ _PANJANG_SIDIK = 32
 # harga yang bisa disunting dari peramban adalah harga yang bisa disunting oleh
 # pembeli.
 #
-# Tangga harganya sengaja membuat langganan menang telak. 10 token seharga
-# Rp20.000 hampir sama mahal dengan sebulan penuh Rp25.000, dan itu memang
-# maksudnya: token untuk orang yang butuh satu-dua laporan dan tidak ingin
-# berlangganan, langganan untuk semua orang lain. Tangga yang membuat token
-# terlihat lebih hemat akan menghasilkan pelanggan yang membeli token terus.
+# Satu produk, satu harga. Token satuan pernah dijual di samping langganan dan
+# dihapus 13 Sep 2026 atas permintaan pemilik repo - lihat `akses_penuh`.
 
 HARGA_BULANAN_RP = 25_000
 
@@ -105,16 +102,6 @@ PAKET_LANGGANAN: list[dict[str, Any]] = [
         ],
     },
 ]
-
-#: 1 token = 1 pembukaan penuh satu heksagon, ATAU 1 unduhan laporan.
-BIAYA_TOKEN: dict[str, int] = {"detail": 1, "laporan": 2}
-
-PAKET_TOKEN: list[dict[str, Any]] = [
-    {"kode": "token_3", "nama": "Coba", "token": 3, "harga_rp": 9_000},
-    {"kode": "token_10", "nama": "Hemat", "token": 10, "harga_rp": 20_000},
-    {"kode": "token_25", "nama": "Pro", "token": 25, "harga_rp": 45_000},
-]
-
 
 # ---------------------------------------------------------------------------
 # Kunci penandatangan
@@ -294,25 +281,6 @@ def langganan_aktif(db: Session, user: User) -> Subscription | None:
     return None
 
 
-def sudah_terbuka(db: Session, user: User | None, h3: str, jenis: str = "detail") -> bool:
-    """Apakah akun ini sudah pernah membayar token untuk heksagon ini.
-
-    Duduk di core, bukan di api/akun.py, karena `hex.py` juga memanggilnya -
-    dan modul API tidak pernah mengimpor menyamping ke modul API lain (lihat
-    kepala `api/bersama.py`). Pelanggan premium tidak pernah sampai ke fungsi
-    ini; pemanggilnya memeriksa langganan lebih dulu.
-    """
-    if user is None:
-        return False
-    return db.execute(
-        select(PremiumUnlock.id).where(
-            PremiumUnlock.user_id == user.id,
-            PremiumUnlock.h3_index == h3,
-            PremiumUnlock.jenis == jenis,
-        )
-    ).first() is not None
-
-
 def tingkat(db: Session, user: User | None) -> Tingkat:
     if user is None:
         return "tamu"
@@ -322,14 +290,21 @@ def tingkat(db: Session, user: User | None) -> Tingkat:
 def akses_penuh(db: Session, user: User | None, h3: str) -> bool:
     """Boleh melihat kedalaman penuh SATU heksagon ini?
 
-    Dua jalan masuk dan hanya dua: langganan aktif, atau token yang pernah
-    dibelanjakan untuk heksagon ini. Satu fungsi untuk keempat pintunya -
-    detail, kartu harga, Commuter Clock, simulasi - supaya "sudah bayar satu
-    lokasi" berarti hal yang sama di semua pintu, bukan di sebagian.
+    Satu jalan masuk: langganan aktif. Sampai 13 Sep 2026 ada jalan kedua -
+    token satuan untuk membuka satu heksagon - dan pemilik repo memintanya
+    dihapus. Saat dihapus, basis data mencatat NOL heksagon yang pernah dibuka
+    dengan token dan nol saldo di seluruh akun, jadi tidak ada pembelian yang
+    hangus. Tabel `token_ledger` dan `premium_unlocks` sengaja dibiarkan:
+    menghapus tabel tidak bisa dibatalkan, dan membiarkannya kosong tidak
+    merugikan apa pun.
+
+    `h3` tetap diterima supaya keempat pintunya - detail, kartu harga, Commuter
+    Clock, simulasi - tetap memanggil satu fungsi yang sama. Kalau suatu saat
+    akses per lokasi kembali, ia kembali di sini, di satu tempat.
     """
     if user is None:
         return False
-    return langganan_aktif(db, user) is not None or sudah_terbuka(db, user, h3)
+    return langganan_aktif(db, user) is not None
 
 
 def wajib_akses_penuh(db: Session, user: User | None, h3: str, fitur: str) -> None:
@@ -345,7 +320,7 @@ def wajib_akses_penuh(db: Session, user: User | None, h3: str, fitur: str) -> No
         )
     if not akses_penuh(db, user, h3):
         raise ButuhPremium(
-            f"{fitur} bagian dari Loconomics Premium — atau buka lokasi ini dengan token.",
+            f"{fitur} bagian dari Loconomics Premium.",
             {"h3_index": h3},
         )
 
@@ -430,7 +405,6 @@ def ringkas_akun(db: Session, user: User) -> dict[str, Any]:
         "nama_tampilan": user.nama_tampilan,
         "peran": user.peran,
         "tingkat": "premium" if lang else "gratis",
-        "saldo_token": user.saldo_token,
         "dibuat_pada": user.dibuat_pada,
         "preferensi": preferensi,
         "langganan": None

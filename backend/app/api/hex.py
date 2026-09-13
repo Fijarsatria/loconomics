@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from app.core.akun import (
     PenggunaOpsional,
     langganan_aktif,
-    sudah_terbuka,
     wajib_akses_penuh,
 )
 from app.api.bersama import (
@@ -817,10 +816,8 @@ def detail_heksagon(
         boleh_penuh = True
     else:
         tingkat_akun = "gratis"
-        # Akun gratis yang sudah membelanjakan token untuk heksagon INI tetap
-        # mendapat isi penuhnya. Ia sudah membayar; yang dibayar tidak boleh
-        # hilang hanya karena ia belum berlangganan bulanan.
-        boleh_penuh = sudah_terbuka(db, pengguna, h3_index)
+        # Akun gratis = hak tamu. Jalur token satuan dihapus 13 Sep 2026.
+        boleh_penuh = False
 
     terkunci: list[str] = (
         [] if boleh_penuh else ["variabel", "faktor", "indeks", "kuadran", "perkiraan"]

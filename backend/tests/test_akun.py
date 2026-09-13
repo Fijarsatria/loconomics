@@ -28,10 +28,9 @@ from app.core.akun import (  # noqa: E402
     langganan_aktif,
     periksa_sandi,
     sidik_sandi,
-    sudah_terbuka,
 )
 from app.core.database import SessionLocal  # noqa: E402
-from app.models import HexFeature, PremiumUnlock, TokenLedger, User  # noqa: E402
+from app.models import HexFeature, Subscription, User  # noqa: E402
 
 def _dari_env(nama: str) -> str:
     """Environment variable dulu, lalu backend/.env. Kembar dari seed_akun.py.
@@ -114,7 +113,6 @@ def main() -> int:
         db.flush()
 
         cek("akun baru bukan premium", langganan_aktif(db, u) is None)
-        cek("akun baru saldo token nol", u.saldo_token == 0)
 
         # =================================================================
         # Penjagaan detail heksagon - INI yang paling penting
@@ -161,17 +159,28 @@ def main() -> int:
             cek("gratis: perkiraan tetap kosong", gratis.perkiraan == [])
             cek("gratis: tingkat 'gratis'", gratis.tingkat_akun == "gratis")
 
-            # --- Token: buka satu heksagon --------------------------------
-            cek("belum terbuka", not sudah_terbuka(db, u, h3))
-            u.saldo_token = 5
-            db.add(PremiumUnlock(user_id=u.id, h3_index=h3, jenis="detail"))
+            # --- Sistem token sudah DIHAPUS (13 Sep 2026) --------------------
+            import app.core.akun as _inti_akun
+            import app.api.akun as _api_akun
+
+            cek("token: fungsi pembuka satu heksagon sudah tidak ada",
+                not hasattr(_inti_akun, "sudah_terbuka"))
+            cek("token: endpoint beli/buka sudah tidak terdaftar",
+                not any(getattr(r, "path", "").startswith(("/akun/token", "/akun/buka", "/akun/terbuka"))
+                        for r in _api_akun.router.routes))
+            cek("token: katalog tidak lagi menjual token",
+                "token" not in _api_akun.katalog() and "biaya_token" not in _api_akun.katalog())
+
+            # Satu-satunya jalan masuk yang tersisa: langganan.
+            langganan_uji = Subscription(user_id=u.id, paket="bulanan", status="aktif",
+                                         selamanya=True, metode_bayar="uji")
+            db.add(langganan_uji)
             db.flush()
-            cek("terbuka sesudah dicatat", sudah_terbuka(db, u, h3))
 
             # --- Ketiga laporan PDF ---------------------------------------
             #
-            # Dijalankan SESUDAH token dibelanjakan, karena ketiganya berbayar
-            # dan penjaganya memang harus dilewati lewat pintu yang sah.
+            # Dijalankan SESUDAH langganan aktif, karena ketiganya berbayar dan
+            # penjaganya memang harus dilewati lewat pintu yang sah.
             #
             # Yang diperiksa BUKAN "PDF-nya bagus" - itu tidak bisa diuji di
             # sini - melainkan tiga hal yang gagalnya diam: berkasnya memang
@@ -195,11 +204,8 @@ def main() -> int:
                 select(LocationScore).where(LocationScore.h3_index == h3)
             ).scalars().first()
 
-            # PERAKITNYA yang dipanggil, bukan endpointnya. `laporan_pdf`
-            # memotong token, dan potongan itu menambah baris buku besar yang
-            # membuat asersi saldo di bawah gagal - uji ini menangkapnya sendiri
-            # pada percobaan pertama. Yang ingin diuji di sini perakitan
-            # PDF-nya, bukan lagi penjaganya (yang sudah diuji di atas).
+            # PERAKITNYA yang dipanggil, bukan endpointnya: yang ingin diuji di
+            # sini perakitan PDF-nya, bukan lagi penjaganya.
             from app.api.bersama import badge, peringatan_risiko, persentil_churn, zoneguard
 
             p75_l, p90_l = persentil_churn(db, hx_uji.kawasan)
@@ -226,44 +232,20 @@ def main() -> int:
             cek("putusan simulasi berjudul", bool(judul_sim))
 
             dibuka = detail_heksagon(h3, db, pengguna=u)
-            cek("token: variabel terisi 43", len(dibuka.variabel) == 43)
-            cek("token: terkunci kosong", dibuka.terkunci == [])
+            cek("premium: variabel terisi 43", len(dibuka.variabel) == 43)
+            cek("premium: terkunci kosong", dibuka.terkunci == [])
             # Dan yang dibuka BENAR-BENAR terbuka. Uji yang cuma memastikan
             # tamu ditahan akan tetap hijau kalau perkiraannya tidak pernah
             # dikirim ke siapa pun - yaitu kalau fiturnya mati total.
-            cek("token: perkiraan ikut terbuka", len(dibuka.perkiraan) > 0)
-            cek("token: tiap perkiraan membawa mutunya",
+            cek("premium: perkiraan ikut terbuka", len(dibuka.perkiraan) > 0)
+            cek("premium: tiap perkiraan membawa mutunya",
                 all(p.keterangan and p.kolom for p in dibuka.perkiraan))
-            cek("token: nilai indeks ikut terbuka", dibuka.indeks.ipt is not None)
-            cek("token: tingkat tetap 'gratis'", dibuka.tingkat_akun == "gratis")
+            cek("premium: nilai indeks ikut terbuka", dibuka.indeks.ipt is not None)
+            cek("premium: tingkat 'premium'", dibuka.tingkat_akun == "premium")
 
-            # Heksagon LAIN tetap terkunci - pembukaan tidak boleh menular.
-            h3_lain = db.execute(
-                select(HexFeature.h3_index).where(HexFeature.h3_index != h3).limit(1)
-            ).scalar_one_or_none()
-            if h3_lain:
-                lain = detail_heksagon(h3_lain, db, pengguna=u)
-                cek("pembukaan tidak menular ke heksagon lain", lain.variabel == {})
-
-        # =================================================================
-        # Buku besar token
-        # =================================================================
-        from app.api.akun import _catat_token
-
-        u.saldo_token = 0
-        _catat_token(db, u, 10, "beli", "uji")
-        db.flush()
-        cek("saldo naik", u.saldo_token == 10)
-        _catat_token(db, u, -2, "laporan", "uji")
-        db.flush()
-        cek("saldo turun", u.saldo_token == 8)
-
-        baris = db.execute(
-            select(TokenLedger).where(TokenLedger.user_id == u.id)
-        ).scalars().all()
-        cek("dua mutasi tercatat", len(baris) == 2)
-        cek("jumlah buku besar == saldo", sum(b.jumlah for b in baris) == u.saldo_token)
-        cek("saldo_sesudah terakhir benar", baris[-1].saldo_sesudah == 8)
+            # Langganan uji dicabut lagi: bagian sesudah ini menguji akun GRATIS.
+            db.delete(langganan_uji)
+            db.flush()
 
         # =================================================================
         # Penjaga premium melempar untuk akun gratis

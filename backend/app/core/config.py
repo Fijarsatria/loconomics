@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # Provider LLM untuk AI Consultant. MAPID tidak menyediakan token AI.
     # WAJIB backend saja - jangan pernah diteruskan ke frontend dalam bentuk apa pun.
     llm_api_key: str = ""
+    # Kunci CADANGAN, dipisah koma, dicoba berurutan saat kunci utama kena
+    # batas. Hanya berguna kalau tiap kunci dibuat di PROYEK Google yang
+    # berbeda: jatah gratis Gemini dihitung per proyek, bukan per kunci -
+    # terukur 13 Sep 2026, kunci kedua dari akun yang sama ikut habis bersama.
+    llm_api_key_cadangan: str = ""
     llm_provider: str = "anthropic"
     llm_model: str = "claude-opus-5"
 
@@ -49,6 +54,10 @@ class Settings(BaseSettings):
     # Yang memakainya cuma pipeline/rute_ors.py, offline. Backend TIDAK pernah
     # memanggil ORS saat melayani permintaan; ia hanya membaca tabel hex_routes.
     ors_api_key: str = ""
+    # Kunci ORS KEDUA, khusus profil mobil (`rute_ors.py --mobil`). Terpisah
+    # supaya rute mobil tidak menghabiskan jatah harian yang dipakai rute
+    # jalan kaki - keduanya berkuota 2.000 permintaan per hari per akun.
+    ors_api_key_mobil: str = ""
 
     # Diisi dari .env sebagai daftar dipisah koma saat deploy, mis.
     # CORS_ORIGINS=https://fijarsatria.github.io,http://localhost:5173

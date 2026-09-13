@@ -29,7 +29,6 @@ import type {
   JawabanAI,
   PeringatanRisiko,
   PermintaanAI,
-  MutasiToken,
   PriceLensHeksagon,
   RiwayatSkor,
   SesiAkun,
@@ -79,8 +78,8 @@ export const adaTiket = (): boolean => tiketSekarang !== null
  * Galat yang membawa KODE backend, bukan cuma teksnya.
  *
  * Ini yang membuat antarmuka bisa bercabang dengan benar: 401 membuka dialog
- * masuk, 402 BUTUH_PREMIUM membuka dialog langganan, 402 TOKEN_TIDAK_CUKUP
- * membuka etalase token. Mencabangkan pada teks pesan akan pecah begitu
+ * masuk, 402 BUTUH_PREMIUM membuka dialog langganan. Mencabangkan pada teks
+ * pesan akan pecah begitu
  * pesannya diperbaiki — dan pesan memang sering diperbaiki.
  */
 export class GalatAPI extends Error {
@@ -433,22 +432,12 @@ export const api = {
   berlangganan: (paket: string) =>
     ambil<Akun>('/akun/langganan', { method: 'POST', body: JSON.stringify({ paket }) }),
 
-  beliToken: (paket: string) =>
-    ambil<Akun>('/akun/token/beli', { method: 'POST', body: JSON.stringify({ paket }) }),
-
-  riwayatToken: () => ambil<MutasiToken[]>('/akun/token/riwayat'),
-
   /** Preferensi usaha dari onboarding. Menyetel bawaan simulasi + saringan peta. */
   simpanPreferensi: (p: {
     jenis_usaha?: string | null
     kawasan?: string | null
     budget_sewa_bulanan?: number | null
   }) => ambil<Akun>('/akun/preferensi', { method: 'POST', body: JSON.stringify(p) }),
-
-  /** Belanjakan token untuk membuka satu heksagon selamanya. Idempoten. */
-  bukaHeksagon: (h3: string) => ambil<Akun>(`/akun/buka/${h3}`, { method: 'POST' }),
-
-  heksagonTerbuka: () => ambil<string[]>('/akun/terbuka'),
 
   // --- Pemantauan ---
   pantauan: () => ambil<ButirPantauan[]>('/akun/pantauan'),

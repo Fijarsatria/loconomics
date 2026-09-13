@@ -216,7 +216,10 @@ def klien():
     if settings.llm_provider.lower() == "gemini":
         from app.core.llm_gemini import KlienGemini
 
-        _klien = KlienGemini(settings.llm_api_key)
+        # Cadangan boleh lebih dari satu, dipisah koma. Urutan di sini urutan
+        # percobaannya: kunci utama selalu yang pertama.
+        cadangan = [k.strip() for k in settings.llm_api_key_cadangan.split(",") if k.strip()]
+        _klien = KlienGemini([settings.llm_api_key, *cadangan])
         log.info("Klien LLM siap (Gemini), model %s", model_aktif())
         return _klien
 

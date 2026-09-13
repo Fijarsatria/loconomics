@@ -43,6 +43,8 @@
 #      MAPID_DATA_API_KEY      data misi; tidak pernah ke peramban
 #      LLM_API_KEY             Konsultan AI. Boleh kosong dulu - /ai/tanya
 #                              menjawab 501 dengan pesan yang jujur
+#      LLM_API_KEY_CADANGAN    kunci Gemini dari PROYEK Google lain, dipisah
+#                              koma; dicoba berurutan saat kunci utama kena batas
 #      LLM_PROVIDER            anthropic ATAU gemini
 #      LLM_MODEL               claude-opus-5 (anthropic) atau
 #                              gemini-3-flash-preview (gemini)
@@ -68,9 +70,10 @@
 #                              Tanpa ini Oryx tidak memasang requirements.txt
 #                              dan aplikasinya naik tanpa satu pun dependensi
 #
-#    Itu SELURUH `Settings` yang dibaca backend, kecuali satu - dan yang satu
-#    itu sengaja tidak ada di sini:
+#    Itu SELURUH `Settings` yang dibaca backend, kecuali dua - dan keduanya
+#    sengaja tidak ada di sini:
 #
+#      ORS_API_KEY, ORS_API_KEY_MOBIL   (yang kedua khusus profil mobil)
 #      ORS_API_KEY   JANGAN disetel di Azure. `render.yaml` mendaftarkannya dan
 #                    itu keliru: satu-satunya pemakainya `pipeline/rute_ors.py`,
 #                    yang dijalankan MANUAL dari mesin pengembang. Backend tidak

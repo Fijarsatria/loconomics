@@ -1,17 +1,17 @@
-"""Akun, langganan, token, pemantauan, dan Laporan Kelayakan.
+"""Akun, langganan, pemantauan, dan Laporan Kelayakan.
 
 Mesinnya ada di `app/core/akun.py`; yang di sini rutenya.
 
 SATU HAL YANG PERLU DIBACA SEBELUM MENYUNTING BERKAS INI. Tidak ada uang
-sungguhan yang berpindah di sini. `POST /akun/langganan` dan `POST
-/akun/token/beli` langsung mengaktifkan tanpa memverifikasi pembayaran apa pun,
+sungguhan yang berpindah di sini. `POST /akun/langganan` langsung mengaktifkan
+tanpa memverifikasi pembayaran apa pun,
 karena QRIS-nya memang belum terpasang. Itu keadaan yang DINYATAKAN - responsnya
 membawa `metode_bayar: "demo"`, dan antarmuka menuliskannya di layar. Begitu
-gerbang pembayaran sungguhan masuk, yang berubah cuma satu hal: kedua endpoint
-ini berhenti mengaktifkan langsung dan mulai menunggu webhook. Bentuk tabelnya
+gerbang pembayaran sungguhan masuk, yang berubah cuma satu hal: endpoint itu
+berhenti mengaktifkan langsung dan mulai menunggu webhook. Bentuk tabelnya
 sudah menyiapkan itu lewat `referensi_bayar`.
 
-Jangan pernah membuat kedua endpoint ini terlihat seolah sudah memverifikasi
+Jangan pernah membuat endpoint ini terlihat seolah sudah memverifikasi
 pembayaran. Layar berbayar palsu yang meyakinkan lebih buruk daripada layar
 berbayar yang jujur mengaku demo.
 """
@@ -33,16 +33,13 @@ from sqlalchemy.orm import Session
 from app.api.bersama import ambil_hex, badge, peringatan_risiko, persentil_churn, zoneguard
 from app.core import batas
 from app.core.akun import (
-    BIAYA_TOKEN,
     PAKET_LANGGANAN,
-    PAKET_TOKEN,
     PenggunaOpsional,
     PenggunaPremium,
     PenggunaWajib,
     buat_tiket,
     langganan_aktif,
     periksa_sandi,
-    sudah_terbuka,
     ringkas_akun,
     sidik_sandi,
 )
@@ -52,16 +49,13 @@ from app.core.galat import (
     KesalahanAPI,
     KredensialSalah,
     TidakDitemukan,
-    TokenTidakCukup,
 )
 from app.models import (
     HexFeature,
     HexHourlyProfile,
     LocationScore,
     ScoreFactor,
-    PremiumUnlock,
     Subscription,
-    TokenLedger,
     User,
     WatchlistItem,
 )
@@ -72,8 +66,6 @@ from app.schemas import (
     Akun,
     PreferensiUsaha,
     ButirPantauan,
-    MutasiTokenKeluar,
-    PermintaanBeliToken,
     PermintaanDaftar,
     PermintaanLangganan,
     PermintaanMasuk,
@@ -235,13 +227,11 @@ def simpan_preferensi(
     return Akun(**ringkas_akun(db, user))
 
 
-@router.get("/paket", summary="Katalog langganan dan token")
+@router.get("/paket", summary="Katalog langganan")
 def katalog() -> dict[str, Any]:
     """Publik. Harga harus bisa dilihat sebelum orang membuat akun."""
     return {
         "langganan": PAKET_LANGGANAN,
-        "token": PAKET_TOKEN,
-        "biaya_token": BIAYA_TOKEN,
         "mata_uang": "IDR",
         # Dibaca antarmuka untuk menuliskan keadaan pembayaran apa adanya.
         "pembayaran_aktif": False,
@@ -290,119 +280,6 @@ def berlangganan(
     db.refresh(user)
     log.info("langganan aktif: %s paket=%s", user.nama_pengguna, paket["kode"])
     return Akun(**ringkas_akun(db, user))
-
-
-def _catat_token(db: Session, user: User, jumlah: int, keperluan: str, catatan: str | None = None,
-                 h3: str | None = None) -> None:
-    """Tulis mutasi DAN saldo dalam satu transaksi.
-
-    Keduanya harus berpindah bersama. Kalau tidak, saldo dan buku besarnya bisa
-    berselisih - dan yang berselisih tanpa ada yang tahu adalah uang orang lain.
-    """
-    user.saldo_token += jumlah
-    db.add(
-        TokenLedger(
-            user_id=user.id,
-            jumlah=jumlah,
-            keperluan=keperluan,
-            catatan=catatan,
-            h3_index=h3,
-            saldo_sesudah=user.saldo_token,
-        )
-    )
-
-
-@router.post("/token/beli", response_model=Akun, summary="Beli token analisis")
-def beli_token(
-    p: PermintaanBeliToken,
-    user: PenggunaWajib,
-    db: Annotated[Session, Depends(get_db)],
-) -> Akun:
-    paket = next((x for x in PAKET_TOKEN if x["kode"] == p.paket), None)
-    if paket is None:
-        raise TidakDitemukan(
-            f"Paket token '{p.paket}' tidak dikenal.",
-            {"paket_tersedia": [x["kode"] for x in PAKET_TOKEN]},
-        )
-    _catat_token(db, user, int(paket["token"]), "beli", f"Paket {paket['nama']} (demo)")
-    db.commit()
-    db.refresh(user)
-    return Akun(**ringkas_akun(db, user))
-
-
-@router.get("/token/riwayat", response_model=list[MutasiTokenKeluar], summary="Buku besar token")
-def riwayat_token(
-    user: PenggunaWajib, db: Annotated[Session, Depends(get_db)], limit: int = 50
-) -> list[MutasiTokenKeluar]:
-    baris = db.execute(
-        select(TokenLedger)
-        .where(TokenLedger.user_id == user.id)
-        .order_by(TokenLedger.id.desc())
-        .limit(min(max(limit, 1), 200))
-    ).scalars().all()
-    return [
-        MutasiTokenKeluar(
-            jumlah=b.jumlah,
-            keperluan=b.keperluan,
-            catatan=b.catatan,
-            h3_index=b.h3_index,
-            saldo_sesudah=b.saldo_sesudah,
-            dibuat_pada=b.dibuat_pada,
-        )
-        for b in baris
-    ]
-
-
-# ---------------------------------------------------------------------------
-# Membuka satu heksagon dengan token
-# ---------------------------------------------------------------------------
-
-
-@router.post("/buka/{h3_index}", response_model=Akun, summary="Buka satu heksagon dengan token")
-def buka_heksagon(
-    h3_index: str,
-    user: PenggunaWajib,
-    db: Annotated[Session, Depends(get_db)],
-) -> Akun:
-    """Belanjakan token untuk membuka satu heksagon selamanya.
-
-    Idempoten: memanggilnya lagi untuk heksagon yang sama TIDAK memotong token
-    kedua kalinya. Tanpa itu, satu klik ganda memakan dua token dan yang
-    kehilangan tidak pernah tahu kenapa.
-    """
-    ambil_hex(db, h3_index)  # 404 kalau heksagonnya memang tidak ada
-
-    if langganan_aktif(db, user) or sudah_terbuka(db, user, h3_index):
-        return Akun(**ringkas_akun(db, user))
-
-    biaya = BIAYA_TOKEN["detail"]
-    if user.saldo_token < biaya:
-        raise TokenTidakCukup(
-            f"Butuh {biaya} token untuk membuka lokasi ini, saldo Anda {user.saldo_token}.",
-            {"butuh": biaya, "saldo": user.saldo_token},
-        )
-
-    _catat_token(db, user, -biaya, "buka_detail", "Pembongkaran penuh 1 heksagon", h3_index)
-    db.add(PremiumUnlock(user_id=user.id, h3_index=h3_index, jenis="detail"))
-    try:
-        db.commit()
-    except IntegrityError:
-        # Klik ganda yang lolos ke dua transaksi. Batalkan seluruhnya - termasuk
-        # potongan tokennya - lalu laporkan keadaan apa adanya.
-        db.rollback()
-        db.refresh(user)
-    return Akun(**ringkas_akun(db, user))
-
-
-@router.get("/terbuka", summary="Heksagon yang sudah dibuka akun ini")
-def daftar_terbuka(user: PenggunaWajib, db: Annotated[Session, Depends(get_db)]) -> list[str]:
-    return list(
-        db.execute(
-            select(PremiumUnlock.h3_index).where(
-                PremiumUnlock.user_id == user.id, PremiumUnlock.jenis == "detail"
-            )
-        ).scalars().all()
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -569,15 +446,14 @@ def hapus_pantauan(
 )
 def laporan_pdf(
     h3_index: str,
-    user: PenggunaWajib,
+    user: PenggunaPremium,
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
     """Dokumen resmi untuk pengajuan modal atau sewa.
 
-    Berbayar - premium, atau 2 token. Token dipotong SESUDAH PDF-nya berhasil
-    dirakit, bukan sebelum: kalau perakitannya gagal, yang mahal bukan
-    kegagalannya melainkan token yang sudah hilang untuk berkas yang tidak
-    pernah ada.
+    Premium saja, lewat dependensi `PenggunaPremium` - bukan `if` di badan
+    fungsi. Jalur token satuan dihapus 13 Sep 2026 atas permintaan pemilik
+    repo; lihat `core/akun.py::akses_penuh`.
 
     Isinya membawa badge keyakinan di halaman pertama, bukan di catatan kaki.
     Dokumen ini dibuat untuk dibawa ke pemberi modal, dan angka yang berdiri
@@ -585,16 +461,6 @@ def laporan_pdf(
     yang paling perlu tahu.
     """
     hx = ambil_hex(db, h3_index)
-    premium = langganan_aktif(db, user) is not None
-    sudah = sudah_terbuka(db, user, h3_index, "laporan")
-
-    if not premium and not sudah:
-        biaya = BIAYA_TOKEN["laporan"]
-        if user.saldo_token < biaya:
-            raise TokenTidakCukup(
-                f"Laporan Kelayakan butuh {biaya} token, saldo Anda {user.saldo_token}.",
-                {"butuh": biaya, "saldo": user.saldo_token},
-            )
 
     sc = db.execute(
         select(LocationScore).where(
@@ -633,16 +499,6 @@ def laporan_pdf(
         log.exception("perakitan PDF gagal untuk %s", h3_index)
         raise
 
-    if not premium and not sudah:
-        _catat_token(
-            db, user, -BIAYA_TOKEN["laporan"], "laporan", "Laporan Kelayakan PDF", h3_index
-        )
-        db.add(PremiumUnlock(user_id=user.id, h3_index=h3_index, jenis="laporan"))
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-
     nama = f"Laporan-{kode_lokasi(hx.h3_index, hx.kawasan).replace(' ', '-')}.pdf"
     return Response(
         content=isi,
@@ -671,10 +527,7 @@ def laporan_komparasi(
     angka berbeda untuk lokasi yang sama - dan yang dibawa orang ke pemberi
     modal justru PDF-nya.
 
-    Premium saja, tanpa jalur token: token dibeli untuk membuka SATU lokasi,
-    sedangkan yang ini menggabungkan beberapa. Menagihnya per lokasi akan
-    membuat harga satu berkas bergantung pada berapa kolom yang kebetulan
-    dipilih.
+    Premium saja.
     """
     from app.api.skor import komparasi as susun_komparasi
 

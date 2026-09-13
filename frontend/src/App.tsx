@@ -75,7 +75,7 @@ import PanelInsight from './components/PanelInsight'
 // peta), dan Simulasi hanya hidup saat lembarnya dibuka. Keduanya keluar dari
 // bundel awal; peta mendapat utas utamanya lebih cepat.
 const Gerbang = lazy(() => import('./components/Gerbang'))
-import { TombolAkun, useSesi } from './components/Akun'
+import { PERISTIWA_BUKA_PETA, TombolAkun, useSesi, type DetailBukaPeta } from './components/Akun'
 import { useBahasa, useTema, useTeks, type Bahasa } from './lib/bahasa'
 import { MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
@@ -1031,7 +1031,6 @@ export default function App() {
   const {
     premium,
     akun,
-    terbuka,
     mintaLangganan,
     mintaMasuk,
     mintaPreferensi,
@@ -1107,14 +1106,14 @@ export default function App() {
     // Simulasi usaha BERBAYAR sejak 24 Agustus 2026. Penjaga backend-nya di
     // /hex/{h3}/simulasi; yang di sini cuma pintunya - non-pelanggan diarahkan
     // ke dialog langganan alih-alih ke lembar yang seluruh permintaannya 401.
-    if (!premium && !(hexTerpilih && terbuka.has(hexTerpilih))) {
+    if (!premium) {
       if (akun) mintaLangganan('Simulasi usaha bagian dari Loconomics Premium.')
       else mintaMasuk('Buat akun dulu untuk menjalankan simulasi usaha.')
       return
     }
     setSimulasiTerbuka(true)
     setPanelTerbuka(false)
-  }, [premium, terbuka, hexTerpilih, akun, mintaLangganan, mintaMasuk])
+  }, [premium, akun, mintaLangganan, mintaMasuk])
   const peta = useRef<AksiPetaRef>(null)
 
   const tutupPembuka = useCallback(() => setPembuka(false), [])
@@ -1307,7 +1306,7 @@ export default function App() {
    * Pemilik akun mendarat di rekomendasinya, SEKALI per sesi.
    *
    * `sekali` menjaganya tetap sekali: tanpa itu, setiap kali `akun` berubah -
-   * termasuk sesudah menyimpan preferensi atau membeli token - tab orangnya
+   * termasuk sesudah menyimpan preferensi - tab orangnya
    * dilempar kembali ke rekomendasi di tengah ia mengerjakan hal lain.
    */
   const sudahKeRekomendasi = useRef(false)
@@ -1528,6 +1527,32 @@ export default function App() {
     },
     [arahkanKamera],
   )
+
+  /**
+   * "Simpan & buka peta" dari langkah preferensi usaha.
+   *
+   * Didengarkan di sini karena App yang memiliki peta dan gerbang; dialognya
+   * tinggal di SesiProvider, di atas App. Dari gerbang: masuk ke peta di
+   * kawasan pilihannya. Dari peta yang sudah hidup: terbang ke sana. Tanpa
+   * kawasan: tetap dibuka - orangnya menekan "buka peta", bukan "tutup".
+   */
+  useEffect(() => {
+    const dengar = (e: Event) => {
+      const kw = (e as CustomEvent<DetailBukaPeta>).detail?.kawasan ?? null
+      if (gerbang) {
+        if (kw) {
+          setKawasan(kw)
+          setHexTerpilih(null)
+          setNHeksagon(null)
+        }
+        masukKePeta()
+      } else if (kw) {
+        gantiKawasan(kw)
+      }
+    }
+    window.addEventListener(PERISTIWA_BUKA_PETA, dengar)
+    return () => window.removeEventListener(PERISTIWA_BUKA_PETA, dengar)
+  }, [gerbang, masukKePeta, gantiKawasan])
 
   // Seluruh simpul transit, untuk pencarian. Diminta sekali seumur sesi:
   // jumlahnya puluhan dan tidak berubah selama demo.

@@ -802,7 +802,6 @@ class Akun(BaseModel):
     nama_tampilan: str | None = None
     peran: str
     tingkat: Literal["gratis", "premium"]
-    saldo_token: int
     dibuat_pada: datetime | None = None
     langganan: RingkasLangganan | None = None
     preferensi: PreferensiUsaha | None = None
@@ -820,21 +819,8 @@ class SesiAkun(BaseModel):
     akun: Akun
 
 
-class MutasiTokenKeluar(BaseModel):
-    jumlah: int
-    keperluan: str
-    catatan: str | None = None
-    h3_index: str | None = None
-    saldo_sesudah: int
-    dibuat_pada: datetime
-
-
 class PermintaanLangganan(BaseModel):
     paket: str = Field(description="Kode paket dari GET /akun/paket")
-
-
-class PermintaanBeliToken(BaseModel):
-    paket: str = Field(description="Kode paket token dari GET /akun/paket")
 
 
 class ButirPantauan(BaseModel):

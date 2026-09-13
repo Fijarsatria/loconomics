@@ -136,11 +136,6 @@ class ButuhPremium(KesalahanAPI):
     kode = "BUTUH_PREMIUM"
 
 
-class TokenTidakCukup(KesalahanAPI):
-    status_code = status.HTTP_402_PAYMENT_REQUIRED
-    kode = "TOKEN_TIDAK_CUKUP"
-
-
 def _amplop(
     kode: str, pesan: str, status_code: int, request_id: str, detail: Any = None
 ) -> JSONResponse:

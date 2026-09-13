@@ -1145,6 +1145,76 @@ def test_jendela_penuh_berlipat_sampai_jatahnya_memang_habis():
         llm._penuh_sampai, llm._jendela_terakhir, llm._gagal_terakhir_pada = asli
 
 
+def test_kunci_gemini_cadangan_dipakai_saat_utama_habis():
+    """Kunci utama kena jatah harian -> kunci cadangan menjawab, TANPA menunggu.
+
+    Dan pada pertanyaan berikutnya kunci utama tidak diketuk lagi: "cepat" di
+    sini berarti tidak membayar satu perjalanan ke Google untuk pintu yang
+    sudah diketahui tertutup. Uji ini memalsukan `urlopen`, jadi tidak ada satu
+    pun permintaan sungguhan yang berangkat.
+    """
+    import io as _io
+    import json as _json
+    import time as _time
+    import urllib.error
+    import urllib.request
+
+    from app.core import llm, llm_gemini
+
+    HARIAN = _json.dumps({"error": {"code": 429, "message": "quota", "details": [
+        {"violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}
+    ]}}).encode()
+    BERHASIL = _json.dumps({"candidates": [{"content": {"parts": [{"text": "siap"}]},
+                                            "finishReason": "STOP"}],
+                            "usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 1}}).encode()
+
+    ketukan: list[str] = []
+
+    class _Jawab:
+        def __init__(self, isi):
+            self._isi = isi
+        def read(self):
+            return self._isi
+        def __enter__(self):
+            return _io.BytesIO(self._isi)
+        def __exit__(self, *a):
+            return False
+
+    def palsu(req, timeout=0):
+        kunci = req.get_header("X-goog-api-key")
+        ketukan.append(kunci)
+        if kunci == "utama":
+            raise urllib.error.HTTPError(req.full_url, 429, "quota", {}, _io.BytesIO(HARIAN))
+        return _Jawab(BERHASIL)
+
+    asli_open, asli_tidur = urllib.request.urlopen, _time.sleep
+    tidur: list[float] = []
+    urllib.request.urlopen = palsu
+    _time.sleep = lambda d: tidur.append(d)
+    llm_gemini.lupakan_jatah()
+    try:
+        k = llm_gemini.KlienGemini(["utama", "cadangan"])
+        argumen = dict(model="gemini-3-flash-preview", max_tokens=50, system="s", tools=[],
+                       messages=[{"role": "user", "content": "halo"}])
+        b = k.messages.create(**argumen)
+        teks = "".join(getattr(x, "text", "") for x in b.content)
+        cek("kunci cadangan menjawab saat utama habis", teks == "siap", f"- {teks!r}")
+        cek("urutan: utama dulu, lalu cadangan", ketukan[:2] == ["utama", "cadangan"], f"- {ketukan}")
+        cek("tidak menunggu sebelum pindah kunci", not tidur, f"- tidur {tidur}")
+
+        ketukan.clear()
+        k.messages.create(**argumen)
+        cek("pertanyaan berikutnya tidak mengetuk kunci yang habis",
+            ketukan == ["cadangan"], f"- {ketukan}")
+        cek("catatan memakai URUTAN kunci, bukan nilai kuncinya",
+            all(isinstance(ik, int) for ik, _ in llm_gemini._dilewati_sampai))
+        cek("jatah harian dikenali dari quotaId", llm_gemini.batas_harian(HARIAN.decode()))
+    finally:
+        urllib.request.urlopen, _time.sleep = asli_open, asli_tidur
+        llm_gemini.lupakan_jatah()
+        llm.tandai_penyedia_pulih()
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):
