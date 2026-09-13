@@ -74,6 +74,7 @@ import {
   SUMBER_UBIN_MAPID,
   ZOOM_AWAL,
   bubuhiKunciBasemap,
+  siapkanKunciBasemap,
   urlGaya,
   type NamaGaya,
   type NamaLayer,
@@ -1298,7 +1299,13 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // setSiap(true) idempoten - mana pun yang lebih dulu, hasilnya sama.
     m.on('load', () => setSiap(true))
     m.once('styledata', () => setSiap(true))
-    m.setStyle(urlGaya(gayaAwal.current), { transformStyle: tataGaya(gayaAwal.current) })
+    // Gaya awal dipasang SESUDAH kunci basemap siap. Terbitan tanpa kunci
+    // bawaan (Cloudflare Pages) memintanya ke backend; ubin yang berangkat
+    // lebih dulu akan ditolak MAPID dan MapLibre tidak pernah memintanya lagi.
+    let dibongkar = false
+    void siapkanKunciBasemap().then(() => {
+      if (!dibongkar) m.setStyle(urlGaya(gayaAwal.current), { transformStyle: tataGaya(gayaAwal.current) })
+    })
 
     // --- Penangan klik & sorot heksagon: SEKALI seumur peta ---------------
     //
@@ -1483,6 +1490,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 
     peta.current = m
     return () => {
+      dibongkar = true
       clearTimeout(rafGelombang.current)
       m.remove()
       peta.current = null
@@ -3132,7 +3140,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         }
 
         if (bingkai()) return
-        const batas = window.setTimeout(() => m.off('sourcedata', coba), 3000)
+        // 10 detik, bukan 3: sejak kartu lokasi AI bisa memindahkan kawasan,
+        // yang ditunggu di sini bisa berupa SELURUH layer kawasan baru dari
+        // backend, bukan cuma ubin yang sedang dibangun.
+        const batas = window.setTimeout(() => m.off('sourcedata', coba), 10_000)
         function coba() {
           if (bingkai()) {
             window.clearTimeout(batas)

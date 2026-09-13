@@ -1267,6 +1267,23 @@ def test_bersihkan_cache_hanya_untuk_admin():
     cache.bersihkan("uji:")
 
 
+def test_kunci_basemap_peramban_bukan_kunci_data():
+    """/meta/kunci-basemap hanya boleh menyerahkan kunci UBIN peramban."""
+    print("[kunci basemap peramban]")
+    from fastapi.testclient import TestClient as _TC
+
+    from app.core.config import settings as _s
+    from app.main import app as _app
+
+    r = _TC(_app).get("/meta/kunci-basemap")
+    cek("endpoint menjawab 200", r.status_code == 200, f"- {r.status_code}")
+    kunci = r.json().get("kunci")
+    rahasia = {k for k in (_s.mapid_data_api_key, _s.mapid_maps_api_key, _s.llm_api_key) if k}
+    cek("yang diserahkan BUKAN kunci data misi, proksi gaya, atau LLM", kunci not in rahasia)
+    if not kunci:
+        print("  ! MAPID_BASEMAP_KEY_PERAMBAN kosong di lingkungan ini")
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

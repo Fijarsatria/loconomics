@@ -172,7 +172,30 @@ export const GLYPH_MAPID = 'https://basemap.mapid.io/fonts/{fontstack}/{range}.p
  * secret. Kalau variabelnya kosong, petanya berperilaku persis seperti
  * sebelumnya - dan pita "Ubin MAPID menolak" yang sudah ada yang menjelaskannya.
  */
-const KUNCI_BASEMAP: string = import.meta.env.VITE_MAPID_BASEMAP_KEY ?? ''
+let KUNCI_BASEMAP: string = import.meta.env.VITE_MAPID_BASEMAP_KEY ?? ''
+let janjiKunciBasemap: Promise<void> | null = null
+
+/**
+ * Pastikan kunci basemap tersedia sebelum ubin pertama diminta.
+ *
+ * Terbitan yang dibangun DENGAN kunci (GitHub Actions) selesai seketika. Yang
+ * dibangun TANPA kunci (Cloudflare Pages - pengaturannya di luar repo) meminta
+ * kuncinya ke `/meta/kunci-basemap`. Tanpa ini loconomics.pages.dev
+ * menampilkan peta hitam setiap kali MAPID menegakkan kuncinya (13 Sep 2026).
+ *
+ * Tidak pernah melempar: backend yang tidak menjawab dalam 6 detik berarti
+ * petanya berjalan tanpa kunci, persis seperti sebelum fungsi ini ada.
+ */
+export function siapkanKunciBasemap(): Promise<void> {
+  if (KUNCI_BASEMAP) return Promise.resolve()
+  janjiKunciBasemap ??= fetch(`${API_BASE}/meta/kunci-basemap`, { signal: AbortSignal.timeout(6000) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { kunci?: unknown } | null) => {
+      if (d && typeof d.kunci === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(d.kunci)) KUNCI_BASEMAP = d.kunci
+    })
+    .catch(() => {})
+  return janjiKunciBasemap
+}
 
 /** Host yang menuntut kunci itu. Sengaja sempit: kunci tidak boleh menempel
  *  pada permintaan ke mana pun selain pemiliknya. */

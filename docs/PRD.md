@@ -8,8 +8,8 @@
 | **Tim** | Loconomics — Tim #33 dari Top 50, Program Studi Informatika, Universitas Telkom |
 | **Versi dokumen** | 1.0 (final) — 13 September 2026 |
 | **Status produk** | Rilis final, dapat diakses publik |
-| **WebGIS** | https://fijarsatria.github.io/loconomics/ (dibangun GitHub Actions dengan kunci basemap) |
-| **WebGIS (alamat alternatif)** | https://loconomics.pages.dev — selama kunci basemap belum dipasang di Cloudflare, alamat ini otomatis mengalihkan ke alamat di atas |
+| **WebGIS (utama)** | https://loconomics.pages.dev |
+| **WebGIS (cermin)** | https://fijarsatria.github.io/loconomics/ |
 | **API** | https://loconomics-api.azurewebsites.net (dokumentasi interaktif: `/docs`) |
 | **Kode sumber** | https://github.com/Fijarsatria/loconomics |
 

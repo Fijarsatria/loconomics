@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 312 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 313 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -232,6 +232,12 @@ Yang tetap dijaga, dan ada ujinya:
 - Kunci **tidak boleh menempel pada permintaan ke host selain
   `basemap.mapid.io`**. Dijaga `audit-prd.mjs` — asersinya dipersempit, bukan
   dicabut.
+- Terbitan yang dibangun **tanpa** kunci (Cloudflare Pages, pengaturannya di
+  luar repo) memintanya saat dibuka ke `GET /meta/kunci-basemap`, yang hanya
+  menyerahkan `MAPID_BASEMAP_KEY_PERAMBAN` — kunci ubin yang sama kelasnya.
+  Kunci data misi, proksi gaya, dan LLM tidak pernah lewat sana; dijaga
+  `test_infra.py`. Jangan diganti pengalihan ke cermin: alamatnya berubah, dan
+  itu sudah ditolak pemilik repo.
 
 ### 6. Basemap hanya MAPID Maps
 
@@ -497,7 +503,7 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 312 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 313 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit

@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # Kunci yang hidup di peramban adalah VITE_MAPID_BASEMAP_KEY, kunci lain.
     mapid_maps_api_key: str = ""
 
+    # Kunci basemap KHUSUS PERAMBAN (kunci yang sama dengan VITE_MAPID_BASEMAP_KEY,
+    # BUKAN mapid_maps_api_key di atas). Diserahkan lewat /meta/kunci-basemap
+    # untuk terbitan yang dibangun tanpa kunci - Cloudflare Pages, yang
+    # pengaturannya di luar repo. Kelasnya sama dengan yang sudah ada di bundel
+    # GitHub Pages: dijaga pembatasan domain MAPID, bukan kerahasiaan.
+    mapid_basemap_key_peramban: str = ""
+
     # Akses data misi MAPID (Properti Go / Struk Go / Menu Go / Activities).
     # WAJIB backend-to-backend lewat header x-api-key. Tidak boleh ke frontend.
     mapid_data_api_key: str = ""

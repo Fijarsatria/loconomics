@@ -441,6 +441,24 @@ def gaya_basemap(gaya: str) -> Response:
     )
 
 
+@router.get("/meta/kunci-basemap", summary="Kunci ubin basemap untuk peramban")
+def kunci_basemap() -> dict[str, str | None]:
+    """Kunci ubin MAPID untuk terbitan yang DIBANGUN tanpa kunci.
+
+    13 Sep 2026: loconomics.pages.dev dibangun Cloudflare Pages, yang tidak punya
+    VITE_MAPID_BASEMAP_KEY, dan MAPID menegakkan kuncinya berselang-seling -
+    jadi peta juri hitam secara acak. Pengalihan ke cermin GitHub Pages
+    menyelesaikannya tetapi mengganti alamat di bilah peramban, dan pemilik repo
+    menolaknya. Maka kuncinya diserahkan saat aplikasi dibuka.
+
+    Yang diserahkan HANYA kunci ubin peramban - kelas kredensial yang sudah
+    tertanam di bundel GitHub Pages dan dijaga pembatasan domain di sisi MAPID.
+    Kunci data misi (`mapid_data_api_key`) dan kunci proksi gaya
+    (`mapid_maps_api_key`) tidak pernah lewat sini; `test_infra.py` menjaganya.
+    """
+    return {"kunci": settings.mapid_basemap_key_peramban or None}
+
+
 @router.get("/meta/kawasan", summary="Enam kawasan pilot dan cakupan datanya")
 def daftar_kawasan(db: Annotated[Session, Depends(get_db)]) -> list[dict[str, Any]]:
     """Kawasan yang sah beserta seberapa lengkap datanya.

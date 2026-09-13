@@ -1160,14 +1160,31 @@ export default function App() {
    * berikutnya hampir selalu tentang lokasi yang sama ("kenapa skornya
    * segitu?"). Panel detailnya cuma satu ketukan tab dari sini.
    */
-  const keLokasiAI = useCallback((h3: string) => {
-    setHexTerpilih(h3)
-    setHexBanding(null)
-    setSimulasiTerbuka(false)
-    setPanelTerbuka(true)
-    peta.current?.highlight([h3])
-    peta.current?.fokusHeksagon(h3)
-  }, [])
+  const keLokasiAI = useCallback(
+    (h3: string, kawasanLokasi?: string) => {
+      // Lokasi di KAWASAN LAIN dari yang sedang dimuat peta: pindahkan saringan
+      // kawasannya dulu. Tanpa ini heksagonnya tidak ada di data peta, fokus
+      // tidak menemukan geometrinya, dan kartu yang diklik tidak menggerakkan
+      // apa pun - dilaporkan pemilik repo 13 Sep 2026 ("card rekomendasi
+      // lokasinya gabisa diarahkan"). `fokusHeksagon` menunggu data kawasan
+      // barunya masuk sebelum membingkai.
+      if (
+        kawasanLokasi &&
+        kawasan !== SEMUA_KAWASAN &&
+        !kawasan.split(',').includes(kawasanLokasi)
+      ) {
+        setKawasan(kawasanLokasi)
+        setNHeksagon(null)
+      }
+      setHexTerpilih(h3)
+      setHexBanding(null)
+      setSimulasiTerbuka(false)
+      setPanelTerbuka(true)
+      peta.current?.highlight([h3])
+      peta.current?.fokusHeksagon(h3)
+    },
+    [kawasan],
+  )
 
   /**
    * Kembali ke halaman perkenalan, atas permintaan eksplisit penggunanya.

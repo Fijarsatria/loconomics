@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { SesiProvider } from './components/Akun.tsx'
 import { bangunkan } from './lib/api.ts'
+import { siapkanKunciBasemap } from './config.ts'
 import { BahasaProvider, TemaProvider } from './lib/bahasa.tsx'
 
 // Dipanggil SEBELUM render, bukan di dalam sebuah useEffect.
@@ -16,6 +17,9 @@ import { BahasaProvider, TemaProvider } from './lib/bahasa.tsx'
 // lebih dulu, dan itu waktu yang diberikan cuma-cuma kepada backend yang
 // masih tidur.
 bangunkan()
+// Kunci basemap untuk terbitan yang dibangun tanpa kunci - diminta sedini
+// mungkin, peta menunggunya sebelum ubin pertama (lihat PetaInteraktif).
+void siapkanKunciBasemap()
 
 // SesiProvider membungkus SELURUH aplikasi, termasuk halaman gerbang.
 //

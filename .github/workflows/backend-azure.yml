@@ -40,6 +40,8 @@
 #                              Asal saja, TANPA jalur. Bukan .../loconomics/.
 #      LINGKUNGAN              produksi
 #      MAPID_MAPS_API_KEY      basemap; hanya untuk mengambil style.json
+#      MAPID_BASEMAP_KEY_PERAMBAN  kunci ubin untuk peramban (= VITE_MAPID_BASEMAP_KEY);
+#                              diserahkan /meta/kunci-basemap ke build tanpa kunci
 #      MAPID_DATA_API_KEY      data misi; tidak pernah ke peramban
 #      LLM_API_KEY             Konsultan AI. Boleh kosong dulu - /ai/tanya
 #                              menjawab 501 dengan pesan yang jujur

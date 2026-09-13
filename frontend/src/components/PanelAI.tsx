@@ -343,7 +343,7 @@ function PintasLokasi({
   urutan: number
   /** Heksagon ini yang sedang terbuka di panel detail. */
   aktif: boolean
-  onBuka: (h3: string) => void
+  onBuka: (h3: string, kawasan?: string) => void
   t: Teks
 }) {
   const [skor, setSkor] = useState<SkorHeksagon | null>(() => SINGGAH.get(h3) ?? null)
@@ -395,7 +395,7 @@ function PintasLokasi({
    */
   return (
     <button
-      onClick={() => onBuka(h3)}
+      onClick={() => onBuka(h3, skor?.kawasan)}
       title={
         skor
           ? `${t.bukaLokasi(kodeLokasi(h3, skor.kawasan))}${q ? ` · ${namaZona(q.kunci)} — ${bahasa === 'en' ? q.ringkasEn : q.ringkas}` : ''}${nilai === null ? '' : ` · ${nilai}`}`
@@ -498,7 +498,7 @@ function PanelAI({
    * komparasi, dan panel detail semuanya membacanya, dan panel yang memilih
    * sendiri akan jadi pemilik kedua untuk satu keadaan yang sama.
    */
-  onKeLokasi: (h3: string) => void
+  onKeLokasi: (h3: string, kawasan?: string) => void
 }) {
   const t = useTeks(K)
   const { bahasa } = useBahasa()
