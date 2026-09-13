@@ -30,7 +30,14 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.bersama import ambil_hex, badge, peringatan_risiko, persentil_churn, zoneguard
+from app.api.bersama import (
+    ambil_hex,
+    badge,
+    kolom_sampel_tunggal,
+    peringatan_risiko,
+    persentil_churn,
+    zoneguard,
+)
 from app.core import batas
 from app.core.akun import (
     PAKET_LANGGANAN,
@@ -102,7 +109,10 @@ def daftar(
     sendiri di suatu tanggal tanpa ia melakukan apa pun - dan fitur yang tiba-tiba
     hilang terbaca sebagai kerusakan, bukan sebagai masa coba yang habis.
     """
-    batas.periksa_laju(f"daftar:{_pemanggil(request)}")
+    batas.periksa_laju(
+        f"daftar:{_pemanggil(request)}",
+        kalimat="Terlalu banyak percobaan mendaftar. Tunggu sebentar lalu coba lagi.",
+    )
 
     nama = p.nama_pengguna.strip()
     email = p.email.strip().lower()
@@ -149,7 +159,10 @@ def masuk(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> SesiAkun:
-    batas.periksa_laju(f"masuk:{_pemanggil(request)}")
+    batas.periksa_laju(
+        f"masuk:{_pemanggil(request)}",
+        kalimat="Terlalu banyak percobaan masuk. Tunggu sebentar lalu coba lagi.",
+    )
 
     identitas = p.identitas.strip()
     user = db.execute(
@@ -560,6 +573,7 @@ def laporan_pdf(
             user,
             faktor=faktor,
             jam=jam,
+            ditahan=kolom_sampel_tunggal(db, hx.h3_index).get(hx.h3_index),
         )
     except KesalahanAPI:
         raise
@@ -1070,7 +1084,9 @@ def _putusan_lokasi(zona, sc, keyakinan) -> tuple[str, str, str]:
     )
 
 
-def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> bytes:
+def _rakit_pdf(
+    hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None, ditahan: set[str] | None = None
+) -> bytes:
     """Laporan Kelayakan satu lokasi.
 
     Sengaja tanpa gambar peta. Menyisipkan tangkapan peta berarti merender
@@ -1246,11 +1262,15 @@ def _rakit_pdf(hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None) -> 
         "Nama variabel ditulis dalam bahasa sehari-hari. Kode di kurung adalah "
         "identitas resminya di Kamus Data, untuk yang ingin menelusuri.", g["kecil"]))
     isi.append(Spacer(1, 4))
+    # Aturan 2: `ditahan` = kolom yang bahannya satu baris survei (lihat
+    # `bersama.kolom_sampel_tunggal`), diisi pemanggil yang memegang sesi.
+    ditahan = ditahan or set()
     for dimensi, kolom in DIMENSI.items():
         baris = []
         for nama in kolom:
             kode, ramah, satuan = ARTI_VARIABEL[nama]
-            baris.append([f"{ramah} ({kode})", _angka_id(getattr(hx, nama, None), satuan)])
+            nilai = None if nama in ditahan else getattr(hx, nama, None)
+            baris.append([f"{ramah} ({kode})", _angka_id(nilai, satuan)])
         isi.append(Paragraph(f"<b>{dimensi.capitalize()}</b>", g["kecil"]))
         isi.append(_tabel(baris, dok.width, colors))
         isi.append(Spacer(1, 5))

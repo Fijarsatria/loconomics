@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Float, func, select
 from sqlalchemy.orm import Session
 
-from app.api.bersama import ambil_hex, badge, periksa_kawasan_banyak
+from app.api.bersama import ambil_hex, badge, kolom_sampel_tunggal, periksa_kawasan_banyak
 from app.core.akun import PenggunaOpsional, wajib_akses_penuh
 from app.core.database import get_db
 from app.models import HexFeature
@@ -88,7 +88,12 @@ def kartu_harga(db: Session, hx: HexFeature) -> PriceLensHeksagon:
         harga_sewa_per_m2=hx.harga_sewa_per_m2,
         harga_sewa_median=hx.harga_sewa_median,
         belanja_per_jam=hx.belanja_per_jam,
-        harga_median_porsi=hx.harga_median_porsi,
+        # Aturan 2 - lihat `kolom_sampel_tunggal`.
+        harga_median_porsi=(
+            None
+            if "harga_median_porsi" in kolom_sampel_tunggal(db, hx.h3_index).get(hx.h3_index, set())
+            else hx.harga_median_porsi
+        ),
         njop_m2=hx.njop_m2,
         wajar_sewa_per_m2=wajar_sewa,
         wajar_belanja_per_jam=wajar_belanja,
@@ -136,6 +141,7 @@ def layer_harga(
     if hanya_berdata:
         stmt = stmt.where(HexFeature.harga_sewa_per_m2.is_not(None))
 
+    ditahan = kolom_sampel_tunggal(db)
     return {
         "type": "FeatureCollection",
         "features": [
@@ -149,7 +155,12 @@ def layer_harga(
                     "harga_sewa_per_m2": r.harga_sewa_per_m2,
                     "harga_sewa_median": r.harga_sewa_median,
                     "belanja_per_jam": r.belanja_per_jam,
-                    "harga_median_porsi": r.harga_median_porsi,
+                    # Aturan 2: median dari satu baris survei = baris itu.
+                    "harga_median_porsi": (
+                        None
+                        if "harga_median_porsi" in ditahan.get(r.h3_index, set())
+                        else r.harga_median_porsi
+                    ),
                     "njop_m2": r.njop_m2,
                     "tingkat_keyakinan": r.tingkat_keyakinan,
                     "n_titik_misi": r.n_titik_misi,

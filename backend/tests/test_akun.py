@@ -383,6 +383,56 @@ def main() -> int:
         else:
             print("  ! akun pemilik belum di-seed, uji terkait dilewati")
 
+        # --- Aturan 2: rangkuman dari SATU baris survei ditahan ---------------
+        # Temuan audit 13 Sep 2026: median harga porsi di heksagon bersampel
+        # satu sama persis dengan baris Menu Go-nya. Diuji di SELURUH jalan
+        # keluarnya: layer publik, kartu PriceLens, detail premium.
+        print("[aturan 2: sampel tunggal]")
+        from sqlalchemy import text as _teks
+        from app.api.bersama import MIN_BARIS_MISI, kolom_sampel_tunggal
+        from app.api.pricelens import kartu_harga, layer_harga
+
+        tunggal = db.execute(_teks(
+            "SELECT m.h3_index FROM menu_observations m JOIN hex_features h USING (h3_index) "
+            "WHERE h.harga_median_porsi IS NOT NULL GROUP BY m.h3_index HAVING count(*) = 1 LIMIT 1"
+        )).scalar()
+        ganda = db.execute(_teks(
+            "SELECT m.h3_index FROM menu_observations m JOIN hex_features h USING (h3_index) "
+            "WHERE h.harga_median_porsi IS NOT NULL GROUP BY m.h3_index HAVING count(*) >= :k LIMIT 1"
+        ), {"k": MIN_BARIS_MISI}).scalar()
+        if tunggal:
+            hx1 = db.get(HexFeature, tunggal)
+            cek("heksagon bersampel satu dikenali",
+                "harga_median_porsi" in kolom_sampel_tunggal(db).get(tunggal, set()))
+            fitur = {
+                f["id"]: f["properties"]
+                for f in layer_harga(db=db, kawasan=hx1.kawasan)["features"]
+            }
+            cek("layer harga PUBLIK tidak mengirim harga porsi sampel tunggal",
+                fitur[tunggal]["harga_median_porsi"] is None)
+            cek("kartu PriceLens tidak mengirim harga porsi sampel tunggal",
+                kartu_harga(db, hx1).harga_median_porsi is None)
+            if pemilik is not None:
+                penuh = detail_heksagon(tunggal, db, pengguna=pemilik)
+                cek("detail premium pun menahan harga porsi sampel tunggal",
+                    bool(penuh.variabel) and penuh.variabel.get("harga_median_porsi") is None)
+                cek("detail premium menahan keramaian sampel tunggal",
+                    penuh.variabel.get("skor_ramai_terkoreksi") is None)
+        else:
+            print("  ! tidak ada heksagon bersampel satu, uji dilewati")
+        if ganda:
+            hx2 = db.get(HexFeature, ganda)
+            fitur2 = {
+                f["id"]: f["properties"]
+                for f in layer_harga(db=db, kawasan=hx2.kawasan)["features"]
+            }
+            # Arah sebaliknya: penahanan tidak boleh mengosongkan SEMUA heksagon
+            # (uji yang cuma menguji penahanan tetap hijau kalau fiturnya mati).
+            cek("heksagon bersampel >= 2 tetap mengirim harga porsinya",
+                fitur2[ganda]["harga_median_porsi"] == hx2.harga_median_porsi)
+        else:
+            print("  ! tidak ada heksagon bersampel ganda, uji arah balik dilewati")
+
         return 0
     finally:
         db.rollback()

@@ -8,7 +8,7 @@ Tidak ada perhitungan skor di berkas ini. Yang ada hanya pembacaan basis data da
 penerapan aturan tampilan dari app/core/aturan.py.
 """
 
-from sqlalchemy import Float, func, select
+from sqlalchemy import Float, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.aturan import (
@@ -58,6 +58,62 @@ DIMENSI: dict[str, list[str]] = {
 
 SEMUA_VARIABEL = [nama for kolom in DIMENSI.values() for nama in kolom]
 assert len(SEMUA_VARIABEL) == 43, f"Kamus Data harus 43 variabel, ada {len(SEMUA_VARIABEL)}"
+
+
+# ---------------------------------------------------------------------------
+# Aturan 2: nilai dari SATU baris survei bukan agregat
+# ---------------------------------------------------------------------------
+
+#: Variabel yang nilainya dirangkum LANGSUNG dari baris observasi misi MAPID,
+#: menurut tabel asalnya.
+#:
+#: Ditemukan audit keamanan 13 Sep 2026: di enam heksagon yang cuma punya satu
+#: titik Menu Go, "median harga per porsi" yang dikirim `/pricelens/layer`
+#: SAMA PERSIS dengan `harga_rata_porsi` baris survei itu - median dari satu
+#: angka adalah angka itu sendiri. Siapa pun tanpa akun jadi tahu harga satu
+#: pedagang yang disurvei. Aturan 2 melarang respons yang bisa merekonstruksi
+#: satu baris survei, dan "rata-rata" dari satu baris persis itu.
+#:
+#: Namanya TABEL, bukan kolom `n_titik_misi`: angka itu menjumlahkan ketiga
+#: jenis misi, jadi satu menu + satu struk berbunyi 2 padahal harga porsinya
+#: tetap satu baris.
+KOLOM_PER_TABEL_MISI: dict[str, tuple[str, ...]] = {
+    "menu_observations": (
+        "harga_median_porsi", "spread_harga", "skor_ramai_terkoreksi", "rasio_keliling",
+    ),
+    "receipt_observations": ("nominal_median_struk", "pangsa_digital"),
+}
+#: Paling sedikit sekian baris sebelum rangkumannya boleh keluar.
+MIN_BARIS_MISI = 2
+
+
+def kolom_sampel_tunggal(db: Session, h3_index: str | None = None) -> dict[str, set[str]]:
+    """h3 -> kolom yang WAJIB ditahan karena bahannya kurang dari `MIN_BARIS_MISI` baris.
+
+    Heksagon tanpa satu pun baris observasi tidak muncul di sini: nilainya (kalau
+    ada) bukan rangkuman survei, jadi tidak ada baris yang bisa direkonstruksi.
+    Nama tabel berasal dari konstanta di atas, tidak pernah dari masukan.
+    """
+    hasil: dict[str, set[str]] = {}
+    for tabel, kolom in KOLOM_PER_TABEL_MISI.items():
+        saring = "WHERE h3_index = :h3 " if h3_index else ""
+        baris = db.execute(
+            text(
+                f"SELECT h3_index FROM {tabel} {saring}"
+                "GROUP BY h3_index HAVING count(*) < :k"
+            ),
+            {"h3": h3_index, "k": MIN_BARIS_MISI},
+        )
+        for (h3,) in baris:
+            hasil.setdefault(h3, set()).update(kolom)
+    return hasil
+
+
+def tahan_sampel_tunggal(nilai: dict, ditahan: set[str] | None) -> dict:
+    """Salinan `nilai` dengan kolom sampel-tunggal dikosongkan (None, bukan 0)."""
+    if not ditahan:
+        return nilai
+    return {k: (None if k in ditahan else v) for k, v in nilai.items()}
 
 
 # ---------------------------------------------------------------------------

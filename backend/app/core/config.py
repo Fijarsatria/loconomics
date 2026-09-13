@@ -21,8 +21,12 @@ class Settings(BaseSettings):
     # Supabase - pakai connection string mode "Transaction pooler"
     database_url: str
 
-    # Basemap MAPID MAPS. Aman berada di frontend juga: menurut briefing MAPID,
-    # kunci ini hanya penghitung pemakaian dan belum punya pembatasan domain.
+    # Basemap MAPID MAPS - dipakai proksi gaya di `api/meta.py`, SISI SERVER.
+    # JANGAN pernah dipindah ke frontend: briefing MAPID menyebutnya "cuma
+    # penghitung pemakaian", tetapi terbukti 26 Agu 2026 kunci Map Services
+    # yang sama MEMBUKA data misi (lihat docs/aturan-lomba.md aturan keras 2),
+    # dan di lingkungan ini nilainya memang sama dengan MAPID_DATA_API_KEY.
+    # Kunci yang hidup di peramban adalah VITE_MAPID_BASEMAP_KEY, kunci lain.
     mapid_maps_api_key: str = ""
 
     # Akses data misi MAPID (Properti Go / Struk Go / Menu Go / Activities).

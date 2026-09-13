@@ -23,10 +23,12 @@ from app.api.bersama import (
     SEMUA_VARIABEL,
     ambil_hex,
     badge,
+    kolom_sampel_tunggal,
     peringatan_risiko,
     periksa_kawasan_banyak,
     persentil_churn,
     skor_heksagon,
+    tahan_sampel_tunggal,
     zoneguard,
 )
 from app.core.aturan import (
@@ -778,7 +780,10 @@ def simulasi_heksagon(
     ).scalar_one_or_none()
 
     b = badge(hx)
-    variabel = {nama: getattr(hx, nama) for nama in SEMUA_VARIABEL}
+    variabel = tahan_sampel_tunggal(
+        {nama: getattr(hx, nama) for nama in SEMUA_VARIABEL},
+        kolom_sampel_tunggal(db, h3_index).get(h3_index),
+    )
     zona_izin = hx.zona_izin_komersial
     blok_sim = None
     if h3_blok:
@@ -977,7 +982,10 @@ def detail_heksagon(
             cakupan=cakupan_indeks(faktor),
         ),
         variabel=(
-            {nama: getattr(hx, nama) for kolom in DIMENSI.values() for nama in kolom}
+            tahan_sampel_tunggal(
+                {nama: getattr(hx, nama) for kolom in DIMENSI.values() for nama in kolom},
+                kolom_sampel_tunggal(db, hx.h3_index).get(hx.h3_index),
+            )
             if boleh_penuh
             else {}
         ),
