@@ -812,6 +812,8 @@ export default function App() {
    */
   const [blok, setBlok] = useState<BedahBlok | null>(null)
   const [blokTerpilih, setBlokTerpilih] = useState<string | null>(null)
+  /** Blok yang sedang disimulasikan. Kosong = simulasi seluruh heksagon. */
+  const [blokSimulasi, setBlokSimulasi] = useState<string | null>(null)
 
   // Pilihan menampilkan rute berlaku untuk SATU heksagon. Berpindah heksagon
   // mengembalikannya ke mati - kalau tidak, heksagon berikutnya langsung
@@ -824,6 +826,7 @@ export default function App() {
     setRutaTampil(false)
     setBlok(null)
     setBlokTerpilih(null)
+    setBlokSimulasi(null)
   }, [hexTerpilih])
 
   /**
@@ -1111,9 +1114,26 @@ export default function App() {
       else mintaMasuk('Buat akun dulu untuk menjalankan simulasi usaha.')
       return
     }
+    setBlokSimulasi(null)
     setSimulasiTerbuka(true)
     setPanelTerbuka(false)
   }, [premium, akun, mintaLangganan, mintaMasuk])
+
+  /** Simulasi yang dipersempit ke SATU blok, dari rincian bedah blok. */
+  const bukaSimulasiBlok = useCallback(
+    (h3Blok: string) => {
+      if (!premium) {
+        if (akun) mintaLangganan('Simulasi usaha bagian dari Loconomics Premium.')
+        else mintaMasuk('Buat akun dulu untuk menjalankan simulasi usaha.')
+        return
+      }
+      setBlokSimulasi(h3Blok)
+      setBlokTerpilih(h3Blok)
+      setSimulasiTerbuka(true)
+      setPanelTerbuka(false)
+    },
+    [premium, akun, mintaLangganan, mintaMasuk],
+  )
   const peta = useRef<AksiPetaRef>(null)
 
   const tutupPembuka = useCallback(() => setPembuka(false), [])
@@ -2402,6 +2422,7 @@ export default function App() {
                               batas={batasKompas}
                               onBukaKuadran={bukaKuadranPenuh}
                               onBukaSimulasi={bukaSimulasi}
+                              onSimulasiBlok={bukaSimulasiBlok}
                               onBandingkan={tambahBaki}
                               sedangDibandingkan={baki.includes(hexTerpilih)}
                             />
@@ -2475,6 +2496,8 @@ export default function App() {
             <Suspense fallback={null}>
             <Simulasi
               h3={hexTerpilih}
+              h3Blok={blokSimulasi}
+              onLepasBlok={() => setBlokSimulasi(null)}
               h3Banding={hexBanding}
               onLepasBanding={() => {
                 setHexBanding(null)

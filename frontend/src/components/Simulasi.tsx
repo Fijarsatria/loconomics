@@ -80,6 +80,14 @@ const K = {
     simulasiUsaha: 'Simulasi usaha',
     lepasBanding: 'Lepas pembanding',
     klikLain: 'Klik heksagon lain di peta untuk membandingkan',
+    blokJudul: (n: number | null, jalan: string | null) =>
+      `Blok #${n ?? '?'}${jalan ? ` · ${jalan}` : ''}`,
+    blokFaktor: (f: string, skor: string, rata: string) =>
+      `Permintaan heksagon dikali ${f} — skor blok ini ${skor} dibanding rata-rata ketujuh blok ${rata}.`,
+    blokTakBerlaku: 'Skor blok ini belum ada, jadi angkanya sama dengan seluruh heksagon.',
+    blokAsumsi: 'Asumsi: uang yang berputar diukur per heksagon, bukan per blok.',
+    blokLepas: 'Seluruh heksagon',
+    blokLabel: 'Simulasi blok',
     tutup: 'Tutup simulasi',
     unduh: 'Unduh laporan PDF',
     mengunduh: 'Menyiapkan PDF…',
@@ -185,6 +193,14 @@ const K = {
     simulasiUsaha: 'Business simulation',
     lepasBanding: 'Drop the comparison',
     klikLain: 'Click another hexagon on the map to compare',
+    blokJudul: (n: number | null, jalan: string | null) =>
+      `Block #${n ?? '?'}${jalan ? ` · ${jalan}` : ''}`,
+    blokFaktor: (f: string, skor: string, rata: string) =>
+      `Hexagon demand multiplied by ${f} — this block scores ${skor} against a seven-block average of ${rata}.`,
+    blokTakBerlaku: 'This block has no score yet, so its numbers equal the whole hexagon.',
+    blokAsumsi: 'Assumption: money in circulation is measured per hexagon, not per block.',
+    blokLepas: 'Whole hexagon',
+    blokLabel: 'Block simulation',
     tutup: 'Close the simulation',
     unduh: 'Download PDF report',
     mengunduh: 'Preparing the PDF…',
@@ -667,12 +683,17 @@ function Turunan({
 
 export default function Simulasi({
   h3,
+  h3Blok = null,
+  onLepasBlok,
   h3Banding,
   onLepasBanding,
   onKeDetail,
   onTutup,
 }: {
   h3: string
+  /** Blok res-10 yang disimulasikan. Kosong = seluruh heksagon. */
+  h3Blok?: string | null
+  onLepasBlok?: () => void
   /** Heksagon pembanding, dipilih dengan mengklik peta selagi lembar terbuka. */
   h3Banding?: string | null
   onLepasBanding: () => void
@@ -727,6 +748,7 @@ export default function Simulasi({
       // membuat URL-nya mengaku sudah diisi padahal belum.
       sewa_bulanan_diminta: sewaDiisi ?? undefined,
       harga_rata_rata: hargaDiisi ?? undefined,
+      h3_blok: h3Blok ?? undefined,
     }
     // Isian yang SAMA disimpan untuk unduhan PDF. Merakit ulang objeknya di
     // penangan tombol berarti dua tempat yang harus sepakat - dan yang
@@ -735,7 +757,9 @@ export default function Simulasi({
     const t = setTimeout(() => {
       Promise.all([
         api.simulasi(h3, p),
-        h3Banding ? api.simulasi(h3Banding, p) : Promise.resolve(null),
+        // Pembanding selalu HEKSAGON utuh: blok yang dipilih milik heksagon
+        // pertama dan tidak ada artinya di heksagon lain.
+        h3Banding ? api.simulasi(h3Banding, { ...p, h3_blok: undefined }) : Promise.resolve(null),
       ])
         .then(([a, b]) => {
           if (batal) return
@@ -754,7 +778,7 @@ export default function Simulasi({
     // penjelasan kuadran, catatan pola jam, peringatan simulasi. Menukar
     // bahasa tanpa meminta ulang meninggalkan kalimat lama di layar yang
     // seluruh sisanya sudah berganti.
-  }, [h3, h3Banding, jenis, jam, luas, pangsa, margin, sewaDiisi, hargaDiisi, ist.bahasa])
+  }, [h3, h3Blok, h3Banding, jenis, jam, luas, pangsa, margin, sewaDiisi, hargaDiisi, ist.bahasa])
 
   // Escape menutup lembarnya, sama dengan setiap dialog lain di aplikasi ini.
   // Tanpa ini ia satu-satunya lapisan menutup layar yang tidak menanggapi
@@ -928,6 +952,46 @@ export default function Simulasi({
           </svg>
         </button>
       </div>
+
+      {/* --- Simulasi satu blok -------------------------------------------
+          Dinyatakan di PALING ATAS, sebelum angka apa pun: omzet blok adalah
+          omzet heksagon dikali sebuah faktor, dan faktor itu asumsi. Angka
+          yang terbaca sebagai hasil ukur per 130 m akan dipercaya lebih dari
+          yang pantas. */}
+      {h3Blok && hasil?.blok && (
+        <div className="sim-blok mx-4 mt-3 flex items-start gap-3 rounded-xl px-3.5 py-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gem text-white" aria-hidden>
+            <svg width="16" height="16" viewBox="0 0 16 16">
+              <path d="M8 1.6 13.6 4.8v6.4L8 14.4 2.4 11.2V4.8Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              <path d="M8 4.9 10.7 6.45v3.1L8 11.1 5.3 9.55v-3.1Z" fill="currentColor" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gem">{t.blokLabel}</p>
+            <p className="truncate text-[13.5px] font-semibold text-ink">
+              {t.blokJudul(hasil.blok.peringkat, hasil.blok.nama_jalan_utama)}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-snug text-ink-2">
+              {hasil.blok.faktor_berlaku
+                ? t.blokFaktor(
+                    `×${hasil.blok.faktor_permintaan.toLocaleString(ist.bahasa === 'en' ? 'en-GB' : 'id-ID', { maximumFractionDigits: 2 })}`,
+                    hasil.blok.skor_blok?.toLocaleString(ist.bahasa === 'en' ? 'en-GB' : 'id-ID') ?? '—',
+                    hasil.blok.rata_skor_heksagon?.toLocaleString(ist.bahasa === 'en' ? 'en-GB' : 'id-ID') ?? '—',
+                  )
+                : t.blokTakBerlaku}
+            </p>
+            <p className="mt-0.5 text-[11px] text-ink-3">{t.blokAsumsi}</p>
+          </div>
+          {onLepasBlok && (
+            <button
+              onClick={onLepasBlok}
+              className="shrink-0 cursor-pointer rounded-full border border-line px-3 py-1.5 text-[11.5px] font-medium text-ink-2 transition-colors hover:border-line-2 hover:text-ink"
+            >
+              {t.blokLepas}
+            </button>
+          )}
+        </div>
+      )}
 
       {!jenis ? (
         // --- Langkah 1: satu pertanyaan saja --------------------------------

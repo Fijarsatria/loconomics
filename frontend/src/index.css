@@ -4657,3 +4657,183 @@ input:focus-visible {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   Bedah blok (13 Sep 2026)
+
+   Dirombak atas laporan "informasinya terlalu susah dipahami". Tiga lapis
+   baca, dari yang paling cepat: peta mini (bentuk + warna, sama dengan peta),
+   daftar bernomor berbatang skor, lalu rincian SATU blok dalam bentuk fakta
+   dan meteran lima titik.
+   ========================================================================== */
+.blok-ringkas {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  padding: 10px 12px 10px 10px;
+}
+.blok-mini {
+  width: 112px;
+  height: 112px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.blok-mini-sel {
+  cursor: pointer;
+}
+.blok-mini-sel path {
+  stroke: var(--color-surface);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  transition:
+    opacity 220ms var(--ease-liquid),
+    stroke 220ms var(--ease-liquid),
+    stroke-width 220ms var(--ease-liquid);
+}
+.blok-mini:has(.blok-mini-sel[data-aktif]) .blok-mini-sel:not([data-aktif]) path {
+  opacity: 0.45;
+}
+.blok-mini-sel:hover path {
+  opacity: 1 !important;
+  stroke: var(--color-ink-3);
+}
+.blok-mini-sel[data-aktif] path {
+  stroke: var(--color-ink);
+  stroke-width: 2.6;
+}
+.blok-mini-angka {
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.blok-baris {
+  animation: masuk 320ms var(--ease-liquid) both;
+}
+.blok-baris-tombol {
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--color-line);
+  padding: 9px 10px;
+  text-align: left;
+  transition:
+    border-color 220ms var(--ease-liquid),
+    background-color 220ms var(--ease-liquid),
+    box-shadow 260ms var(--ease-liquid);
+}
+.blok-baris-tombol:hover {
+  border-color: var(--color-line-2);
+  background: color-mix(in srgb, var(--color-surface-2) 60%, transparent);
+}
+.blok-baris[data-aktif] .blok-baris-tombol {
+  border-color: var(--color-gem);
+  background: color-mix(in srgb, var(--color-gem-soft) 38%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-gem) 14%, transparent);
+}
+@keyframes blok-batang-tumbuh {
+  from {
+    transform: scaleX(0);
+  }
+}
+.blok-batang {
+  transform-origin: left center;
+  animation: blok-batang-tumbuh 620ms var(--ease-liquid) both;
+}
+
+@keyframes blok-rinci-buka {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.blok-rinci {
+  margin-top: 6px;
+  border-radius: 12px;
+  background: var(--color-surface-2);
+  padding: 11px 11px 12px;
+  animation: blok-rinci-buka 300ms var(--ease-liquid) both;
+}
+.blok-zona-boleh {
+  background: color-mix(in srgb, var(--color-gem-soft) 80%, transparent);
+  color: var(--color-gem);
+}
+.blok-zona-tidak {
+  background: var(--color-bahaya-soft);
+  color: var(--color-bahaya);
+}
+.blok-zona-tahu {
+  background: var(--color-surface);
+  color: var(--color-ink-3);
+}
+.blok-alasan {
+  display: flex;
+  gap: 9px;
+}
+.blok-alasan-ikon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-gem);
+}
+.blok-alasan[data-menekan] .blok-alasan-ikon {
+  color: var(--color-bahaya);
+}
+.blok-meter {
+  display: inline-flex;
+  gap: 2.5px;
+}
+.blok-meter span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-line);
+  transition: background-color 300ms var(--ease-liquid);
+}
+.blok-meter span[data-isi] {
+  background: var(--color-gem);
+}
+.blok-alasan[data-menekan] .blok-meter span[data-isi] {
+  background: var(--color-bahaya);
+}
+.blok-simulasi {
+  margin-top: 12px;
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  background: var(--color-ink);
+  color: var(--color-surface);
+  padding: 9px 12px 9px 9px;
+  transition: transform 320ms var(--ease-jelly);
+}
+.blok-simulasi:hover {
+  transform: translateY(-1px) scale(1.01);
+}
+.sim-blok {
+  border: 1px solid color-mix(in srgb, var(--color-gem) 40%, var(--color-line));
+  background: color-mix(in srgb, var(--color-gem-soft) 35%, var(--color-surface));
+  animation: masuk 320ms var(--ease-liquid) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blok-baris,
+  .blok-batang,
+  .blok-rinci,
+  .sim-blok {
+    animation: none !important;
+  }
+}

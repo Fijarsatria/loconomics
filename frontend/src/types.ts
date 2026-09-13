@@ -79,6 +79,22 @@ export interface SkorHeksagon {
   keyakinan: BadgeKeyakinan
 }
 
+/** Simulasi yang dipersempit ke satu blok. Faktornya ASUMSI, rumusnya di `rumus`. */
+export interface BlokSimulasi {
+  h3_blok: string
+  peringkat: number | null
+  nama_jalan_utama: string | null
+  skor_blok: number | null
+  rata_skor_heksagon: number | null
+  faktor_permintaan: number
+  faktor_berlaku: boolean
+  menit_jalan: number | null
+  jarak_jalan_utama_m: number | null
+  n_pesaing_150m: number | null
+  izin_komersial: boolean | null
+  kelas_zona: string | null
+}
+
 export interface Simulasi {
   h3_index: string
   kawasan: string
@@ -158,6 +174,8 @@ export interface Simulasi {
   }
   /** 05.00–22.00, `relatif` dinormalkan ke jam tersibuk heksagon ini. */
   profil_jam: { jam: number; relatif: number; pangsa_captive: number | null }[]
+  /** Terisi kalau simulasi dipersempit ke satu blok. */
+  blok: BlokSimulasi | null
 }
 
 export interface FaktorSkor {
@@ -413,6 +431,8 @@ export interface KontribusiBlok {
   nilai: number
   /** Sumbangan sebagai pangsa dari seluruh sumbangan positif, 0-1. */
   pangsa: number
+  /** Seberapa bagus blok ini pada indikator ini, 0-1. Untuk banjir: seberapa tinggi risikonya. */
+  kekuatan: number | null
 }
 
 export interface BedahBlok {

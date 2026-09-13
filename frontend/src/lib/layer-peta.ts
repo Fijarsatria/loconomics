@@ -506,19 +506,42 @@ export function idLabelPertama(m: MapLibreMap): string | undefined {
  * ini ia mendapat ujung terpucat dari rona yang sama - terbaca sebagai "paling
  * lemah" padahal artinya "tidak boleh". Larangan itu temuan, bukan kelemahan.
  */
+const STOP_BLOK: [number, string][] = [
+  [0, '#eef3f1'],
+  [40, '#a8cfc3'],
+  [65, '#55b096'],
+  [85, '#137c65'],
+  [100, '#0a5b4a'],
+]
+
 export const WARNA_BLOK: ExpressionSpecification = [
   'case',
   ['==', ['get', 'dilarang'], true], KUADRAN.HINDARI.warnaPeta,
   ['==', ['get', 'skor'], null], ABU_HINDARI,
-  [
-    'interpolate', ['linear'], ['get', 'skor'],
-    0, '#eef3f1',
-    40, '#a8cfc3',
-    65, '#55b096',
-    85, '#137c65',
-    100, '#0a5b4a',
-  ],
+  ['interpolate', ['linear'], ['get', 'skor'], ...STOP_BLOK.flat()] as ExpressionSpecification,
 ]
+
+/**
+ * Warna blok yang SAMA dengan `WARNA_BLOK`, untuk dipakai di luar peta (peta
+ * mini dan daftar di panel). Stop-nya dibaca dari larik yang sama, jadi warna
+ * di panel dan warna di peta tidak bisa berselisih.
+ */
+export function warnaSkorBlok(skor: number | null, dilarang: boolean): string {
+  if (dilarang) return KUADRAN.HINDARI.warnaPeta
+  if (skor == null) return ABU_HINDARI
+  const s = Math.max(0, Math.min(100, skor))
+  for (let i = 1; i < STOP_BLOK.length; i++) {
+    const [s1, w1] = STOP_BLOK[i]
+    const [s0, w0] = STOP_BLOK[i - 1]
+    if (s <= s1) {
+      const f = (s - s0) / (s1 - s0)
+      const hex = (w: string, k: number) => parseInt(w.slice(1 + k * 2, 3 + k * 2), 16)
+      const c = [0, 1, 2].map((k) => Math.round(hex(w0, k) + (hex(w1, k) - hex(w0, k)) * f))
+      return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`
+    }
+  }
+  return STOP_BLOK[STOP_BLOK.length - 1][1]
+}
 
 /**
  * Garis blok: lebih tipis dan lebih pucat daripada garis heksagon.

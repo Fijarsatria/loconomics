@@ -38,6 +38,7 @@ from app.core.aturan import (
     Bahasa,
     PENJELASAN_KUADRAN,
     PENJELASAN_KUADRAN_EN,
+    JENIS_KE_KELAS,
     alasan_blok,
     kalimat,
     kontribusi_blok,
@@ -68,6 +69,7 @@ from app.models import (
     ScoreFactor,
 )
 from app.schemas import (
+    BlokSimulasi,
     BedahBlok,
     BlokDalamHeksagon,
     CakupanPrestise,
@@ -649,6 +651,80 @@ def simpul_terdekat(
     )
 
 
+#: Batas faktor permintaan blok. Sempit dengan sengaja: yang diketahui cuma
+#: bahwa satu sisi heksagon LEBIH BAIK dari sisi lain, bukan berapa kali lipat
+#: uang yang lewat di depannya. Tanpa batas, blok terbaik di heksagon yang
+#: ketujuh bloknya jomplang akan "menghasilkan" tiga kali omzet heksagonnya.
+FAKTOR_BLOK_MIN = 0.6
+FAKTOR_BLOK_MAKS = 1.4
+
+
+def _persempit_ke_blok(db, h3_index, h3_blok, jenis_usaha, variabel, zona_izin):
+    """Angka heksagon -> angka satu blok. Mengembalikan (blok, variabel, zona).
+
+    Yang disesuaikan HANYA belanja per jam - satu-satunya besaran yang wajar
+    berbeda antar-sisi heksagon dan tidak diukur per blok. Sewa dan harga
+    struk tidak disentuh: tidak ada dasar untuk menebak bahwa ruko di tepi
+    jalan utama lebih mahal PERSIS sekian persen.
+
+    Skor pembandingnya skor KELAS usaha kalau jenisnya punya kelas - pesaing
+    sekelas ikut menurunkan peringkatnya, dan itu yang relevan untuk usaha
+    yang sedang disimulasikan - dan skor umum kalau tidak.
+    """
+    from app.core.galat import TidakDitemukan
+
+    saudara = db.execute(
+        select(BlokHeksagon).where(BlokHeksagon.h3_induk == h3_index)
+    ).scalars().all()
+    target = next((s for s in saudara if s.h3_blok == h3_blok), None)
+    if target is None:
+        raise TidakDitemukan(
+            "Blok itu tidak ada di dalam heksagon ini.",
+            {"h3_index": h3_index, "h3_blok": h3_blok},
+        )
+
+    kelas = JENIS_KE_KELAS.get(jenis_usaha)
+
+    def skor(s):
+        if kelas and isinstance(s.skor_per_kelas, dict) and s.skor_per_kelas.get(kelas) is not None:
+            return float(s.skor_per_kelas[kelas])
+        return None if s.skor_blok is None else float(s.skor_blok)
+
+    nilai = [v for v in (skor(s) for s in saudara) if v is not None]
+    rata = sum(nilai) / len(nilai) if nilai else None
+    sk = skor(target)
+    berlaku = sk is not None and rata is not None and rata > 0
+    faktor = (
+        min(FAKTOR_BLOK_MAKS, max(FAKTOR_BLOK_MIN, sk / rata)) if berlaku else 1.0
+    )
+
+    variabel = dict(variabel)
+    if variabel.get("belanja_per_jam") is not None:
+        variabel["belanja_per_jam"] = float(variabel["belanja_per_jam"]) * faktor
+
+    pesaing = None
+    if kelas and isinstance(target.usaha_per_kelas_150m, dict):
+        pesaing = target.usaha_per_kelas_150m.get(kelas)
+
+    blok = BlokSimulasi(
+        h3_blok=target.h3_blok,
+        peringkat=target.peringkat_induk,
+        nama_jalan_utama=target.nama_jalan_utama,
+        skor_blok=None if sk is None else round(sk, 1),
+        rata_skor_heksagon=None if rata is None else round(rata, 1),
+        faktor_permintaan=round(faktor, 3),
+        faktor_berlaku=berlaku,
+        menit_jalan=target.menit_jalan,
+        jarak_jalan_utama_m=target.jarak_jalan_utama_m,
+        n_pesaing_150m=pesaing,
+        izin_komersial=target.izin_komersial,
+        kelas_zona=target.kelas_zona,
+    )
+    # Zona BLOK menang atas zona heksagon kalau diketahui: satu heksagon bisa
+    # memuat blok berzona perdagangan dan blok berzona perumahan sekaligus.
+    return blok, variabel, (target.izin_komersial if target.izin_komersial is not None else zona_izin)
+
+
 @router.get(
     "/{h3_index}/simulasi",
     response_model=Simulasi,
@@ -669,6 +745,10 @@ def simulasi_heksagon(
     # ke angka heksagon kalau ada.
     sewa_bulanan_diminta: Annotated[float | None, Query(ge=0, le=5_000_000_000)] = None,
     harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
+    h3_blok: Annotated[
+        str | None,
+        Query(description="Persempit ke satu blok res-10 di dalam heksagon ini"),
+    ] = None,
     versi: str = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> Simulasi:
@@ -698,11 +778,19 @@ def simulasi_heksagon(
     ).scalar_one_or_none()
 
     b = badge(hx)
+    variabel = {nama: getattr(hx, nama) for nama in SEMUA_VARIABEL}
+    zona_izin = hx.zona_izin_komersial
+    blok_sim = None
+    if h3_blok:
+        blok_sim, variabel, zona_izin = _persempit_ke_blok(
+            db, h3_index, h3_blok, jenis_usaha, variabel, zona_izin
+        )
+
     hasil = hitung_simulasi(
-        variabel={nama: getattr(hx, nama) for nama in SEMUA_VARIABEL},
+        variabel=variabel,
         indeks_kompetisi=getattr(sc, "ikp", None),
         indeks_churn=hx.indeks_churn,
-        zona_izin=hx.zona_izin_komersial,
+        zona_izin=zona_izin,
         keyakinan=b.tingkat,
         jenis_usaha=jenis_usaha,
         jam_buka=jam_buka,
@@ -738,14 +826,22 @@ def simulasi_heksagon(
         for r in sorted(baris_jam, key=lambda r: r.nominal_total or 0, reverse=True)[:3]
     ]
 
+    rumus = dict(hasil["rumus"])
+    if blok_sim is not None:
+        rumus["faktor_permintaan"] = (
+            "skor blok ÷ rata-rata skor ketujuh blok, dibatasi "
+            f"{FAKTOR_BLOK_MIN:g}–{FAKTOR_BLOK_MAKS:g}; mengalikan belanja per jam"
+        )
+
     return Simulasi(
         h3_index=hx.h3_index,
         kawasan=hx.kawasan,
+        blok=blok_sim,
         masukan=hasil["masukan"],
         sumber=hasil["sumber"],
         terukur=hasil["terukur"],
         hasil=hasil["hasil"],
-        rumus=hasil["rumus"],
+        rumus=rumus,
         peringatan=hasil["peringatan"],
         sensitivitas=hasil["sensitivitas"],
         keyakinan=b,

@@ -567,6 +567,7 @@ def laporan_simulasi_pdf(
     margin_persen: Annotated[float, Query(gt=0, le=100)] = 30.0,
     sewa_bulanan_diminta: Annotated[float | None, Query(ge=0, le=5_000_000_000)] = None,
     harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
+    h3_blok: Annotated[str | None, Query()] = None,
 ) -> Response:
     """Rencana usaha satu halaman, siap dibawa ke pemberi modal.
 
@@ -586,6 +587,7 @@ def laporan_simulasi_pdf(
         jenis_usaha=jenis_usaha, jam_buka=jam_buka, luas_m2=luas_m2,
         pangsa_persen=pangsa_persen, margin_persen=margin_persen,
         sewa_bulanan_diminta=sewa_bulanan_diminta, harga_rata_rata=harga_rata_rata,
+        h3_blok=h3_blok,
     )
     pdf = _rakit_pdf_simulasi(sim, user)
     nama = f"Simulasi-{h3_index}.pdf"
@@ -692,6 +694,26 @@ def _rakit_pdf_simulasi(sim, user) -> bytes:
         _pita_keyakinan(sim.keyakinan, dok.width, g, colors),
         Spacer(1, 9),
     ]
+    # Simulasi SATU BLOK dinyatakan di halaman pertama, dengan asumsinya.
+    # Dokumen ini dibawa ke pemberi modal; omzet blok yang terbaca sebagai hasil
+    # ukur per 130 m akan dipercaya lebih dari yang pantas.
+    if sim.blok is not None:
+        bk = sim.blok
+        jalan = f" &middot; {bk.nama_jalan_utama}" if bk.nama_jalan_utama else ""
+        faktor = (
+            f"Permintaan heksagon dikali <b>{bk.faktor_permintaan:.2f}</b> "
+            f"(skor blok {bk.skor_blok} dibanding rata-rata ketujuh blok {bk.rata_skor_heksagon})."
+            if bk.faktor_berlaku
+            else "Skor blok belum ada; angkanya sama dengan seluruh heksagon."
+        )
+        isi += [
+            Paragraph(
+                f"<b>Simulasi blok #{bk.peringkat or '?'}{jalan}</b> &mdash; {faktor} "
+                "Asumsi: uang yang berputar diukur per heksagon, bukan per blok.",
+                g["kecil"],
+            ),
+            Spacer(1, 8),
+        ]
 
     # --- Ke mana omzetnya pergi ---------------------------------------------
     if h.omzet_bulanan:

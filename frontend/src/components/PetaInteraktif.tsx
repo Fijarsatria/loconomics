@@ -2801,9 +2801,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 
     if (blokLalu.current !== blok.h3_index) {
       blokLalu.current = blok.h3_index
-      if (m.getZoom() < 15) {
+      // Tujuh blok ±130 m baru terbaca sebagai tujuh petak mulai zoom ~16.
+      if (m.getZoom() < 16.2) {
         const diam = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-        m.easeTo({ zoom: 15.4, duration: diam ? 0 : 700 })
+        m.easeTo({ zoom: 16.8, duration: diam ? 0 : 700 })
       }
     }
   }, [blok, siap])
@@ -3140,9 +3141,22 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             if (y < sLat) sLat = y
             if (y > n) n = y
           }
-          // Bantalan besar: heksagon yang memenuhi layar tidak bisa dibaca dalam
-          // konteks tetangganya, dan konteks itulah gunanya peta ini.
-          m.fitBounds([w, sLat, e, n], { padding: 220, duration: 900, maxZoom: 15.4 })
+          // JAUH lebih dekat sejak 13 Sep 2026, atas permintaan pemilik repo -
+          // "biar lebih detail". Sebelumnya bantalan 220 px dan zoom paling
+          // tinggi 15,4 menaruh heksagonnya sebesar ibu jari di tengah
+          // tetangganya; sekarang ia memenuhi bagian peta yang TIDAK tertutup
+          // panel, cukup dekat untuk membaca nama jalan dan membedakan ketujuh
+          // bloknya. Bantalannya tidak simetris: di layar lebar panel detail
+          // menutupi sisi kanan, di ponsel lembar bawah menutupi separuh bawah
+          // - dan heksagon yang dibingkai di belakang panel sama saja dengan
+          // tidak dibingkai.
+          const lebar = m.getContainer().clientWidth
+          const tinggi = m.getContainer().clientHeight
+          const padding =
+            lebar >= 1024
+              ? { top: 96, bottom: 96, left: 96, right: Math.min(520, lebar * 0.36) }
+              : { top: 72, bottom: Math.round(tinggi * 0.46), left: 36, right: 36 }
+          m.fitBounds([w, sLat, e, n], { padding, duration: 900, maxZoom: 17.4 })
           return true
         }
 

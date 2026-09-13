@@ -838,12 +838,34 @@ NAMA_KONTRIBUSI_BLOK: dict[str, tuple[str, str]] = {
 }
 
 
+#: Bobot tiap sumbangan blok - KEMBARAN `pipeline/config.py::BOBOT_BLOK` plus
+#: `BOBOT_BLOK_BANJIR`, dijaga sama oleh `test_aturan.py`. Dipakai HANYA untuk
+#: menerjemahkan sumbangan jadi kekuatan 0-1 yang bisa dibaca awam; tidak ada
+#: satu pun skor yang dihitung ulang dari sini (aturan 1).
+BOBOT_KONTRIBUSI_BLOK: dict[str, float] = {
+    "menit_jalan_inv": 0.30,
+    "jarak_jalan_utama_m_inv": 0.20,
+    "n_penarik_250m": 0.15,
+    "n_usaha_150m": 0.15,
+    "jarak_halte_m_inv": 0.10,
+    "rasio_tutupan_bangunan": 0.10,
+    "risiko_banjir_inv": 0.10,
+}
+
+
 def kontribusi_blok(mentah: dict | None, bahasa: Bahasa) -> list[dict]:
     """`blok_heksagon.kontribusi` -> daftar berlabel, urut dari yang terbesar.
 
     TIDAK menghitung apa pun: pangsanya pembagian dua angka yang sudah jadi,
     dan pembagian itu tidak memeringkat blok mana pun (aturan 1). Yang
     menghitung sumbangannya `pipeline/s6_score.skor_blok`.
+
+    `kekuatan` ditambahkan 13 Sep 2026 atas laporan pemilik repo: "masa dekat
+    halte pake persentase". Pangsa menjawab "berapa bagian skor datang dari
+    sini" - pertanyaan yang tidak diajukan siapa pun. Yang diajukan orang:
+    "seberapa bagus blok ini soal halte?". Sumbangan dibagi bobotnya menjawab
+    persis itu, pada skala 0-1 atas seluruh blok wilayah studi, karena
+    pipeline menormalkannya begitu.
 
     Yang NEGATIF ikut dikirim dan tidak diubah tandanya. Risiko banjir menekan
     skor, dan menyembunyikannya berarti daftar sumbangan yang jumlahnya tidak
@@ -859,6 +881,11 @@ def kontribusi_blok(mentah: dict | None, bahasa: Bahasa) -> list[dict]:
             "nama": NAMA_KONTRIBUSI_BLOK.get(k, (k, k))[1 if en else 0],
             "nilai": round(float(v), 4),
             "pangsa": round(float(v) / positif, 4),
+            "kekuatan": (
+                None
+                if not BOBOT_KONTRIBUSI_BLOK.get(k)
+                else round(min(1.0, max(0.0, abs(float(v)) / BOBOT_KONTRIBUSI_BLOK[k])), 3)
+            ),
         }
         for k, v in mentah.items()
     ]

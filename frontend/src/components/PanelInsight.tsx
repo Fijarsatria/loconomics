@@ -499,6 +499,7 @@ function PanelInsight({
   posisi,
   batas,
   onBukaSimulasi,
+  onSimulasiBlok,
   onBandingkan,
   sedangDibandingkan,
   profilRute = 'foot-walking',
@@ -518,6 +519,8 @@ function PanelInsight({
   batas?: { x: number | null; y: number | null }
   /** Membuka simulasi kelayakan usaha untuk heksagon ini. */
   onBukaSimulasi?: () => void
+  /** Simulasi yang dipersempit ke satu blok. */
+  onSimulasiBlok?: (h3Blok: string) => void
   /** Menambahkan heksagon ini ke baki komparasi. */
   onBandingkan?: (h3: string) => void
   /** Sudah ada di baki komparasi. */
@@ -1150,7 +1153,7 @@ function PanelInsight({
         <Bagian
           judul={t.blokJudul}
           nada="gem"
-          ikon={<><path d="M8 1.6 13.6 4.8v6.4L8 14.4 2.4 11.2V4.8Z"/><path d="M8 5.4 10.8 7v3.2L8 11.8 5.2 10.2V7Z"/></>}
+          ikon={<><path d="M8 1.6 13.6 4.8v6.4L8 14.4 2.4 11.2V4.8Z"/><path d="M8 4.9 10.7 6.45v3.1L8 11.1 5.3 9.55v-3.1Z"/></>}
         >
           {!blok && <p className="mb-2.5 text-[13px] leading-snug text-ink-2">{t.blokIsi}</p>}
           {/* `key` = h3: pilihan kelas usaha milik SATU heksagon. Tanpa ini,
@@ -1163,6 +1166,7 @@ function PanelInsight({
             onData={onBlok}
             terpilih={blokTerpilih}
             onPilih={onPilihBlok}
+            onSimulasi={onSimulasiBlok}
           />
         </Bagian>
       )}

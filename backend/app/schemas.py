@@ -348,6 +348,30 @@ class TitikSensitivitas(BaseModel):
     laba_kotor_bulanan: float | None = None
 
 
+class BlokSimulasi(BaseModel):
+    """Simulasi yang dipersempit ke SATU blok res-10 di dalam heksagonnya.
+
+    Uang yang berputar diukur per HEKSAGON, bukan per blok - tidak ada data
+    belanja setajam 130 m. Jadi simulasi blok memakai angka heksagon yang sama
+    lalu menyesuaikannya dengan `faktor_permintaan`: seberapa kuat blok ini
+    dibanding rata-rata ketujuh saudaranya. Faktor itu ASUMSI dan dinyatakan
+    sebagai asumsi; rumusnya ikut dikirim di `Simulasi.rumus`.
+    """
+
+    h3_blok: str
+    peringkat: int | None = None
+    nama_jalan_utama: str | None = None
+    skor_blok: float | None = None
+    rata_skor_heksagon: float | None = None
+    faktor_permintaan: float
+    faktor_berlaku: bool
+    menit_jalan: float | None = None
+    jarak_jalan_utama_m: float | None = None
+    n_pesaing_150m: int | None = None
+    izin_komersial: bool | None = None
+    kelas_zona: str | None = None
+
+
 class LingkunganSimulasi(BaseModel):
     """Keadaan sekitar heksagon, dalam satuan yang bisa dibaca orang awam.
 
@@ -414,6 +438,9 @@ class Simulasi(BaseModel):
     )
     profil_jam: list[JamSimulasi] = Field(
         default_factory=list, description="05.00-22.00, dinormalkan ke jam tersibuk"
+    )
+    blok: BlokSimulasi | None = Field(
+        default=None, description="Terisi kalau simulasi dipersempit ke satu blok"
     )
 
 
@@ -537,6 +564,10 @@ class KontribusiBlok(BaseModel):
     #: Ada supaya batang di layar bisa dibandingkan antar-indikator tanpa
     #: pembacanya perlu tahu bobot mana yang 0,30 dan mana yang 0,10.
     pangsa: float
+    #: Seberapa bagus blok ini pada indikator ini, 0-1 atas seluruh blok wilayah
+    #: studi (sumbangan dibagi bobotnya). Untuk risiko banjir: seberapa TINGGI
+    #: risikonya. Yang dibaca antarmuka - pangsa terlalu abstrak untuk awam.
+    kekuatan: float | None = None
 
 
 class BlokDalamHeksagon(BaseModel):

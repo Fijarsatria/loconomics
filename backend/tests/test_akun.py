@@ -243,6 +243,42 @@ def main() -> int:
             cek("premium: nilai indeks ikut terbuka", dibuka.indeks.ipt is not None)
             cek("premium: tingkat 'premium'", dibuka.tingkat_akun == "premium")
 
+            # --- Simulasi dipersempit ke satu blok -------------------------
+            from sqlalchemy import text as _teks
+
+            from app.core.galat import TidakDitemukan
+
+            h3_sim = db.execute(_teks(
+                "select b.h3_induk from blok_heksagon b join hex_features h on h.h3_index=b.h3_induk "
+                "where h.belanja_per_jam is not null group by b.h3_induk "
+                "having max(b.skor_blok) - min(b.skor_blok) > 10 limit 1"
+            )).scalar()
+            if h3_sim is None:
+                print("  ! tidak ada heksagon berdata belanja dengan blok berbeda, uji blok dilewati")
+            else:
+                from app.api.hex import blok_heksagon as _blok
+
+                bb = _blok(h3_sim, db).blok
+                dasar = simulasi_heksagon(h3_sim, db, pengguna=u)
+                atas = simulasi_heksagon(h3_sim, db, pengguna=u, h3_blok=bb[0].h3_blok)
+                bawah = simulasi_heksagon(h3_sim, db, pengguna=u, h3_blok=bb[-1].h3_blok)
+                cek("blok: simulasi heksagon polos tidak membawa blok", dasar.blok is None)
+                cek("blok: simulasi blok menyebut bloknya", atas.blok is not None and atas.blok.h3_blok == bb[0].h3_blok)
+                cek("blok: faktor dalam batas 0,6-1,4",
+                    all(0.6 <= x.blok.faktor_permintaan <= 1.4 for x in (atas, bawah)))
+                cek("blok: blok terbaik >= blok terlemah",
+                    atas.blok.faktor_permintaan >= bawah.blok.faktor_permintaan)
+                if dasar.hasil.omzet_bulanan:
+                    rasio = atas.hasil.omzet_bulanan / dasar.hasil.omzet_bulanan
+                    cek("blok: omzet blok = omzet heksagon x faktornya",
+                        abs(rasio - atas.blok.faktor_permintaan) < 0.01)
+                cek("blok: rumus faktornya ikut dikirim", "faktor_permintaan" in atas.rumus)
+                try:
+                    simulasi_heksagon(h3_sim, db, pengguna=u, h3_blok="8a0000000000000")
+                    cek("blok: blok dari heksagon lain ditolak", False, "- justru dilayani")
+                except TidakDitemukan:
+                    cek("blok: blok dari heksagon lain ditolak", True)
+
             # Langganan uji dicabut lagi: bagian sesudah ini menguji akun GRATIS.
             db.delete(langganan_uji)
             db.flush()

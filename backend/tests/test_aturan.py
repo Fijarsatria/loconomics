@@ -1176,6 +1176,28 @@ def test_kalimat_perkiraan_menyebut_benda_yang_benar():
     assert "bukan sebagai harga" not in kalimat_perkiraan("D10", "model_gbr", r, "id")
 
 
+
+def test_bobot_kontribusi_blok_kembar_pipeline():
+    """`kekuatan` = sumbangan dibagi bobot. Bobot yang berselisih dengan pipeline
+    membuat meteran "Dekat halte: sangat baik" berbohong tanpa satu pun galat."""
+    import config as cfg_pipeline
+
+    from app.core.aturan import BOBOT_KONTRIBUSI_BLOK, NAMA_KONTRIBUSI_BLOK, kontribusi_blok
+
+    harapan = dict(cfg_pipeline.BOBOT_BLOK)
+    harapan["risiko_banjir_inv"] = cfg_pipeline.BOBOT_BLOK_BANJIR
+    assert BOBOT_KONTRIBUSI_BLOK == harapan, f"berselisih: {BOBOT_KONTRIBUSI_BLOK} vs {harapan}"
+    assert set(NAMA_KONTRIBUSI_BLOK) == set(harapan), "setiap bobot wajib punya nama awam"
+
+    # Sumbangan penuh = kekuatan 1; separuh = 0,5; banjir negatif tetap positif.
+    baris = {b["kode"]: b for b in kontribusi_blok(
+        {"menit_jalan_inv": 0.30, "jarak_halte_m_inv": 0.05, "risiko_banjir_inv": -0.04}, "id"
+    )}
+    assert baris["menit_jalan_inv"]["kekuatan"] == 1.0
+    assert baris["jarak_halte_m_inv"]["kekuatan"] == 0.5
+    assert baris["risiko_banjir_inv"]["kekuatan"] == 0.4
+    assert all(0 <= b["kekuatan"] <= 1 for b in baris.values())
+
 if __name__ == "__main__":
     lolos = gagal = 0
     for nama, fn in sorted(globals().items()):
