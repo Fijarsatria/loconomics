@@ -65,8 +65,9 @@ Hasilnya tampil di peta berbasemap **MAPID Maps** dan dijelaskan oleh **Loconomi
 | openrouteservice | Rute jalan kaki & mobil 708/708 heksagon, isochrone |
 | WorldPop 2020 | Penduduk dan usia produktif |
 | RDTR ATR/BPN (GISTARU) | Izin komersial, kelas zona, risiko banjir |
+| Model tim AI ([syahh-coder/Loconomics-AI](https://github.com/syahh-coder/Loconomics-AI), GradientBoosting) | **Perkiraan** harga per porsi & keramaian — panel detail saja, tidak pernah mengisi skor atau peta |
 
-Data mentah MAPID **tidak pernah** keluar dari API. Yang ditampilkan hanya rangkuman per heksagon, dan rangkuman dari satu baris survei pun ditahan.
+Data mentah MAPID **tidak pernah** keluar dari API. Yang ditampilkan hanya rangkuman per heksagon, dan rangkuman dari satu baris survei pun ditahan. Baris terakhir tabel di atas ditandai terpisah karena isinya **perkiraan, bukan pengukuran** — dilatih atas label yang mayoritas sintetis, dan selisihnya terhadap data lapangan sungguhan ditampilkan apa adanya di aplikasi (lihat [docs/metadata.md](docs/metadata.md)).
 
 ## Arsitektur
 
