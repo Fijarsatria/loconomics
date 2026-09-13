@@ -960,6 +960,138 @@ def test_csp_meta_disuntikkan_saat_build_bukan_di_sumber():
         "Content-Security-Policy" not in indeks.read_text(encoding="utf-8"))
 
 
+def test_build_rilis_menolak_naik_tanpa_kunci_basemap():
+    """Terbitan publik tanpa kunci basemap = peta putih, dan nol galat.
+
+    Diukur 13 Sep 2026 pada `loconomics.pages.dev` - justru URL yang dipakai
+    juri: setiap permintaan ubin berangkat TANPA `?key=`, dan MAPID menolak
+    permintaan tanpa kunci sejak 6 Sep. Yang terlihat di layar: label
+    mengambang di atas putih, dan satu pita kecil "Ubin MAPID menolak".
+
+    Sebabnya konfigurasi, bukan kode. `pages.yml` mengoper secret
+    `MAPID_BASEMAP_KEY` ke build GitHub Pages; Cloudflare Pages membangun
+    SENDIRI dari dasbornya, dan variabel itu tidak pernah diisi di sana. Satu
+    repo, dua lingkungan build, dan hanya satu yang lengkap - keluarga yang sama
+    dengan `_headers` yang berlaku di satu terbitan saja.
+
+    Yang dijaga di sini penjaganya, bukan nilainya: nilai kunci tidak boleh
+    masuk git sama sekali (lihat uji di atas).
+    """
+    akar_fe = Path(__file__).resolve().parents[2] / "frontend"
+    konfig = akar_fe / "vite.config.ts"
+    cek("vite.config.ts ada", konfig.exists())
+    if not konfig.exists():
+        return
+    teks = konfig.read_text(encoding="utf-8")
+    cek("plugin kunci-basemap-wajib ada", "name: 'kunci-basemap-wajib'" in teks)
+    cek("ia berjalan saat build", "apply: 'build'" in teks)
+    cek("ia membaca VITE_MAPID_BASEMAP_KEY", "VITE_MAPID_BASEMAP_KEY" in teks)
+    # Yang membedakan build rilis dari build pengembang: backend yang dituju.
+    # Tanpa pembeda ini, penjaganya akan menghentikan `vite build` siapa pun
+    # yang tidak punya kuncinya - dan penjaga yang menghalangi pekerjaan biasa
+    # adalah penjaga yang dicabut orang berikutnya.
+    cek("build pengembang tidak ikut dihentikan",
+        "api.startsWith('https://')" in teks)
+    cek("pesannya menyebut tempat mengisinya", "Cloudflare Pages" in teks)
+
+    alur = AKAR / ".github" / "workflows" / "pages.yml"
+    if alur.exists():
+        ta = alur.read_text(encoding="utf-8")
+        cek("pages.yml mengoper kunci basemap ke build",
+            "VITE_MAPID_BASEMAP_KEY:" in ta and "secrets.MAPID_BASEMAP_KEY" in ta)
+
+
+def test_hambatan_per_menit_bukan_pemadaman_lima_belas_menit():
+    """429 "coba lagi 2 detik" tidak boleh mematikan asisten seperempat jam.
+
+    Balasan sungguhan dari terbitan hidup 13 Sep 2026:
+
+        Quota exceeded for metric: generate_content_free_tier_requests,
+        limit: 20, model: gemini-3-flash. Please retry in 1.93s
+
+    Dua puluh permintaan per MENIT - bukan per hari - dan disuruh kembali dua
+    detik lagi. Sebelum perbaikan ini, hambatan itu menandai penyedianya penuh
+    selama `JENDELA_PENUH_DETIK` (15 menit) DAN membuat `/ai/status`
+    mengabarkan "jatah hariannya habis": dua pernyataan yang keduanya salah,
+    tentang keadaan yang sudah lewat sebelum kalimatnya selesai dibaca.
+
+    Di depan juri yang mencoba fitur berbobot 20% rubrik, selisih antara dua
+    detik dan lima belas menit adalah selisih antara jeda dan kegagalan.
+    """
+    import json as _json
+    import time as _time
+
+    from app.core import llm
+    from app.core.llm_gemini import batas_harian, lama_menunggu
+
+    PER_MENIT = _json.dumps(
+        {
+            "error": {
+                "code": 429,
+                "message": (
+                    "You exceeded your current quota. * Quota exceeded for metric: "
+                    "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+                    "limit: 20, model: gemini-3-flash\nPlease retry in 1.930699981s."
+                ),
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "2s"}
+                ],
+            }
+        }
+    )
+    PER_HARI = _json.dumps(
+        {
+            "error": {
+                "code": 429,
+                "message": (
+                    "Quota exceeded for metric: generate_content_free_tier_requests_PerDay, "
+                    "limit: 200, model: gemini-3-flash"
+                ),
+                "status": "RESOURCE_EXHAUSTED",
+            }
+        }
+    )
+
+    cek("retryDelay penyedianya terbaca", lama_menunggu(PER_MENIT) == 2.0,
+        f"- dapat {lama_menunggu(PER_MENIT)!r}")
+    cek("kalimatnya terbaca kalau details tidak ada",
+        lama_menunggu("Please retry in 1.930699981s.") == 1.930699981)
+    cek("balasan tanpa angka menjawab None", lama_menunggu("boom") is None)
+    cek("hambatan per menit TIDAK dianggap harian", batas_harian(PER_MENIT) is False)
+    cek("jatah harian dikenali sebagai harian", batas_harian(PER_HARI) is True)
+
+    asli = llm._penuh_sampai
+    try:
+        # Hambatan dua detik -> jendela pendek, dibatasi lantai 30 detik.
+        llm.tandai_penyedia_penuh(2.0)
+        sisa = llm.sisa_penuh_detik()
+        cek("hambatan 2 detik tidak jadi pemadaman 15 menit",
+            sisa <= llm.JENDELA_PENUH_MINIMUM, f"- {sisa} detik")
+        cek("tetap ditandai penuh, bukan diabaikan", llm.penyedia_penuh() is True)
+
+        # Tanpa keterangan -> kembali ke jendela panjang yang lama.
+        llm.tandai_penyedia_penuh(None)
+        panjang = llm.sisa_penuh_detik()
+        cek("tanpa keterangan tetap 15 menit",
+            panjang > llm.JENDELA_PENUH_DETIK - 5, f"- {panjang} detik")
+
+        # Kalimat untuk pengguna ikut berubah menurut lamanya.
+        from app.api.ai import _kalimat_dibatasi
+
+        pendek = _kalimat_dibatasi(20)
+        lama_k = _kalimat_dibatasi(900)
+        cek("kalimat pendek menyebut per menit, bukan harian",
+            "per menit" in pendek and "hari" not in pendek, f"- {pendek}")
+        cek("kalimat pendek menyebut berapa detik", "20 detik" in pendek, f"- {pendek}")
+        cek("kalimat panjang menyebut berapa menit", "15 menit" in lama_k, f"- {lama_k}")
+        cek("keduanya tetap menenangkan soal fitur lain",
+            "tidak terpengaruh" in pendek and "tidak terpengaruh" in lama_k)
+    finally:
+        llm._penuh_sampai = asli
+    assert _time  # dipakai lewat llm
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

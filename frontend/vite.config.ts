@@ -158,6 +158,56 @@ function cspDariHeaders(): Plugin {
   }
 }
 
+/**
+ * Build yang ditujukan ke publik TIDAK BOLEH naik tanpa kunci basemap.
+ *
+ * Diukur 13 Sep 2026 di terbitan Cloudflare - yang justru URL yang dipakai
+ * juri: setiap permintaan ubin berangkat TANPA `?key=`, dan MAPID menolak
+ * permintaan tanpa kunci sejak 6 Sep. Hasilnya peta putih dengan label
+ * mengambang dan satu pita kecil "Ubin MAPID menolak" di pojok - aplikasinya
+ * "berjalan", tidak ada galat, dan yang hilang cuma seluruh petanya.
+ *
+ * Sebabnya bukan kode melainkan konfigurasi: `pages.yml` mengoper secret
+ * `MAPID_BASEMAP_KEY` ke GitHub Pages, sementara Cloudflare Pages membangun
+ * SENDIRI dari dasbornya dan variabel itu tidak pernah diisi di sana. Dua
+ * terbitan dari satu repo, dua lingkungan build, dan hanya satu yang lengkap.
+ *
+ * Jadi build yang gagal KERAS lebih baik daripada terbitan yang naik diam-diam
+ * tanpa peta: yang pertama terlihat di log dan menahan terbitan lama yang masih
+ * bekerja, yang kedua baru ketahuan kalau ada yang membuka situsnya dan
+ * memperhatikan.
+ *
+ * Yang dipakai membedakan "untuk publik" dari "untuk pengembang" adalah backend
+ * yang dituju build ini: URL https berarti ia diarahkan ke Azure, dan build yang
+ * diarahkan ke backend produksi memang sedang menyiapkan terbitan. Build lokal
+ * (backend di localhost, atau tanpa backend sama sekali) tetap boleh jalan
+ * tanpa kunci - ia cuma kehilangan ubinnya, dan itu sudah lama jadi keadaan
+ * yang bisa diterima saat mengembangkan.
+ */
+function kunciBasemapWajib(): Plugin {
+  return {
+    name: 'kunci-basemap-wajib',
+    apply: 'build',
+    configResolved(konfig) {
+      const api = (konfig.env.VITE_API_BASE_URL as string | undefined) ?? ''
+      const kunci = (konfig.env.VITE_MAPID_BASEMAP_KEY as string | undefined) ?? ''
+      if (api.startsWith('https://') && !kunci) {
+        throw new Error(
+          [
+            'VITE_MAPID_BASEMAP_KEY kosong, padahal build ini diarahkan ke backend produksi',
+            `(${api}) - jadi ia sedang menyiapkan terbitan publik.`,
+            '',
+            'Tanpa kunci itu MAPID menolak setiap ubin dan yang terbit adalah peta putih.',
+            'Isi di tempat yang membangun:',
+            '  GitHub Actions   secret MAPID_BASEMAP_KEY (sudah terpasang di pages.yml)',
+            '  Cloudflare Pages Settings > Environment variables > VITE_MAPID_BASEMAP_KEY',
+          ].join('\n'),
+        )
+      }
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // GitHub Pages menyajikan repo di /<nama-repo>/, bukan di akar. Dibaca dari
@@ -168,7 +218,7 @@ export default defineConfig({
   // gaya basemap, kartu gerbang, dan cadangan GeoJSON heksagon - jadi mengubah
   // nilai ini cukup untuk memindahkan seluruh aplikasi ke sub-jalur.
   base: process.env.VITE_BASE ?? '/',
-  plugins: [react(), tailwindcss(), workerMaplibre(), cspDariHeaders()],
+  plugins: [react(), tailwindcss(), workerMaplibre(), cspDariHeaders(), kunciBasemapWajib()],
   // maplibre-gl memuat worker internalnya sendiri lewat cara yang bikin bingung
   // dependency-pre-bundler Vite (error "maplibre-gl-worker.mjs does not exist").
   // Dikecualikan dari optimizeDeps supaya worker-nya dimuat apa adanya.

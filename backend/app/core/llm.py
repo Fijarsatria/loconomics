@@ -61,7 +61,14 @@ _penuh_sampai: float = 0.0
 JENDELA_PENUH_DETIK = 15 * 60
 
 
-def tandai_penyedia_penuh() -> None:
+#: Sekat bawah. Penyedia yang menyuruh mencoba lagi "dalam 2 detik" tetap
+#: ditandai penuh setengah menit: dua pengunjung yang menekan kirim pada detik
+#: yang sama akan sama-sama membentur batas yang sama, dan yang kedua tidak
+#: perlu ikut menunggu balasan galat untuk mengetahuinya.
+JENDELA_PENUH_MINIMUM = 30
+
+
+def tandai_penyedia_penuh(detik: float | None = None) -> None:
     """Dipanggil klien saat SELURUH modelnya menolak (429/503).
 
     Ada supaya `/ai/status` berhenti berbohong. Tanpa ini status cuma menjawab
@@ -70,11 +77,33 @@ def tandai_penyedia_penuh() -> None:
     pertanyaan pertama. Itu persis keadaan yang endpoint ini dibuat untuk
     mencegah. Terjadi 13 Sep 2026: jatah Gemini habis dipakai OCR foto misi,
     dan `/ai/status` di backend publik tetap menjawab `siap: true`.
+
+    `detik` DITAMBAHKAN 13 Sep 2026 sesudah diukur, dan ia memperbaiki
+    kesalahan yang arahnya berlawanan. Balasan 429 Google ternyata membawa
+    lamanya sendiri, dan yang benar-benar terjadi di terbitan hidup berbunyi:
+
+        Quota exceeded for metric: generate_content_free_tier_requests,
+        limit: 20, model: gemini-3-flash. Please retry in 1.93s
+
+    Dua puluh permintaan per MENIT, dan disuruh kembali dua detik lagi. Tanpa
+    parameter ini, hambatan dua detik itu mematikan Konsultan AI **lima belas
+    menit** dan membuat `/ai/status` mengabarkan "jatah hariannya habis" -
+    kalimat yang salah tentang keadaan yang sudah lewat. Di depan juri yang
+    mencoba fitur berbobot 20%, selisih antara dua detik dan lima belas menit
+    adalah selisih antara jeda dan kegagalan.
+
+    Kosong berarti penyedianya tidak memberi tahu, dan barulah 15 menit yang
+    lama dipakai: kalau kita tidak tahu berapa lama, menganggapnya lama lebih
+    aman daripada mengundang orang mencoba lagi setiap detik.
     """
     global _penuh_sampai
     import time
 
-    _penuh_sampai = time.time() + JENDELA_PENUH_DETIK
+    if detik is None:
+        jendela = float(JENDELA_PENUH_DETIK)
+    else:
+        jendela = min(max(float(detik), JENDELA_PENUH_MINIMUM), float(JENDELA_PENUH_DETIK))
+    _penuh_sampai = time.time() + jendela
 
 
 def tandai_penyedia_pulih() -> None:
@@ -87,6 +116,19 @@ def penyedia_penuh() -> bool:
     import time
 
     return _penuh_sampai > time.time()
+
+
+def sisa_penuh_detik() -> int:
+    """Berapa detik lagi sebelum penyedianya dicoba lagi. 0 kalau tidak penuh.
+
+    Dipakai `/ai/status` supaya kalimat yang muncul di panel menyebut lamanya
+    yang SEBENARNYA. "Coba lagi sebentar lagi" untuk hambatan dua detik dan
+    untuk jatah harian yang habis adalah kalimat yang sama untuk dua keadaan
+    yang menuntut keputusan berbeda dari pembacanya.
+    """
+    import time
+
+    return max(0, int(round(_penuh_sampai - time.time())))
 
 
 def tersedia() -> bool:

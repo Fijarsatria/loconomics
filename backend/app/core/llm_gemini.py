@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -73,6 +74,48 @@ URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateC
 #:
 #: Yang diminta lewat LLM_MODEL selalu dicoba PERTAMA; daftar ini cuma jaring.
 MODEL_CADANGAN = ("gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-flash-latest")
+
+#: Sekat atas untuk menunggu di tengah satu permintaan. Orangnya sedang berdiri
+#: di depan layar; menunggu sepuluh detik masih terasa seperti "sedang
+#: berpikir", menunggu semenit terasa seperti rusak.
+TUNGGU_MAKS_DETIK = 10.0
+
+
+def lama_menunggu(rinci: str) -> float | None:
+    """Berapa detik yang DIMINTA penyedianya, dari balasan 429-nya sendiri.
+
+    Balasan Google membawa angkanya dua kali: sebagai `retryDelay` di dalam
+    `details[].RetryInfo`, dan sebagai kalimat "Please retry in 1.93s" di
+    pesannya. Yang kedua dibaca sebagai cadangan karena bentuk `details`
+    berubah-ubah antar versi API sementara kalimatnya sudah bertahan lama.
+
+    Kenapa ini penting sampai perlu fungsinya sendiri: tanpa membacanya, satu
+    hambatan 20-permintaan-per-menit tidak bisa dibedakan dari jatah harian yang
+    benar-benar habis - dan keduanya lalu diperlakukan sebagai yang terburuk.
+    """
+    try:
+        badan = json.loads(rinci)
+    except (ValueError, TypeError):
+        badan = {}
+    for d in (badan.get("error", {}) or {}).get("details", []) or []:
+        nilai = str(d.get("retryDelay") or "")
+        if nilai.endswith("s"):
+            try:
+                return float(nilai[:-1])
+            except ValueError:
+                pass
+    cocok = re.search(r"retry in ([0-9.]+)\s*s", rinci, re.IGNORECASE)
+    return float(cocok.group(1)) if cocok else None
+
+
+def batas_harian(rinci: str) -> bool:
+    """Apakah 429-nya jatah HARIAN, bukan hambatan per menit.
+
+    Google menamai metriknya, dan yang harian selalu memuat "PerDay" atau
+    "per day". Yang per menit tidak - itu yang kita temui 13 Sep 2026, lengkap
+    dengan `limit: 20` dan saran mencoba lagi dua detik kemudian.
+    """
+    return "perday" in rinci.replace(" ", "").lower()
 
 #: Tarif Gemini Flash per Juni 2026, USD per juta token. Dipakai `biaya_usd`.
 TARIF_MASUK = 0.30
@@ -280,6 +323,12 @@ class _Pesan:
         # kunci yang ditolak akan salah lagi berapa kali pun diulang, dan
         # mengulangnya cuma memperlambat pesan galat yang benar.
         data = None
+        # Lamanya-menunggu TERBESAR yang diminta penyedianya di seluruh model,
+        # dan apakah salah satunya menyebut jatah harian. Dipakai di bawah untuk
+        # menandai penyedia penuh selama yang ia minta - bukan lima belas menit
+        # untuk hambatan dua detik.
+        minta_tunggu: float | None = None
+        harian = False
         for m in urutan:
             req = urllib.request.Request(
                 URL.format(model=m),
@@ -295,10 +344,21 @@ class _Pesan:
                         log.warning("Gemini: %s penuh, dilayani %s", model, m)
                     break
                 except urllib.error.HTTPError as e:
-                    rinci = e.read().decode("utf-8", "replace")[:400]
+                    rinci = e.read().decode("utf-8", "replace")[:800]
                     sementara = e.code in (429, 500, 502, 503, 504)
+                    if e.code == 429:
+                        harian = harian or batas_harian(rinci)
+                        diminta = lama_menunggu(rinci)
+                        if diminta is not None:
+                            minta_tunggu = max(minta_tunggu or 0.0, diminta)
                     if sementara and percobaan == 0:
-                        time.sleep(1.2)
+                        # Tidur selama yang DIMINTA penyedianya, bukan 1,2 detik
+                        # tetap. Terukur: hambatan per menit meminta ~2 detik,
+                        # dan tidur 1,2 detik bangun tepat sebelum ia lewat -
+                        # jadi percobaan kedua membentur batas yang sama dan
+                        # seluruh permintaan gagal karena setengah detik.
+                        diminta = lama_menunggu(rinci) if e.code == 429 else None
+                        time.sleep(min(max(diminta or 1.2, 1.2), TUNGGU_MAKS_DETIK))
                         continue
                     if sementara or e.code == 404:
                         # Habis jatahnya di model ini - pindah ke berikutnya.
@@ -330,7 +390,27 @@ class _Pesan:
             # pengunjung menemukannya lewat pertanyaan yang gagal.
             from app.core.llm import tandai_penyedia_penuh
 
-            tandai_penyedia_penuh()
+            # Jatah harian: tidak ada gunanya mencoba lagi sebentar lagi, jadi
+            # jendela penuhnya yang panjang. Hambatan per menit: sependek yang
+            # diminta penyedianya.
+            tandai_penyedia_penuh(None if harian or minta_tunggu is None else minta_tunggu)
+            # Kalimat yang sampai ke layar menyebut lamanya, kalau tahu.
+            # "Coba lagi sebentar lagi" adalah kalimat yang sama untuk tunggu
+            # sepuluh detik dan untuk jatah harian yang habis - dan yang
+            # membacanya harus memutuskan hal yang berbeda di dua keadaan itu.
+            from app.core.llm import sisa_penuh_detik
+
+            sisa = sisa_penuh_detik()
+            if harian:
+                raise RuntimeError(
+                    "Jatah harian penyedia model sudah habis. Konsultan AI kembali "
+                    "sendiri besok; bagian lain di peta tidak terpengaruh."
+                )
+            if 0 < sisa < 120:
+                raise RuntimeError(
+                    f"Penyedia model sedang membatasi jumlah pertanyaan per menit. "
+                    f"Coba lagi sekitar {sisa} detik lagi."
+                )
             raise RuntimeError(
                 "Penyedia model sedang sibuk di semua modelnya. Coba lagi sebentar lagi."
             )

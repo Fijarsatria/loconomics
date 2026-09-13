@@ -55,6 +55,7 @@ from app.core.llm import (
     klien,
     model_aktif,
     penyedia_penuh,
+    sisa_penuh_detik,
     tersedia,
 )
 from app.models import AICallLog, HexFeature
@@ -643,18 +644,50 @@ def status() -> dict[str, Any]:
         # diisi di backend/.env" adalah instruksi untuk orang yang punya
         # backend-nya. Sebabnya tetap sampai ke yang perlu: core/llm.py
         # mencatatnya ke log server pada percobaan pertama.
+        # Berapa detik lagi, kalau memang sedang dibatasi. Frontend memakainya
+        # untuk memberi tahu orangnya harus menunggu berapa lama - dan sepuluh
+        # detik adalah kabar yang sama sekali berbeda dari lima belas menit.
+        "coba_lagi_detik": sisa_penuh_detik() if dibatasi else None,
         "pesan": (
             None
             if siap
             else (
-                "Konsultan AI sedang dibatasi penyedia modelnya - jatah hariannya "
-                "habis. Ia kembali sendiri tanpa perlu dinyalakan ulang. Bagian lain "
-                "di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh."
+                _kalimat_dibatasi(sisa_penuh_detik())
                 if dibatasi
                 else "Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh."
             )
         ),
     }
+
+
+def _kalimat_dibatasi(detik: int) -> str:
+    """Kalimat yang menyebut lamanya yang SEBENARNYA.
+
+    Sampai 13 Sep 2026 kalimatnya selalu berbunyi "jatah hariannya habis", dan
+    itu keliru untuk sebab yang paling sering terjadi. Yang terukur di terbitan
+    hidup: Gemini menolak karena batas **20 permintaan per menit** dan menyuruh
+    kembali dua detik lagi - lalu panel memberi tahu pengunjungnya bahwa jatah
+    HARI ITU sudah habis. Yang membaca kalimat itu menutup panelnya dan tidak
+    kembali; padahal ia cuma perlu menunggu sebentar.
+
+    Dua ambang, dan keduanya dari sudut pandang orang yang sedang menunggu:
+    di bawah dua menit ia masih mau menunggu, di atas itu ia perlu tahu bahwa
+    menunggu bukan rencana yang baik.
+    """
+    sisa = "Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh."
+    if detik <= 0:
+        return f"Konsultan AI sedang dibatasi penyedia modelnya. {sisa}"
+    if detik < 120:
+        return (
+            f"Konsultan AI sedang ramai - penyedia modelnya membatasi jumlah pertanyaan "
+            f"per menit. Coba lagi sekitar {detik} detik lagi. {sisa}"
+        )
+    menit = round(detik / 60)
+    return (
+        f"Konsultan AI sedang dibatasi penyedia modelnya - jatahnya habis untuk "
+        f"sementara. Ia kembali sendiri sekitar {menit} menit lagi, tanpa perlu "
+        f"dinyalakan ulang. {sisa}"
+    )
 
 
 def _pemanggil(request: Request | None) -> str:
