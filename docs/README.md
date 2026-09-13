@@ -10,6 +10,7 @@ berurutan.
 |---|---|---|---|
 | 1 | [alur-sistem.md](alur-sistem.md) | Bagaimana data mengalir dari lapangan sampai ke layar | Anda baru pertama kali melihat proyek ini |
 | 2 | [produk.md](produk.md) | Apa yang sebenarnya dijual, untuk siapa, apa saja fiturnya | Anda mau tahu "kita membangun apa" |
+| — | **[PRD.md](PRD.md)** | Product Requirements Document final untuk penjurian: masalah, tujuan, 23 fitur + kriteria penerimaan, data & AI, alur, kepatuhan ketentuan | Anda menyiapkan berkas lomba atau video |
 | 3 | [data.md](data.md) | 43 variabel, dari mana asalnya, aturan pembersihannya | Anda menyentuh pipeline atau skema database |
 | 4 | [skoring.md](skoring.md) | Rumus skor, bobot, dan kenapa bobotnya segitu | Anda mengubah `s6_score.py` atau ditanya juri soal metodologi |
 | 5 | [ai.md](ai.md) | 14 fitur AI dalam 3 lapisan, mana yang wajib | Anda mengerjakan OCR, imputasi, atau AI Consultant |
