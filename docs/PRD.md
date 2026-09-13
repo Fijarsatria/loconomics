@@ -8,8 +8,8 @@
 | **Tim** | Loconomics — Tim #33 dari Top 50, Program Studi Informatika, Universitas Telkom |
 | **Versi dokumen** | 1.0 (final) — 13 September 2026 |
 | **Status produk** | Rilis final, dapat diakses publik |
-| **WebGIS (utama)** | https://loconomics.pages.dev |
-| **WebGIS (cermin)** | https://fijarsatria.github.io/loconomics/ |
+| **WebGIS** | https://fijarsatria.github.io/loconomics/ (dibangun GitHub Actions dengan kunci basemap) |
+| **WebGIS (alamat alternatif)** | https://loconomics.pages.dev — selama kunci basemap belum dipasang di Cloudflare, alamat ini otomatis mengalihkan ke alamat di atas |
 | **API** | https://loconomics-api.azurewebsites.net (dokumentasi interaktif: `/docs`) |
 | **Kode sumber** | https://github.com/Fijarsatria/loconomics |
 
@@ -180,9 +180,9 @@ Enam fitur bernama membentuk inti produk. Fitur-fitur di bawahnya menopang alur 
 | F-16 | **Lokasi tersimpan & titik favorit** | Simpan heksagon; klik sekali di dalam heksagon terbuka untuk menandai titik persis; beri nama; pin penanda buku dengan nama saat disorot; klik pin membuka detail; hapus dari panel atau daftar | `watchlist_items` (lat, lon, nama) | Titik harus di dalam heksagon (validasi `ST_Contains`); hapus berhasil dari kedua tempat | Simpan/beri nama: premium. Hapus: semua akun |
 | F-17 | **Pemantauan & dinamika kawasan** | Selisih skor sejak disimpan, sebaran churn, komposisi kuadran kawasan | `/skor/dinamika`, `/skor/riwayat/{h3}` | Selisih dihitung terhadap skor yang dibekukan saat disimpan | Premium |
 | F-18 | **Laporan Kelayakan PDF** | Laporan satu lokasi, komparasi, dan simulasi (termasuk asumsi blok) | ReportLab di backend | Dijaga pembatas beban; hanya untuk premium | Premium |
-| F-19 | **Loconomics AI** | Konsultan percakapan yang memanggil 13 alat dan menggerakkan peta (§5.5) | `/ai/tanya` | Jawaban membawa `jejak`, `sumber_angka`, dan aksi peta; tidak ada angka karangan | Semua (alat berbayar mengikuti hak akses pengguna) |
+| F-19 | **Loconomics AI** | Konsultan percakapan yang memanggil 13 alat dan menggerakkan peta (§5.5). Lokasi yang disebut tampil sebagai **kartu mini** (nomor urut, skor + batang, kuadran, kode lokasi) yang menerbangkan peta saat diklik | `/ai/tanya` | Jawaban membawa `jejak`, `sumber_angka`, dan aksi peta; tidak ada angka karangan | Semua (alat berbayar mengikuti hak akses pengguna) |
 | F-20 | **Halaman Gerbang (Beranda/Overview)** | Scrollytelling: hero, masalah, 6 keputusan (potret peta sungguhan), ekosistem produk, penutup, tim | `ringkasan-data.ts` | Tidak bergulir mendatar di 390 px; CTA membuka peta di kawasan/layer yang dipilih | Semua |
-| F-21 | **Sumber Data & Metodologi** | Sumber RESMI vs PERKIRAAN, lisensi, cakupan per sumber, batasan, dan 4 temuan terukur | Dibangkitkan `s7_publish.py --ekspor` | Tidak ada angka yang diketik tangan | Semua |
+| F-21 | **Metodologi & Sumber Data** (menu ⚙ → "Metodologi & sumber data") | Metodologi 6 langkah, **Survey Activities** (titik misi ditarik, observasi di wilayah studi, heksagon tersentuh, dan peran data lapangan), **Rekomendasi untuk 4 pemangku kepentingan**, sumber RESMI vs PERKIRAAN, lisensi, cakupan, batasan, estimasi pengisi, dan 4 temuan terukur | Angka dari `ringkasan-data.ts` yang dibangkitkan `s7_publish.py --ekspor` | Angka tidak diketik tangan; kalimat rekomendasi mengambil angkanya dari temuan terukur | Semua |
 | F-22 | **Akun & alur langganan** | Daftar → pilih paket (Premium Bulanan Rp25.000, pembayaran disimulasikan) atau lanjut gratis → preferensi usaha → peta terbuka di kawasan pilihan, dalam satu tirai bertransisi | `/akun/*` | "Simpan & buka peta" benar-benar membuka peta | Semua |
 | F-23 | **Dua bahasa & dua tema** | Indonesia/Inggris, gelap/terang, pilihan milik pembaca | `lib/bahasa.tsx` | Kalimat tanpa pasangan terjemahan gagal di tahap kompilasi | Semua |
 
@@ -338,7 +338,7 @@ Prompt A1–A4 disimpan sebagai berkas di `pipeline/prompts/`, sehingga perubaha
 
 | | |
 |---|---|
-| **Input** | Pertanyaan pengguna, riwayat percakapan (maks. 20 pesan, disimpan di peramban), konteks heksagon terpilih |
+| **Input** | Pertanyaan pengguna, riwayat percakapan (maks. 20 pesan, disimpan di peramban), heksagon terpilih **beserta kawasannya**, layer aktif, dan bahasa antarmuka; jawaban mengikuti bahasa pertanyaan (Indonesia/Inggris) |
 | **Proses** | Model memilih alat dari daftar tertutup (skema *strict*); backend mengeksekusi alat data dan mengembalikan hasilnya; alat peta dikumpulkan sebagai `aksi_peta`; maksimal 8 putaran, lalu satu panggilan penutup **tanpa alat** memaksa jawaban disusun dari hasil yang sudah terkumpul |
 | **Output** | `teks` (bahasa pertanyaan), `aksi_peta` (dieksekusi di peta), `jejak` (setiap alat + argumennya), `sumber_angka` (faktor skor yang dikutip), `keyakinan` (lencana heksagon), `hex_disebut` |
 | **Validasi** | (1) **LLM tidak menghitung**: setiap angka berasal dari alat. (2) Jawaban tanpa satu pun panggilan alat ditandai `perlu_review` di `ai_call_logs`. (3) Penjaga akses berbayar yang sama dengan endpoint; argumen `pengguna` dari model selalu dibuang. (4) Heksagon kosong-data tidak dibuang dari pencarian, dan model diberi tahu nilainya belum diketahui. (5) 50 asersi uji loop dengan klien tiruan, termasuk batas putaran dan panggilan penutup |
@@ -354,7 +354,7 @@ Prompt A1–A4 disimpan sebagai berkas di `pipeline/prompts/`, sehingga perubaha
 |---|---|
 | **Lencana keyakinan Q01–Q03** | Jumlah titik survei, tingkat keyakinan (RENDAH/SEDANG/TINGGI), dan asal data (`observed` / `predicted`). Saat ini 26 heksagon `observed`, 682 `predicted`, seluruhnya berkeyakinan RENDAH (maks. 4 titik survei per heksagon; ambang SEDANG = 10) |
 | **Tiga golongan angka** | *Diukur* (kolom `hex_features`), *Perkiraan model* (tabel `hex_perkiraan`, tidak pernah masuk skor atau peta), *Tidak ada* (NULL, digambar abu-abu) |
-| **Estimasi pengisi untuk demonstrasi** | Pada rilis final, sel variabel yang belum punya sumber lapangan (antara lain P01 NJOP, P05 sewa, P06 churn, dan profil jam) **diisi estimasi** oleh `pipeline/demo_pameran.py` supaya seluruh layer, termasuk PriceLens dan RiskRadar, dapat diperagakan. Rinciannya: (1) estimasi diturunkan dari sinyal nyata heksagon itu sendiri (jarak simpul, penduduk WorldPop, POI OSM) dengan pola yang dapat direproduksi, bukan diacak; (2) skornya tetap dihitung mesin yang sama; (3) lencana keyakinan **tidak dinaikkan**, jadi panel tetap menyatakan "belum disurvei langsung"; (4) seluruh sel yang disentuh tercatat di manifes dan dapat dicabut persis dengan `python demo_pameran.py --copot` |
+| **Estimasi pengisi untuk demonstrasi** | Pada rilis final, sel variabel yang **belum punya sumber sama sekali** (P01 NJOP, P05/P07 sewa, P06 churn, pola jam & belanja per jam, M03 prestise, D06 proksi penumpang, D07 kepadatan kos) **diisi estimasi**. **Zonasi RDTR dan seluruh variabel survei MAPID (Menu Go, Struk Go, Community Maps) tidak pernah diisi estimasi**; kosongnya tetap kosong oleh `pipeline/demo_pameran.py` supaya seluruh layer, termasuk PriceLens dan RiskRadar, dapat diperagakan. Rinciannya: (1) estimasi diturunkan dari sinyal nyata heksagon itu sendiri (jarak simpul, penduduk WorldPop, POI OSM) dengan pola yang dapat direproduksi, bukan diacak; (2) skornya tetap dihitung mesin yang sama; (3) lencana keyakinan **tidak dinaikkan**, jadi panel tetap menyatakan "belum disurvei langsung"; (4) seluruh sel yang disentuh tercatat di manifes dan dapat dicabut persis dengan `python demo_pameran.py --copot` |
 
 ---
 
@@ -517,6 +517,8 @@ sequenceDiagram
 | Injeksi & XSS | ORM + parameter terikat; validasi indeks H3 & nama kawasan dari daftar putih; nama lokasi di pin ditulis lewat `textContent` |
 | Penyalahgunaan AI | Pembatas laju, plafon biaya harian, daftar alat tertutup, argumen `pengguna` dari model dibuang |
 | Kebocoran detail galat | Amplop galat generik + `request_id` |
+| Rekonstruksi baris survei (ketentuan A.1/B.7) | Rangkuman yang bahannya kurang dari 2 baris survei (harga porsi, keramaian, pedagang keliling, nominal struk, pangsa digital) **ditahan** di layer publik, kartu harga, detail premium, simulasi, dan PDF |
+| Penyalahgunaan endpoint operasional | Pengosongan cache hanya untuk akun admin |
 | Lintas-asal | CORS daftar putih asal resmi; metode yang diizinkan hanya yang dipakai frontend |
 
 ---
@@ -547,9 +549,9 @@ sequenceDiagram
 | Peta Interaktif | ✅ | F-01 s.d. F-04 |
 | Analisis & Insight | ✅ | Panel detail, Kompas Kuadran, komparasi, dinamika kawasan, 4 temuan terukur |
 | Interaksi AI & AI Insight | ✅ | Loconomics AI: ringkasan, penjelasan area, perbandingan, rekomendasi |
-| Survey Activities | ✅ | Data misi & survei MAPID APPS di halaman Sumber Data dan lencana keyakinan per heksagon |
-| Metodologi & Sumber Data | ✅ | Halaman Sumber Data (F-21) |
-| Rekomendasi | ✅ | Tab "Untuk Anda", GemFinder, peringatan RiskRadar, jawaban AI |
+| Survey Activities | ✅ | Bagian "Survey activities" di layar Metodologi & Sumber Data (angka survei + peran data lapangan) dan lencana keyakinan per heksagon |
+| Metodologi & Sumber Data | ✅ | Layar Metodologi & Sumber Data (F-21): 6 langkah metodologi, sumber, lisensi, cakupan, batasan |
+| Rekomendasi | ✅ | Rekomendasi untuk UMKM, pemerintah daerah, operator transportasi, dan pemilik properti (F-21); tab "Untuk Anda", GemFinder, RiskRadar, jawaban AI |
 
 ### 7.3 Desain, responsivitas, larangan, dan AI
 
@@ -573,13 +575,14 @@ sequenceDiagram
 
 | Pemeriksaan | Hasil |
 |---|---|
-| `test_infra.py` (galat, cache, pembatas, berkas deploy, CORS) | 147 lolos |
+| `test_infra.py` (galat, cache, pembatas, berkas deploy, CORS) | 149 lolos |
 | `test_aturan.py` (aturan tampilan, konsistensi lintas berkas) | 65 lolos |
 | `test_ai_loop.py` (loop agentik, batas putaran, panggilan penutup) | 50 lolos |
-| `test_akun.py` (tingkat akses, penahanan konten berbayar, pin) | 71 lolos |
+| `test_akun.py` (tingkat akses, penahanan konten berbayar, pin, sampel tunggal) | 77 lolos |
 | `smoke_api.py` (fitur ke basis data nyata, rute & isochrone produksi) | 114 lolos |
 | `test_s7_publish.py` (pembersihan nilai) | 32 lolos |
-| Uji peramban Playwright (alur akun, blok, pin, AI, hapus lokasi, layer) | Seluruh asersi lolos |
+| Uji peramban Playwright (alur akun, blok, pin, AI, kartu lokasi AI, hapus lokasi, layer, ponsel) | Seluruh asersi lolos |
+| Audit keamanan (paywall server, HMAC, IDOR, injeksi, XSS, rahasia di bundel & riwayat git, CORS, header) | Tanpa temuan Critical/High; temuan Medium (sampel tunggal) diperbaiki |
 | Cakupan rute | Jalan kaki 708/708, mobil 708/708 heksagon |
 
 ### 8.2 Batasan yang diakui

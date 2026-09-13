@@ -1252,6 +1252,21 @@ def test_cors_mengizinkan_setiap_metode_yang_dipakai_frontend():
         cek(f"preflight {metode} diizinkan", r.status_code == 200, f"- {r.status_code}")
 
 
+def test_bersihkan_cache_hanya_untuk_admin():
+    """Tanpa akun, mengosongkan cache ditolak - dulu terbuka untuk siapa pun."""
+    print("[cache/bersihkan hanya admin]")
+    from fastapi.testclient import TestClient as _TC
+
+    from app.main import app as _app
+
+    klien = _TC(_app, raise_server_exceptions=False)
+    cache.simpan("uji:bersihkan", 1)
+    r = klien.post("/meta/cache/bersihkan")
+    cek("tanpa tiket ditolak 401", r.status_code == 401, f"- {r.status_code}")
+    cek("cache tidak tersentuh oleh penolakan", cache.ambil("uji:bersihkan") == (True, 1))
+    cache.bersihkan("uji:")
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

@@ -36,7 +36,7 @@ import json
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api import pricelens, skor as modul_skor
@@ -581,10 +581,35 @@ menemukan atau menjelaskan lokasi, panggil flyTo dan highlight supaya pengguna \
 melihat yang Anda maksud. Kalau pertanyaannya soal harga, panggil setLayer \
 "pricelens". Soal hidden gem, "hidden_gem". Soal risiko, "risk_radar".
 
+5. "Kawasan yang sama", "di sini", "sekitar sini", dan "heksagon ini" merujuk \
+KAWASAN HEKSAGON YANG SEDANG DIBUKA, yang disebut di konteks pesan pengguna - \
+bukan kawasan yang pernah dibicarakan di giliran sebelumnya. Isi argumen \
+`kawasan` pada setiap alat dengan kawasan itu.
+
+6. Kalau pengguna bertanya soal "aman", "risiko", atau "paling aman", panggil \
+cek_risiko untuk kawasannya dan sebutkan status risiko pergantian usaha lokasi \
+yang Anda sebut - termasuk kalau statusnya WASPADA atau BAHAYA.
+
+7. Kalau cari_lokasi mengembalikan 0 hasil, longgarkan kriterianya satu kali \
+(hapus batas anggaran atau menit jalan) lalu cari lagi, katakan kriteria mana \
+yang dilonggarkan, dan tetap gerakkan peta ke hasil terbaiknya.
+
 CARA MENJAWAB
 
-Bahasa Indonesia sehari-hari, tanpa jargon. "Persentil 78" berarti "lebih tinggi \
-daripada 78 dari 100 lokasi lain di kawasan itu" - tulis yang kedua.
+BAHASA: jawab dalam bahasa yang dipakai pengguna di pertanyaan TERAKHIRNYA. \
+Pertanyaan berbahasa Inggris dijawab dalam bahasa Inggris, walaupun seluruh \
+hasil alat berbahasa Indonesia - terjemahkan isinya. Kalau konteks menyebut \
+bahasa antarmuka, pakai itu saat bahasa pertanyaannya tidak jelas.
+
+Tanpa jargon. "Persentil 78" berarti "lebih tinggi daripada 78 dari 100 lokasi \
+lain di kawasan itu" - tulis yang kedua.
+
+Jangan pernah menulis kode mentah. Kuadran ditulis dengan namanya: HIDDEN_GEM = \
+"Hidden Gem", PEMENANG_JELAS = "Aman" (Inggris: "Safe"), JEBAKAN_GENGSI = \
+"Jebakan Gengsi" (Inggris: "Prestige Trap"), HINDARI = "Hindari" (Inggris: \
+"Avoid"). Status zona DIIZINKAN/DILARANG/TIDAK_DIKETAHUI ditulis "diizinkan", \
+"dilarang", "belum bisa dipastikan". Heksagon disebut dengan kode lokasinya \
+kalau ada, bukan indeks H3 panjang.
 
 Ringkas. Dua sampai empat kalimat untuk pertanyaan biasa. Pakai daftar hanya kalau \
 memang membandingkan beberapa lokasi.
@@ -601,15 +626,26 @@ menjanjikan keuntungan.\
 """
 
 
-def _konteks(permintaan: PermintaanAI) -> str | None:
+def _konteks(permintaan: PermintaanAI, db: Session | None = None, bahasa: str = "id") -> str | None:
     """Konteks peta yang sedang dilihat pengguna, kalau ada.
 
     Dikirim sebagai bagian pesan pengguna, bukan prompt sistem, supaya prefiks
     yang di-cache tetap sama di seluruh percakapan.
+
+    KAWASAN heksagon ikut disebut (13 Sep 2026). Tanpa itu model menebaknya dari
+    riwayat percakapan: uji QA mendapati "bandingkan dengan heksagon terbaik di
+    kawasan yang sama" untuk heksagon Manggarai dijawab dengan heksagon Dukuh
+    Atas BNI - kawasan yang disebut dua giliran sebelumnya.
     """
     bagian = []
+    if bahasa == "en":
+        bagian.append("Bahasa antarmuka pengguna: Inggris")
     if permintaan.hex_terpilih:
         bagian.append(f"Heksagon yang sedang dibuka pengguna: {permintaan.hex_terpilih}")
+        hx = db.get(HexFeature, permintaan.hex_terpilih) if db is not None else None
+        kawasan = getattr(hx, "kawasan", None)
+        if isinstance(kawasan, str):
+            bagian.append(f"Kawasan heksagon itu: {kawasan}")
     if permintaan.layer_aktif:
         bagian.append(f"Layer aktif: {permintaan.layer_aktif}")
     return "\n".join(bagian) if bagian else None
@@ -753,6 +789,7 @@ def tanya(
     db: Annotated[Session, Depends(get_db)],
     request: Request = None,  # type: ignore[assignment]
     pengguna: PenggunaOpsional = None,
+    bahasa: Annotated[str, Query(description="Bahasa antarmuka: id atau en")] = "id",
 ) -> JawabanAI:
     """Alur lengkap satu pertanyaan.
 
@@ -787,7 +824,7 @@ def tanya(
     while pesan and pesan[0]["role"] != "user":
         pesan.pop(0)
 
-    konteks = _konteks(permintaan)
+    konteks = _konteks(permintaan, db, bahasa)
     isi_awal = permintaan.pertanyaan if not konteks else f"{konteks}\n\n{permintaan.pertanyaan}"
     pesan.append({"role": "user", "content": isi_awal})
 

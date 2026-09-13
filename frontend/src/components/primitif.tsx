@@ -1306,7 +1306,7 @@ const K_PENGATURAN = {
   id: {
     pengaturan: 'Pengaturan',
     tutup: 'Tutup',
-    sumber: 'Sumber data',
+    sumber: 'Metodologi & sumber data',
     belumDiisi: 'belum diisi',
     tentang: {
       judul: 'Tentang kami',
@@ -1327,7 +1327,7 @@ const K_PENGATURAN = {
   en: {
     pengaturan: 'Settings',
     tutup: 'Close',
-    sumber: 'Data sources',
+    sumber: 'Methodology & data sources',
     belumDiisi: 'not filled in',
     tentang: {
       judul: 'About us',

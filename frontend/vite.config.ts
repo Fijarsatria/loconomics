@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -184,11 +185,17 @@ function cspDariHeaders(): Plugin {
  * tanpa kunci - ia cuma kehilangan ubinnya, dan itu sudah lama jadi keadaan
  * yang bisa diterima saat mengembangkan.
  */
+/** Cermin yang dibangun GitHub Actions DENGAN kunci basemap (secret MAPID_BASEMAP_KEY). */
+const CERMIN_BERKUNCI = 'https://fijarsatria.github.io/loconomics'
+
 function kunciBasemapWajib(): Plugin {
+  let alihkanKeCermin = false
+  let folderKeluar = 'dist'
   return {
     name: 'kunci-basemap-wajib',
     apply: 'build',
     configResolved(konfig) {
+      folderKeluar = path.resolve(konfig.root, konfig.build.outDir)
       const api = (konfig.env.VITE_API_BASE_URL as string | undefined) ?? ''
       const kunci = (konfig.env.VITE_MAPID_BASEMAP_KEY as string | undefined) ?? ''
       if (api.startsWith('https://') && !kunci) {
@@ -211,7 +218,29 @@ function kunciBasemapWajib(): Plugin {
             '  Cloudflare Pages Settings > Environment variables > VITE_MAPID_BASEMAP_KEY',
           ].join('\n'),
         )
+        // Build CLOUDFLARE tanpa kunci: arahkan pengunjung ke cermin GitHub
+        // Pages, yang dibangun GitHub Actions DENGAN kunci. Terukur 13 Sep 2026:
+        // loconomics.pages.dev terbit tanpa kunci, dan setiap kali MAPID
+        // menegakkan kuncinya (401 pukul 09:27 dan 09:41 UTC, 200 di antaranya)
+        // peta juri hitam di bawah heksagon. 302, bukan 301: begitu kuncinya
+        // diisi di pengaturan Cloudflare, build berikutnya tidak menulis berkas
+        // ini dan pengalihannya hilang sendiri - tanpa 301 yang tersimpan di
+        // cache peramban siapa pun.
+        if (process.env.CF_PAGES === '1') alihkanKeCermin = true
       }
+    },
+    closeBundle() {
+      if (!alihkanKeCermin) return
+      writeFileSync(
+        path.resolve(folderKeluar, '_redirects'),
+        [
+          '# DITULIS build Cloudflare yang TIDAK punya VITE_MAPID_BASEMAP_KEY.',
+          '# Lihat kunciBasemapWajib() di vite.config.ts.',
+          `/*  ${CERMIN_BERKUNCI}/:splat  302`,
+          '',
+        ].join('\n'),
+      )
+      console.warn(`\n!!! _redirects ditimpa: seluruh situs dialihkan ke ${CERMIN_BERKUNCI}\n`)
     },
   }
 }

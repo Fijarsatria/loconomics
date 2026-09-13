@@ -26,6 +26,8 @@ from sqlalchemy.orm import Session
 from app.api.ai import ALAT_BACKEND, ALAT_FRONTEND
 from app.api.bersama import SEMUA_VARIABEL
 from app.core import cache
+from app.core.akun import PenggunaWajib
+from app.core.galat import BukanAdmin
 from app.core.aturan import KAWASAN_PILOT
 from app.core.batas import PLAFON_HARIAN_USD, biaya_hari_ini
 from app.core.config import settings
@@ -482,12 +484,19 @@ def daftar_kawasan(db: Annotated[Session, Depends(get_db)]) -> list[dict[str, An
     return keluar
 
 
-@router.post("/meta/cache/bersihkan", summary="Kosongkan cache baca")
-def bersihkan_cache(awalan: str | None = None) -> dict[str, Any]:
+@router.post("/meta/cache/bersihkan", summary="Kosongkan cache baca (admin)")
+def bersihkan_cache(user: PenggunaWajib, awalan: str | None = None) -> dict[str, Any]:
     """Dipanggil setelah pipeline memuat data baru.
+
+    Hanya untuk akun berperan admin (13 Sep 2026). Sebelumnya siapa pun tanpa
+    akun bisa memanggilnya berulang-ulang, dan setiap panggilan memaksa backend
+    Azure F1 menghitung ulang persentil dan layer yang sudah di-cache - cara
+    murah menghabiskan jatah CPU hariannya.
 
     Tanpa ini, persentil kawasan yang sudah di-cache akan bertahan sampai TTL
     habis, dan angka baru hasil pipeline tidak muncul sampai sepuluh menit
     kemudian. Saat demo, sepuluh menit itu selamanya.
     """
+    if user.peran != "admin":
+        raise BukanAdmin("Mengosongkan cache hanya untuk pengelola.")
     return {"dibuang": cache.bersihkan(awalan), "sisa": cache.statistik()}

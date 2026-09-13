@@ -514,6 +514,18 @@ function PanelAI({
   const [suntingJudul, setSuntingJudul] = useState<{ id: string; teks: string } | null>(null)
   const akhir = useRef<HTMLDivElement>(null)
   /**
+   * Gulir DAFTAR PESAN ke dasar - bukan `scrollIntoView`.
+   *
+   * `scrollIntoView` menggulir SETIAP leluhur yang bisa digulir. Terukur 13 Sep
+   * 2026 (uji QA): sesudah jawaban AI, seluruh aplikasi terdorong naik 598-800
+   * px dan separuh bawah layar kosong, pada 2 dari 5 pertanyaan. `scrollTo` pada
+   * induknya sendiri tidak menyentuh leluhur mana pun.
+   */
+  const gulirKeAkhir = () => {
+    const daftar = akhir.current?.parentElement
+    if (daftar) daftar.scrollTo({ top: daftar.scrollHeight, behavior: 'smooth' })
+  }
+  /**
    * Id percakapan yang sedang dibuka.
    *
    * STATE, bukan ref, dan itu bukan selera: daftar riwayat menandai mana yang
@@ -622,7 +634,7 @@ function PanelAI({
     // Gulir ke gelembung baru SEGERA, bukan sesudah jawabannya datang: tanpa
     // ini pertanyaan yang baru dikirim bisa meluncur masuk di bawah tepi
     // panel, dan satu-satunya bukti bahwa ia terkirim tidak terlihat.
-    requestAnimationFrame(() => akhir.current?.scrollIntoView({ behavior: 'smooth' }))
+    requestAnimationFrame(gulirKeAkhir)
 
     try {
       // Riwayat dikirim ulang tiap giliran; backend tidak menyimpan sesi.
@@ -644,7 +656,7 @@ function PanelAI({
       setPesan((s) => [...s, { peran: 'asisten', teks: pesanGalat(e, t) }])
     } finally {
       setMemuat(false)
-      requestAnimationFrame(() => akhir.current?.scrollIntoView({ behavior: 'smooth' }))
+      requestAnimationFrame(gulirKeAkhir)
     }
   }
 

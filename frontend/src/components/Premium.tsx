@@ -460,7 +460,7 @@ export function MenuKawasan({
           role="listbox"
           aria-label={tk.kawasan}
           data-menutup={menutup ? '1' : undefined}
-          className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[17rem] overflow-hidden rounded-md"
+          className="kaca-tebal pop pop-kanan absolute left-0 top-[calc(100%+8px)] z-50 w-[min(17rem,calc(100vw-2rem))] overflow-hidden rounded-md sm:left-auto sm:right-0"
         >
           <div className="p-1.5">
             <button

@@ -119,6 +119,13 @@ class KredensialSalah(KesalahanAPI):
     kode = "KREDENSIAL_SALAH"
 
 
+class BukanAdmin(KesalahanAPI):
+    """Sudah masuk, tetapi tindakan ini hanya untuk pengelola."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    kode = "BUKAN_ADMIN"
+
+
 class AkunSudahAda(KesalahanAPI):
     status_code = status.HTTP_409_CONFLICT
     kode = "AKUN_SUDAH_ADA"

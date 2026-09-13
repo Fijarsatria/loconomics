@@ -1807,7 +1807,7 @@ export default function App() {
             setinggi layar. */}
         <div className="pointer-events-none absolute inset-0 z-20 flex flex-col gap-3 p-3 sm:gap-4 sm:p-4">
           {/* --- Bilah atas ------------------------------------------------ */}
-          <header className="kaca pointer-events-auto relative z-30 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2.5 rounded-lg px-4 py-2.5 sm:px-5">
+          <header className="kaca pointer-events-auto relative z-40 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2.5 rounded-lg px-4 py-2.5 sm:px-5">
             {/* Tombol pulang BERDIRI SENDIRI di sebelah kiri logo, selalu
                 terlihat. Versi sebelumnya menyembunyikannya di dalam logo dengan
                 panah yang baru muncul saat disorot - dan tidak ada yang menyorot
