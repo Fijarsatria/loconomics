@@ -960,7 +960,7 @@ def test_csp_meta_disuntikkan_saat_build_bukan_di_sumber():
         "Content-Security-Policy" not in indeks.read_text(encoding="utf-8"))
 
 
-def test_build_rilis_menolak_naik_tanpa_kunci_basemap():
+def test_build_rilis_memperingatkan_tanpa_kunci_basemap():
     """Terbitan publik tanpa kunci basemap = peta putih, dan nol galat.
 
     Diukur 13 Sep 2026 pada `loconomics.pages.dev` - justru URL yang dipakai
@@ -993,6 +993,13 @@ def test_build_rilis_menolak_naik_tanpa_kunci_basemap():
     cek("build pengembang tidak ikut dihentikan",
         "api.startsWith('https://')" in teks)
     cek("pesannya menyebut tempat mengisinya", "Cloudflare Pages" in teks)
+    # PERINGATAN, bukan galat (13 Sep 2026 sore). Galat membekukan build
+    # Cloudflare sejak 557f949 - URL juri tertinggal seluruh perubahan hari itu,
+    # padahal terbitan lama yang ditahannya sama-sama tanpa kunci.
+    potong = teks[teks.index("name: 'kunci-basemap-wajib'"):]
+    potong = potong[: potong.index("\n}\n")]
+    cek("kekosongan kunci DIPERINGATKAN, tidak menghentikan build",
+        "logger.warn" in potong and "throw" not in potong)
 
     alur = AKAR / ".github" / "workflows" / "pages.yml"
     if alur.exists():

@@ -192,9 +192,17 @@ function kunciBasemapWajib(): Plugin {
       const api = (konfig.env.VITE_API_BASE_URL as string | undefined) ?? ''
       const kunci = (konfig.env.VITE_MAPID_BASEMAP_KEY as string | undefined) ?? ''
       if (api.startsWith('https://') && !kunci) {
-        throw new Error(
+        // PERINGATAN, bukan galat - sejak 13 Sep 2026 sore. Versi galatnya
+        // bekerja persis seperti dirancang, dan justru itu masalahnya: sejak
+        // commit 557f949 SETIAP build Cloudflare gagal, jadi URL yang dipakai
+        // juri membeku di versi sebelum seluruh perubahan hari itu. Penjaga
+        // yang menahan terbitan lama tidak melindungi apa pun kalau terbitan
+        // lama itu SAMA tanpa kuncinya. Yang tetap: pesannya keras, di log
+        // build, dan menyebut tempat mengisinya.
+        konfig.logger.warn(
           [
-            'VITE_MAPID_BASEMAP_KEY kosong, padahal build ini diarahkan ke backend produksi',
+            '',
+            '!!! VITE_MAPID_BASEMAP_KEY kosong, padahal build ini diarahkan ke backend produksi',
             `(${api}) - jadi ia sedang menyiapkan terbitan publik.`,
             '',
             'Tanpa kunci itu MAPID menolak setiap ubin dan yang terbit adalah peta putih.',
