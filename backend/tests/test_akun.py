@@ -284,6 +284,14 @@ def main() -> int:
             from app.core.galat import KesalahanAPI as _Galat
             from app.schemas import PermintaanNamaPantau, PermintaanPantau
 
+            # Fungsi pantauan memanggil `db.commit()`. Di uji yang seluruhnya
+            # di-rollback, satu commit mengabadikan akun uji ke basis data
+            # sungguhan - dan itu SUDAH terjadi sekali saat uji ini ditulis:
+            # putaran berikutnya gagal pada email yang sudah ada. Selama blok
+            # ini commit diganti flush, jadi rollback di akhir tetap menyapu
+            # semuanya.
+            _commit_asli = db.commit
+            db.commit = db.flush  # type: ignore[method-assign]
             lat_d, lon_d = db.execute(_teks(
                 "select ST_Y(ST_PointOnSurface(geom)), ST_X(ST_PointOnSurface(geom)) "
                 "from hex_features where h3_index = :h"
@@ -299,7 +307,6 @@ def main() -> int:
                 tambah_pantauan(PermintaanPantau(h3_index=h3, lat=lat_d + 0.05, lon=lon_d), u, db)
                 cek("pin: titik di LUAR heksagon ditolak", False)
             except _Galat:
-                db.rollback()
                 cek("pin: titik di LUAR heksagon ditolak", True)
             namai_pantauan(h3, PermintaanNamaPantau(nama="  Pojok Kendal  "), u, db)
             daftar = {b.h3_index: b for b in daftar_pantauan(u, db)}
@@ -330,6 +337,7 @@ def main() -> int:
             cek("pin: daftar simpanan menuntut PREMIUM", _pakai_premium("/akun/pantauan", "GET"))
             cek("pin: menghapus TETAP boleh untuk akun apa pun",
                 not _pakai_premium("/akun/pantauan/{h3_index}", "DELETE"))
+            db.commit = _commit_asli  # type: ignore[method-assign]
 
             # Langganan uji dicabut lagi: bagian sesudah ini menguji akun GRATIS.
             db.delete(langganan_uji)
