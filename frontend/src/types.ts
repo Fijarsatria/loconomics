@@ -490,6 +490,7 @@ export type NamaFungsi =
   | 'cek_zona'
   | 'cari_hidden_gem'
   | 'cek_risiko'
+  | 'bedah_blok'
   | 'flyTo'
   | 'highlight'
   | 'setLayer'

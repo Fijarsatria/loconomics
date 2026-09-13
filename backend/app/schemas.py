@@ -687,6 +687,7 @@ NamaFungsi = Literal[
     "cek_zona",  # ZoneGuard
     "cari_hidden_gem",  # GemFinder
     "cek_risiko",  # RiskRadar
+    "bedah_blok",  # tujuh blok di dalam satu heksagon
     # dijalankan frontend (aksi peta, tidak menyentuh basis data)
     "flyTo",
     "highlight",

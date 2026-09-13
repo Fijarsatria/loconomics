@@ -71,7 +71,7 @@ const K = {
     ],
     riwayat: 'Riwayat percakapan',
     tutupRiwayat: 'Tutup riwayat',
-    baru: 'Percakapan baru',
+    baru: 'Chat baru',
     kosongRiwayat: 'Belum ada percakapan tersimpan. Yang Anda tanyakan di sini disimpan di peramban ini saja.',
     hapus: 'Hapus percakapan ini',
     sedang: 'sedang dibuka',
@@ -110,6 +110,7 @@ const K = {
       cek_zona: 'memeriksa izin zona',
       cari_hidden_gem: 'mencari hidden gem',
       cek_risiko: 'memeriksa risiko',
+      bedah_blok: 'membedah heksagon jadi tujuh blok',
       flyTo: 'menggerakkan peta',
       highlight: 'menyorot heksagon',
       setLayer: 'mengganti layer',
@@ -135,7 +136,7 @@ const K = {
     ],
     riwayat: 'Conversation history',
     tutupRiwayat: 'Close history',
-    baru: 'New conversation',
+    baru: 'New chat',
     kosongRiwayat: 'Nothing saved yet. What you ask here stays in this browser.',
     hapus: 'Delete this conversation',
     sedang: 'open now',
@@ -174,6 +175,7 @@ const K = {
       cek_zona: 'checking zoning permission',
       cari_hidden_gem: 'searching for hidden gems',
       cek_risiko: 'checking risk',
+      bedah_blok: 'splitting the hexagon into seven blocks',
       flyTo: 'moving the map',
       highlight: 'highlighting hexagons',
       setLayer: 'switching layer',
@@ -527,14 +529,27 @@ function PanelAI({
     }
   }
 
+  /** Luncuran tombol kirim: nyala sesaat, lalu padam sendiri. */
+  const [luncur, setLuncur] = useState(false)
+  useEffect(() => {
+    if (!luncur) return
+    const id = window.setTimeout(() => setLuncur(false), 650)
+    return () => window.clearTimeout(id)
+  }, [luncur])
+
   async function kirim(pertanyaan: string) {
     if (!pertanyaan.trim() || memuat) return
+    setLuncur(true)
     // Percakapan baru lahir di sini, bukan di effect penyimpan. Keduanya
     // dibatch React dalam satu render, jadi effect itu langsung melihat idnya.
     if (!idSesi) setIdSesi(idBaru())
     setPesan((s) => [...s, { peran: 'pengguna', teks: pertanyaan }])
     setInput('')
     setMemuat(true)
+    // Gulir ke gelembung baru SEGERA, bukan sesudah jawabannya datang: tanpa
+    // ini pertanyaan yang baru dikirim bisa meluncur masuk di bawah tepi
+    // panel, dan satu-satunya bukti bahwa ia terkirim tidak terlihat.
+    requestAnimationFrame(() => akhir.current?.scrollIntoView({ behavior: 'smooth' }))
 
     try {
       // Riwayat dikirim ulang tiap giliran; backend tidak menyimpan sesi.
@@ -646,16 +661,26 @@ function PanelAI({
           )}
         </button>
 
+        {/* BERLABEL, bukan "+" polos (13 Sep 2026, permintaan pemilik repo -
+            "kayak ChatGPT atau Gemini"). Tanda tambah sendirian di pojok panel
+            terbaca sebagai "tambah sesuatu", dan sesuatu itu tidak disebut. */}
         <button
           onClick={percakapanBaru}
           title={t.baru}
-          aria-label={t.baru}
           disabled={!pesan.length}
-          className="ml-auto grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+          className="ai-chat-baru ml-auto flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-            <path d="M7 2.4v9.2M2.4 7h9.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="shrink-0">
+            <path
+              d="M9.6 2.6H4.4A1.8 1.8 0 0 0 2.6 4.4v7.2a1.8 1.8 0 0 0 1.8 1.8h7.2a1.8 1.8 0 0 0 1.8-1.8V6.4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <path d="M12.4 1.8 14.2 3.6 8.6 9.2 6.4 9.6l.4-2.2Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
           </svg>
+          {t.baru}
         </button>
       </div>
 
@@ -850,6 +875,24 @@ function PanelAI({
                 <span className="g-ai-nyala pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full" aria-hidden />
                 <span className="g-ai-kilau pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full" aria-hidden />
                 <span className="g-ai-cincin-kabut pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[152px] w-[152px] -translate-x-1/2 -translate-y-1/2 rounded-full" aria-hidden />
+                {/* Aurora dan orbit, 13 Sep 2026 - "lebih hidup, lebih dinamis".
+                    Tiga gumpal cahaya yang HANYUT dengan periode berbeda (9, 13,
+                    dan 17 detik) tidak pernah kembali ke susunan yang sama dalam
+                    hitungan menit, jadi latarnya tidak terbaca sebagai putaran
+                    ulang. Tiga titik mengorbit pada jari-jari dan kecepatan yang
+                    berbeda memberi GERAK DEPAN - yang dulu tidak ada: semua lapis
+                    lama bergerak di tempat. Posisinya lewat margin, bukan kelas
+                    translate Tailwind, alasannya sama dengan catatan `g-napas`. */}
+                <span className="g-ai-aurora" aria-hidden>
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className="g-ai-orbit" aria-hidden>
+                  <i />
+                  <i />
+                  <i />
+                </span>
 
                 <span className="g-ai-tanda relative inline-flex items-center gap-3">
                   <svg width="27" height="27" viewBox="0 0 16 16" aria-hidden className="shrink-0 text-ink-2">
@@ -921,11 +964,11 @@ function PanelAI({
         {pesan.map((m, i) => (
           <div key={i} className={m.peran === 'pengguna' ? 'flex shrink-0 justify-end' : 'shrink-0'}>
             {m.peran === 'pengguna' ? (
-              <p className="max-w-[85%] rounded-md rounded-br-xs bg-ink px-3.5 py-2 text-[14.5px] leading-snug text-surface">
+              <p className="ai-gelembung-pengguna max-w-[85%] rounded-md rounded-br-xs bg-ink px-3.5 py-2 text-[14.5px] leading-snug text-surface">
                 {m.teks}
               </p>
             ) : (
-              <div className="max-w-[94%] text-[14.5px] text-ink">
+              <div className="ai-jawaban-masuk max-w-[94%] text-[14.5px] text-ink">
                 {/* Jawaban model dirender sebagai Markdown, bukan teks polos.
                     Prompt A1-A4 memang meminta daftar bernomor dan tebal, dan
                     sampai sekarang tanda bintangnya tampil apa adanya di layar. */}
@@ -1004,7 +1047,9 @@ function PanelAI({
             yang mengerjakannya. Komponennya bersama dengan daftar lokasi dan
             rekomendasi; lihat `NamaBerombak` di primitif.tsx. */}
         {memuat && (
-          <NamaBerombak teks="Loconomics AI" kelas="justify-start text-[15px]" label={t.berpikir} />
+          <div className="ai-berpikir-masuk">
+            <NamaBerombak teks="Loconomics AI" kelas="justify-start text-[15px]" label={t.berpikir} />
+          </div>
         )}
         <div ref={akhir} />
       </div>
@@ -1047,7 +1092,7 @@ function PanelAI({
 
               `data-berpikir` sekarang di WADAH TOMBOL ini, bukan di `.ai-kaca` -
               cincinnya cuma perlu tahu keadaan tombol yang membungkusnya. */}
-          <span className="ai-tombol relative shrink-0" data-berpikir={memuat}>
+          <span className="ai-tombol relative shrink-0" data-berpikir={memuat} data-luncur={luncur || undefined}>
             <span className="ai-cincin" aria-hidden />
             <button
               type="submit"
@@ -1067,16 +1112,20 @@ function PanelAI({
                 // di belakangnya, cuma jauh lebih cepat, jadi keduanya terbaca
                 // sebagai SATU gerakan, bukan dua animasi yang kebetulan
                 // tumpang tindih.
-                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden className="ai-spin">
+                // Jalur samar + busur yang memanjang-memendek sambil berputar -
+                // gerak spinner yang sudah dikenal mata, bukan busur kaku yang
+                // diputar dengan kecepatan tetap (yang dilaporkan "kurang alami").
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className="ai-spin">
+                  <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.8" opacity="0.18" />
                   <circle
+                    className="ai-spin-busur"
                     cx="8"
                     cy="8"
                     r="6"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.8"
+                    strokeWidth="1.9"
                     strokeLinecap="round"
-                    strokeDasharray="21 17"
                   />
                 </svg>
               ) : (

@@ -462,6 +462,26 @@ def test_status_membedakan_belum_tersambung_dari_dibatasi():
     tandai_penyedia_pulih()
 
 
+def test_setiap_alat_boleh_muncul_di_jejak():
+    """Nama setiap alat WAJIB ada di `NamaFungsi`, tipe jejak jawaban.
+
+    Diukur 13 Sep 2026 di jawaban sungguhan: alat `bedah_blok` terdaftar di
+    REGISTRI dan di skema alat, tetapi tidak di `NamaFungsi`. Begitu model
+    memanggilnya, `JejakFungsi(fungsi="bedah_blok")` gagal validasi dan SELURUH
+    jawaban jadi 500 - alatnya bekerja, jawabannya yang mati. Uji registri yang
+    sudah ada menghitung alat, bukan memeriksa apakah jejaknya bisa dicatat.
+    """
+    import typing
+
+    from app.api import ai
+    from app.schemas import NamaFungsi
+
+    boleh = set(typing.get_args(NamaFungsi))
+    semua = {a["name"] for a in ai.ALAT_BACKEND + ai.ALAT_FRONTEND} | set(ai.REGISTRI)
+    kurang = sorted(semua - boleh)
+    cek("setiap alat boleh dicatat di jejak", not kurang, f"- tidak ada di NamaFungsi: {kurang}")
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):
