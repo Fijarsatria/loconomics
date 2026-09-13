@@ -148,7 +148,7 @@ IPTT = ────────────────────────�
                  1 + norm(C08 n_menetap_kuliner)
 ```
 
-Lolos kalau IPTT di atas kuartil ketiga. Lihat [produk.md](produk.md) untuk
+Lolos kalau IPTT di atas kuartil ketiga. Lihat [PRD.md](PRD.md) untuk
 kenapa metrik ini tidak bisa ditiru tanpa data misi MAPID.
 
 ## Uji sensitivitas bobot

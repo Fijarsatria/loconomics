@@ -283,12 +283,9 @@ disetel. Daftar Application settings yang harus diisi ada di kepala berkas
 alurnya, dan satu uji di `test_infra.py` memaksa setiap field `Settings`
 DISEBUT di sana - sebagai isian, atau sebagai pengecualian berikut alasannya.
 
-**Kenapa bukan Render.** `render.yaml` ditulis lebih dulu dan masih ada, sudah
-dibetulkan dan dijaga sembilan asersi. Yang menggugurkannya bukan harga - plan
-`free`-nya memang gratis - melainkan kartu: Render meminta kartu, Azure for
-Students memberi $100/12 bulan tanpa kartu. Free tier Render juga tidur 15
-menit dan cuma 0,1 CPU. Ia dipertahankan sebagai CADANGAN: kalau Azure
-bermasalah menjelang penjurian, Blueprint-nya tinggal dipakai.
+**Kenapa Azure.** Render sempat dipertimbangkan, tetapi layanannya meminta
+kartu, sementara Azure for Students memberi $100/12 bulan tanpa kartu. Free tier
+Render juga tidur sesudah 15 menit dan cuma 0,1 CPU.
 
 **Yang wajib disetel ulang begitu subdomain MAPID keluar:** `CORS_ORIGINS` di
 Application settings. CORS yang salah membuat SELURUH panggilan data gagal dari
@@ -362,7 +359,7 @@ Tiga hal yang menentukan di rancangannya, dan ketiganya pernah salah lebih dulu:
    dan nol uji yang menangkapnya.
 3. **Asal backend build ini ikut diizinkan.** Dibaca dari `VITE_API_BASE_URL`,
    supaya `vite build && vite preview` dengan backend lokal — cara yang
-   diwajibkan CLAUDE.md untuk menangkap jebakan #1 — tetap bekerja. Build deploy
+   dipakai untuk memastikan worker MapLibre ikut ter-build — tetap bekerja. Build deploy
    mengisi variabel itu dengan URL Azure yang sudah ada di daftar, jadi ia tidak
    menambah apa pun di terbitan publik.
 
@@ -393,8 +390,8 @@ yang perlu dikembalikan ke `index.html`.
 
 `GET /meta/basemap/{gaya}/style.json` mengambil gaya dari MAPID dengan kunci,
 membuang kuncinya dari badan respons, lalu menyisipkan TileJSON-nya. Ia ada
-karena kunci Map Services ternyata membuka data misi juga — rinciannya di
-`docs/aturan-lomba.md` bagian 2.
+karena kunci Map Services ternyata membuka data misi juga, jadi kunci itu tidak
+boleh berada di peramban.
 
 Endpoint ini TIDAK dipanggil peramban saat aplikasi berjalan; ia dipanggil
 `scripts/gaya-basemap.mjs` saat build. Yang dilayani ke pengguna berkas statis.

@@ -57,7 +57,7 @@ tim kami.
 **Yang tidak pernah keluar dari sini:** satu pun baris survei mentah. API dan
 layar hanya mengeluarkan agregat per heksagon. Sebelum menambah endpoint,
 pertanyaannya selalu: *bisakah respons ini dipakai merekonstruksi satu baris
-survei?* Melanggarnya berisiko diskualifikasi (lihat `docs/aturan-lomba.md`).
+survei?* Melanggarnya berisiko diskualifikasi (ketentuan A.1 dan B.7 panitia).
 
 **Kenapa cakupannya tipis, dan kenapa itu tidak ditutupi.** Misi adalah survei
 **bertitik**: surveyor mendatangi sebuah tempat, bukan menyisir wilayah. Maka
@@ -268,6 +268,6 @@ perkiraan.
 ## Berkas terkait
 
 - [`docs/data.md`](data.md) — skema, pipeline, dan sumber yang sudah dipetakan tetapi belum ditarik
-- [`docs/aturan-lomba.md`](aturan-lomba.md) — batas penggunaan data MAPID
+- [`docs/PRD.md`](PRD.md) — kepatuhan terhadap ketentuan panitia (bagian 7)
 - [`docs/skoring.md`](skoring.md) — bobot, indeks, dan kenapa kosong bernilai 0,5
 - [`docs/ai.md`](ai.md) — OCR dan Konsultan AI

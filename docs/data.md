@@ -920,7 +920,7 @@ sama. Unik per `(h3_index, kode)`, dengan `metode`, `n_sumber`, `radius_m`, dan
 
 **Kenapa tabel sendiri dan bukan sebuah kolom penanda.** Angka yang duduk di
 kolom yang sama dengan pengamatan tidak bisa dibedakan dari luar oleh siapa
-pun — bukan oleh pembaca API, bukan oleh sesi AI berikutnya, dan bukan oleh
+pun — bukan oleh pembaca API, bukan oleh pengembang berikutnya, dan bukan oleh
 kita sendiri enam minggu kemudian. Tiga larangan yang ditegakkan oleh letaknya:
 
 | Larangan | Ditegakkan oleh |

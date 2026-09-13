@@ -1,126 +1,144 @@
+<div align="center">
+
 # Loconomics
 
-**Transit-oriented Retail Recommender** — WebGIS pendukung keputusan untuk memilih
-lokasi usaha di sekitar simpul transportasi massal Jabodetabek.
+**Transit-oriented Retail Recommender**
+WebGIS pendukung keputusan untuk memilih lokasi usaha di sekitar simpul transportasi massal Jabodetabek
 
-MAPID WebGIS Competition #2 2026 · tema *"Maps That Think! — Mass Transportation
-Edition"* · Tim #33 dari Top 50 · Telkom University Bandung.
+MAPID WebGIS Competition #2 2026 · *Maps That Think! — Mass Transportation Edition*
+Tim Loconomics · Universitas Telkom
+
+**[Buka WebGIS](https://loconomics.pages.dev)** · **[Dokumen PRD](docs/PRD.md)** · [Cermin GitHub Pages](https://fijarsatria.github.io/loconomics/)
+
+</div>
+
+![Peta Loconomics: layer GemFinder di Tanah Abang beserta daftar Hidden Gem](docs/gambar/peta.jpg)
 
 ---
 
-## Idenya
+## Masalah
 
-Orang memilih lokasi usaha dengan mata. Yang terlihat ramai dianggap bagus, yang
-terlihat sepi dianggap buruk. Dua kesalahan lahir dari situ, dan Loconomics
-menangani keduanya:
+Calon pelaku UMKM memilih lokasi usaha dengan mata. Yang terlihat ramai dianggap bagus, yang terlihat sepi dianggap buruk. Dari situ lahir dua kesalahan:
 
-- **Hidden Gem** — lokasi yang *terlihat* biasa saja tetapi datanya bagus.
-  Sewanya jauh lebih murah dan tidak ada yang melirik.
-- **Jebakan Gengsi** — lokasi yang terlihat mahal dan bergengsi tetapi ekonominya
-  tidak mendukung. Ini yang paling sering menghabiskan modal pemula.
+- **Hidden Gem terlewat**: lokasi yang terlihat biasa saja, padahal datanya bagus dan sewanya jauh lebih murah.
+- **Jebakan Gengsi**: lokasi yang terlihat mahal dan bergengsi, padahal ekonominya tidak mendukung. Kesalahan inilah yang paling sering menghabiskan modal pemula.
 
-Keduanya masalah yang sama dilihat dari dua arah: **tampilan dan data tidak selalu
-sejalan.** Platform ini mengukur keduanya terpisah, lalu menunjukkan selisihnya —
-sehingga tidak hanya merekomendasikan, tetapi juga melindungi.
+## Solusi
+
+Loconomics membagi enam kawasan pilot di sekitar simpul KRL, MRT, dan LRT menjadi **708 heksagon H3** (±350 m). Setiap heksagon dinilai mesin skor yang dapat diaudit:
+
+| Keluaran | Isi |
+|---|---|
+| **Opportunity Score** 0–100 | Gabungan empat indeks: potensi transit, aktivitas ekonomi, kompetisi, serta biaya & risiko |
+| **Kuadran** | Hidden Gem · Aman · Jebakan Gengsi · Hindari, dari skor dibandingkan prestise visual |
+| **ZoneGuard** | Zona RDTR yang melarang usaha membuat skornya **nol mutlak** |
+| **RiskRadar** | Peringatan pergantian usaha (churn) |
+| **Lencana keyakinan** | Seberapa tebal data survei di balik skor itu |
+
+Hasilnya tampil di peta berbasemap **MAPID Maps** dan dijelaskan oleh **Loconomics AI**, konsultan yang menjawab dalam bahasa sehari-hari dan menggerakkan petanya sendiri.
+
+## Fitur utama
+
+| | |
+|---|---|
+| ![Detail heksagon dengan rute jalan kaki ke stasiun dan kawasan jangkau](docs/gambar/detail-rute.jpg) | ![Loconomics AI menjawab dan menampilkan kartu lokasi](docs/gambar/loconomics-ai.jpg) |
+| **Detail heksagon & rute.** Skor, kuadran, zonasi, dan rute jaringan jalan (jalan kaki dan mobil) ke stasiun terdekat, lengkap dengan kawasan jangkau 5–60 menit | **Loconomics AI.** Memanggil 13 alat, membaca angka dari basis data, lalu terbang dan menyorot lokasi di peta. Setiap jawaban membawa jejak alat yang dipanggil |
+
+- **Lima layer tematik**: Opportunity Score, PriceLens, GemFinder (Hidden Gem), RiskRadar, ZoneGuard. Tersedia lima gaya basemap MAPID, termasuk satelit dan gedung 3D.
+- **Bedah 7 blok**: satu heksagon dipecah menjadi tujuh blok ±130 m untuk memilih sisi jalan yang tepat, dan setiap blok bisa disimulasikan.
+- **Simulasi usaha**: omzet, laba, dan titik impas untuk 16 jenis usaha, dengan asumsi yang dinyatakan terbuka.
+- **Komparasi 2–4 lokasi** dan **Laporan Kelayakan PDF**.
+- **Rekomendasi personal** menurut jenis usaha, kawasan, dan anggaran sewa.
+- **Lokasi tersimpan & titik favorit**: tandai titik persis di dalam heksagon dan beri nama.
+- **Metodologi & sumber data** di dalam aplikasi: sumber resmi vs perkiraan, peran survei lapangan, batasan, dan rekomendasi untuk pemangku kepentingan.
+- Dua bahasa (Indonesia/Inggris), tema gelap/terang, dan responsif di desktop maupun ponsel.
+
+**IPTT (Indeks Permintaan Tak Terlayani)** adalah metrik orisinal tim: *banyak pedagang keliling × pembeli ramai ÷ sedikit usaha menetap*. Metrik ini hanya bisa dihitung karena misi **Menu Go** MAPID mencatat mobilitas pedagang dan kondisi pembeli.
+
+## Data
+
+| Sumber | Dipakai untuk |
+|---|---|
+| **MAPID Community Maps & Mission** (Menu Go, Struk Go, Properti Go) | Harga per porsi, keramaian pembeli, pedagang keliling, nominal & jam transaksi (OCR foto struk), pasokan ruang sewa, lencana keyakinan |
+| **MAPID Maps** | Basemap seluruh peta |
+| OpenStreetMap | 3.444 POI usaha dalam 8 kelas, simpul transit, bangunan, jaringan jalan |
+| openrouteservice | Rute jalan kaki & mobil 708/708 heksagon, isochrone |
+| WorldPop 2020 | Penduduk dan usia produktif |
+| RDTR ATR/BPN (GISTARU) | Izin komersial, kelas zona, risiko banjir |
+
+Data mentah MAPID **tidak pernah** keluar dari API. Yang ditampilkan hanya rangkuman per heksagon, dan rangkuman dari satu baris survei pun ditahan.
+
+## Arsitektur
+
+```
+pipeline/  Python s1 → s7        ingest MAPID API · OSM · WorldPop · RDTR · ORS
+    │                            OCR Gemini Vision · skor (satu-satunya tempat skor dihitung)
+    ▼
+PostgreSQL + PostGIS (Supabase)
+    │
+    ▼
+backend/   FastAPI (Azure)       7 modul API · akun & langganan · Loconomics AI (Gemini, function calling)
+    │
+    ▼
+frontend/  React + MapLibre GL   peta · insight · AI dalam satu layar (Cloudflare Pages & GitHub Pages)
+```
+
+| Lapisan | Teknologi |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, MapLibre GL, Tailwind CSS, GSAP |
+| Backend | Python, FastAPI, SQLAlchemy, GeoAlchemy2, Pydantic, ReportLab |
+| Basis data | PostgreSQL + PostGIS (Supabase), Alembic |
+| Pipeline | Pandas, GeoPandas, Shapely, h3, OSMnx, scikit-learn, rasterio |
+| AI | Google Gemini (vision di pipeline, function calling di produk), GradientBoosting |
 
 ## Struktur repositori
 
 ```
-pipeline/    Python s1→s7 — dari survei lapangan sampai ke basis data
-             Satu-satunya tempat skor dihitung
-backend/     FastAPI — 7 modul + tests/. Membaca basis data, tidak menghitung
-frontend/    React + Vite + MapLibre GL — peta, insight, AI dalam satu layar
-docs/        9 dokumen. Menjelaskan kenapa, bukan bagaimana
-CLAUDE.md    Panduan untuk sesi AI berikutnya
+backend/    API FastAPI, migrasi Alembic, dan uji (tests/)
+frontend/   Aplikasi WebGIS React + MapLibre
+pipeline/   Pengolahan data s1–s7, prompt AI (prompts/), dan uji
+docs/       PRD dan dokumentasi teknis
 ```
 
-## Mulai dari mana
-
-| Anda | Mulai dari |
+| Dokumen | Isi |
 |---|---|
-| Baru melihat proyek ini | [docs/alur-sistem.md](docs/alur-sistem.md) |
-| Mau tahu apa yang dibangun | [docs/produk.md](docs/produk.md) |
-| Akan menulis kode | [CLAUDE.md](CLAUDE.md) lalu [docs/aturan-lomba.md](docs/aturan-lomba.md) |
-| Mau menjalankan sesuatu | Bagian di bawah |
+| [docs/PRD.md](docs/PRD.md) | **Product Requirements Document**: masalah, tujuan, fitur, data & AI, alur, kepatuhan ketentuan |
+| [docs/arsitektur.md](docs/arsitektur.md) | Backend, frontend, basis data, deployment |
+| [docs/data.md](docs/data.md) | Kamus 43 variabel dan sumbernya |
+| [docs/skoring.md](docs/skoring.md) | Rumus skor, bobot, Hidden Gem, uji sensitivitas |
+| [docs/ai.md](docs/ai.md) | AI di pipeline dan di dalam produk |
+| [docs/metadata.md](docs/metadata.md) | Asal-usul setiap angka: diukur atau diperkirakan |
 
-Indeks lengkap dokumentasi: [docs/README.md](docs/README.md).
-
-## Menjalankan
+## Menjalankan secara lokal
 
 ```bash
-# Uji — tidak butuh basis data maupun data lapangan
-cd pipeline && python test_s6_score.py     # mesin skoring
-cd pipeline && python test_s4_spatial.py   # Commuter Clock + PriceLens
-cd pipeline && python test_s7_publish.py   # jembatan ke basis data
-cd backend  && python tests/test_aturan.py
-cd backend  && python tests/test_infra.py  # galat, cache, pembatas
-
-# Backend  → http://localhost:8000/docs
+# Backend  → http://localhost:8000
 cd backend
 python -m venv venv && source venv/Scripts/activate
 pip install -r requirements.txt
-cp .env.example .env          # isi DATABASE_URL
+cp .env.example .env          # isi DATABASE_URL, LLM_API_KEY, dll.
 alembic upgrade head
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --port 8000
 
 # Frontend → http://localhost:5173
 cd frontend
 npm install
-cp .env.example .env          # isi VITE_MAPID_MAPS_API_KEY
+cp .env.example .env          # isi VITE_API_BASE_URL dan VITE_MAPID_BASEMAP_KEY
 npm run dev
+
+# Uji
+cd backend  && python tests/test_akun.py && python tests/test_infra.py && python tests/test_ai_loop.py
+cd pipeline && python test_s6_score.py
 ```
 
-## Yang membuat proyek ini berbeda
+## Tim
 
-**IPTT — Indeks Permintaan Tak Terlayani.** Banyak pedagang keliling × pembeli
-ramai ÷ sedikit usaha menetap. Artinya permintaan sudah terbukti ada tetapi belum
-ada yang melayaninya secara permanen.
-
-Bisa dihitung **hanya karena** data misi MAPID punya kolom Mobilitas dan kolom
-Kondisi Pembeli. Tidak ada dataset komersial yang menyediakan keduanya — pedagang
-keliling tidak pernah masuk ke peta mana pun.
-
-**Commuter Clock.** Kapan uang benar-benar berpindah di suatu lokasi, dibaca dari
-jam yang tercetak di struk. Dataset POI mana pun hanya menyimpan jam buka-tutup —
-kapan toko buka, bukan kapan transaksi terjadi.
-
-**Harga yang hanya ada di foto.** Dataset misi punya 8 kolom untuk properti dan
-8 kolom untuk struk — tidak satu pun berisi rupiah. Angkanya ada di spanduk dan di
-struk, dan PriceLens membacanya lewat OCR menjadi harga sewa per m² dan belanja
-per jam yang bisa dibandingkan antarlokasi.
-
-**AI yang menggerakkan peta.** Jawaban asisten tidak berhenti sebagai teks; ia
-memanggil `flyTo`, `highlight`, `setLayer`, dan `filter` yang dieksekusi di
-frontend. Petanya bergerak sendiri.
-
-## Status
-
-| Bagian | Status |
+| Nama | Peran |
 |---|---|
-| Skema basis data (43 variabel + 3 penanda + profil jam) | Selesai, migrasi diterapkan |
-| Backend — 7 modul, 46 rute | Selesai, 219 asersi lolos |
-| Ketahanan produksi | Amplop galat, cache, pembatas laju, plafon biaya AI, GZip |
-| Jembatan pipeline → basis data (`s7_publish`) | Selesai, termasuk ekspor GeoJSON statis |
-| PriceLens · Commuter Clock · ZoneGuard · RiskRadar · GemFinder | Selesai di backend |
-| AI Consultant — 12 alat, loop agentik | Selesai. Butuh `LLM_API_KEY` untuk aktif |
-| Mesin skoring | Selesai — 14/14 uji lolos, sensitivitas ρ 0,97–0,99 |
-| Prompt AI A1–A4 | Selesai |
-| Frontend (3 bagian wajib) | Sistem visual + Kompas Kuadran + daftar + 3 grafik. Belum pernah dilihat render |
-| Data demo | 708 heksagon lewat pipeline sungguhan (`pipeline/demo_seed.py`) |
-| Pemanggil API vision (A1–A4) | Menunggu keputusan penyedia |
-| Data survei lapangan | Menunggu tim survei |
+| Irvan Tegar Yunadi | Business Analyst |
+| Wily Franklyn Togatorop | UI/UX Designer |
+| Fijar Satria Pinandita Mangkauna | WebGIS Developer |
+| Ukasyah | AI Engineer |
+| Azziz Abdul Ghofur | Data Analyst |
 
-Daftar lengkap yang belum dikerjakan beserta apa yang menghalanginya:
-[docs/status.md](docs/status.md#belum-dikerjakan--di-sinilah-pekerjaan-berikutnya).
-
-## Aturan yang mengikat
-
-Empat hal yang berkonsekuensi diskualifikasi kalau dilanggar — rinciannya di
-[docs/aturan-lomba.md](docs/aturan-lomba.md):
-
-1. Data misi MAPID mentah tidak boleh keluar dari API maupun antarmuka
-2. Kunci API lewat environment variable, tidak pernah di source
-3. Data MAPID/mitra tidak boleh diredistribusi
-4. Sumber terlarang: Google Places API, scraping listing, GTFS komunitas
-
-Plus: basemap **hanya** MAPID Maps.
+<sub>Data Community Maps dan misi MAPID dipakai hanya untuk keperluan kompetisi dan tidak disebarluaskan. Atribusi sumber terbuka: © OpenStreetMap contributors (ODbL), openrouteservice (CC BY-SA 4.0), WorldPop (CC BY 4.0), RDTR ATR/BPN.</sub>

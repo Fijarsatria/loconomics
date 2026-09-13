@@ -261,8 +261,8 @@ mungkin mengirim skor tanpa badge-nya. Lihat [data.md](data.md) Q01–Q03.
 | Skema keluaran A1–A4 | **Siap** (`HasilSpanduk`, `HasilStruk`, `HasilPrestise`, `HasilMenu`) |
 | Pemanggil API vision | **Siap & jalan** (12 Sep 2026) — Gemini vision lewat REST langsung, tanpa SDK: yang dibutuhkan cuma `inline_data` base64 dan `responseMimeType: application/json`. Hasil per foto di-cache menurut SHA-1 URL fotonya |
 | A6 GapFill | **Belum** — menunggu data survei |
-| 12 alat B1–B5 | **Siap & teruji** — `GET /ai/fungsi` menyajikan skema lengkapnya |
-| Loop agentik | **Siap & teruji** — 26 asersi dengan klien tiruan |
+| 13 alat B1–B5 | **Siap & teruji** — `GET /ai/fungsi` menyajikan skema lengkapnya |
+| Loop agentik | **Siap & teruji** — 50 asersi dengan klien tiruan, termasuk batas putaran dan panggilan penutup tanpa alat |
 | Jalur eksekusi aksi peta | **Siap** — tersambung ujung ke ujung sampai frontend |
 | `POST /ai/tanya` | **Siap.** Butuh `LLM_API_KEY` di `backend/.env` |
 
@@ -271,8 +271,9 @@ apa yang kurang — bukan jawaban palsu. `GET /ai/status` menyatakan kesiapannya
 supaya panel AI di frontend bisa menampilkan keadaan sebenarnya alih-alih
 menunggu pertanyaan pertama gagal.
 
-Model default `claude-opus-5`, bisa ditimpa lewat `LLM_MODEL` tanpa menyentuh
-kode. Perkiraan biaya tiap panggilan dicatat ke `ai_call_logs.biaya_usd`.
+Produksi memakai Google Gemini (`LLM_PROVIDER=gemini`) dengan cadangan otomatis
+antarmodel dan antarkunci API; penyedia dan model diatur lewat `LLM_PROVIDER` dan
+`LLM_MODEL` tanpa menyentuh kode. Perkiraan biaya tiap panggilan dicatat ke `ai_call_logs.biaya_usd`.
 
 ## Temuan A1: spanduk tidak memuat harga
 
