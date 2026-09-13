@@ -447,6 +447,13 @@ def test_render_yaml_corsnya_benar_benar_terurai():
 
     from app.core.config import Settings
 
+    if not _render_yaml():
+        # `render.yaml` dicabut dari repo publik 13 Sep 2026 (proyek sudah
+        # pindah ke Azure sejak lama; lihat docstring `_render_yaml`). Uji ini
+        # menjaga BERKAS itu, bukan CI - kalau berkasnya tidak ada, tidak ada
+        # apa pun untuk diuji.
+        cek("render.yaml corsnya terurai (dilewati - berkas tidak ada lagi)", True)
+        return
     nilai = _nilai_render("CORS_ORIGINS")
     cek("render.yaml menyetel CORS_ORIGINS", bool(nilai))
     if not nilai:
@@ -495,6 +502,10 @@ def test_render_yaml_menyebut_asal_yang_benar_benar_diterbitkan():
         cek("asal terbitan cocok (dilewati - remote github tidak terbaca)", True)
         return
 
+    if not _render_yaml():
+        cek("render.yaml menyebut asal terbitan (dilewati - berkas tidak ada lagi)", True)
+        return
+
     # GitHub Pages menyajikan di <pemilik>.github.io, seluruhnya huruf kecil.
     harapan = f"https://{m.group(1).lower()}.github.io"
     nilai = _nilai_render("CORS_ORIGINS") or ""
@@ -533,6 +544,9 @@ def test_render_yaml_membawa_auth_secret():
     health check hijau, dan peta tergambar. Yang mati cuma pintu masuknya.
     """
     teks = _render_yaml()
+    if not teks:
+        cek("AUTH_SECRET di render.yaml (dilewati - berkas tidak ada lagi)", True)
+        return
     cek("AUTH_SECRET ada di render.yaml", "key: AUTH_SECRET" in teks)
     cek("nilainya dibangkitkan Render, bukan isian manual yang bisa terlupa",
         bool(__import__("re").search(r"key: AUTH_SECRET\s*\n\s*generateValue: true", teks)))
