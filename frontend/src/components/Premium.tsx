@@ -123,8 +123,9 @@ const K = {
     selisihNol:
       'Selisihnya nol karena skornya belum pernah diterbitkan ulang sejak Anda menyimpan lokasi ini — bukan karena tidak ada yang berubah.',
     fokusPeta: 'Fokus ke peta',
-    lepasPantauan: 'Lepas dari pantauan',
-    berhentiPantau: (h3: string) => `Berhenti memantau ${h3}`,
+    lepasPantauan: 'Hapus dari simpanan',
+    berhentiPantau: (h3: string) => `Hapus ${h3} dari simpanan`,
+    gagalHapus: 'Gagal menghapus lokasi dari simpanan. Coba lagi.',
 
     dinamikaJudul: 'Dinamika kawasan',
     dinamikaIsi:
@@ -229,8 +230,9 @@ const K = {
     selisihNol:
       'The difference is zero because the score has not been published again since you saved this location — not because nothing has changed.',
     fokusPeta: 'Focus the map here',
-    lepasPantauan: 'Stop watching',
-    berhentiPantau: (h3: string) => `Stop watching ${h3}`,
+    lepasPantauan: 'Remove from saved',
+    berhentiPantau: (h3: string) => `Remove ${h3} from saved`,
+    gagalHapus: 'Could not remove the location. Try again.',
 
     dinamikaJudul: 'Area dynamics',
     dinamikaIsi:
@@ -1201,7 +1203,7 @@ export function KabarPin({
     <div className="kabar-pin kaca-tebal" role="status">
       <span className="kabar-pin-ikon" aria-hidden>
         <svg width="15" height="15" viewBox="0 0 20 20">
-          <path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill="currentColor" />
+          <path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor" />
         </svg>
       </span>
       <div className="min-w-0 flex-1">
@@ -1305,10 +1307,25 @@ export function DialogPantauan({
   }, [kawasanTunggal, bahasa])
 
   const { catatSimpan } = useSesi()
+  const [menghapus, setMenghapus] = useState<string | null>(null)
   const lepas = async (h3: string) => {
-    await api.lepasPantauan(h3).catch(() => {})
-    catatSimpan() // pin ikut hilang dari peta, bukan menunggu refresh
-    muat()
+    // Galatnya DITAMPILKAN, tidak lagi ditelan `.catch(() => {})`: tindakan
+    // yang mengubah data dan gagal diam-diam adalah persis bagaimana "hapus
+    // lokasi tersimpan" bisa rusak berbulan-bulan tanpa ketahuan.
+    setMenghapus(h3)
+    try {
+      await api.lepasPantauan(h3)
+      // Dihapus dari daftar SEKETIKA, tidak menunggu muat ulang - baris yang
+      // tetap terlihat sesudah tombol hapus ditekan terbaca sebagai gagal.
+      setButir((b) => b?.filter((x) => x.h3_index !== h3) ?? b)
+      if (buka === h3) setBuka(null)
+      catatSimpan() // pin ikut hilang dari peta, bukan menunggu refresh
+      muat()
+    } catch (e) {
+      setGalat(e instanceof GalatAPI ? e.message : t.gagalHapus)
+    } finally {
+      setMenghapus(null)
+    }
   }
 
   return (
@@ -1380,7 +1397,7 @@ export function DialogPantauan({
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span className={`pin-daftar ${b.titik_sendiri ? '' : 'pin-daftar-tengah'}`} aria-hidden>
                         <svg width="10" height="10" viewBox="0 0 20 20">
-                          <path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill="currentColor" />
+                          <path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor" />
                         </svg>
                       </span>
                       <span className="papan block truncate text-[14px]">
@@ -1428,6 +1445,28 @@ export function DialogPantauan({
                       </span>
                     )}
                   </div>
+
+                  {/* Hapus LANGSUNG dari barisnya. Dulu tombolnya cuma ada di dalam
+                      rincian yang harus dibuka lebih dulu, dan pemilik repo
+                      tidak menemukannya. */}
+                  <button
+                    onClick={() => lepas(b.h3_index)}
+                    disabled={menghapus === b.h3_index}
+                    aria-label={t.berhentiPantau(b.nama || b.h3_index)}
+                    title={t.lepasPantauan}
+                    className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-bahaya/10 hover:text-bahaya disabled:cursor-wait disabled:opacity-50"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden>
+                      <path
+                        d="M3.5 5.5h13M8 5.5V3.8h4v1.7M5.2 5.5l.8 11h8l.8-11M8.4 8.6v5M11.6 8.6v5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
 
                   <svg
                     width="11"

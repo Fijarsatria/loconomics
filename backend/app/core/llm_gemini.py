@@ -335,6 +335,7 @@ class _Pesan:
         system: str,
         tools: list[dict],
         messages: list[dict],
+        tool_choice: dict | None = None,
         **_,
     ) -> Balasan:
         badan = {
@@ -343,6 +344,11 @@ class _Pesan:
             "tools": _alat_gemini(tools),
             "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.4},
         }
+        # Bentuk Anthropic `{"type": "none"}` = model DILARANG memanggil alat.
+        # Deklarasi alatnya tetap dikirim: riwayatnya memuat functionCall dan
+        # functionResponse, dan Gemini menolak riwayat seperti itu tanpa alat.
+        if tool_choice and tool_choice.get("type") == "none":
+            badan["toolConfig"] = {"functionCallingConfig": {"mode": "NONE"}}
         # Urutan model yang dicoba: yang diminta dulu, lalu cadangannya.
         # `dict.fromkeys` membuang duplikat tanpa mengacak urutannya.
         urutan = list(dict.fromkeys([model, *MODEL_CADANGAN]))

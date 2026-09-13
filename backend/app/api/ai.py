@@ -76,6 +76,28 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 # ---------------------------------------------------------------------------
 
 
+PERINTAH_PENUTUP = (
+    "Cukup memanggil alat. Susun jawaban akhir sekarang, HANYA dari hasil alat "
+    "di atas, dalam bahasa pertanyaan pengguna."
+)
+
+
+def _dengan_perintah_penutup(pesan: list[dict]) -> list[dict]:
+    """Riwayat + perintah menulis jawaban, DI DALAM giliran hasil alat terakhir.
+
+    Bukan giliran pengguna tersendiri: dua giliran pengguna berturut-turut
+    (hasil alat, lalu teks) dijawab Gemini dengan balasan kosong - terukur
+    13 Sep 2026, panggilan penutupnya berhasil dan tetap tidak berisi teks.
+    """
+    if pesan and pesan[-1]["role"] == "user" and isinstance(pesan[-1]["content"], list):
+        akhir = {
+            "role": "user",
+            "content": [*pesan[-1]["content"], {"type": "text", "text": PERINTAH_PENUTUP}],
+        }
+        return [*pesan[:-1], akhir]
+    return [*pesan, {"role": "user", "content": PERINTAH_PENUTUP}]
+
+
 def cari_lokasi(
     db: Session,
     jenis_usaha: str | None = None,
@@ -86,7 +108,7 @@ def cari_lokasi(
     versi: str = "baseline",
 ) -> dict[str, Any]:
     """Kriteria pengguna -> daftar heksagon. Seluruh penyaringan dilakukan SQL."""
-    from sqlalchemy import select
+    from sqlalchemy import or_, select
 
     from app.api.bersama import gabung_skor, saring_zoneguard, skor_heksagon
     from app.models import LocationScore
@@ -99,10 +121,24 @@ def cari_lokasi(
     )
     if kawasan:
         stmt = stmt.where(HexFeature.kawasan == kawasan)
+    # Heksagon yang harga sewanya / waktu jalannya BELUM DIKETAHUI tidak
+    # dibuang (aturan 4: kosong bukan "melebihi anggaran"). Dulu `<=` atas NULL
+    # membuang seluruh kawasan tanpa data sewa, dan model menerima "0 hasil"
+    # tiga kali berturut-turut untuk pertanyaan yang jawabannya ada.
     if budget_sewa_bulanan is not None:
-        stmt = stmt.where(HexFeature.harga_sewa_median <= budget_sewa_bulanan)
+        stmt = stmt.where(
+            or_(
+                HexFeature.harga_sewa_median <= budget_sewa_bulanan,
+                HexFeature.harga_sewa_median.is_(None),
+            )
+        )
     if maks_menit_jalan is not None:
-        stmt = stmt.where(HexFeature.waktu_jalan_menit <= maks_menit_jalan)
+        stmt = stmt.where(
+            or_(
+                HexFeature.waktu_jalan_menit <= maks_menit_jalan,
+                HexFeature.waktu_jalan_menit.is_(None),
+            )
+        )
 
     baris = db.execute(stmt).all()
     hasil = [skor_heksagon(hx, sc).model_dump() for hx, sc in baris]
@@ -117,6 +153,12 @@ def cari_lokasi(
             f"kompetitor per kelas induk menunggu data POI. Hasil di bawah belum "
             f"disaring menurut jenis usaha."
         )
+    if budget_sewa_bulanan is not None or maks_menit_jalan is not None:
+        tambahan = (
+            "Heksagon yang harga sewa atau waktu jalannya belum diketahui tetap "
+            "disertakan; jangan menyebutnya memenuhi anggaran/batas waktu."
+        )
+        catatan = f"{catatan} {tambahan}" if catatan else tambahan
 
     return {"hasil": hasil, "jumlah": len(hasil), "catatan": catatan}
 
@@ -861,6 +903,26 @@ def tanya(
         pesan.append({"role": "user", "content": hasil_alat})
     else:
         log.warning("Batas %d putaran alat tercapai", MAKS_PUTARAN)
+
+    # Putaran terakhir masih meminta alat: model belum pernah MENULIS
+    # jawabannya. Terukur di produksi 13 Sep 2026 - sepuluh alat berhasil
+    # dipanggil untuk "lokasi terbaik buka cafe di Manggarai", lalu yang tampil
+    # cuma "belum berhasil menyusun jawabannya". Satu panggilan lagi dengan alat
+    # DILARANG memaksanya menyusun jawaban dari hasil yang sudah terkumpul.
+    if balasan is not None and balasan.stop_reason == "tool_use":
+        try:
+            akhir = c.messages.create(
+                model=model_aktif(),
+                max_tokens=MAKS_TOKEN,
+                system=PROMPT_SISTEM,
+                tools=SEMUA_ALAT,
+                tool_choice={"type": "none"},
+                messages=_dengan_perintah_penutup(pesan),
+            )
+            total_biaya += biaya_usd(akhir.usage) or 0.0
+            balasan = akhir
+        except RuntimeError as e:
+            log.warning("Panggilan penutup model gagal: %s", e)
 
     teks = "\n".join(b.text for b in balasan.content if b.type == "text").strip()
     if not teks:

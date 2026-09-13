@@ -123,6 +123,7 @@ const K = {
       terlaluBanyak: 'Terlalu banyak pertanyaan dalam waktu singkat. Tunggu sebentar lalu coba lagi.',
       basisData:
         'Basis data sedang tidak bisa dihubungi. Kalau ini terjadi setelah lama menganggur, coba lagi dalam beberapa puluh detik.',
+      lambat: 'Asisten terlalu lama menyusun jawaban. Coba lagi, atau persempit pertanyaannya (misalnya sebut kawasannya).',
       lain: (t: string) => `Gagal menghubungi asisten: ${t}`,
     },
   },
@@ -188,6 +189,7 @@ const K = {
       terlaluBanyak: 'Too many questions in a short time. Wait a moment and try again.',
       basisData:
         'The database cannot be reached right now. If this happened after a long idle period, try again in a few dozen seconds.',
+      lambat: 'The assistant took too long to answer. Try again, or ask a narrower question (for example, name the area).',
       lain: (t: string) => `Could not reach the assistant: ${t}`,
     },
   },
@@ -197,6 +199,10 @@ type Teks = (typeof K)['id']
 
 /** Terjemahkan galat backend jadi kalimat yang bisa ditindaklanjuti. */
 function pesanGalat(e: unknown, t: Teks): string {
+  // Batas waktu peramban dilempar sebagai DOMException bernama TimeoutError,
+  // dan pesan mentahnya ("signal timed out") dulu ditempel apa adanya ke layar.
+  if (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError'))
+    return t.galat.lambat
   const teks = e instanceof Error ? e.message : String(e)
   if (teks.includes('501')) return t.galat.belumTersambung
   if (teks.includes('ANGGARAN_AI_HABIS')) return t.galat.anggaran

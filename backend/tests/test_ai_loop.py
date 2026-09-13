@@ -69,6 +69,7 @@ class KlienTiruan:
         self.dipanggil += 1
         self.pesan_terakhir = kw["messages"]
         self.tools_terakhir = kw["tools"]
+        self.pilihan_alat_terakhir = kw.get("tool_choice")
         return self.urutan.pop(0)
 
 
@@ -259,15 +260,39 @@ def test_batas_putaran_dihormati():
             [Blok("tool_use", id=f"t{i}", name="cek_zona", input={"hex_id": "89aitest0001"})],
             "tool_use",
         )
-        for i in range(MAKS_PUTARAN + 3)
+        for i in range(MAKS_PUTARAN)
     ]
-    k = pasang(selalu_alat)
+    penutup = Balasan([Blok("text", text="Ringkasan dari hasil alat.")], "end_turn")
+    k = pasang([*selalu_alat, penutup])
     db = DbTiruan(hex_contoh())
     jawab = ai.tanya(PermintaanAI(pertanyaan="terus"), db, None)
     pulihkan()
 
-    cek("berhenti tepat di batas", k.dipanggil == MAKS_PUTARAN, f"- {k.dipanggil}")
-    cek("tetap mengembalikan jawaban, bukan meledak", bool(jawab.teks))
+    cek(
+        "berhenti di batas + SATU panggilan penutup",
+        k.dipanggil == MAKS_PUTARAN + 1,
+        f"- {k.dipanggil}",
+    )
+    cek(
+        "panggilan penutup melarang alat",
+        k.pilihan_alat_terakhir == {"type": "none"},
+        f"- {k.pilihan_alat_terakhir}",
+    )
+    akhir = k.pesan_terakhir[-1]
+    cek(
+        "perintah penutup menumpang di giliran hasil alat, bukan giliran pengguna kedua",
+        akhir["role"] == "user"
+        and isinstance(akhir["content"], list)
+        and akhir["content"][0].get("type") == "tool_result"
+        and akhir["content"][-1].get("type") == "text"
+        and k.pesan_terakhir[-2]["role"] == "assistant",
+        f"- {str(akhir)[:120]}",
+    )
+    cek(
+        "jawabannya teks penutup, bukan kalimat 'belum berhasil menyusun'",
+        jawab.teks == "Ringkasan dari hasil alat.",
+        f"- {jawab.teks[:60]}",
+    )
 
 
 def test_pencatatan_ai_call_log():

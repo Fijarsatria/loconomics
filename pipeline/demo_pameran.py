@@ -316,7 +316,7 @@ KOLOM_TAMBAL = (
 )
 
 
-def isi(db) -> None:
+def isi(db, penanda: bool = True) -> None:
     if (JEJAK / "sel_kosong.json").exists():
         raise SystemExit(
             "Manifes demo sudah ada - data demo tampaknya masih terpasang.\n"
@@ -394,22 +394,33 @@ def isi(db) -> None:
     # Ditimpa, bukan ditambal: ketiganya sudah punya nilai. Inilah yang membuat
     # seluruh lencana berhenti berbunyi "Data tipis" dan panel berhenti menulis
     # "heksagon ini belum disurvei langsung".
+    #
+    # `--tanpa-penanda` MELEWATI langkah ini (13 Sep 2026). Seluruh layer tetap
+    # terisi dan bisa dipakai, tetapi lencana keyakinan tetap mengatakan yang
+    # sebenarnya: angka-angka ini tidak disurvei. Aturan 3 menuntut lencananya
+    # jujur, dan "keyakinan TINGGI" di atas angka karangan justru kebalikannya.
+    if not penanda:
+        print("  penanda survei TIDAK diubah (--tanpa-penanda)")
+        dasar_penanda: list[dict] = []
+    else:
+        dasar_penanda = dasar
     muatan = []
-    for b in dasar:
+    for b in dasar_penanda:
         h3 = b["h3_index"]
         n = KEYAKINAN_TINGGI_MIN + round(_antara(h3, "titik", 4, 78))
         muatan.append({"n": n, "t": tingkat_keyakinan(n), "h3": h3})
-    db.execute(
-        text(
-            """
-            UPDATE hex_features
-            SET n_titik_misi = :n, tingkat_keyakinan = :t, data_source = 'observed'
-            WHERE h3_index = :h3
-            """
-        ),
-        muatan,
-    )
-    print(f"  {len(dasar)} heksagon ditandai observed, keyakinan TINGGI")
+    if muatan:
+        db.execute(
+            text(
+                """
+                UPDATE hex_features
+                SET n_titik_misi = :n, tingkat_keyakinan = :t, data_source = 'observed'
+                WHERE h3_index = :h3
+                """
+            ),
+            muatan,
+        )
+        print(f"  {len(muatan)} heksagon ditandai observed, keyakinan TINGGI")
 
     # --- 5. Profil jam -----------------------------------------------------
     sebelum_jam = {r[0] for r in db.execute(text("SELECT id FROM hex_hourly_profiles")).all()}
@@ -425,9 +436,16 @@ def isi(db) -> None:
             )
         ).mappings()
     }
+    # Heksagon yang SUDAH punya profil jam (dari struk misi sungguhan) dilewati
+    # utuh: menyisipkan di sampingnya melanggar `uq_profil_hex_jam`, dan 13 Sep
+    # 2026 seluruh `--isi` batal di langkah ini karenanya.
+    punya_jam = {
+        r[0] for r in db.execute(text("SELECT DISTINCT h3_index FROM hex_hourly_profiles")).all()
+    }
     muatan = []
     for b in dasar:
-        muatan.extend(_profil_jam(b, segar[b["h3_index"]]))
+        if b["h3_index"] not in punya_jam:
+            muatan.extend(_profil_jam(b, segar[b["h3_index"]]))
     SISIP_JAM = text(
         """
         INSERT INTO hex_hourly_profiles
@@ -628,6 +646,11 @@ def main() -> int:
     ap.add_argument("--isi", action="store_true", help="tambal seluruh sel kosong")
     ap.add_argument("--copot", action="store_true", help="kembalikan persis seperti semula")
     ap.add_argument("--status", action="store_true", help="lihat keadaan, tanpa mengubah")
+    ap.add_argument(
+        "--tanpa-penanda",
+        action="store_true",
+        help="isi seluruh layer TANPA menandai heksagon sebagai disurvei/keyakinan TINGGI",
+    )
     a = ap.parse_args()
 
     db = sessionmaker(bind=_mesin())()
@@ -635,7 +658,7 @@ def main() -> int:
         if a.status:
             status(db)
         elif a.isi:
-            isi(db)
+            isi(db, penanda=not a.tanpa_penanda)
             db.commit()
             status(db)
         elif a.copot:

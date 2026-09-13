@@ -137,6 +137,8 @@ const L_RUTE_BAYANG = 'rute-bayang'
 const L_RUTE_ALT = 'rute-alt'
 const L_RUTE = 'rute-utama'
 const L_RUTE_TEKS = 'rute-teks'
+/** Kepala bercahaya di ujung rute yang sedang tumbuh. Hanya ada selama animasi. */
+const L_RUTE_KEPALA = 'rute-kepala'
 /** Pin titik awal (pusat heksagon) dan tujuan (simpul). */
 const L_UJUNG = 'rute-ujung'
 
@@ -147,10 +149,19 @@ const L_UJUNG = 'rute-ujung'
  */
 const PERCOBAAN_UBIN = 10
 
-/** Lama animasi rute menggambar dirinya, milidetik. */
-const GAMBAR_MS = 950
+/** Lama animasi rute menggambar dirinya, milidetik.
+ *
+ *  1.700, bukan 950 (13 Sep 2026). Pemilik repo melaporkan "kenapa ga ada
+ *  animasi kemunculan rutenya" - dan diukur, animasinya memang ADA, tetapi
+ *  selesai di luar layar: kamera sedang terlalu dekat ke heksagon, rute 2,5 km
+ *  hampir seluruhnya di luar bingkai, dan 950 ms habis sebelum mata sempat
+ *  menemukannya. Sekarang kamera MUNDUR membingkai rutenya dulu, dan garisnya
+ *  tumbuh cukup lama untuk diikuti. */
+const GAMBAR_MS = 1700
 /** Jeda tiap rute berikutnya berangkat. Berundak, bukan serempak. */
-const UNDAK_MS = 130
+const UNDAK_MS = 240
+/** Garis mulai tumbuh sesudah kamera mulai mundur, bukan bersamaan. */
+const TUNDA_RUTE_MS = 380
 
 /**
  * Panjang kumulatif tiap simpul sebuah polyline, dalam derajat.
@@ -2369,6 +2380,23 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         // `setStyle` menghapus keduanya sekaligus, jadi keduanya harus dipasang
         // di tempat yang sama - kalau tidak, ganti basemap menghilangkan pinnya
         // tanpa satu pun galat.
+        // Kepala komet di ujung rute yang sedang tumbuh: yang membuat
+        // kemunculannya terbaca sebagai GERAK dari heksagon menuju stasiun,
+        // bukan garis yang tiba-tiba ada.
+        m.addLayer({
+          id: L_RUTE_KEPALA,
+          type: 'circle',
+          source: SUMBER_RUTE,
+          filter: ['==', ['get', 'jenis'], 'kepala'],
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 4.5, 16, 7],
+            'circle-color': '#ffffff',
+            'circle-stroke-color': ['get', 'warna'],
+            'circle-stroke-width': 3,
+            'circle-blur': 0.15,
+          },
+        })
+
         pasangGambarRute(m)
 
         m.addLayer({
@@ -2897,6 +2925,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // - bukan sebaliknya, dan bukan sekadar hiasan yang kebetulan menghubungkan
   // dua benda.
   const rafRute = useRef(0)
+  /** Kunci rute yang kameranya sudah dibingkai, supaya tidak dibingkai ulang
+   *  tiap kali efeknya berjalan lagi (ganti gaya, konteks baru). */
+  const ruteDibingkai = useRef('')
   /** Jam arus rute. setInterval, BUKAN rAF: 14 langkah/detik sudah halus
    *  untuk mata, dan rAF akan menjalankannya 60 kali - empat kali ongkos
    *  untuk gerak yang sama. */
@@ -2984,6 +3015,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     })
 
     if (!jalur.length) {
+      ruteDibingkai.current = ''
       sumber.setData(kosong as never)
       return
     }
@@ -3040,19 +3072,53 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       return () => berhenti()
     }
 
-    const t0 = performance.now()
+    // Kamera MUNDUR membingkai seluruh rute sebelum garisnya tumbuh - hanya
+    // untuk satu lokasi, dan hanya sekali per rute yang baru ditampilkan.
+    // Tanpa ini fokus heksagon (zoom 17,4) menaruh hampir seluruh rute di luar
+    // layar, dan animasinya berlangsung tanpa ada yang bisa melihatnya.
+    // Kuncinya memuat PROFIL: berganti jalan kaki -> mobil untuk heksagon yang
+    // sama tidak mengubah `kunciKonteks`, padahal rute mobil jauh lebih lebar.
+    const kunciBingkai = `${kunciKonteks}|${profilNyata}`
+    if (!membandingkan && ruteDibingkai.current !== kunciBingkai) {
+      ruteDibingkai.current = kunciBingkai
+      let [w, sLat, e, n] = [Infinity, Infinity, -Infinity, -Infinity]
+      for (const j of jalur)
+        for (const [x, y] of j.k) {
+          if (x < w) w = x
+          if (x > e) e = x
+          if (y < sLat) sLat = y
+          if (y > n) n = y
+        }
+      const lebar = m.getContainer().clientWidth
+      const tinggi = m.getContainer().clientHeight
+      const padding =
+        lebar >= 1024
+          ? { top: 110, bottom: 110, left: 110, right: Math.min(520, lebar * 0.36) }
+          : { top: 80, bottom: Math.round(tinggi * 0.46), left: 40, right: 40 }
+      if (Number.isFinite(w)) m.fitBounds([w, sLat, e, n], { padding, duration: 1100, maxZoom: 16.6 })
+    }
+
+    const t0 = performance.now() + TUNDA_RUTE_MS
     const total = GAMBAR_MS + UNDAK_MS * (jalur.length - 1)
     const maju = () => {
       const lewat = performance.now() - t0
-      sumber.setData(
-        garis((j, i) => {
-          const pp = Math.min(1, Math.max(0, (lewat - i * UNDAK_MS) / GAMBAR_MS))
-          // Melambat di ujung, sama dengan gelombang heksagon: laju tetap
-          // terbaca sebagai penggaris yang bergeser, bukan sebagai sesuatu yang
-          // mendarat.
-          return potongJalur(j.k, j.kum, 1 - Math.pow(1 - pp, 3))
-        }, false) as never,
-      )
+      const kepala: unknown[] = []
+      const data = garis((j, i) => {
+        const pp = Math.min(1, Math.max(0, (lewat - i * UNDAK_MS) / GAMBAR_MS))
+        // Melambat di ujung, sama dengan gelombang heksagon: laju tetap
+        // terbaca sebagai penggaris yang bergeser, bukan sebagai sesuatu yang
+        // mendarat.
+        const f = 1 - Math.pow(1 - pp, 3)
+        if (j.utama && pp > 0 && pp < 1)
+          kepala.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: titikPada(j.k, j.kum, f) },
+            properties: { jenis: 'kepala', warna: j.warna },
+          })
+        return potongJalur(j.k, j.kum, f)
+      }, false)
+      data.features.push(...(kepala as never[]))
+      sumber.setData(data as never)
       if (lewat < total) {
         rafRute.current = requestAnimationFrame(maju)
       } else {
@@ -3096,7 +3162,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           // nama itu diketik pengguna, dan innerHTML di sini adalah XSS.
           el.innerHTML =
             '<span class="pin-simpan-kepala"><svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true">' +
-            '<path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill="currentColor"/></svg></span>' +
+            '<path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor"/></svg></span>' +
             '<span class="pin-simpan-nama"></span>'
           const namaEl = el.querySelector('.pin-simpan-nama')
           if (namaEl) namaEl.textContent = label

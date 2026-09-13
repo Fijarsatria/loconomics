@@ -123,6 +123,20 @@ ALTERNATIF = {"target_count": 3, "share_factor": 0.6, "weight_factor": 1.6}
 #: apa adanya alih-alih menggambar sesuatu yang tidak berarti.
 MAKS_METER = 8000
 
+#: Batas yang sama untuk MOBIL. 8 km berkendara itu belasan menit, bukan
+#: "jauh" - memakai batas jalan kaki untuk mobil membuat 11 heksagon di pinggir
+#: kawasan tanpa rute mobil sama sekali (13 Sep 2026).
+MAKS_METER_MOBIL = 30_000
+
+#: Radius penempelan titik ke jaringan jalan, meter. Bawaan ORS 350 m cukup
+#: untuk jalan kaki (gang pun ruas), tetapi pusat heksagon di tengah kompleks
+#: atau lahan kosong bisa lebih dari 350 m dari jalan yang BOLEH dilalui mobil.
+RADIUS_MOBIL = 1500
+
+
+def maks_meter() -> float:
+    return MAKS_METER_MOBIL if PROFIL == "driving-car" else MAKS_METER
+
 URL_ISO = "https://api.openrouteservice.org/v2/isochrones/{profil}"
 
 #: Pita isochrone, menit. Harus sama dengan `pipeline/config.py::ISOCHRONE_MENIT`
@@ -428,6 +442,10 @@ def minta_rute(awal: tuple[float, float], akhir: tuple[float, float]) -> list[di
         "alternative_routes": ALTERNATIF,
         "instructions": False,
     }
+    # Jalan kaki ikut dilonggarkan ke 1 km: lima heksagon Harjamukti berpusat di
+    # lahan tanpa ruas OSM dalam 350 m, dan tanpa ini tidak punya rute sama
+    # sekali. Ujung yang meleset dijahit ke pusat heksagon oleh `--rapikan`.
+    badan["radiuses"] = [RADIUS_MOBIL, RADIUS_MOBIL] if PROFIL == "driving-car" else [1000, 1000]
     req = urllib.request.Request(
         URL_ORS.format(profil=PROFIL),
         data=json.dumps(badan).encode(),
@@ -945,7 +963,7 @@ def main() -> int:
                 gagal += 1
                 if len(gagal_contoh) < 5:
                     gagal_contoh.append(f"{t['h3_index']}: {hasil}")
-            elif hasil[0]["jarak_m"] > MAKS_METER:
+            elif hasil[0]["jarak_m"] > maks_meter():
                 # Rute utama di luar batas kewajaran membatalkan seluruh heksagon
                 # itu, alternatifnya sekalian - kalau yang tercepat pun 8 km,
                 # yang lain sudah pasti lebih jauh.
@@ -974,7 +992,7 @@ def main() -> int:
         db.commit()
         print(f"\n  Selesai. {ok} heksagon, {n_rute} rute tersimpan.")
         if jauh:
-            print(f"  {jauh} dilewati karena rute utamanya di atas {MAKS_METER} m.")
+            print(f"  {jauh} dilewati karena rute utamanya di atas {maks_meter():.0f} m.")
         if gagal:
             print(f"  {gagal} gagal dirutekan:")
             for g in gagal_contoh:

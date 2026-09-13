@@ -91,12 +91,15 @@ const K = {
     diBaki: 'Ada di baki banding',
     bandingkan: 'Bandingkan lokasi ini',
     sudahSimpan: 'Lokasi tersimpan',
+    hapusSimpan: 'Tersimpan - klik untuk menghapus',
     simpan: 'Simpan lokasi',
     simpanMasuk: 'Buat akun dulu untuk menyimpan lokasi.',
     simpanPremium: 'Menyimpan dan memantau lokasi bagian dari Loconomics Premium.',
     simpanOke:
       'Lokasi tersimpan dan skornya dibekukan. Klik titik mana pun di dalam heksagon ini untuk menandai tempat persisnya.',
     simpanGagal: 'Gagal menambahkan pantauan.',
+    hapusOke: 'Lokasi dihapus dari simpanan.',
+    hapusGagal: 'Gagal menghapus lokasi dari simpanan.',
     unduhLaporan: 'Unduh Laporan Kelayakan (PDF)',
     laporanMasuk: 'Buat akun dulu untuk mengunduh Laporan Kelayakan.',
     laporanOke: 'Laporan Kelayakan terunduh.',
@@ -249,12 +252,15 @@ const K = {
     diBaki: 'In the comparison tray',
     bandingkan: 'Compare this location',
     sudahSimpan: 'Location saved',
+    hapusSimpan: 'Saved - click to remove',
     simpan: 'Save location',
     simpanMasuk: 'Create an account first to save locations.',
     simpanPremium: 'Saving and watching locations is part of Loconomics Premium.',
     simpanOke:
       'Location saved and its score frozen. Click any spot inside this hexagon to mark the exact place.',
     simpanGagal: 'Could not add it to your watchlist.',
+    hapusOke: 'Location removed from your saved list.',
+    hapusGagal: 'Could not remove the location.',
     unduhLaporan: 'Download the Feasibility Report (PDF)',
     laporanMasuk: 'Create an account first to download the Feasibility Report.',
     laporanOke: 'Feasibility Report downloaded.',
@@ -921,12 +927,30 @@ function PanelInsight({
         {/* Bulat, ikon saja - bentuk yang sama dengan tombol Tersimpan di bilah
             atas, karena keduanya mengurus benda yang sama. */}
         <TombolBulat
-          label={dipantau ? t.sudahSimpan : t.simpan}
+          label={dipantau ? t.hapusSimpan : t.simpan}
           aktif={dipantau}
           sibuk={aksiSibuk === 'pantau'}
           gembok={!premium}
           onClick={async () => {
             if (!akun) return mintaMasuk(t.simpanMasuk)
+            // Lokasi yang SUDAH tersimpan: tekan lagi = hapus dari simpanan.
+            // Dulu tekan kedua cuma menyimpan ulang, jadi tombol yang menyala
+            // tidak pernah bisa dimatikan - dilaporkan "gabisa hapus lokasi
+            // tersimpan" (13 Sep 2026). Menghapus sengaja tidak menuntut
+            // langganan, sama dengan API-nya.
+            if (dipantau) {
+              setAksiSibuk('pantau')
+              try {
+                await api.lepasPantauan(h3)
+                catatSimpan()
+                setAksiPesan(t.hapusOke)
+              } catch (e) {
+                setAksiPesan(e instanceof GalatAPI ? e.message : t.hapusGagal)
+              } finally {
+                setAksiSibuk(null)
+              }
+              return
+            }
             if (!premium) return mintaLangganan(t.simpanPremium)
             setAksiSibuk('pantau')
             try {
@@ -940,8 +964,9 @@ function PanelInsight({
             }
           }}
         >
-          {/* Bintang, kembaran pin di peta - bukan penanda buku. */}
-          <path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill={dipantau ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+          {/* Penanda buku - SAMA dengan tombol Tersimpan di tepi peta dan pin
+              di peta (13 Sep 2026, permintaan pemilik repo: bintang diganti). */}
+          <path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill={dipantau ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         </TombolBulat>
 
         <TombolBulat

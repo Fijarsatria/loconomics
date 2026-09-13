@@ -410,8 +410,17 @@ export const api = {
   /** Dipanggil saat memuat, supaya panel AI bisa menampilkan keadaan sebenarnya. */
   statusAI: () => ambil<StatusAI>('/ai/status'),
 
+  // Batas waktunya SENDIRI, 150 detik. Satu pertanyaan bisa memanggil sepuluh
+  // alat dalam delapan putaran model, dan diukur di produksi 13 Sep 2026 butuh
+  // 19 detik pada saat sepi - batas 25 detik milik endpoint lain memutusnya
+  // di tengah jalan, dan yang tampil "Could not reach the assistant: signal
+  // timed out" padahal jawabannya sedang disusun.
   tanyaAI: (permintaan: PermintaanAI) =>
-    ambil<JawabanAI>('/ai/tanya', { method: 'POST', body: JSON.stringify(permintaan) }),
+    ambil<JawabanAI>('/ai/tanya', {
+      method: 'POST',
+      body: JSON.stringify(permintaan),
+      signal: AbortSignal.timeout(150_000),
+    }),
 
   // --- Akun ---
   daftar: (p: {
