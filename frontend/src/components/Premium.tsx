@@ -87,6 +87,17 @@ const K = {
 
     gagalPantauan: 'Gagal memuat pantauan.',
     judulSimpan: 'Lokasi tersimpan',
+    beriNama: 'Beri nama',
+    gantiNama: 'Ganti nama',
+    namaPlaceholder: 'mis. Ruko pojok Jl. Kendal',
+    simpanNama: 'Simpan',
+    titikSendiri: 'Titik pilihan Anda',
+    titikTengah: 'Titik tengah heksagon',
+    pinTersimpan: 'Titik favorit tersimpan',
+    pinDipindah: 'Titik favorit dipindah ke sini',
+    pinPetunjuk: 'Klik titik lain di dalam heksagon ini untuk memindahkannya.',
+    batalkan: 'Batalkan',
+    tutupKabar: 'Tutup',
     ketSimpan:
       'Selisih dihitung terhadap skor yang dibekukan saat Anda menyimpan lokasinya — bukan terhadap angka yang dihitung ulang sekarang.',
     yangDisimpan: 'Lokasi yang Anda simpan',
@@ -184,6 +195,17 @@ const K = {
 
     gagalPantauan: 'Could not load your saved locations.',
     judulSimpan: 'Saved locations',
+    beriNama: 'Name it',
+    gantiNama: 'Rename',
+    namaPlaceholder: 'e.g. Corner shophouse on Jl. Kendal',
+    simpanNama: 'Save',
+    titikSendiri: 'Your chosen spot',
+    titikTengah: 'Hexagon centre',
+    pinTersimpan: 'Favourite spot saved',
+    pinDipindah: 'Favourite spot moved here',
+    pinPetunjuk: 'Click another spot inside this hexagon to move it.',
+    batalkan: 'Undo',
+    tutupKabar: 'Close',
     ketSimpan:
       'The difference is measured against the score frozen when you saved the location — not against a figure recomputed now.',
     yangDisimpan: 'The locations you saved',
@@ -1093,6 +1115,140 @@ export function DialogKomparasi({
 // 3 · Pemantauan
 // ---------------------------------------------------------------------------
 
+/** Nama lokasi tersimpan, disunting di tempat. Enter menyimpan, Esc membatalkan. */
+function IsianNama({ awal, onSimpan }: { awal: string | null; onSimpan: (nama: string | null) => Promise<void> }) {
+  const t = useTeks(K)
+  const [nilai, setNilai] = useState(awal ?? '')
+  const [sibuk, setSibuk] = useState(false)
+  const berubah = (nilai.trim() || null) !== (awal ?? null)
+  const simpan = async () => {
+    if (!berubah || sibuk) return
+    setSibuk(true)
+    await onSimpan(nilai.trim() || null)
+    setSibuk(false)
+  }
+  return (
+    <form
+      className="flex items-center gap-1.5"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void simpan()
+      }}
+    >
+      <input
+        value={nilai}
+        maxLength={80}
+        onChange={(e) => setNilai(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation()
+            setNilai(awal ?? '')
+          }
+        }}
+        placeholder={t.namaPlaceholder}
+        aria-label={awal ? t.gantiNama : t.beriNama}
+        className="min-w-0 flex-1 rounded-full border border-line bg-surface px-3 py-1.5 text-[12.5px] text-ink outline-none transition-colors focus:border-ink-3"
+      />
+      <button
+        type="submit"
+        disabled={!berubah || sibuk}
+        className="shrink-0 cursor-pointer rounded-full bg-ink px-3 py-1.5 text-[12px] font-semibold text-surface transition-opacity disabled:cursor-default disabled:opacity-35"
+      >
+        {t.simpanNama}
+      </button>
+    </form>
+  )
+}
+
+/**
+ * Kabar sesudah menaruh titik favorit dengan satu klik.
+ *
+ * Satu klik yang langsung menyimpan menuntut dua jalan keluar di tempat yang
+ * sama: memberinya NAMA (yang diminta pemilik repo) dan MEMBATALKANNYA (klik
+ * yang tidak sengaja). Tanpa yang kedua, satu klik keliru berarti membuka
+ * dialog Tersimpan hanya untuk menghapusnya.
+ */
+export function KabarPin({
+  h3,
+  baru,
+  onTutup,
+}: {
+  h3: string
+  /** false = heksagon ini sudah tersimpan; titiknya cuma dipindah. */
+  baru: boolean
+  onTutup: () => void
+}) {
+  const t = useTeks(K)
+  const { catatSimpan } = useSesi()
+  const [nama, setNama] = useState('')
+  const [fokus, setFokus] = useState(false)
+
+  // Hilang sendiri, KECUALI selagi orangnya sedang mengetik nama.
+  useEffect(() => {
+    if (fokus || nama) return
+    const id = window.setTimeout(onTutup, 7000)
+    return () => window.clearTimeout(id)
+  }, [fokus, nama, onTutup])
+
+  const simpanNama = async () => {
+    if (!nama.trim()) return onTutup()
+    await api.namaiPantauan(h3, nama.trim()).catch(() => {})
+    catatSimpan()
+    onTutup()
+  }
+
+  return createPortal(
+    <div className="kabar-pin kaca-tebal" role="status">
+      <span className="kabar-pin-ikon" aria-hidden>
+        <svg width="15" height="15" viewBox="0 0 20 20">
+          <path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill="currentColor" />
+        </svg>
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold text-ink">{baru ? t.pinTersimpan : t.pinDipindah}</p>
+        <form
+          className="mt-1.5 flex items-center gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void simpanNama()
+          }}
+        >
+          <input
+            value={nama}
+            maxLength={80}
+            onChange={(e) => setNama(e.target.value)}
+            onFocus={() => setFokus(true)}
+            onBlur={() => setFokus(false)}
+            placeholder={t.namaPlaceholder}
+            aria-label={t.beriNama}
+            className="min-w-0 flex-1 rounded-full border border-line bg-surface px-3 py-1.5 text-[12.5px] text-ink outline-none focus:border-ink-3"
+          />
+          <button
+            type="submit"
+            className="shrink-0 cursor-pointer rounded-full bg-ink px-3 py-1.5 text-[12px] font-semibold text-surface"
+          >
+            {nama.trim() ? t.simpanNama : t.tutupKabar}
+          </button>
+        </form>
+        <p className="mt-1 text-[11px] text-ink-3">{t.pinPetunjuk}</p>
+      </div>
+      {baru && (
+        <button
+          onClick={async () => {
+            await api.lepasPantauan(h3).catch(() => {})
+            catatSimpan()
+            onTutup()
+          }}
+          className="shrink-0 cursor-pointer self-start rounded-full px-2.5 py-1 text-[12px] font-medium text-ink-2 underline underline-offset-2 hover:text-ink"
+        >
+          {t.batalkan}
+        </button>
+      )}
+    </div>,
+    document.body,
+  )
+}
+
 export function DialogPantauan({
   kawasan,
   onTutup,
@@ -1221,9 +1377,21 @@ export function DialogPantauan({
                     className="min-w-0 flex-1 cursor-pointer text-left"
                     title={t.lihatRinci}
                   >
-                    <span className="papan block truncate text-[14px]">
-                      {kodeLokasi(b.h3_index, b.kawasan ?? '')}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className={`pin-daftar ${b.titik_sendiri ? '' : 'pin-daftar-tengah'}`} aria-hidden>
+                        <svg width="10" height="10" viewBox="0 0 20 20">
+                          <path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill="currentColor" />
+                        </svg>
+                      </span>
+                      <span className="papan block truncate text-[14px]">
+                        {b.nama ?? kodeLokasi(b.h3_index, b.kawasan ?? '')}
+                      </span>
                     </span>
+                    {b.nama && (
+                      <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                        {kodeLokasi(b.h3_index, b.kawasan ?? '')}
+                      </span>
+                    )}
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       {b.kuadran && (
                         <span
@@ -1276,6 +1444,17 @@ export function DialogPantauan({
 
                 {buka === b.h3_index && (
                   <div className="border-t border-line/70 bg-surface-2/50 px-3.5 py-3">
+                    <IsianNama
+                      awal={b.nama}
+                      onSimpan={async (nama) => {
+                        await api.namaiPantauan(b.h3_index, nama).catch(() => {})
+                        catatSimpan() // label pin di peta ikut berganti
+                        muat()
+                      }}
+                    />
+                    <p className="mb-2.5 mt-1 text-[11px] text-ink-3">
+                      {b.titik_sendiri ? t.titikSendiri : t.titikTengah}
+                    </p>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
                       <BarisRinci label={t.rKawasan} nilai={b.kawasan ?? '—'} />
                       <BarisRinci

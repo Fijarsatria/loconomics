@@ -77,7 +77,7 @@ import PanelInsight from './components/PanelInsight'
 const Gerbang = lazy(() => import('./components/Gerbang'))
 import { PERISTIWA_BUKA_PETA, TombolAkun, useSesi, type DetailBukaPeta } from './components/Akun'
 import { useBahasa, useTema, useTeks, type Bahasa } from './lib/bahasa'
-import { MenuKawasan } from './components/Premium'
+import { KabarPin, MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
 // Kedua dialog ini besar dan jarang dibuka. MenuKawasan tetap statis - ia
 // duduk di bilah atas dan harus ada sejak bingkai pertama.
@@ -1039,36 +1039,33 @@ export default function App() {
     mintaPreferensi,
     sinyalSimpan,
     catatSimpan,
+    tersimpan,
   } = useSesi()
 
   /**
-   * Simpan lokasi lewat klik dua kali di peta.
+   * Titik favorit: klik sekali di dalam heksagon yang sedang terbuka.
    *
-   * Penjaganya SAMA PERSIS dengan tombol "Simpan lokasi" di panel detail -
-   * belum masuk diminta masuk, sudah masuk tapi belum berlangganan diminta
-   * berlangganan. Disalin sengaja alih-alih dilonggarkan: kalau jalan pintas
-   * ini punya syarat yang lebih longgar, "menyimpan lokasi butuh langganan"
-   * berhenti benar, dan yang membuktikannya bukan uji melainkan pengguna.
+   * Hanya PELANGGAN yang mendapat penangan ini (lihat `onTaruhPin` di bawah) -
+   * untuk tamu dan akun gratis klik di dalam heksagon tetap tidak berbuat apa
+   * pun, alih-alih memunculkan dialog langganan tiap kali orang mengklik peta.
+   * Tombol "Simpan lokasi" di panel tetap jadi pintu yang menjelaskan fitur ini.
    *
-   * `catatSimpan()` yang membuat pinnya langsung muncul. Tanpa itu, pin baru
-   * datang setelah muat ulang - dan pin yang menunggu muat ulang bukan fitur.
+   * `catatSimpan()` yang membuat pinnya langsung muncul.
    */
-  const simpanCepat = useCallback(
-    async (h3: string) => {
-      if (!akun) return mintaMasuk(t.simpanMasuk)
-      if (!premium)
-        return mintaLangganan(t.simpanPremium)
+  const [kabarPin, setKabarPin] = useState<{ h3: string; baru: boolean; kunci: number } | null>(null)
+  const taruhPin = useCallback(
+    async (h3: string, lat: number, lon: number) => {
+      const baru = !tersimpan.has(h3)
       try {
-        await api.pantau(h3)
+        await api.pantau(h3, { lat, lon })
         catatSimpan()
+        setKabarPin({ h3, baru, kunci: Date.now() })
       } catch {
-        // Diam di sini disengaja. Klik dua kali di peta tidak punya tempat
-        // menampilkan galat, dan satu-satunya sebab yang wajar - lokasinya
-        // sudah tersimpan - bukan kabar yang perlu disampaikan sebagai galat.
-        // Panel detail tetap melaporkan sebabnya kalau ditekan dari sana.
+        // Satu-satunya sebab yang wajar di sini titik yang jatuh tepat di tepi
+        // heksagon; tidak ada tempat yang pantas untuk melaporkannya sebagai galat.
       }
     },
-    [akun, premium, mintaMasuk, mintaLangganan, catatSimpan],
+    [tersimpan, catatSimpan],
   )
   /**
    * Baki komparasi: heksagon yang dikumpulkan untuk dibandingkan berdampingan.
@@ -1305,7 +1302,13 @@ export default function App() {
             .filter((x): x is typeof x & { lat: number; lon: number } =>
               x.lat !== null && x.lon !== null,
             )
-            .map((x) => ({ lat: x.lat, lon: x.lon, h3: x.h3_index })),
+            .map((x) => ({
+              lat: x.lat,
+              lon: x.lon,
+              h3: x.h3_index,
+              label: x.nama ?? kodeLokasi(x.h3_index, x.kawasan ?? ''),
+              sendiri: x.titik_sendiri,
+            })),
         )
       })
       .catch(() => {})
@@ -1777,7 +1780,7 @@ export default function App() {
             saringKuadran={saringKuadran}
             dibandingkan={baki}
             onPilihHeksagon={pilihHeksagon}
-            onSimpanCepat={simpanCepat}
+            onTaruhPin={premium ? taruhPin : undefined}
             profilRute={profilRute}
             onMuat={catatMuat}
             // Gelombang heksagon menunggu GERBANG juga, bukan cuma layar
@@ -2654,6 +2657,14 @@ export default function App() {
         </Suspense>
       )}
 
+      {kabarPin && (
+        <KabarPin
+          key={kabarPin.kunci}
+          h3={kabarPin.h3}
+          baru={kabarPin.baru}
+          onTutup={() => setKabarPin(null)}
+        />
+      )}
       {pantauanTerbuka &&
         (premium ? (
           <Suspense fallback={null}>

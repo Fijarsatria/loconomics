@@ -685,6 +685,11 @@ class WatchlistItem(Base):
     )
     h3_index: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     catatan: Mapped[str | None] = mapped_column(String(200))
+    #: Titik yang ditandai orangnya DI DALAM heksagon. NULL = titik tengahnya.
+    lat: Mapped[float | None] = mapped_column(Float)
+    lon: Mapped[float | None] = mapped_column(Float)
+    #: Nama yang ia berikan ("Ruko pojok Kendal"). NULL = kode lokasi.
+    nama: Mapped[str | None] = mapped_column(String(80))
     skor_saat_dipantau: Mapped[float | None] = mapped_column(Float)
     versi_saat_dipantau: Mapped[str | None] = mapped_column(String(40))
     dibuat_pada: Mapped[datetime] = mapped_column(

@@ -1215,6 +1215,36 @@ def test_kunci_gemini_cadangan_dipakai_saat_utama_habis():
         llm.tandai_penyedia_pulih()
 
 
+def test_cors_mengizinkan_setiap_metode_yang_dipakai_frontend():
+    """Metode yang dipanggil frontend lintas asal WAJIB ada di allow_methods.
+
+    Diukur 13 Sep 2026: `lepasPantauan` memanggil DELETE, `allow_methods` cuma
+    GET dan POST, jadi preflight-nya 400 di lokal DAN produksi - "Hapus dari
+    simpanan" tidak pernah berhasil dari peramban, dan dialognya menelan
+    galatnya diam-diam. Uji ini membaca metode yang BENAR-BENAR dipakai
+    `frontend/src/lib/api.ts`, bukan daftar yang diketik ulang di sini.
+    """
+    import re as _re
+
+    from fastapi.testclient import TestClient as _TC
+
+    from app.main import app as _app
+
+    api_ts = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
+    dipakai = set(_re.findall(r"method:\s*'([A-Z]+)'", api_ts)) | {"GET"}
+    cek("api.ts memakai lebih dari GET/POST", bool(dipakai - {"GET", "POST"}), f"- {sorted(dipakai)}")
+    klien = _TC(_app)
+    asal = _app.user_middleware  # noqa: F841 - dibaca lewat respons, bukan konfigurasi
+    from app.core.config import settings as _s
+
+    for metode in sorted(dipakai):
+        r = klien.options(
+            "/akun/pantauan/898c106a693ffff",
+            headers={"Origin": _s.cors_origins[0], "Access-Control-Request-Method": metode},
+        )
+        cek(f"preflight {metode} diizinkan", r.status_code == 200, f"- {r.status_code}")
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

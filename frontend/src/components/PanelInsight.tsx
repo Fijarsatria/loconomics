@@ -95,7 +95,7 @@ const K = {
     simpanMasuk: 'Buat akun dulu untuk menyimpan lokasi.',
     simpanPremium: 'Menyimpan dan memantau lokasi bagian dari Loconomics Premium.',
     simpanOke:
-      'Lokasi tersimpan dan skornya dibekukan — perubahan berikutnya dilaporkan di menu Tersimpan.',
+      'Lokasi tersimpan dan skornya dibekukan. Klik titik mana pun di dalam heksagon ini untuk menandai tempat persisnya.',
     simpanGagal: 'Gagal menambahkan pantauan.',
     unduhLaporan: 'Unduh Laporan Kelayakan (PDF)',
     laporanMasuk: 'Buat akun dulu untuk mengunduh Laporan Kelayakan.',
@@ -253,7 +253,7 @@ const K = {
     simpanMasuk: 'Create an account first to save locations.',
     simpanPremium: 'Saving and watching locations is part of Loconomics Premium.',
     simpanOke:
-      'Location saved and its score frozen — the next change is reported under Saved.',
+      'Location saved and its score frozen. Click any spot inside this hexagon to mark the exact place.',
     simpanGagal: 'Could not add it to your watchlist.',
     unduhLaporan: 'Download the Feasibility Report (PDF)',
     laporanMasuk: 'Create an account first to download the Feasibility Report.',
@@ -940,7 +940,8 @@ function PanelInsight({
             }
           }}
         >
-          <path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor" />
+          {/* Bintang, kembaran pin di peta - bukan penanda buku. */}
+          <path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill={dipantau ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         </TombolBulat>
 
         <TombolBulat

@@ -442,10 +442,18 @@ export const api = {
   // --- Pemantauan ---
   pantauan: () => ambil<ButirPantauan[]>('/akun/pantauan'),
 
-  pantau: (h3_index: string, catatan?: string) =>
+  /** Simpan lokasi. `lat`/`lon` = titik favorit DI DALAM heksagon (opsional). */
+  pantau: (h3_index: string, opsi: { lat?: number; lon?: number; nama?: string } = {}) =>
     ambil<ButirPantauan>('/akun/pantauan', {
       method: 'POST',
-      body: JSON.stringify({ h3_index, catatan }),
+      body: JSON.stringify({ h3_index, ...opsi }),
+    }),
+
+  /** Beri nama lokasi tersimpan. Kosong = kembali ke kode lokasi. */
+  namaiPantauan: (h3: string, nama: string | null) =>
+    ambil<{ h3_index: string; nama: string | null }>(`/akun/pantauan/${h3}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ nama }),
     }),
 
   lepasPantauan: (h3: string) =>

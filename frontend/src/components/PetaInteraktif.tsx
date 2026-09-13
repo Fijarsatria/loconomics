@@ -872,7 +872,7 @@ export interface AksiPetaRef {
    * mengirim daftar lengkap, bukan delta, jadi tidak ada pin yatim yang
    * tertinggal saat sebuah lokasi dilepas dari simpanan.
    */
-  setPin: (daftar: { lat: number; lon: number; h3: string }[]) => void
+  setPin: (daftar: { lat: number; lon: number; h3: string; label: string; sendiri: boolean }[]) => void
   /** Arah kompas & kemiringan saat ini, untuk memunculkan tombol reset. */
   arah: () => { bearing: number; pitch: number }
 }
@@ -919,19 +919,19 @@ interface Props {
   onPilihBlok?: (h3Blok: string | null) => void
   onPilihHeksagon: (h3: string | null) => void
   /**
-   * Klik dua kali sebuah heksagon = simpan lokasi itu.
+   * Klik SEKALI di dalam heksagon yang sedang terbuka = taruh titik favorit.
    *
-   * Jalan pintas, bukan jalan satu-satunya: tombol "Simpan lokasi" di panel
-   * detail tetap ada dan tetap jadi tempat orang belajar bahwa fitur ini ada.
-   * Yang ditambahkan cuma cara yang lebih cepat untuk orang yang sudah tahu -
-   * dan klik-dua-kali memang gerakan yang sudah dipakai orang untuk "tandai
-   * ini" di hampir setiap peta.
+   * Menggantikan "klik dua kali = simpan heksagon" (13 Sep 2026). Yang lama
+   * dilaporkan pemilik repo sebagai bug: klik dua kali yang dimaksudkan untuk
+   * memperbesar peta ikut menyimpan lokasi, dan yang disimpan selalu TITIK
+   * TENGAH heksagon - bukan ruko yang ia maksud. Sekarang yang ditandai titik
+   * persis yang diklik, dan hanya di heksagon yang detailnya sedang dibuka,
+   * jadi mengklik peta untuk menjelajah tidak pernah menyimpan apa pun.
    *
-   * Penjagaannya TIDAK ada di sini. Pemanggil yang memutuskan boleh atau
-   * tidak, memakai penjaga yang sama persis dengan tombol di panel - kalau
-   * dipisah, "sudah berlangganan" akan berarti hal yang berbeda di dua tempat.
+   * Penjagaannya TIDAK ada di sini. Pemanggil yang memutuskan (dan hanya
+   * memberikan penangan ini kepada pelanggan).
    */
-  onSimpanCepat?: (h3: string) => void
+  onTaruhPin?: (h3: string, lat: number, lon: number) => void
   /**
    * Profil rute yang digambar: jalan kaki atau mobil.
    *
@@ -1028,7 +1028,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     blokTerpilih = null,
     onPilihBlok,
     onPilihHeksagon,
-    onSimpanCepat,
+    onTaruhPin,
     profilRute = 'foot-walking',
     onMuat,
     tampil,
@@ -1138,8 +1138,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // Alasan yang sama persis dengan `onPilihRef` di atas: pendengar peta
   // dipasang SEKALI di efek tanpa dependensi, jadi ia tidak boleh menangkap
   // prop yang identitasnya berganti tiap render.
-  const onSimpanRef = useRef(onSimpanCepat)
-  onSimpanRef.current = onSimpanCepat
+  const onTaruhPinRef = useRef(onTaruhPin)
+  onTaruhPinRef.current = onTaruhPin
+  const terpilihRef = useRef(terpilih)
+  terpilihRef.current = terpilih
   const onMuatRef = useRef(onMuat)
   onMuatRef.current = onMuat
   // Alasan yang sama dengan `onPilihRef`: pendengar blok dipasang SEKALI di
@@ -1372,23 +1374,23 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     m.on('click', L_ISI, (e) => {
       if (adaBlokDi(e.point)) return
       const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
+      // Di dalam heksagon yang SEDANG terbuka: taruh titik favorit di sana.
+      // Di luarnya: pilih heksagon itu, seperti biasa.
+      if (p?.h3_index && p.h3_index === terpilihRef.current && onTaruhPinRef.current) {
+        onTaruhPinRef.current(p.h3_index, e.lngLat.lat, e.lngLat.lng)
+        return
+      }
       onPilihRef.current(p?.h3_index ?? null)
-    })
-    // `preventDefault()` WAJIB, dan bukan formalitas: tanpa itu MapLibre
-    // ikut menjalankan zoom bawaannya, jadi menyimpan sebuah lokasi
-    // sekaligus melompatkan peta satu tingkat zoom. Yang tersimpan benar,
-    // yang terlihat pindah tempat.
-    m.on('dblclick', L_ISI, (e) => {
-      if (adaBlokDi(e.point)) return
-      const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
-      if (!p?.h3_index || !onSimpanRef.current) return
-      e.preventDefault()
-      onSimpanRef.current(p.h3_index)
     })
     m.on('mousemove', L_ISI, (e) => {
       const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
       setSorot(p ?? null)
-      m.getCanvas().style.cursor = 'pointer'
+      // Kursor bidik di heksagon yang terbuka: satu-satunya petunjuk bahwa
+      // klik di sini menaruh titik, bukan memilih.
+      m.getCanvas().style.cursor =
+        p?.h3_index && p.h3_index === terpilihRef.current && onTaruhPinRef.current && !adaBlokDi(e.point)
+          ? 'crosshair'
+          : 'pointer'
       if (p && m.getLayer(L_SOROT)) {
         m.setFilter(L_SOROT, ['in', ['get', 'h3_index'], ['literal', [p.h3_index]]])
       }
@@ -3083,15 +3085,31 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         const m = peta.current
         if (!m) return
         for (const p of pinAktif.current) p.remove()
-        pinAktif.current = daftar.map(({ lat, lon, h3 }) => {
+        pinAktif.current = daftar.map(({ lat, lon, h3, label, sendiri }) => {
           const el = document.createElement('button')
+          el.type = 'button'
           el.className = 'pin-simpan'
-          el.title = `Lokasi tersimpan ${h3.slice(0, 10)}…`
-          el.setAttribute('aria-label', el.title)
-          // Glif bookmark digambar inline: berkas ini tidak boleh menambah aset.
+          if (sendiri) el.dataset.sendiri = '1'
+          el.setAttribute('aria-label', label)
+          // Glif digambar inline (berkas ini tidak boleh menambah aset). Label
+          // namanya diisi lewat `textContent`, TIDAK PERNAH lewat innerHTML:
+          // nama itu diketik pengguna, dan innerHTML di sini adalah XSS.
           el.innerHTML =
-            '<svg width="13" height="13" viewBox="0 0 20 20" aria-hidden="true">' +
-            '<path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor"/></svg>'
+            '<span class="pin-simpan-kepala"><svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true">' +
+            '<path d="M10 2.6l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.9l5-.7Z" fill="currentColor"/></svg></span>' +
+            '<span class="pin-simpan-nama"></span>'
+          const namaEl = el.querySelector('.pin-simpan-nama')
+          if (namaEl) namaEl.textContent = label
+          // Klik pin = buka detail heksagonnya. Kejadiannya dihentikan di sini
+          // supaya peta di bawahnya tidak ikut menerima klik yang sama - klik
+          // itu jatuh DI DALAM heksagon terbuka dan akan menaruh titik baru.
+          const henti = (ev: Event) => ev.stopPropagation()
+          el.addEventListener('mousedown', henti)
+          el.addEventListener('dblclick', henti)
+          el.addEventListener('click', (ev) => {
+            ev.stopPropagation()
+            onPilihRef.current(h3)
+          })
           return new Marker({ element: el, anchor: 'bottom' })
             .setLngLat([lon, lat])
             .addTo(m)

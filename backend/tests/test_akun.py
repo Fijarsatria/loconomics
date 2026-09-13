@@ -279,6 +279,58 @@ def main() -> int:
                 except TidakDitemukan:
                     cek("blok: blok dari heksagon lain ditolak", True)
 
+            # --- Titik favorit di dalam heksagon ------------------------------
+            from app.api.akun import daftar_pantauan, hapus_pantauan, namai_pantauan, tambah_pantauan
+            from app.core.galat import KesalahanAPI as _Galat
+            from app.schemas import PermintaanNamaPantau, PermintaanPantau
+
+            lat_d, lon_d = db.execute(_teks(
+                "select ST_Y(ST_PointOnSurface(geom)), ST_X(ST_PointOnSurface(geom)) "
+                "from hex_features where h3_index = :h"
+            ), {"h": h3}).one()
+            simpan = tambah_pantauan(
+                PermintaanPantau(h3_index=h3, lat=lat_d, lon=lon_d, nama="Ruko uji"), u, db
+            )
+            cek("pin: titik di dalam heksagon diterima", simpan.titik_sendiri is True)
+            cek("pin: titiknya yang disimpan, bukan titik tengah",
+                abs(simpan.lat - lat_d) < 1e-9 and abs(simpan.lon - lon_d) < 1e-9)
+            cek("pin: nama ikut tersimpan", simpan.nama == "Ruko uji")
+            try:
+                tambah_pantauan(PermintaanPantau(h3_index=h3, lat=lat_d + 0.05, lon=lon_d), u, db)
+                cek("pin: titik di LUAR heksagon ditolak", False)
+            except _Galat:
+                db.rollback()
+                cek("pin: titik di LUAR heksagon ditolak", True)
+            namai_pantauan(h3, PermintaanNamaPantau(nama="  Pojok Kendal  "), u, db)
+            daftar = {b.h3_index: b for b in daftar_pantauan(u, db)}
+            cek("pin: nama bisa diganti (dan dirapikan)", daftar[h3].nama == "Pojok Kendal")
+            cek("pin: daftar memakai titik sendiri", daftar[h3].titik_sendiri)
+            namai_pantauan(h3, PermintaanNamaPantau(nama=""), u, db)
+            cek("pin: nama kosong kembali ke kode lokasi",
+                {b.h3_index: b for b in daftar_pantauan(u, db)}[h3].nama is None)
+            hapus_pantauan(h3, u, db)
+            cek("pin: bisa dihapus", h3 not in {b.h3_index for b in daftar_pantauan(u, db)})
+
+            import app.api.akun as _api_akun2
+            from app.core.akun import wajib_premium as _wp
+
+            def _pakai_premium(jalur, metode):
+                for r in _api_akun2.router.routes:
+                    if getattr(r, "path", "") == jalur and metode in getattr(r, "methods", set()):
+                        return any(d.call is _wp for d in _semua_dep(r.dependant))
+                return False
+
+            def _semua_dep(dep):
+                for d in dep.dependencies:
+                    yield d
+                    yield from _semua_dep(d)
+
+            cek("pin: menyimpan lokasi menuntut PREMIUM, bukan sekadar akun",
+                _pakai_premium("/akun/pantauan", "POST"))
+            cek("pin: daftar simpanan menuntut PREMIUM", _pakai_premium("/akun/pantauan", "GET"))
+            cek("pin: menghapus TETAP boleh untuk akun apa pun",
+                not _pakai_premium("/akun/pantauan/{h3_index}", "DELETE"))
+
             # Langganan uji dicabut lagi: bagian sesudah ini menguji akun GRATIS.
             db.delete(langganan_uji)
             db.flush()

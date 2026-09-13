@@ -863,6 +863,9 @@ class ButirPantauan(BaseModel):
     # respons.
     lat: float | None = None
     lon: float | None = None
+    #: True kalau `lat`/`lon` titik yang ditaruh orangnya, bukan titik tengah.
+    titik_sendiri: bool = False
+    nama: str | None = None
     catatan: str | None = None
     skor_saat_dipantau: float | None = None
     skor_sekarang: float | None = None
@@ -877,6 +880,15 @@ class ButirPantauan(BaseModel):
 class PermintaanPantau(BaseModel):
     h3_index: str = Field(min_length=15, max_length=20)
     catatan: str | None = Field(default=None, max_length=200)
+    # Titik di DALAM heksagon. Keduanya atau tidak sama sekali; backend menolak
+    # titik yang jatuh di luar heksagonnya.
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    nama: str | None = Field(default=None, max_length=80)
+
+
+class PermintaanNamaPantau(BaseModel):
+    nama: str | None = Field(default=None, max_length=80)
 
 
 class TitikRiwayat(BaseModel):

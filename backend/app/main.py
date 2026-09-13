@@ -135,7 +135,12 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_methods=["GET", "POST"],
+    # DELETE dan PATCH ditambahkan 13 Sep 2026. Tanpa keduanya, "Hapus dari
+    # simpanan" TIDAK PERNAH berhasil dari peramban: frontend memanggil DELETE
+    # lintas asal, preflight-nya dijawab 400 - diukur di lokal DAN produksi -
+    # dan dialognya menelan galat itu diam-diam. Lokasinya tetap tersimpan,
+    # pinnya tetap di peta, dan pemilik repo melaporkannya sebagai "ngebug".
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
     # Peramban menyembunyikan setiap header respons yang tidak disebut di sini,
     # termasuk header buatan sendiri. X-Total-Count adalah janji paginasi

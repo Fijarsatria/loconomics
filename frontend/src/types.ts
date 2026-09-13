@@ -661,9 +661,13 @@ export interface KatalogPaket {
 export interface ButirPantauan {
   h3_index: string
   kawasan: string | null
-  /** Centroid heksagon, untuk pin di peta. */
+  /** Titik pin: titik yang ditaruh orangnya, atau centroid heksagon. */
   lat: number | null
   lon: number | null
+  /** true = `lat`/`lon` titik yang ditaruh sendiri di dalam heksagon. */
+  titik_sendiri: boolean
+  /** Nama pemberian orangnya. null = sebut dengan kode lokasi. */
+  nama: string | null
   catatan: string | null
   skor_saat_dipantau: number | null
   skor_sekarang: number | null

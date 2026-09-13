@@ -69,6 +69,7 @@ from app.schemas import (
     PermintaanDaftar,
     PermintaanLangganan,
     PermintaanMasuk,
+    PermintaanNamaPantau,
     PermintaanPantau,
     SesiAkun,
 )
@@ -289,9 +290,16 @@ def berlangganan(
 
 @router.get("/pantauan", response_model=list[ButirPantauan], summary="Daftar pantauan")
 def daftar_pantauan(
-    user: PenggunaWajib, db: Annotated[Session, Depends(get_db)]
+    user: PenggunaPremium, db: Annotated[Session, Depends(get_db)]
 ) -> list[ButirPantauan]:
     """Selisih dihitung terhadap angka yang DIBEKUKAN saat mulai memantau.
+
+    `PenggunaPremium`, bukan `PenggunaWajib` - sejak 13 Sep 2026. Pemantauan
+    tercatat sebagai fitur berbayar di tabel aturan 2b dan antarmuka memang
+    menahannya, tetapi ketiga pintu API-nya cuma menuntut akun: akun gratis
+    yang memanggil endpoint ini langsung mendapat fitur yang sama dengan
+    pelanggan. Menghapus dari simpanan sengaja TETAP boleh untuk akun apa pun -
+    langganan yang habis tidak boleh menyandera daftar milik orangnya.
 
     Bukan terhadap angka yang dihitung ulang sekarang. Bedanya penting: yang
     pertama melaporkan perubahan yang sungguh terjadi, yang kedua selalu
@@ -340,12 +348,15 @@ def daftar_pantauan(
         if hx is not None:
             p75, p90 = persentil_churn(db, hx.kawasan)
             risiko = peringatan_risiko(hx, p75, p90).tingkat
+        sendiri = b.lat is not None and b.lon is not None
         keluar.append(
             ButirPantauan(
                 h3_index=b.h3_index,
                 kawasan=hx.kawasan if hx else None,
-                lat=r.lat if r else None,
-                lon=r.lon if r else None,
+                lat=b.lat if sendiri else (r.lat if r else None),
+                lon=b.lon if sendiri else (r.lon if r else None),
+                titik_sendiri=sendiri,
+                nama=b.nama,
                 catatan=b.catatan,
                 skor_saat_dipantau=b.skor_saat_dipantau,
                 skor_sekarang=skor_kini,
@@ -363,7 +374,7 @@ def daftar_pantauan(
 @router.post("/pantauan", response_model=ButirPantauan, summary="Tambah ke pantauan")
 def tambah_pantauan(
     p: PermintaanPantau,
-    user: PenggunaWajib,
+    user: PenggunaPremium,
     db: Annotated[Session, Depends(get_db)],
 ) -> ButirPantauan:
     hx = ambil_hex(db, p.h3_index)
@@ -372,6 +383,25 @@ def tambah_pantauan(
             LocationScore.h3_index == p.h3_index, LocationScore.versi == VERSI_BAKU
         )
     ).scalar_one_or_none()
+
+    # Titik favorit di DALAM heksagon. Diperiksa di basis data, bukan dipercaya
+    # dari peramban: pin yang tersimpan di luar heksagonnya akan membuka detail
+    # heksagon yang salah saat diklik - salah tanpa satu pun galat.
+    if (p.lat is None) != (p.lon is None):
+        raise KesalahanAPI("Titik harus membawa lat dan lon sekaligus.")
+    if p.lat is not None:
+        di_dalam = db.execute(
+            select(
+                func.ST_Contains(
+                    HexFeature.geom, func.ST_SetSRID(func.ST_MakePoint(p.lon, p.lat), 4326)
+                )
+            ).where(HexFeature.h3_index == p.h3_index)
+        ).scalar()
+        if not di_dalam:
+            raise KesalahanAPI(
+                "Titik itu berada di luar heksagon ini.",
+                {"h3_index": p.h3_index},
+            )
 
     ada = db.execute(
         select(WatchlistItem).where(
@@ -383,16 +413,31 @@ def tambah_pantauan(
             user_id=user.id,
             h3_index=p.h3_index,
             catatan=p.catatan,
+            lat=p.lat,
+            lon=p.lon,
+            nama=(p.nama or "").strip() or None,
             skor_saat_dipantau=sc.opportunity_score if sc else None,
             versi_saat_dipantau=VERSI_BAKU,
         )
         db.add(ada)
         db.commit()
         db.refresh(ada)
-    elif p.catatan is not None:
-        ada.catatan = p.catatan
-        db.commit()
-        db.refresh(ada)
+    else:
+        # Menaruh titik lagi di heksagon yang sama MEMINDAHKAN pinnya - satu
+        # heksagon, satu titik favorit. Skor yang dibekukan tidak disentuh.
+        berubah = False
+        if p.catatan is not None:
+            ada.catatan = p.catatan
+            berubah = True
+        if p.lat is not None:
+            ada.lat, ada.lon = p.lat, p.lon
+            berubah = True
+        if p.nama is not None:
+            ada.nama = p.nama.strip() or None
+            berubah = True
+        if berubah:
+            db.commit()
+            db.refresh(ada)
 
     p75, p90 = persentil_churn(db, hx.kawasan)
     # lat/lon ikut di sini juga, bukan cuma di GET. Frontend menggambar pin dari
@@ -404,11 +449,14 @@ def tambah_pantauan(
             func.ST_X(func.ST_Centroid(HexFeature.geom)),
         ).where(HexFeature.h3_index == p.h3_index)
     ).one_or_none()
+    sendiri = ada.lat is not None and ada.lon is not None
     return ButirPantauan(
         h3_index=ada.h3_index,
         kawasan=hx.kawasan,
-        lat=titik[0] if titik else None,
-        lon=titik[1] if titik else None,
+        lat=ada.lat if sendiri else (titik[0] if titik else None),
+        lon=ada.lon if sendiri else (titik[1] if titik else None),
+        titik_sendiri=sendiri,
+        nama=ada.nama,
         catatan=ada.catatan,
         skor_saat_dipantau=ada.skor_saat_dipantau,
         skor_sekarang=sc.opportunity_score if sc else None,
@@ -419,6 +467,26 @@ def tambah_pantauan(
         risiko=peringatan_risiko(hx, p75, p90).tingkat,
         dibuat_pada=ada.dibuat_pada,
     )
+
+
+@router.patch("/pantauan/{h3_index}", summary="Beri nama lokasi tersimpan")
+def namai_pantauan(
+    h3_index: str,
+    p: PermintaanNamaPantau,
+    user: PenggunaPremium,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    """Nama kosong mengembalikannya ke kode lokasi."""
+    ada = db.execute(
+        select(WatchlistItem).where(
+            WatchlistItem.user_id == user.id, WatchlistItem.h3_index == h3_index
+        )
+    ).scalar_one_or_none()
+    if ada is None:
+        raise TidakDitemukan("Lokasi itu tidak ada di simpanan Anda.", {"h3_index": h3_index})
+    ada.nama = (p.nama or "").strip() or None
+    db.commit()
+    return {"h3_index": h3_index, "nama": ada.nama}
 
 
 @router.delete("/pantauan/{h3_index}", summary="Hapus dari pantauan")
