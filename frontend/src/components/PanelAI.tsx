@@ -37,14 +37,14 @@
  *   mencari sendiri yang mana - jawaban yang benar tetapi tidak bisa diikuti.
  */
 
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 
-import { KUADRAN, LAYER, type NamaLayer } from '../config'
+import { KUADRAN, LAYER, kodeLokasi, type NamaLayer } from '../config'
 import { api } from '../lib/api'
 import { useBahasa, useNamaZona, useTeks, type Bahasa } from '../lib/bahasa'
 import type { AksiPeta, JawabanAI, PesanRiwayat, SkorHeksagon, StatusAI } from '../types'
 import type { KendaliPeta, Kriteria } from './PetaInteraktif'
-import { Badge, Markdown, NamaBerombak, PapanNama } from './primitif'
+import { Badge, Glif, Markdown, NamaBerombak, PapanNama } from './primitif'
 
 interface Pesan {
   peran: 'pengguna' | 'asisten'
@@ -94,6 +94,9 @@ const K = {
     lebihTinggi: (p: string) => `lebih tinggi dari ${p}% lokasi lain`,
     keLokasi: 'Lokasi yang disebut',
     bukaLokasi: (k: string) => `Terbangkan peta ke ${k}`,
+    lihatPeta: 'Lihat di peta',
+    sedangDibuka: 'Sedang dibuka',
+    zonaLarang: 'Zona melarang',
     memuat: 'memuat…',
     tanyaHex: 'Tanya soal heksagon terpilih…',
     tanya: 'Tanya soal lokasi…',
@@ -160,6 +163,9 @@ const K = {
     lebihTinggi: (p: string) => `higher than ${p}% of other locations`,
     keLokasi: 'Locations mentioned',
     bukaLokasi: (k: string) => `Fly the map to ${k}`,
+    lihatPeta: 'Show on map',
+    sedangDibuka: 'Open now',
+    zonaLarang: 'Zoning forbids',
     memuat: 'loading…',
     tanyaHex: 'Ask about the selected hexagon…',
     tanya: 'Ask about a location…',
@@ -327,15 +333,22 @@ function idBaru() {
 
 function PintasLokasi({
   h3,
+  urutan,
+  aktif,
   onBuka,
   t,
 }: {
   h3: string
+  /** Urutan penyebutan di jawaban, mulai 1. */
+  urutan: number
+  /** Heksagon ini yang sedang terbuka di panel detail. */
+  aktif: boolean
   onBuka: (h3: string) => void
   t: Teks
 }) {
   const [skor, setSkor] = useState<SkorHeksagon | null>(() => SINGGAH.get(h3) ?? null)
   const namaZona = useNamaZona()
+  const { bahasa } = useBahasa()
 
   useEffect(() => {
     // Sudah disinggahkan: nilainya sudah dipungut oleh penginisialisasi state
@@ -350,8 +363,8 @@ function PintasLokasi({
         if (hidup) setSkor(d.skor)
       })
       .catch(() => {
-        /* Tombolnya tetap ada dan tetap bisa ditekan; cuma labelnya yang
-           tinggal kode heksagon. Peta tidak butuh label untuk terbang. */
+        /* Kartunya tetap ada dan tetap bisa ditekan; cuma isinya yang
+           tinggal kerangka. Peta tidak butuh label untuk terbang. */
       })
     return () => {
       hidup = false
@@ -360,48 +373,102 @@ function PintasLokasi({
 
   const q = skor?.kuadran ? KUADRAN[skor.kuadran] : null
   const nilai = typeof skor?.opportunity_score === 'number' ? Math.round(skor.opportunity_score) : null
+  const warna = q?.warna ?? 'var(--color-ink-3)'
+  const terlarang = skor?.zona_izin_komersial === false
 
   /**
-   * SKORNYA yang berdiri di depan, bukan nama kawasannya.
+   * KARTU MINI, bukan pil satu baris (13 Sep 2026, permintaan pemilik repo:
+   * "jangan hanya hijau 100 Safe, kurang - buatkan mini card persegi").
    *
-   * Terlihat begitu di potret pertama: delapan pintasan berturut-turut yang
-   * seluruhnya berbunyi "Manggarai" - benar, dan sama sekali tidak membantu
-   * siapa pun memilih yang mana. Jawaban AI hampir selalu menyebut beberapa
-   * heksagon di SATU kawasan, jadi nama kawasan adalah bagian yang paling
-   * sering sama dan skor adalah yang paling sering berbeda.
+   * Yang dipertahankan dari pil lama: SKOR tetap yang paling besar. Jawaban AI
+   * hampir selalu menyebut beberapa heksagon di SATU kawasan, jadi nama
+   * kawasan adalah bagian yang paling sering sama dan skor yang paling sering
+   * berbeda. Yang ditambahkan seluruhnya sudah ada di respons GRATIS
+   * `/hex/{h3}` - tidak ada angka yang dikarang di sini:
+   *   - nomor urut penyebutan, supaya "lokasi kedua" di teks bisa ditemukan;
+   *   - batang skor 0-100 berwarna kuadran, supaya 100 dan 56 terbaca sebagai
+   *     jarak, bukan cuma dua angka;
+   *   - glif + nama kuadran (artinya di tooltip - kartu persegi tidak muat);
+   *   - kode lokasi yang sama dengan panel detail;
+   *   - peringatan kalau zonasinya melarang usaha.
+   * Warna tidak pernah berdiri sendiri: glif dan nama kuadrannya selalu ikut.
    */
   return (
     <button
       onClick={() => onBuka(h3)}
       title={
         skor
-          ? `${t.bukaLokasi(skor.kawasan)}${q ? ` · ${namaZona(q.kunci)}` : ''}${nilai === null ? '' : ` · ${nilai}`}`
+          ? `${t.bukaLokasi(kodeLokasi(h3, skor.kawasan))}${q ? ` · ${namaZona(q.kunci)} — ${bahasa === 'en' ? q.ringkasEn : q.ringkas}` : ''}${nilai === null ? '' : ` · ${nilai}`}`
           : t.bukaLokasi(h3)
       }
-      className="g-ai-pintas group flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[12.5px] text-ink-2"
+      aria-current={aktif || undefined}
+      data-aktif={aktif || undefined}
+      className="ai-kartu-lokasi group"
+      style={{ '--kartu-warna': warna, animationDelay: `${(urutan - 1) * 70}ms` } as CSSProperties}
     >
-      {/* Pin, bukan panah: yang dituju sebuah TEMPAT, dan pin sudah jadi
-          kosakata untuk itu di setiap produk peta yang pernah dipakai orang. */}
-      <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden className="shrink-0 text-ink-3">
-        <path
-          d="M6 11S1.8 7.4 1.8 4.7a4.2 4.2 0 1 1 8.4 0C10.2 7.4 6 11 6 11Z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinejoin="round"
-        />
-        <circle cx="6" cy="4.6" r="1.5" fill="currentColor" />
-      </svg>
-      {q && (
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
-          style={{ background: q.warna }}
-          aria-hidden
-        />
+      <span className="flex items-center justify-between gap-1">
+        <span className="ai-kartu-urutan tabular">{urutan}</span>
+        {/* Heksagon kecil berwarna kuadran - bentuk yang sama dengan petaknya
+            di peta, jadi kartu dan petak terbaca sebagai benda yang sama. */}
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden className="ai-kartu-heks shrink-0">
+          <path
+            d="M12 1.8 21 7v10l-9 5.2L3 17V7Z"
+            fill={q ? warna : 'none'}
+            fillOpacity={q ? 0.22 : 0}
+            stroke={warna}
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          {q && <circle cx="12" cy="12" r="3.2" fill={warna} />}
+        </svg>
+      </span>
+
+      {skor ? (
+        <>
+          <span className="mt-1.5 flex items-baseline gap-0.5">
+            <span className="tabular text-[26px] font-semibold leading-none tracking-tight text-ink">
+              {nilai ?? '—'}
+            </span>
+            <span className="text-[10.5px] font-medium text-ink-3">/100</span>
+          </span>
+          <span className="ai-kartu-batang" aria-hidden>
+            <span style={{ width: `${Math.max(3, Math.min(100, nilai ?? 0))}%` }} />
+          </span>
+          <span className="mt-2 flex min-w-0 items-center gap-1">
+            {q && <Glif kuadran={q.kunci} ukuran={10} />}
+            <span className="truncate text-[12px] font-semibold" style={{ color: warna }}>
+              {q ? namaZona(q.kunci) : '—'}
+            </span>
+          </span>
+          {terlarang && <span className="ai-kartu-larang">{t.zonaLarang}</span>}
+        </>
+      ) : (
+        <span className="mt-2 flex flex-col gap-1.5" aria-label={t.memuat}>
+          <span className="ai-kartu-kerangka h-6 w-12" />
+          <span className="ai-kartu-kerangka h-1.5 w-full" />
+          <span className="ai-kartu-kerangka h-3 w-16" />
+          <span className="ai-kartu-kerangka mt-2 h-2.5 w-20" />
+        </span>
       )}
-      {nilai !== null && <span className="tabular shrink-0 font-semibold text-ink">{nilai}</span>}
-      <span className="min-w-0 truncate text-ink-3">
-        {q ? namaZona(q.kunci) : (skor?.kawasan ?? t.memuat)}
+
+      {/* Satu baris kaki untuk dua isi yang BERGANTIAN: kode lokasi saat diam,
+          "Lihat di peta" saat disorot. Kartu persegi tidak punya tempat untuk
+          dua baris, dan keduanya tidak pernah dibutuhkan bersamaan. */}
+      <span className="ai-kartu-kaki">
+        <span className="ai-kartu-kode">{skor ? kodeLokasi(h3, skor.kawasan) : ''}</span>
+        <span className="ai-kartu-aksi">
+        {aktif ? t.sedangDibuka : t.lihatPeta}
+        <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
+          <path
+            d="M3 6h6M6.5 3 9.5 6l-3 3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        </span>
       </span>
     </button>
   )
@@ -987,10 +1054,20 @@ function PanelAI({
                     heksagon mana yang barusan dimaksud. */}
                 {m.jawaban && m.jawaban.hex_disebut.length > 0 && (
                   <div className="mt-2.5">
-                    <p className="eyebrow mb-1.5">{t.keLokasi}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {m.jawaban.hex_disebut.slice(0, 6).map((h3) => (
-                        <PintasLokasi key={h3} h3={h3} onBuka={onKeLokasi} t={t} />
+                    <p className="eyebrow mb-1.5">
+                      {t.keLokasi}
+                      <span className="ml-1 text-ink-3">· {Math.min(6, m.jawaban.hex_disebut.length)}</span>
+                    </p>
+                    <div className="ai-kartu-kisi">
+                      {m.jawaban.hex_disebut.slice(0, 6).map((h3, k) => (
+                        <PintasLokasi
+                          key={h3}
+                          h3={h3}
+                          urutan={k + 1}
+                          aktif={hexTerpilih === h3}
+                          onBuka={onKeLokasi}
+                          t={t}
+                        />
                       ))}
                     </div>
                   </div>

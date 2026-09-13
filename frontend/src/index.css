@@ -5286,3 +5286,215 @@ input:focus-visible {
     stroke-dasharray: 20 40;
   }
 }
+
+/* ==========================================================================
+   Loconomics AI - kartu mini "Lokasi yang disebut" (13 Sep 2026)
+
+   Pengganti pil satu baris. Warna kuadran datang lewat `--kartu-warna` yang
+   dipasang komponen (var(--q-*) milik tema), jadi kartu yang sama benar di
+   tema gelap dan terang tanpa satu pun warna diketik ulang di sini.
+   ========================================================================== */
+.ai-kartu-kisi {
+  display: grid;
+  /* Tiga kolom di lebar panel AI (±22rem), dua di layar sempit. */
+  grid-template-columns: repeat(auto-fill, minmax(6.3rem, 1fr));
+  gap: 0.45rem;
+}
+
+@keyframes ai-kartu-masuk {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ai-kartu-lokasi {
+  position: relative;
+  display: flex;
+  min-height: 7.6rem;
+  max-width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--kartu-warna) 28%, var(--color-line));
+  background:
+    radial-gradient(120% 70% at 100% 0%, color-mix(in srgb, var(--kartu-warna) 20%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--kartu-warna) 7%, var(--color-surface)), var(--color-surface));
+  padding: 0.55rem 0.6rem 0.5rem;
+  text-align: left;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ink) 4%, transparent);
+  animation: ai-kartu-masuk 420ms var(--ease-jelly) both;
+  transition:
+    transform 260ms var(--ease-jelly),
+    border-color 220ms var(--ease-liquid),
+    box-shadow 260ms var(--ease-liquid);
+}
+.ai-kartu-lokasi:hover,
+.ai-kartu-lokasi:focus-visible {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--kartu-warna) 62%, var(--color-line));
+  box-shadow:
+    0 14px 28px -16px color-mix(in srgb, var(--kartu-warna) 70%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--kartu-warna) 30%, transparent);
+  outline: none;
+}
+.ai-kartu-lokasi:active {
+  transform: translateY(-1px) scale(0.98);
+}
+.ai-kartu-lokasi[data-aktif] {
+  border-color: var(--kartu-warna);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--kartu-warna) 45%, transparent);
+}
+
+.ai-kartu-urutan {
+  display: grid;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--kartu-warna) 16%, var(--color-surface-2));
+  padding: 0 0.3rem;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+}
+
+.ai-kartu-heks {
+  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--kartu-warna) 45%, transparent));
+  transition: transform 420ms var(--ease-jelly);
+}
+.ai-kartu-lokasi:hover .ai-kartu-heks {
+  transform: rotate(30deg) scale(1.08);
+}
+
+.ai-kartu-batang {
+  position: relative;
+  margin-top: 0.4rem;
+  display: block;
+  /* Lebar TEGAS: di dalam <button> flex-kolom, anak tanpa lebar ternyata
+     menyusut ke nol (terukur 0 px) - batangnya ada, tapi tidak terlihat. */
+  width: 100%;
+  align-self: stretch;
+  flex-shrink: 0;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-ink) 9%, transparent);
+}
+.ai-kartu-batang > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--kartu-warna) 55%, transparent), var(--kartu-warna));
+  transform-origin: left;
+  animation: ai-kartu-isi 900ms var(--ease-liquid) both;
+  animation-delay: inherit;
+}
+@keyframes ai-kartu-isi {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.ai-kartu-larang {
+  position: absolute;
+  top: 0.55rem;
+  right: 2.1rem;
+  border-radius: 999px;
+  /* color-mix, bukan --color-bahaya-soft: yang itu pink pucat di KEDUA tema. */
+  background: color-mix(in srgb, var(--color-bahaya) 18%, var(--color-surface));
+  padding: 0.05rem 0.4rem;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--color-bahaya);
+}
+
+/* Kaki kartu: kode lokasi saat diam, "Lihat di peta" saat disorot atau saat
+   heksagonnya sedang terbuka, di SATU baris yang sama. */
+.ai-kartu-kaki {
+  position: relative;
+  margin-top: auto;
+  display: block;
+  width: 100%;
+  height: 0.95rem;
+  flex-shrink: 0;
+}
+.ai-kartu-kode,
+.ai-kartu-aksi {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  transition:
+    opacity 200ms var(--ease-liquid),
+    transform 240ms var(--ease-liquid);
+}
+.ai-kartu-kode {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  line-height: 0.95rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  color: var(--color-ink-3);
+}
+.ai-kartu-aksi {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--kartu-warna);
+  opacity: 0;
+  transform: translateY(6px);
+}
+.ai-kartu-lokasi:hover .ai-kartu-kode,
+.ai-kartu-lokasi:focus-visible .ai-kartu-kode,
+.ai-kartu-lokasi[data-aktif] .ai-kartu-kode {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.ai-kartu-lokasi:hover .ai-kartu-aksi,
+.ai-kartu-lokasi:focus-visible .ai-kartu-aksi,
+.ai-kartu-lokasi[data-aktif] .ai-kartu-aksi {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ai-kartu-kerangka {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-ink) 7%, transparent) 0%,
+    color-mix(in srgb, var(--color-ink) 14%, transparent) 50%,
+    color-mix(in srgb, var(--color-ink) 7%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: ai-kartu-kilau 1.2s linear infinite;
+}
+@keyframes ai-kartu-kilau {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-kartu-lokasi,
+  .ai-kartu-batang > span,
+  .ai-kartu-kerangka {
+    animation: none !important;
+  }
+  .ai-kartu-lokasi:hover,
+  .ai-kartu-lokasi:hover .ai-kartu-heks {
+    transform: none;
+  }
+}
