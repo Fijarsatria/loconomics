@@ -1092,6 +1092,59 @@ def test_hambatan_per_menit_bukan_pemadaman_lima_belas_menit():
     assert _time  # dipakai lewat llm
 
 
+def test_jendela_penuh_berlipat_sampai_jatahnya_memang_habis():
+    """Jangan menebak sebabnya - COBA, lalu percaya hasilnya.
+
+    Diukur 13 Sep 2026 pada ketiga model Gemini sekaligus: balasan 429-nya
+    berbunyi `limit: 20` untuk satu model dan `limit: 500` untuk yang lain,
+    keduanya dengan saran "Please retry in 1.93s". Kalimat yang sama persis
+    untuk dua keadaan yang berbeda jauh - yang satu pulih dua detik kemudian,
+    yang lain baru tengah malam waktu Pasifik - dan nama metriknya tidak
+    membedakan keduanya.
+
+    Jadi jendelanya tidak ditebak dari pesan melainkan dinaikkan dari
+    PENGALAMAN: kegagalan pertama dianggap sesaat, dan tiap kegagalan berikutnya
+    yang menyusul tak lama sesudah jendela sebelumnya habis melipatgandakannya
+    sampai atap 15 menit. Hambatan sungguhan tidak pernah naik karena percobaan
+    berikutnya berhasil; jatah yang benar-benar habis naik ke atapnya dalam
+    beberapa percobaan, dan kalimat yang dibaca pengunjung ikut berubah.
+    """
+    import time as _time
+
+    from app.core import llm
+
+    asli = (llm._penuh_sampai, llm._jendela_terakhir, llm._gagal_terakhir_pada)
+    try:
+        llm.tandai_penyedia_pulih()
+        urut = []
+        for _ in range(7):
+            llm.tandai_penyedia_penuh(2.0)
+            urut.append(llm.sisa_penuh_detik())
+            # Seolah percobaan berikutnya menyusul sesudah jendelanya habis.
+            llm._gagal_terakhir_pada = _time.time() - 1
+        cek("kegagalan pertama tetap pendek", urut[0] <= llm.JENDELA_PENUH_MINIMUM, f"- {urut[0]}")
+        cek("jendelanya berlipat", urut[1] >= urut[0] * 2 - 1 and urut[2] >= urut[1] * 2 - 1,
+            f"- {urut[:3]}")
+        cek("berhenti di atap 15 menit", max(urut) <= llm.JENDELA_PENUH_DETIK, f"- {max(urut)}")
+        cek("sampai di atapnya dalam tujuh kegagalan", urut[-1] >= llm.JENDELA_PENUH_DETIK - 2,
+            f"- {urut[-1]}")
+
+        # Satu jawaban yang berhasil membuktikan penyedianya sehat.
+        llm.tandai_penyedia_pulih()
+        llm.tandai_penyedia_penuh(2.0)
+        cek("satu keberhasilan menyetel ulang pelipatgandaan",
+            llm.sisa_penuh_detik() <= llm.JENDELA_PENUH_MINIMUM, f"- {llm.sisa_penuh_detik()}")
+
+        # Kegagalan yang terpisah jauh bukan beruntun: ia mulai dari pendek lagi.
+        llm.tandai_penyedia_penuh(2.0)
+        llm._gagal_terakhir_pada = _time.time() - llm.JENDELA_BERUNTUN - 60
+        llm.tandai_penyedia_penuh(2.0)
+        cek("kegagalan yang terpisah jauh tidak ikut berlipat",
+            llm.sisa_penuh_detik() <= llm.JENDELA_PENUH_MINIMUM, f"- {llm.sisa_penuh_detik()}")
+    finally:
+        llm._penuh_sampai, llm._jendela_terakhir, llm._gagal_terakhir_pada = asli
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("test_"):

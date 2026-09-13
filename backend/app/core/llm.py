@@ -67,6 +67,16 @@ JENDELA_PENUH_DETIK = 15 * 60
 #: perlu ikut menunggu balasan galat untuk mengetahuinya.
 JENDELA_PENUH_MINIMUM = 30
 
+#: Seberapa dekat dua kegagalan harus terjadi supaya dihitung BERUNTUN. Longgar
+#: dengan sengaja: sesudah jendela habis, orang berikutnya yang bertanya bisa
+#: datang beberapa menit kemudian, dan kegagalannya tetap kabar yang sama
+#: tentang penyedia yang sama.
+JENDELA_BERUNTUN = 20 * 60
+
+#: Jendela yang dipakai terakhir kali, dan kapan. Dasar pelipatgandaan.
+_jendela_terakhir: float = 0.0
+_gagal_terakhir_pada: float = 0.0
+
 
 def tandai_penyedia_penuh(detik: float | None = None) -> None:
     """Dipanggil klien saat SELURUH modelnya menolak (429/503).
@@ -99,17 +109,47 @@ def tandai_penyedia_penuh(detik: float | None = None) -> None:
     global _penuh_sampai
     import time
 
+    global _jendela_terakhir, _gagal_terakhir_pada
+    sekarang = time.time()
+
+    # Berlipat kalau gagal LAGI tak lama sesudah jendela sebelumnya habis.
+    #
+    # Ada karena balasan Google tidak bisa dipercaya untuk membedakan "ramai
+    # sesaat" dari "jatah harian habis". Diukur 13 Sep 2026: ketiga model
+    # menjawab 429 dengan `limit: 20` / `limit: 500` dan saran "retry in 1.93s"
+    # - saran yang sama persis untuk kedua keadaan, padahal yang satu pulih dua
+    # detik kemudian dan yang lain baru tengah malam waktu Pasifik.
+    #
+    # Jadi jangan menebak: COBA. Kegagalan pertama diperlakukan sebagai
+    # hambatan sesaat, dan tiap kegagalan berikutnya yang datang tak lama
+    # sesudah jendela sebelumnya habis melipatgandakan jendelanya sampai atap
+    # 15 menit. Hambatan sungguhan pulih di percobaan berikutnya dan tidak
+    # pernah naik; jatah harian yang habis naik ke atapnya dalam beberapa
+    # percobaan, dan kalimat yang dibaca pengunjung ikut berubah bersamanya -
+    # tanpa satu pun tebakan tentang metrik yang namanya bisa berubah.
+    beruntun = _gagal_terakhir_pada > 0 and sekarang - _gagal_terakhir_pada < JENDELA_BERUNTUN
     if detik is None:
         jendela = float(JENDELA_PENUH_DETIK)
+    elif beruntun and _jendela_terakhir > 0:
+        jendela = min(_jendela_terakhir * 2, float(JENDELA_PENUH_DETIK))
     else:
         jendela = min(max(float(detik), JENDELA_PENUH_MINIMUM), float(JENDELA_PENUH_DETIK))
-    _penuh_sampai = time.time() + jendela
+
+    _jendela_terakhir = jendela
+    _gagal_terakhir_pada = sekarang
+    _penuh_sampai = sekarang + jendela
 
 
 def tandai_penyedia_pulih() -> None:
-    """Dipanggil klien pada panggilan yang BERHASIL."""
-    global _penuh_sampai
+    """Dipanggil klien pada panggilan yang BERHASIL.
+
+    Pelipatgandaan ikut disetel ulang: satu jawaban yang berhasil membuktikan
+    penyedianya sehat, dan kegagalan berikutnya berhak dianggap sesaat lagi.
+    """
+    global _penuh_sampai, _jendela_terakhir, _gagal_terakhir_pada
     _penuh_sampai = 0.0
+    _jendela_terakhir = 0.0
+    _gagal_terakhir_pada = 0.0
 
 
 def penyedia_penuh() -> bool:
