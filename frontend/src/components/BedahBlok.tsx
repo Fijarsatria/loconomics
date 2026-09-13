@@ -88,6 +88,7 @@ const K = {
     kMenit: 'mnt',
     kJalan: 'ke jalan',
     kUsaha: 'usaha',
+    usahaN: (n: number) => `${n} usaha`,
     kPenarik: 'penarik',
     kHalte: 'halte',
     kolMenit: 'Jalan kaki ke simpul',
@@ -157,6 +158,7 @@ const K = {
     kMenit: 'min',
     kJalan: 'to road',
     kUsaha: 'shops',
+    usahaN: (n: number) => `${n} ${n === 1 ? 'shop' : 'shops'}`,
     kPenarik: 'draws',
     kHalte: 'stop',
     kolMenit: 'Walk to the node',
@@ -172,7 +174,7 @@ const K = {
       menit: (m: number, simpul: string | null) =>
         `${Math.round(m)} min walk${simpul ? ` to ${simpul}` : ' to the transit node'}`,
       jalan: (d: string, nama: string | null) => `${d} from ${nama ?? 'a main road'}`,
-      usaha: (n: number) => `${n} businesses within 150 m`,
+      usaha: (n: number) => `${n} ${n === 1 ? 'business' : 'businesses'} within 150 m`,
       penarik: (n: number, rincian: string) =>
         n === 0 ? 'No crowd generators within 250 m' : `${n} crowd generators within 250 m${rincian ? ` (${rincian})` : ''}`,
       halte: (d: string) => `Transit stop ${d} away`,
@@ -658,9 +660,7 @@ function Blok({
             {b.jarak_jalan_utama_m != null && (
               <Fakta glif={GLIF.jarak_jalan_utama_m_inv}>{jarakSingkat(b.jarak_jalan_utama_m)}</Fakta>
             )}
-            <Fakta glif={GLIF.n_usaha_150m}>
-              {b.n_usaha_150m} {t.kUsaha}
-            </Fakta>
+            <Fakta glif={GLIF.n_usaha_150m}>{t.usahaN(b.n_usaha_150m)}</Fakta>
             {dilarang && <span className="font-semibold text-bahaya">{t.zonaTidak}</span>}
           </span>
         </span>

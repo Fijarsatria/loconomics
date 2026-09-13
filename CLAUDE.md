@@ -7,7 +7,7 @@ berkonsekuensi diskualifikasi lomba, bukan sekadar gaya penulisan.
 Berkas ini sengaja ringkas. Dua bagian terbesarnya pindah ke `docs/` supaya
 tidak dibayar setiap sesi, dan **tidak satu kalimat pun dibuang**:
 
-- **[docs/jebakan.md](docs/jebakan.md)** — 294 kesalahan yang benar-benar
+- **[docs/jebakan.md](docs/jebakan.md)** — 299 kesalahan yang benar-benar
   terjadi di repo ini, sebab, dan perbaikannya. Sebagian besar gagalnya DIAM.
   Sebelum menyentuh sebuah bagian, `grep` nama berkasnya di sana.
 - **[docs/status.md](docs/status.md)** — apa yang sudah jadi berikut buktinya,
@@ -50,7 +50,7 @@ dulu sebelum mengerjakannya.
 backend/     FastAPI — 7 modul + tests/. Membaca basis data, TIDAK menghitung skor
              core/akun.py  — sidik sandi (scrypt), tiket sesi (hmac), tingkat.
                              TANPA pustaka auth pihak ketiga; alasannya di kepala berkas
-             api/akun.py   — daftar/masuk, langganan, token, pantauan, Laporan PDF
+             api/akun.py   — daftar/masuk, langganan, pantauan (+ titik favorit), Laporan PDF
              seed_akun.py  — akun pemilik. Skrip, BUKAN migrasi: migrasi itu bentuk,
                              akun itu isi, dan isi tidak boleh menyelinap ke tiap lingkungan
 frontend/    React + Vite + MapLibre GL. Sengaja ramping; berkas baru butuh alasan
@@ -163,10 +163,16 @@ Frontend menggambar tirainya DARI daftar itu, bukan dari tebakannya sendiri.
 | Komparasi, riwayat, dinamika, pemantauan, PDF | Grid heksagon, daftar lokasi, pencarian, Konsultan AI |
 | **Nilai keempat indeks + penjelasan kuadran** (11 Sep 2026) | **Cakupan indeks & cakupan prestise** — keduanya keterangan MUTU, tidak memuat satu pun nilai |
 
-Seluruhnya dijaga `wajib_akses_penuh()`, yang meloloskan DUA jalan: langganan
-aktif, atau token yang pernah dibelanjakan untuk heksagon itu. Satu fungsi untuk
-keempat pintunya — kalau dipecah, "sudah bayar satu lokasi" akan berarti hal yang
-berbeda di pintu yang berbeda.
+Seluruhnya dijaga `wajib_akses_penuh()`, yang meloloskan SATU jalan: langganan
+aktif. Satu fungsi untuk keempat pintunya — kalau suatu saat akses per lokasi
+kembali, ia kembali di satu tempat itu, bukan di sebagian pintu.
+
+**Sistem token satuan DIHAPUS 13 Sep 2026** atas permintaan pemilik repo:
+endpoint beli/buka/riwayat, jalur token di Laporan PDF, tab token di etalase,
+dan tombol "buka dengan token" di panel. Saat dihapus basis data mencatat NOL
+pembukaan dan nol saldo. Tabel `token_ledger` dan `premium_unlocks` SENGAJA
+dibiarkan - menghapus tabel tidak bisa dibatalkan. Jangan menghidupkan jalur
+token lagi tanpa keputusan pemilik repo.
 
 **Alat AI memakai penjaga yang SAMA.** `cek_harga` dan `pola_jam` menerima
 `pengguna` dari `/ai/tanya` dan menolak tamu persis seperti endpoint-nya.
@@ -181,9 +187,10 @@ Tiga tingkat, dan yang kedua paling sering salah dipahami:
 | `gratis` | sudah masuk, **tidak** berlangganan — haknya SAMA PERSIS dengan tamu |
 | `premium` | langganan aktif, atau akun bertanda `selamanya` |
 
-Masuk bukan cara membuka fitur; berlangganan yang membukanya. Satu pengecualian
-yang disengaja: akun gratis yang membelanjakan token untuk satu heksagon
-mendapat isi penuh **heksagon itu saja**, selamanya.
+Masuk bukan cara membuka fitur; berlangganan yang membukanya. Tidak ada
+pengecualian sejak sistem token dihapus. Pemantauan (daftar, simpan, beri nama)
+ikut menuntut `PenggunaPremium` di API sejak 13 Sep 2026; MENGHAPUS dari
+simpanan sengaja tetap boleh untuk akun apa pun.
 
 Penjaganya `wajib_premium` sebagai **dependensi**, bukan `if` di dalam badan
 fungsi — alasan yang sama dengan `saring_zoneguard()`: penjaga yang harus
@@ -490,7 +497,7 @@ cd frontend && node scripts/potret-kartu.mjs --sorot
 
 ## Dua belas jebakan yang paling mahal
 
-Katalog lengkapnya — 286 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
+Katalog lengkapnya — 299 baris — ada di **[docs/jebakan.md](docs/jebakan.md)**.
 Yang di bawah ini yang paling sering terulang atau paling besar akibatnya.
 
 1. **Build produksi tidak menggambar satu heksagon pun.** Vite tidak mengemit
