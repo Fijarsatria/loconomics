@@ -40,9 +40,10 @@
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import { KUADRAN, LAYER, kodeLokasi, type NamaLayer } from '../config'
-import { api } from '../lib/api'
+import { api, GalatAPI } from '../lib/api'
 import { useBahasa, useNamaZona, useTeks, type Bahasa } from '../lib/bahasa'
 import type { AksiPeta, JawabanAI, PesanRiwayat, SkorHeksagon, StatusAI } from '../types'
+import { useSesi } from './Akun'
 import type { KendaliPeta, Kriteria } from './PetaInteraktif'
 import { Badge, Glif, Markdown, NamaBerombak, PapanNama } from './primitif'
 
@@ -119,7 +120,16 @@ const K = {
       setLayer: 'mengganti layer',
       filter: 'menyaring peta',
     } as Record<string, string>,
+    kunci: {
+      judul: 'Loconomics AI khusus Premium',
+      isiTamu: 'Konsultan lokasi ini bagian dari Loconomics Premium. Masuk atau buat akun, lalu berlangganan untuk bertanya.',
+      isiGratis: 'Konsultan lokasi ini bagian dari Loconomics Premium. Berlangganan untuk mulai bertanya.',
+      tombolTamu: 'Masuk untuk berlangganan',
+      tombolGratis: 'Berlangganan Premium',
+      alasan: 'Loconomics AI bagian dari Loconomics Premium.',
+    },
     galat: {
+      premium: 'Loconomics AI khusus pelanggan Premium. Berlangganan untuk melanjutkan percakapan ini.',
       belumTersambung:
         'Loconomics AI belum tersambung ke penyedia modelnya. Bagian lain di peta — skor, kuadran, ZoneGuard, dan rekomendasi — tidak terpengaruh.',
       anggaran: 'Plafon biaya AI untuk hari ini sudah tercapai. Asisten aktif lagi besok.',
@@ -188,7 +198,16 @@ const K = {
       setLayer: 'switching layer',
       filter: 'filtering the map',
     } as Record<string, string>,
+    kunci: {
+      judul: 'Loconomics AI is Premium only',
+      isiTamu: 'This location consultant is part of Loconomics Premium. Sign in or create an account, then subscribe to ask.',
+      isiGratis: 'This location consultant is part of Loconomics Premium. Subscribe to start asking.',
+      tombolTamu: 'Sign in to subscribe',
+      tombolGratis: 'Subscribe to Premium',
+      alasan: 'Loconomics AI is part of Loconomics Premium.',
+    },
     galat: {
+      premium: 'Loconomics AI is for Premium subscribers. Subscribe to continue this conversation.',
       belumTersambung:
         'Loconomics AI is not connected to its model provider yet. Everything else on the map — scores, quadrants, ZoneGuard, and recommendations — is unaffected.',
       anggaran: 'Today’s AI spending cap has been reached. The assistant is back tomorrow.',
@@ -209,6 +228,7 @@ function pesanGalat(e: unknown, t: Teks): string {
   // dan pesan mentahnya ("signal timed out") dulu ditempel apa adanya ke layar.
   if (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError'))
     return t.galat.lambat
+  if (e instanceof GalatAPI && (e.status === 401 || e.status === 402)) return t.galat.premium
   const teks = e instanceof Error ? e.message : String(e)
   if (teks.includes('501')) return t.galat.belumTersambung
   if (teks.includes('ANGGARAN_AI_HABIS')) return t.galat.anggaran
@@ -614,6 +634,16 @@ function PanelAI({
     }
   }
 
+  /**
+   * Loconomics AI fitur PREMIUM sejak 14 Sep 2026. Backend yang menegakkannya
+   * (`/ai/tanya` menuntut `PenggunaPremium`); yang di sini cuma supaya orang
+   * tidak mengetik pertanyaan panjang untuk ditolak. Selama sesi masih
+   * divalidasi panelnya belum dikunci - pelanggan tidak melihat tirai berkedip.
+   */
+  const { premium, akun, memuat: memuatSesi, mintaMasuk, mintaLangganan } = useSesi()
+  const terkunci = !memuatSesi && !premium
+  const bukaKunci = () => (akun ? mintaLangganan(t.kunci.alasan) : mintaMasuk(t.kunci.alasan))
+
   /** Luncuran tombol kirim: nyala sesaat, lalu padam sendiri. */
   const [luncur, setLuncur] = useState(false)
   useEffect(() => {
@@ -624,6 +654,10 @@ function PanelAI({
 
   async function kirim(pertanyaan: string) {
     if (!pertanyaan.trim() || memuat) return
+    if (terkunci) {
+      bukaKunci()
+      return
+    }
     setLuncur(true)
     // Percakapan baru lahir di sini, bukan di effect penyimpan. Keduanya
     // dibatch React dalam satu render, jadi effect itu langsung melihat idnya.
@@ -654,6 +688,8 @@ function PanelAI({
       setPesan((s) => [...s, { peran: 'asisten', teks: jawaban.teks, jawaban }])
     } catch (e) {
       setPesan((s) => [...s, { peran: 'asisten', teks: pesanGalat(e, t) }])
+      // Tiket kedaluwarsa atau langganan berakhir di tengah percakapan.
+      if (e instanceof GalatAPI && (e.status === 401 || e.status === 402)) bukaKunci()
     } finally {
       setMemuat(false)
       requestAnimationFrame(gulirKeAkhir)
@@ -718,7 +754,7 @@ function PanelAI({
    * sebagai "Loconomics AI kok kayak gabisa ngetik".
    */
   const dibatasi = status?.dibatasi === true
-  const mati = status !== null && !status.siap && !dibatasi
+  const mati = terkunci || (status !== null && !status.siap && !dibatasi)
   /** Ada sesuatu yang perlu diberitahukan - entah mati, entah cuma dibatasi. */
   const berkabar = status !== null && !status.siap
 
@@ -1007,7 +1043,22 @@ function PanelAI({
                   membuat teks backend terbaca sebagai instruksi untuk
                   pembacanya, dan ia akan mengulanginya untuk setiap sebab
                   berikutnya. */}
-              {berkabar && (
+              {terkunci && (
+                <div className="mt-4 w-full rounded-md border border-line bg-surface-2 px-3.5 py-3 text-left">
+                  <p className="text-[14px] font-semibold text-ink">{t.kunci.judul}</p>
+                  <p className="mt-1 text-[13.5px] leading-snug text-ink-2">
+                    {akun ? t.kunci.isiGratis : t.kunci.isiTamu}
+                  </p>
+                  <button
+                    onClick={bukaKunci}
+                    className="mt-3 w-full cursor-pointer rounded-full bg-ink px-4 py-2 text-[13.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.01]"
+                  >
+                    {akun ? t.kunci.tombolGratis : t.kunci.tombolTamu}
+                  </button>
+                </div>
+              )}
+
+              {!terkunci && berkabar && (
                 <p
                   className={`mt-3 w-full rounded-sm border px-2.5 py-2 text-left text-[13.5px] leading-snug ${
                     dibatasi

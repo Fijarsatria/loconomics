@@ -436,8 +436,10 @@ async function main() {
     // hidup, kotak tanyanya HARUS bisa diketik; kalau mati, panel harus
     // mengatakan sebabnya dalam kalimat manusia.
     const bisaTanya = await page.locator('#tanya-ai').isEnabled().catch(() => false)
+    // Audit ini berjalan sebagai TAMU, dan sejak 14 Sep 2026 Loconomics AI
+    // khusus Premium - jadi kotak yang terkunci wajib menyebut Premium.
     cek('kesiapan AI dinyatakan apa adanya',
-      bisaTanya || /(belum|LLM_API_KEY|tidak aktif|plafon|tersambung)/i.test(ai),
+      bisaTanya || /(belum|LLM_API_KEY|tidak aktif|plafon|tersambung|khusus Premium)/i.test(ai),
       '- asisten yang mati harus mengatakan sebabnya, bukan diam')
   } catch (e) {
     cek('panel AI bisa dibuka', false, `- ${e.message.slice(0, 60)}`)

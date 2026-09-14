@@ -73,7 +73,9 @@ import {
   KUADRAN,
   SUMBER_UBIN_MAPID,
   ZOOM_AWAL,
+  adaKunciBasemap,
   bubuhiKunciBasemap,
+  kunciBasemapSusulan,
   siapkanKunciBasemap,
   urlGaya,
   type NamaGaya,
@@ -982,6 +984,9 @@ const K_PETA = {
     ubinHabis: '· percobaan habis',
     ubinJudul: 'Server ubin MAPID sedang menolak',
     basemapJudul: 'Basemap gagal dimuat',
+    heksJudul: 'Layer heksagon gagal dimuat',
+    heksLanjut: 'Mesin data mungkin sedang bangun dari tidur. Muat ulang halaman dalam semenit.',
+    tanpaSambungan: 'Mesin data tidak bisa dihubungi.',
     ubinIsi:
       'Gaya basemap-nya sendiri termuat — ia berkas statis di server ini. Yang ditolak permintaan ubinnya, di sisi MAPID.',
     ubinLanjut:
@@ -1005,6 +1010,9 @@ const K_PETA = {
     ubinHabis: '· out of tries',
     ubinJudul: 'The MAPID tile server is refusing',
     basemapJudul: 'The basemap failed to load',
+    heksJudul: 'The hexagon layer failed to load',
+    heksLanjut: 'The data engine may be waking up. Reload the page in a minute.',
+    tanpaSambungan: 'The data engine could not be reached.',
     ubinIsi:
       'The basemap style itself loaded — it is a static file on this server. What is being refused are the tile requests, on the MAPID side.',
     ubinLanjut:
@@ -1178,6 +1186,8 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       "efek ini kebetulan berjalan lagi". */
   const saringLalu = useRef<string | null>(saringKuadran)
   const [siap, setSiap] = useState(false)
+  /** Naik sekali saat kunci basemap tiba terlambat; memicu efek ganti gaya. */
+  const [kunciTerlambat, setKunciTerlambat] = useState(false)
 
   /**
    * Layer tematik BISA DIMATIKAN, dan itu keadaan bawaannya.
@@ -1304,7 +1314,13 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // lebih dulu akan ditolak MAPID dan MapLibre tidak pernah memintanya lagi.
     let dibongkar = false
     void siapkanKunciBasemap().then(() => {
-      if (!dibongkar) m.setStyle(urlGaya(gayaAwal.current), { transformStyle: tataGaya(gayaAwal.current) })
+      if (dibongkar) return
+      m.setStyle(urlGaya(gayaAwal.current), { transformStyle: tataGaya(gayaAwal.current) })
+      if (!adaKunciBasemap()) {
+        void kunciBasemapSusulan().then((tiba) => {
+          if (tiba && !dibongkar) setKunciTerlambat(true)
+        })
+      }
     })
 
     // --- Penangan klik & sorot heksagon: SEKALI seumur peta ---------------
@@ -1530,7 +1546,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // terlihat peta polos tanpa keterangan apa pun.
     m.setStyle(urlGaya(gaya), { diff: false, transformStyle: tataGaya(gaya) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gaya])
+  }, [gaya, kunciTerlambat])
 
   // --- Mode 3D ---
   //
@@ -3326,13 +3342,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           role="alert"
           className="absolute bottom-4 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-md border border-bahaya/30 bg-bahaya-soft px-4 py-3 text-[15px] text-bahaya shadow-[0_18px_40px_-14px_rgb(22_33_28/0.35)] lg:left-[calc(50%-13rem)]"
         >
-          <p className="font-semibold">Layer heksagon gagal dimuat</p>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-ink-2">{galat}</p>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
-            Kalau tertulis “Failed to fetch”, backend-nya belum jalan:{' '}
-            <span className="font-mono text-[12.5px]">cd backend</span>, lalu{' '}
-            <span className="font-mono text-[12.5px]">uvicorn app.main:app --reload</span>.
+          <p className="font-semibold">{teksZona.heksJudul}</p>
+          <p className="mt-1 text-[13.5px] leading-relaxed text-ink-2">
+            {/* `TypeError` peramban ("Failed to fetch") bukan kalimat untuk pengunjung. */}
+            {galat === 'Failed to fetch' ? teksZona.tanpaSambungan : galat}
           </p>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{teksZona.heksLanjut}</p>
         </div>
       )}
     </div>

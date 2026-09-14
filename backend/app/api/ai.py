@@ -42,7 +42,7 @@ from sqlalchemy.orm import Session
 from app.api import pricelens, skor as modul_skor
 from app.api.bersama import ambil_hex, periksa_kawasan, zoneguard
 from app.api.hex import commuter_clock, detail_heksagon
-from app.core.akun import PenggunaOpsional, wajib_akses_penuh
+from app.core.akun import PenggunaPremium, wajib_akses_penuh
 from app.core.batas import periksa_anggaran, periksa_laju
 from app.core.config import settings
 from app.core.database import get_db
@@ -833,7 +833,12 @@ def tanya(
     permintaan: PermintaanAI,
     db: Annotated[Session, Depends(get_db)],
     request: Request = None,  # type: ignore[assignment]
-    pengguna: PenggunaOpsional = None,
+    # Loconomics AI fitur PREMIUM sejak 14 Sep 2026 (keputusan pemilik repo).
+    # Dependensi, bukan `if`: ia menolak tamu (401) dan akun gratis (402)
+    # SEBELUM pembatas laju dan anggaran - yang belum membayar tidak pernah
+    # membelanjakan satu panggilan model pun. `= None` hanya untuk uji yang
+    # memanggil fungsi ini langsung; lewat HTTP dependensinya selalu berjalan.
+    pengguna: PenggunaPremium = None,  # type: ignore[assignment]
     bahasa: Annotated[str, Query(description="Bahasa antarmuka: id atau en")] = "id",
 ) -> JawabanAI:
     """Alur lengkap satu pertanyaan.

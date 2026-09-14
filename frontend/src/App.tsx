@@ -1154,11 +1154,12 @@ export default function App() {
   /**
    * Pintasan lokasi di jawaban AI ditekan.
    *
-   * Petanya terbang dan heksagonnya TERPILIH - tapi tabnya TIDAK diganti, dan
-   * itu keputusan yang sengaja. Melempar orang ke tab "Daftar lokasi" berarti
-   * menutup percakapan yang barusan menyebut lokasi ini, dan pertanyaan
-   * berikutnya hampir selalu tentang lokasi yang sama ("kenapa skornya
-   * segitu?"). Panel detailnya cuma satu ketukan tab dari sini.
+   * Petanya terbang, heksagonnya TERPILIH, dan panel pindah ke detailnya.
+   *
+   * Sampai 14 Sep 2026 tabnya sengaja TIDAK diganti. Pemilik repo memintanya
+   * dibalik: kartu yang ditekan harus langsung membuka detail heksagon, bukan
+   * menyisakan satu ketukan tab lagi. Percakapannya tidak hilang - PanelAI
+   * tetap terpasang di tabnya sendiri.
    */
   const keLokasiAI = useCallback(
     (h3: string, kawasanLokasi?: string) => {
@@ -1180,6 +1181,7 @@ export default function App() {
       setHexBanding(null)
       setSimulasiTerbuka(false)
       setPanelTerbuka(true)
+      setTab('daftar')
       peta.current?.highlight([h3])
       peta.current?.fokusHeksagon(h3)
     },
@@ -1866,7 +1868,7 @@ export default function App() {
               }}
             />
 
-            <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+            <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
               <MenuKawasan nilai={kawasan} onUbah={gantiKawasan} />
               <Menu
                 label="Layer"
@@ -2075,7 +2077,11 @@ export default function App() {
                     tombolnya dan tidak ada apa pun yang terlihat muncul.
                     `relative` ikut alur normal persis seperti `static`, bedanya
                     cuma ia tetap jadi jangkar. */}
-                <div className="pointer-events-auto absolute bottom-[calc(56svh+0.75rem)] left-0 z-30 order-1 flex flex-col items-start gap-2 lg:relative lg:bottom-auto lg:left-auto lg:mr-auto">
+                {/* BARIS di bawah lg, KOLOM mulai lg. Terukur 14 Sep 2026 di 360x640,
+                    390x664, 412x780, dan 768x1024: tumpukan tegak naik
+                    menembus bilah atas di keempatnya, karena tinggi layar di
+                    atas lembar 56svh terlalu pendek untuknya. */}
+                <div className="pointer-events-auto absolute bottom-[calc(56svh+0.75rem)] left-0 z-30 order-1 flex flex-row items-end gap-2 lg:relative lg:flex-col lg:items-start lg:bottom-auto lg:left-auto lg:mr-auto">
                   {/* Tombol perbesar/perkecil DISEMBUNYIKAN di layar sempit.
                       Bukan karena tidak berguna, melainkan karena di sana ia
                       satu-satunya yang bisa pergi tanpa kehilangan apa pun:
@@ -2388,10 +2394,7 @@ export default function App() {
                     // belakangnya dan kembali terasa seketika.
                     //
                     // Lapisan detailnya ikut tetap terpasang saat tab lain yang
-                    // aktif. Satu akibat yang disengaja: pintasan lokasi di
-                    // jawaban Loconomics AI - yang sengaja TIDAK memindah tab -
-                    // sekarang sudah memuat rinciannya di belakang, jadi satu
-                    // ketukan ke "Daftar lokasi" langsung menampilkannya.
+                    // aktif.
                     <div className="relative h-full min-h-0">
                       <div className="h-full min-h-0">
                         <DaftarLokasi

@@ -188,14 +188,38 @@ let janjiKunciBasemap: Promise<void> | null = null
  */
 export function siapkanKunciBasemap(): Promise<void> {
   if (KUNCI_BASEMAP) return Promise.resolve()
-  janjiKunciBasemap ??= fetch(`${API_BASE}/meta/kunci-basemap`, { signal: AbortSignal.timeout(6000) })
+  janjiKunciBasemap ??= mintaKunciBasemap()
+  return janjiKunciBasemap
+}
+
+function mintaKunciBasemap(): Promise<void> {
+  return fetch(`${API_BASE}/meta/kunci-basemap`, { signal: AbortSignal.timeout(6000) })
     .then((r) => (r.ok ? r.json() : null))
     .then((d: { kunci?: unknown } | null) => {
       if (d && typeof d.kunci === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(d.kunci)) KUNCI_BASEMAP = d.kunci
     })
     .catch(() => {})
-  return janjiKunciBasemap
 }
+
+/**
+ * Terus meminta kunci yang gagal diambil `siapkanKunciBasemap`, sampai 90 detik.
+ *
+ * Backend Azure F1 bangun 38-55 detik (log kontainer, 14 Sep 2026), jauh di
+ * atas 6 detik percobaan pertama. Tanpa ini loconomics.pages.dev yang dibuka
+ * saat backend tidur menampilkan peta hitam sepanjang kunjungan, padahal
+ * kuncinya tersedia semenit kemudian. `true` berarti kunci baru tiba dan
+ * gayanya perlu dipasang ulang - ubin yang sudah ditolak tidak diminta lagi.
+ */
+export async function kunciBasemapSusulan(): Promise<boolean> {
+  const tenggat = performance.now() + 90_000
+  while (!KUNCI_BASEMAP && performance.now() < tenggat) {
+    await new Promise((r) => setTimeout(r, 3000))
+    await mintaKunciBasemap()
+  }
+  return !!KUNCI_BASEMAP
+}
+
+export const adaKunciBasemap = () => !!KUNCI_BASEMAP
 
 /** Host yang menuntut kunci itu. Sengaja sempit: kunci tidak boleh menempel
  *  pada permintaan ke mana pun selain pemiliknya. */

@@ -73,6 +73,8 @@ const disorot = (kawasanAktif: string, nama: string) =>
  */
 const K = {
   id: {
+    gagalJudul: 'Daftar gagal dimuat',
+    tanpaSambungan: 'Mesin data tidak bisa dihubungi. Kalau baru bangun dari tidur, coba lagi dalam semenit.',
     lokasi: 'lokasi',
     teratas: 'teratas',
     saring: 'Semua zona',
@@ -115,6 +117,8 @@ const K = {
     },
   },
   en: {
+    gagalJudul: 'The list failed to load',
+    tanpaSambungan: 'The data engine could not be reached. If it is just waking up, try again in a minute.',
     lokasi: 'locations',
     teratas: 'top',
     saring: 'All zones',
@@ -241,7 +245,10 @@ function DaftarLokasi({
   }, [layer, kawasan, bahasaKalimat])
 
   if (memuat) return <MemuatNama teks={t.memuat} />
-  if (galat) return <Ajakan judul="Daftar gagal dimuat" anak={galat} />
+  if (galat)
+    return (
+      <Ajakan judul={t.gagalJudul} anak={galat === 'Failed to fetch' ? t.tanpaSambungan : galat} />
+    )
   // Sebaran kuadran seluruh kawasan. Urutannya mengikuti URUTAN_KUADRAN supaya
   // pita dan legendanya selalu sejajar dengan Kompas.
   const ringkasKuadran = (() => {

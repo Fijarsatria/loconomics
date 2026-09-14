@@ -337,6 +337,18 @@ def main() -> int:
             cek("pin: daftar simpanan menuntut PREMIUM", _pakai_premium("/akun/pantauan", "GET"))
             cek("pin: menghapus TETAP boleh untuk akun apa pun",
                 not _pakai_premium("/akun/pantauan/{h3_index}", "DELETE"))
+
+            import app.api.ai as _api_ai
+
+            def _ai_premium(jalur, metode):
+                for r in _api_ai.router.routes:
+                    if getattr(r, "path", "") == jalur and metode in getattr(r, "methods", set()):
+                        return any(d.call is _wp for d in _semua_dep(r.dependant))
+                raise AssertionError(f"rute {metode} {jalur} tidak ada")
+
+            cek("AI: bertanya menuntut PREMIUM", _ai_premium("/ai/tanya", "POST"))
+            cek("AI: status tetap terbuka supaya panel bisa menjelaskan kuncinya",
+                not _ai_premium("/ai/status", "GET"))
             db.commit = _commit_asli  # type: ignore[method-assign]
 
             # Langganan uji dicabut lagi: bagian sesudah ini menguji akun GRATIS.
