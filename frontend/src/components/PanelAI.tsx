@@ -759,7 +759,20 @@ function PanelAI({
   const berkabar = status !== null && !status.siap
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative h-full">
+      {/* Belum Premium: SELURUH panel diburamkan dan tidak bisa disentuh, dengan
+          satu ajakan di atasnya - bentuk yang sama dengan tab "Untuk Anda"
+          (14 Sep 2026, permintaan pemilik repo). Yang diburamkan cuma papan
+          nama dan kotak ketik; tidak ada jawaban berbayar yang pernah dikirim ke
+          sini (aturan 2b dijaga `/ai/tanya`). Animasinya DIHENTIKAN: buram di
+          atas cahaya yang bergerak memaksa peramban melukis ulang tiap bingkai. */}
+      <div
+        className={`flex h-full flex-col ${
+          terkunci ? 'pointer-events-none select-none blur-[6px] [&_*]:[animation-play-state:paused]' : ''
+        }`}
+        inert={terkunci}
+        aria-hidden={terkunci || undefined}
+      >
       {/* --- Bilah alat -----------------------------------------------------
           Dua tombol, tanpa judul. Nama panel ini sudah tertulis di tab tepat di
           atasnya; menulisnya lagi cuma memakan baris. */}
@@ -1043,21 +1056,6 @@ function PanelAI({
                   membuat teks backend terbaca sebagai instruksi untuk
                   pembacanya, dan ia akan mengulanginya untuk setiap sebab
                   berikutnya. */}
-              {terkunci && (
-                <div className="mt-4 w-full rounded-md border border-line bg-surface-2 px-3.5 py-3 text-left">
-                  <p className="text-[14px] font-semibold text-ink">{t.kunci.judul}</p>
-                  <p className="mt-1 text-[13.5px] leading-snug text-ink-2">
-                    {akun ? t.kunci.isiGratis : t.kunci.isiTamu}
-                  </p>
-                  <button
-                    onClick={bukaKunci}
-                    className="mt-3 w-full cursor-pointer rounded-full bg-ink px-4 py-2 text-[13.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.01]"
-                  >
-                    {akun ? t.kunci.tombolGratis : t.kunci.tombolTamu}
-                  </button>
-                </div>
-              )}
-
               {!terkunci && berkabar && (
                 <p
                   className={`mt-3 w-full rounded-sm border px-2.5 py-2 text-left text-[13.5px] leading-snug ${
@@ -1071,6 +1069,7 @@ function PanelAI({
                 </p>
               )}
 
+              {!terkunci && (
               <div className="mt-6 w-full space-y-1.5">
                 {t.contoh.map((c, i) => (
                   <button
@@ -1093,6 +1092,7 @@ function PanelAI({
                   </button>
                 ))}
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -1290,6 +1290,27 @@ function PanelAI({
           </span>
         </div>
       </form>
+      </div>
+
+      {terkunci && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-surface/45 px-6 text-center">
+          <span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-ink text-surface">
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+              <path d="M10 2.5 11.7 7l4.8 1.4L11.7 10l-1.7 4.5L8.3 10 3.5 8.4 8.3 7Z" fill="currentColor" />
+            </svg>
+          </span>
+          <h2 className="papan text-[19px]">{t.kunci.judul}</h2>
+          <p className="mx-auto mt-2 max-w-[34ch] text-[13.5px] leading-relaxed text-ink-2">
+            {akun ? t.kunci.isiGratis : t.kunci.isiTamu}
+          </p>
+          <button
+            onClick={bukaKunci}
+            className="mt-4 cursor-pointer rounded-full bg-ink px-5 py-2.5 text-[13.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.03]"
+          >
+            {akun ? t.kunci.tombolGratis : t.kunci.tombolTamu}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
