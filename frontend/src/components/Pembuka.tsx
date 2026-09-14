@@ -108,15 +108,15 @@ const KETUKAN_MS = 6_000
 /** Jeda antar-percobaan. Cold start tidak akan selesai lebih cepat dari ini. */
 const JEDA_KETUKAN_MS = 1_500
 /**
- * Total kesabaran. Cold start Render terukur di kisaran 50 detik, dan angka ini
- * sengaja di bawahnya: yang menutup selisihnya `bangunkan()` di `main.tsx`,
- * yang sudah mengetuk backend sejak halaman DIBUKA - biasanya puluhan detik
- * sebelum layar ini muncul, karena gerbang di antaranya memang dibuat untuk
- * dibaca. Anggaran ini hanya menanggung sisa jalannya, dan satu-satunya kasus
- * yang benar-benar memakainya adalah orang yang menyegarkan halaman langsung
- * ke peta saat backend baru saja tertidur.
+ * Total kesabaran. Semula 40 detik, dihitung untuk Render dengan anggapan
+ * `bangunkan()` di `main.tsx` sudah mengetuk sejak gerbang dibuka. Backend
+ * kini Azure F1, dan log kontainernya (14 Sep 2026) mencatat bangun 38-55
+ * detik dari permintaan pertama - pengunjung yang langsung menekan "Masuk ke
+ * peta" melihat "Mesin data belum bisa dihubungi" beberapa detik sebelum
+ * backend-nya menjawab. Anggaran ini hanya dipakai backend yang MENGGANTUNG;
+ * yang menolak sambungan tetap menyerah seketika (`layakDicobaLagi`).
  */
-const ANGGARAN_BANGUN_MS = 40_000
+const ANGGARAN_BANGUN_MS = 90_000
 
 /**
  * Layak dicoba lagi, atau sudah pasti percuma?

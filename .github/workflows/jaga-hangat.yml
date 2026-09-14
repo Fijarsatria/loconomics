@@ -1,0 +1,24 @@
+# Ketuk backend Azure tiap 10 menit supaya tidak tertidur.
+#
+# F1 tidak punya Always On dan melepas aplikasi sesudah ~20 menit menganggur;
+# bangunnya terukur 38-55 detik (log kontainer, 14 Sep 2026). Yang menanggung
+# ongkos itu pengunjung pertama sesudah jeda - di loconomics.pages.dev ia
+# melihat "Mesin data belum bisa dihubungi". Jadwal GitHub bisa terlambat
+# beberapa menit, jadi ini memperkecil peluangnya, bukan menjaminnya. Jaminan
+# sungguhan cuma B1 + Always On (lihat backend-azure.yml).
+name: Jaga backend tetap hangat
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ketuk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ketuk /health
+        run: curl -fsS -m 120 --retry 3 --retry-delay 10 https://loconomics-api.azurewebsites.net/health
