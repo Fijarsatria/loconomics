@@ -3121,14 +3121,44 @@ input:focus-visible {
      menang pada spesifisitas yang sama. Tanpa ini, aturan di sini tidak
      berpengaruh apa-apa - persis kegagalan diam yang pernah membuat atribusi
      tertutup bilah bawah tanpa satu pun galat. */
-  /* Atribusi (i) ditaruh di SEBELAH KANAN pil filter - sebaris dengannya.
-     Kanan bawah kini milik tombol tersimpan + kompas, jadi (i) tidak boleh ke
-     sana. */
-  .maplibregl-ctrl-bottom-left,
+  /* Atribusi: BARIS TEKS tipis selebar layar - bukan lagi pil (i) yang
+     menempel di samping pil filter dan terbaca sebagai penghalang. Tetap
+     terlihat (A.3), tapi tidak lagi sesuatu yang perlu ditepuk atau
+     disingkirkan.
+
+     Ditaruh di BAWAH bilah atas, bukan di dasar layar. Di dasar tidak ada lagi
+     ruang kosong: pil filter (10..98) dan tombol tersimpan/Kompas (332..380)
+     mengisi baris di atas bilah, bilahnya sendiri mulai 754 - dan baris
+     64..140 di bawah bilah atas benar-benar kosong. Atribusi yang menumpuk di
+     salah satu dari itu justru kembali "menghalangi". */
+  .maplibregl-ctrl-bottom-left {
+    top: 4.5rem !important;
+    bottom: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    display: block !important;
+    pointer-events: none;
+  }
   .maplibregl-ctrl-bottom-right {
-    bottom: calc(6rem + env(safe-area-inset-bottom)) !important;
-    left: 7.5rem !important;
-    right: auto !important;
+    display: none !important;
+  }
+  .maplibregl-ctrl-attrib {
+    background: transparent !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: 100%;
+    padding: 0 0.6rem !important;
+    font-size: 9.5px !important;
+    line-height: 1.2 !important;
+    color: var(--color-ink-3) !important;
+    opacity: 0.72;
+    text-align: left;
+    pointer-events: auto;
+  }
+  .maplibregl-ctrl-attrib a {
+    color: inherit !important;
   }
   /* Saat lembar bawah terbuka, ia menutupi dasar peta - dan atribusi yang
      duduk tepat di atas bilah masih menyembul menembus kaca lembar. Disembunyikan
@@ -3140,11 +3170,15 @@ input:focus-visible {
     opacity: 0;
     pointer-events: none;
   }
-  /* Kendali di pil filter dipadatkan. Menu/MenuKawasan tetap pil. */
+  /* Kendali di dalam pil filter: masing-masing jadi SATU baris penuh yang
+     mudah ditepuk, dengan label kecil ("Kawasan" / "Layer") di kiri dan
+     nilainya di kanan. Sebelumnya keduanya pil kecil tanpa keterangan, jadi
+     tidak jelas mana yang mengatur apa. */
   .kendali-peta button {
-    padding-top: 0.4rem;
-    padding-bottom: 0.4rem;
-    font-size: 12.5px;
+    width: 100%;
+    justify-content: space-between;
+    padding: 0.55rem 0.85rem;
+    font-size: 13px;
   }
   /* Kartu Kompas/Legenda di ponsel menjadi MODAL di tengah layar. Sebelumnya
      ia kartu di baris bawah dan laporannya "ketutup bar bawah". Desktop tetap
@@ -3564,6 +3598,7 @@ input:focus-visible {
    akan tampil sebagai tiga benda berbeda. */
 
 .sakelar-tema {
+  --st-lebar: 7.75rem;
   --st-tinggi: 2.5rem;
   --st-kenop: 2.05rem;
   --st-sela: 0.225rem;
@@ -3571,7 +3606,7 @@ input:focus-visible {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  width: 7.75rem;
+  width: var(--st-lebar);
   height: var(--st-tinggi);
   border-radius: 999px;
   cursor: pointer;
@@ -3659,7 +3694,7 @@ input:focus-visible {
     box-shadow 620ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .sakelar-tema[data-tema='gelap'] .st-kenop {
-  transform: translateX(calc(100% + (7.75rem - var(--st-kenop) * 2 - var(--st-sela) * 2)));
+  transform: translateX(calc(100% + (var(--st-lebar) - var(--st-kenop) * 2 - var(--st-sela) * 2)));
 }
 .sakelar-tema[data-tema='terang'] .st-kenop {
   background: #ffffff;
@@ -3720,7 +3755,23 @@ input:focus-visible {
   transform: translateX(var(--st-geser, 0)) scale(0.94);
 }
 .sakelar-tema[data-tema='gelap']:active .st-kenop {
-  --st-geser: calc(100% + (7.75rem - var(--st-kenop) * 2 - var(--st-sela) * 2));
+  --st-geser: calc(100% + (var(--st-lebar) - var(--st-kenop) * 2 - var(--st-sela) * 2));
+}
+
+/* Di ponsel sakelarnya dikecilkan. Sebelumnya 7,75rem × 2,5rem duduk di menu
+   pengaturan selebar 12rem bersama labelnya, dan barisnya terpotong di tepi
+   kanan. Ukurannya turun ~sepertiga; tinggi dan lebar kenop ikut, karena
+   keduanya dihitung dari variabel yang sama. */
+@media (max-width: 1023.98px) {
+  .sakelar-tema {
+    --st-lebar: 5.9rem;
+    --st-tinggi: 1.95rem;
+    --st-kenop: 1.55rem;
+    --st-sela: 0.2rem;
+  }
+  .st-kata {
+    font-size: 11px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

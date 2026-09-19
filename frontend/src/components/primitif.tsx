@@ -882,7 +882,7 @@ export function Menu<T extends string>({
             : 'border-line bg-surface/60 hover:border-line-2 hover:bg-surface'
         }`}
       >
-        <span className="eyebrow hidden 2xl:inline">{label}</span>
+        <span className="eyebrow hidden max-lg:inline 2xl:inline">{label}</span>
         <span className="whitespace-nowrap">{terpilih?.label ?? '—'}</span>
         {terpilih?.catatan && (
           <span className="hidden text-[12px] text-ink-3 lg:inline">{terpilih.catatan}</span>

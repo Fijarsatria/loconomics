@@ -92,7 +92,11 @@ async function main() {
   await page.waitForSelector('canvas.maplibregl-canvas', { timeout: 90000 })
   await tungguLayer
   await tungguUbin
-  await tidur(5000)
+  // 12 detik, bukan 5. Sejak layer tematik nyala secara bawaan, heksagon
+  // langsung diminta dan gelombangnya berjalan SESUDAH ubin basemap; pada
+  // mesin ini 5 detik berakhir sebelum kanvas benar-benar menggambar, dan
+  // klik heksagon di bawah mendarat di peta kosong tanpa satu pun galat.
+  await tidur(12000)
 
   // ------------------------------------------------------------- kepatuhan
   console.log('\n[K] Kepatuhan kunci & basemap')
@@ -166,10 +170,21 @@ async function main() {
   // 'Manggarai')` - dan "Manggarai" memang ada di DOM sebagai salah satu PILIHAN
   // di dropdown, terpilih atau tidak. Asersi yang tetap benar saat aksinya gagal
   // bukan asersi.
-  await page.getByRole('button', { name: /Semua kawasan/i }).first().click()
+  // Tombolnya dicari lewat awal `aria-label`-nya ("Kawasan: ..."), BUKAN lewat
+  // nilainya. Sejak 19 Sep 2026 bawaan kawasannya Manggarai, jadi mengejar
+  // teks "Semua kawasan" akan gagal pada pemuatan pertama - dan yang lebih
+  // buruk, membetulkannya dengan nilai bawaan baru mengulang kesalahan yang
+  // sama begitu bawaannya berganti lagi.
+  await page.getByRole('button', { name: /^Kawasan:/i }).first().click()
   await tidur(700)
   await page.getByRole('option', { name: /Manggarai/ }).first().click()
-  await tidur(6000)
+  // 9 detik, bukan 6. Sejak layer tematik NYALA secara bawaan (19 Sep 2026),
+  // gelombang kemunculan heksagon baru berangkat SESUDAH datanya tiba, dan
+  // pada mesin yang lambat 6 detik berakhir tepat sebelum hiasannya selesai -
+  // klik heksagon di bawah lalu mendarat di peta kosong dan menjatuhkan
+  // sepuluh asersi sekaligus. Menunggu lebih lama tidak menyembunyikan apa
+  // pun; yang diuji bukan kecepatannya melainkan hasilnya.
+  await tidur(9000)
   await page.screenshot({ path: `${KELUAR}/01-kawasan.png` })
   const labelKawasan = await page.evaluate(
     () =>
@@ -194,15 +209,43 @@ async function main() {
   await page.getByRole('button', { name: 'Layer', exact: true }).click()
   await tidur(500)
   await page.getByRole('option', { name: /Opportunity/i }).click()
-  await tidur(2500)
-  const titik = await page.evaluate(() => {
-    const c = document.querySelector('canvas.maplibregl-canvas')
-    const r = c.getBoundingClientRect()
-    // Kiri-tengah: panel kanan menutupi sepertiga kanan layar.
-    return { x: r.x + r.width * 0.33, y: r.y + r.height * 0.5 }
-  })
-  await page.mouse.click(titik.x, titik.y)
-  await tidur(7000)
+  await tidur(4500)
+  // Klik peta bisa meleset pada mesin yang kanvasnya belum selesai menggambar
+  // saat itu - dan kegagalannya DIAM: tidak ada galat, cuma /hex/{h3} yang
+  // tidak pernah diminta. Daripada satu titik lalu sepuluh asersi merah, coba
+  // beberapa titik; kalau semuanya meleset, pilih dari DAFTAR, jalur yang
+  // sama-sama memanggil /hex/{h3} dan pasti ada isinya.
+  const kandidat = [
+    [0.33, 0.5],
+    [0.42, 0.5],
+    [0.46, 0.44],
+    [0.3, 0.42],
+    [0.5, 0.56],
+  ]
+  for (const [fx, fy] of kandidat) {
+    if (dijawab('/hex/89').length > 0) break
+    const titik = await page.evaluate(
+      ([fx, fy]) => {
+        const c = document.querySelector('canvas.maplibregl-canvas')
+        const r = c.getBoundingClientRect()
+        // Kiri-tengah: panel kanan menutupi sepertiga kanan layar.
+        return { x: r.x + r.width * fx, y: r.y + r.height * fy }
+      },
+      [fx, fy],
+    )
+    await page.mouse.click(titik.x, titik.y)
+    await tidur(2500)
+  }
+  if (dijawab('/hex/89').length === 0) {
+    await page
+      .locator('aside button')
+      .filter({ hasText: /Opportunity Score/ })
+      .first()
+      .click({ timeout: 5000 })
+      .catch(() => {})
+    await tidur(4000)
+  }
+  await tidur(3000)
   await page.screenshot({ path: `${KELUAR}/02-detail.png` })
   const detail = await page.evaluate(() => document.body.innerText)
 

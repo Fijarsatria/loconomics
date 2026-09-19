@@ -43,6 +43,7 @@ import {
   BINGKAI_SEMUA,
   GAYA_BASEMAP,
   KERAPATAN_NAMA,
+  KAWASAN_AWAL,
   KAWASAN_PILOT,
   KUADRAN,
   SEMUA_KAWASAN,
@@ -179,7 +180,7 @@ const POLA_H3 = /^[0-9a-f]{15}$/i
  * sekali - ia dibaca ulang dari backend tiap kali memuat. Tingkat yang bisa
  * disunting dari devtools bukan tingkat.
  */
-const KUNCI_TAMPILAN = 'loconomics.tampilan.v1'
+const KUNCI_TAMPILAN = 'loconomics.tampilan.v2'
 
 /** Hanya menandai "sudah lewat gerbang di sesi ini". Sengaja di sessionStorage. */
 const KUNCI_SESI = 'loconomics.sesi.v1'
@@ -766,24 +767,25 @@ export default function App() {
   /**
    * Kawasan yang sedang disaring. SEMUA_KAWASAN ('') = tidak disaring.
    *
-   * Bawaannya sengaja "semua": layar pertama seharusnya memperlihatkan cakupan
-   * produknya, bukan satu dari enam kawasan yang kebetulan ditulis pertama di
-   * daftar. Menyempitkan ke satu kawasan adalah tindakan yang dipilih pengguna,
-   * bukan keadaan yang ia warisi.
+   * Bawaannya `KAWASAN_AWAL` (Manggarai), permintaan pemilik repo 19 Sep 2026:
+   * peta harus terbuka langsung di sebuah kawasan yang benar-benar punya isi,
+   * bukan di zoom 9 yang seluruh Jabodetabek-nya hanya menyisakan jalan besar -
+   * di basemap terang, layar pertama nyaris putih. Pilihan pengguna tetap
+   * menang; yang berganti cuma keadaan WARISAN-nya.
    */
-  const [kawasan, setKawasan] = useState<string>(AWAL.kawasan ?? SEMUA_KAWASAN)
+  const [kawasan, setKawasan] = useState<string>(AWAL.kawasan ?? KAWASAN_AWAL.nama)
   const [layer, setLayer] = useState<NamaLayer>(AWAL.layer ?? 'opportunity')
   /**
-   * Apakah layer tematik menyala. Bawaannya MATI.
-   *
-   * Peta yang langsung penuh 708 heksagon berwarna memaksa orang membaca
-   * kesimpulan sebelum ia sempat mengenali di mana ia sedang melihat -
-   * dan bagi yang baru pertama membuka, itu bukan peta melainkan grafik.
+   * Apakah layer tematik menyala. Bawaannya NYALA (19 Sep 2026, permintaan
+   * pemilik repo): Opportunity Score langsung tergambar supaya layar pertama
+   * menjawab "di sini mahal atau murah", bukan menunggu orang menemukan
+   * filternya. Sebelumnya mati, dengan alasan "membaca kesimpulan sebelum tahu
+   * sedang melihat apa" - pemilik repo menilai sebaliknya, dan itu wewenangnya.
    *
    * Terpisah dari `layer` dan bukan `NamaLayer | null` dengan sengaja:
    * mematikan layer tidak boleh MELUPAKAN layer mana yang tadi dilihat.
    */
-  const [layerNyala, setLayerNyala] = useState(AWAL.layerNyala ?? false)
+  const [layerNyala, setLayerNyala] = useState(AWAL.layerNyala ?? true)
   /**
    * Serapat apa nama tempat basemap ditampilkan.
    *
@@ -943,6 +945,80 @@ export default function App() {
      tidak ikut membalik keadaan. Lihat penangan di kepala lembar. */
   const mulaiLembar = useRef(0)
   const geserLembar = useRef(false)
+  /**
+   * Seretan yang MENGIKUTI jari (19 Sep 2026).
+   *
+   * Sebelumnya kepala lembar cuma menanggapi TAP: tinggi berubah sesudah jari
+   * lepas, tidak ada satu pun bingkai di antaranya. Dilaporkan pemilik repo apa
+   * adanya: "cuma bisa diklik... ga bisa ditarik, ga ada animasi slidernya".
+   * Sekarang tinggi lembar ditulis langsung dari `clientY` selama jari turun,
+   * lalu di-`snap` ke keadaan terdekat saat dilepas - pola yang sama dengan
+   * lembar Simulasi.
+   *
+   * `tinggiSeret` non-null = sedang menyeret, dan tinggi diambil dari inline
+   * style (transisi dimatikan) supaya lembar benar-benar menempel di jari.
+   */
+  const [tinggiSeret, setTinggiSeret] = useState<number | null>(null)
+  const [seretLembar, setSeretLembar] = useState(false)
+  const lembarRef = useRef<HTMLElement>(null)
+  const tinggiAwal = useRef(0)
+  const tinggiKini = useRef(0)
+
+  /** Tinggi keadaan PENUH, dihitung sama dengan `.lembar-peta[data-penuh]`. */
+  const tinggiPenuhLembar = () => {
+    const probe = document.createElement('div')
+    probe.style.cssText =
+      'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom)'
+    document.body.appendChild(probe)
+    const safe = probe.getBoundingClientRect().height
+    probe.remove()
+    return window.innerHeight - 10.5 * 16 - safe
+  }
+
+  const seretMulai = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const el = lembarRef.current
+    if (!el) return
+    mulaiLembar.current = e.clientY
+    geserLembar.current = false
+    tinggiAwal.current = el.getBoundingClientRect().height
+    tinggiKini.current = tinggiAwal.current
+    setSeretLembar(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const seretGerak = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!seretLembar) return
+    const dy = e.clientY - mulaiLembar.current
+    if (Math.abs(dy) > 6) geserLembar.current = true
+    const penuh = tinggiPenuhLembar()
+    const h = Math.max(window.innerHeight * 0.12, Math.min(penuh, tinggiAwal.current - dy))
+    tinggiKini.current = h
+    setTinggiSeret(h)
+  }
+
+  const seretLepas = () => {
+    if (!seretLembar) return
+    setSeretLembar(false)
+    // Jari tidak bergerak: biarkan `onClick` yang membalik ringkas/penuh.
+    if (!geserLembar.current) {
+      setTinggiSeret(null)
+      return
+    }
+    const ringkas = window.innerHeight * 0.45
+    const penuh = tinggiPenuhLembar()
+    const h = tinggiKini.current
+    if (h < ringkas - 40) {
+      // Seret turun cukup jauh: tutup dengan gerakan, bukan lenyap seketika.
+      setTinggiSeret(penuh * 0.04)
+      window.setTimeout(() => {
+        setTinggiSeret(null)
+        setPanelTerbuka(false)
+      }, 240)
+      return
+    }
+    setLembarPenuh(h > (ringkas + penuh) / 2)
+    setTinggiSeret(null)
+  }
   /**
    * Kompas Kuadran / Legenda: sekarang dibuka lewat tombol, tidak berdiri terus.
    *
@@ -1995,9 +2071,11 @@ export default function App() {
                 tampil - identitas produk tumbuh di bilah atas yang tinggal satu
                 baris, persis seperti aplikasi peta. */}
             <div className="flex shrink-0 items-baseline gap-2.5">
-              {/* Di ponsel logonya dikecilkan: 20px membuat "Loconomics"
-                  memakan hampir separuh bilah sampai pencariannya tercekik. */}
-              <PapanNama teks="Loconomics" kelas="text-[20px] leading-none max-lg:!text-[16px]" />
+              {/* Di ponsel logonya dikecilkan dua kali: 20px membuat
+                  "Loconomics" memakan hampir separuh bilah sampai pencariannya
+                  tercekik, dan 16px masih dilaporkan "kegedean" (19 Sep 2026).
+                  14px masih terbaca sebagai papan nama tanpa berebut ruang. */}
+              <PapanNama teks="Loconomics" kelas="text-[20px] leading-none max-lg:!text-[14px]" />
             </div>
 
             <Cari
@@ -2387,6 +2465,7 @@ export default function App() {
                 layar penuh, berhenti tepat di bawah bilah atas
                 (`calc(100svh - 10.5rem)`, lihat `.lembar-peta[data-penuh]`). */}
             <aside
+              ref={lembarRef}
               data-buka={panelTerbuka}
               data-penuh={lembarPenuh}
               aria-hidden={!panelTerbuka}
@@ -2396,6 +2475,8 @@ export default function App() {
                   '--lebar-kolom': panelTerbuka ? '25rem' : '0rem',
                   '--geser-kolom': panelTerbuka ? '0rem' : '-1rem',
                   '--opasitas-kolom': panelTerbuka ? 1 : 0,
+                  ...(tinggiSeret != null ? { height: `${tinggiSeret}px` } : {}),
+                  ...(seretLembar ? { transition: 'none' } : {}),
                 } as CSSProperties
               }
             >
@@ -2487,30 +2568,22 @@ export default function App() {
                   {/* Pegangan lembar ponsel. Menggantikan deret tiga tab yang di
                       sana tinggal mengulang bilah bawah. Seret naik = mekar
                       penuh, seret turun = ringkas lalu tutup, ketuk = beralih.
-                      `touch-none` supaya gerakannya tidak ikut menggulir isi. */}
+                      `touch-none` supaya gerakannya tidak ikut menggulir isi.
+
+                      Seretannya MENGIKUTI jari (`seretMulai`/`seretGerak`), lalu
+                      di-`snap` (`seretLepas`) - bukan lagi "hitung jarak, ubah
+                      tinggi sesudah lepas" yang terasa seperti tombol, bukan
+                      lembar. */}
                   <button
                     type="button"
                     onClick={() => {
                       if (geserLembar.current) return
                       setLembarPenuh((v) => !v)
                     }}
-                    onPointerDown={(e) => {
-                      mulaiLembar.current = e.clientY
-                      geserLembar.current = false
-                      e.currentTarget.setPointerCapture(e.pointerId)
-                    }}
-                    onPointerMove={(e) => {
-                      if (Math.abs(e.clientY - mulaiLembar.current) > 16)
-                        geserLembar.current = true
-                    }}
-                    onPointerUp={(e) => {
-                      const dy = e.clientY - mulaiLembar.current
-                      if (dy < -30) setLembarPenuh(true)
-                      else if (dy > 30) {
-                        if (lembarPenuh) setLembarPenuh(false)
-                        else setPanelTerbuka(false)
-                      }
-                    }}
+                    onPointerDown={seretMulai}
+                    onPointerMove={seretGerak}
+                    onPointerUp={seretLepas}
+                    onPointerCancel={seretLepas}
                     aria-label={lembarPenuh ? t.lipat : 'Perbesar panel'}
                     className="flex min-w-0 flex-1 cursor-grab touch-none flex-col items-center gap-1 py-1.5 active:cursor-grabbing lg:hidden"
                   >
@@ -2693,19 +2766,23 @@ export default function App() {
               duduk di bilah atas - kawasan dan layer - dan keduanya membuka KE
               ATAS supaya daftarnya tidak jatuh keluar layar. Desktop tidak
               merendernya (`lg:hidden`): di sana keduanya ada di bilah atas. */}
-          <div className="pil-filter pointer-events-none absolute left-2.5 z-30 flex flex-col items-start gap-2 lg:hidden">
+          {/* `ref` duduk di WADAH, bukan di popover. Dulu ia di popover, jadi
+              ketukan pada tombolnya sendiri dianggap "di luar" - penangan
+              dokumen menutupnya lebih dulu, lalu `onClick` membukanya lagi, dan
+              pilnya tidak pernah bisa ditutup dengan menekannya sekali lagi. */}
+          <div
+            ref={filterRef}
+            className="pil-filter pointer-events-none absolute left-2.5 z-30 flex flex-col items-stretch gap-2 lg:hidden"
+          >
             {filterTerbuka && (
-              <div
-                ref={filterRef}
-                className="kendali-peta pop kaca pointer-events-auto flex flex-col items-stretch gap-1.5 rounded-xl p-2"
-              >
+              <div className="kendali-peta pop kaca pointer-events-auto flex w-[15rem] max-w-[calc(100vw-1.25rem)] flex-col items-stretch gap-1.5 rounded-xl p-2.5">
                 {kendaliFilter('naik')}
               </div>
             )}
             <button
               onClick={() => setFilterTerbuka((v) => !v)}
               aria-expanded={filterTerbuka}
-              className="pointer-events-auto flex cursor-pointer items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[13.5px] font-semibold text-surface shadow-[0_14px_30px_-12px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.03]"
+              className="pointer-events-auto flex cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[13.5px] font-semibold text-surface shadow-[0_14px_30px_-12px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.03]"
             >
               <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden className="shrink-0">
                 <path
@@ -2821,17 +2898,20 @@ export default function App() {
                           }`
                     }
                   >
-                    {/* "Lokasi" kini bulatan BESAR yang terangkat, seperti FAB
-                        MAPID, dan tanpa label - persis bentuk di aplikasi itu.
-                        Ikon butir lain 24 px. (Permintaan 19 Sep 2026: "ikon dan
-                        buletan daftar lokasi dibuat lebih besar".) */}
+                    {/* "Lokasi": bulatan BESAR seperti FAB MAPID, tanpa label.
+                        `absolute` + `bottom-[-0.375rem]` (6px = `py-1.5` bilah)
+                        menaruh sisi BAWAHNYA rata dengan dasar bilah, sementara
+                        atasnya menembus keluar - persis yang diminta 19 Sep 2026:
+                        "bulatnya melewati bar, tapi di sisi bawahnya pas dengan
+                        sisi bar bawah". Sebelumnya `-translate-y-3.5` membuatnya
+                        melayang di TENGAH bilah, bukan tumbuh darinya. */}
                     {pusat ? (
                       <span
-                        className={`grid h-14 w-14 -translate-y-3.5 place-items-center rounded-full bg-ink text-surface shadow-[0_12px_24px_-8px_rgb(22_33_28/0.8)] transition-transform duration-300 ease-jelly ${
+                        className={`absolute bottom-[-0.375rem] left-1/2 grid h-16 w-16 -translate-x-1/2 place-items-center rounded-full bg-ink text-surface shadow-[0_14px_28px_-8px_rgb(22_33_28/0.85)] transition-transform duration-300 ease-jelly ${
                           aktif ? 'scale-105' : ''
                         }`}
                       >
-                        <svg width={24} height={24} viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                        <svg width={28} height={28} viewBox="0 0 20 20" aria-hidden className="shrink-0">
                           <circle cx="5" cy="5" r="1.6" fill="currentColor" />
                           <circle cx="5" cy="10" r="1.6" fill="currentColor" />
                           <circle cx="5" cy="15" r="1.6" fill="currentColor" />

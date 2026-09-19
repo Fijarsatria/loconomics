@@ -65,9 +65,15 @@ export const BASEMAP_GELAP: NamaGaya[] = ['gelap', 'satelit']
  * yang gelap.
  */
 export const SELUBUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
-  terang: { warna: '#ffffff', opasitas: 0.48 },
-  dasar: { warna: '#ffffff', opasitas: 0.45 },
-  jalan: { warna: '#ffffff', opasitas: 0.45 },
+  // Gaya terang MAPID (OSM Liberty) SUDAH pucat dengan sendirinya: latar
+  // rgb(242,243,240), jalan putih di atasnya - kontrasnya memang rendah, itu
+  // pilihan gaya itu. Selubung putih 0,48 di atasnya (nilai lama) mendorongnya
+  // ke ambang tak terlihat: dilaporkan pemilik repo sebagai "basemap light-nya
+  // aneh, kenapa ga responsif". Diturunkan ke 0,12 - cukup meredam keramaian,
+  // tidak menghapus jalannya.
+  terang: { warna: '#ffffff', opasitas: 0.1 },
+  dasar: { warna: '#ffffff', opasitas: 0.15 },
+  jalan: { warna: '#ffffff', opasitas: 0.15 },
   gelap: { warna: '#000000', opasitas: 0.3 },
   // Tipis sekali. Orang memilih satelit justru untuk MELIHAT atap dan halaman
   // di bawah heksagonnya; selubung setebal gaya lain akan menghapus alasan itu.

@@ -463,6 +463,11 @@ function terapkanNamaTempat(m: MapLibreMap, kerapatan: string) {
 function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
   const layers = m.getStyle().layers ?? []
   const gelap = BASEMAP_GELAP.includes(gaya)
+  // Nama tempat dikecilkan di ponsel (permintaan 19 Sep 2026). Ukuran aslinya
+  // dirancang untuk layar lebar; di 390px labelnya memakan peta. Dikalikan
+  // ekspresi `text-size` yang sudah ada - termasuk yang ber-`interpolate`
+  // zoom - supaya tangga zoomnya tetap, cuma skalanya turun.
+  const kecilkanNama = window.matchMedia('(max-width: 1023.98px)').matches
 
   // Kerapatan penandanya diurus `terapkanNamaTempat` di bawah - satu tempat,
   // supaya pilihan pengguna dan pemuatan gaya tidak pernah berselisih.
@@ -472,6 +477,21 @@ function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
       // atas isian heksagon yang berwarna, bukan di atas kertas putih.
       m.setPaintProperty(l.id, 'text-halo-width', 1.6)
       m.setPaintProperty(l.id, 'text-halo-blur', 0.3)
+      if (kecilkanNama) {
+        // HANYA angka atau ekspresi-array yang boleh dikalikan. Sebagian layer
+        // gaya MAPID menyimpan `text-size` sebagai OBJEK (format lama gaya
+        // `{ stops: [...] }`); `['*', objek, 0.8]` ditolak MapLibre sebagai
+        // "Bare objects invalid", dan penolakan itu terjadi saat VALIDASI GAYA
+        // - bukan sebagai lemparan di sini - sehingga SELURUH basemap gagal
+        // dimuat dan peta putih dengan pita "Basemap gagal dimuat". Jadi
+        // diperiksa jenisnya lebih dulu, bukan dibungkus try/catch.
+        const ts = m.getLayoutProperty(l.id, 'text-size')
+        if (typeof ts === 'number') {
+          m.setLayoutProperty(l.id, 'text-size', ['*', ts, 0.8])
+        } else if (Array.isArray(ts)) {
+          m.setLayoutProperty(l.id, 'text-size', ['*', ts, 0.8])
+        }
+      }
     }
 
     // Label gaya gelap MAPID ditulis untuk latar hitam pekat: rgb(101,101,101)
@@ -1281,7 +1301,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // kebetulan berbunyi mirip, dan yang kedua tidak gugur oleh yang pertama.
     m.addControl(
       new AttributionControl({
-        compact: true,
+        // `compact: false` (19 Sep 2026, permintaan pemilik repo): tombol (i)
+        // yang membuka daftar dianggap "menghalangi". Sekarang atribusinya
+        // berupa BARIS TEKS tipis yang selalu terlihat - tidak ada lagi pil
+        // yang harus diketuk, dan A.3 tetap terpenuhi karena sumbernya tetap
+        // disebut di layar. Gayanya diatur index.css (font 9,5px, redup).
+        compact: false,
         customAttribution: [
           '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>',
           '<a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">© openrouteservice</a>',
@@ -1295,17 +1320,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }),
       'bottom-left',
     )
-    // Di ponsel daftar atribusi penuh memakan empat baris dan menutupi peta.
-    // MapLibre sudah menyediakan bentuk RINGKASnya sendiri - pil (i) yang
-    // membuka daftar saat diketuk - tetapi `compact: true` membuatnya terbuka
-    // sejak awal, jadi kelasnya dicabut sekali di sini. Atribusi tetap
-    // terlihat (ketentuan A.3): tombolnya yang membukanya. Desktop tidak
-    // disentuh, daftarnya tetap terbuka seperti sebelumnya.
-    if (window.matchMedia('(max-width: 1023.98px)').matches) {
-      m.getContainer()
-        .querySelector('.maplibregl-ctrl-attrib')
-        ?.classList.remove('maplibregl-compact-show')
-    }
     // DUA pemicu, dan yang kedua bukan sabuk pengaman berlebihan.
     //
     // 'load' baru menyala sesudah render pertama yang lengkap, dan itu
@@ -1747,6 +1761,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           if (batal || !peta.current) return
           ;(sumber as GeoJSONSource).setData(data as never)
           if (tampilRef.current) await jalankanGelombang(0, T_PENUH, DURASI_MASUK)
+          else terapkanGelombang(m, layerKini.current, T_PENUH, fokusRef.current)
           return
         }
 
@@ -2419,6 +2434,15 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         if (tampilRef.current) {
           await tungguTenang(m)
           if (!batal && peta.current) void jalankanGelombang(0, T_PENUH, DURASI_MASUK)
+        } else {
+          // Pembuka masih menutup layar. Jangan biarkan heksagon tertinggal di
+          // opasitas NOL: gelombang "pembuka menyingkir" (efek `[tampil]`) cuma
+          // berjalan kalau layernya SUDAH ada saat `tampil` berubah - dan pada
+          // pemuatan yang lambat, data tiba sesudahnya. Tanpa cabang ini, peta
+          // bisa terbuka kosong tanpa satu pun galat. Terukur 19 Sep 2026 pada
+          // audit desktop: sepuluh asersi merah karena klik heksagon mendarat
+          // di peta kosong.
+          terapkanGelombang(m, layerKini.current, T_PENUH, fokusRef.current)
         }
       })
       .catch((e: Error) => !batal && setGalat(e.message))
