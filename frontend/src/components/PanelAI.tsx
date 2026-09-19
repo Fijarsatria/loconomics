@@ -1040,7 +1040,7 @@ function PanelAI({
                       opacity="0.6"
                     />
                   </svg>
-                  <PapanNama teks="Loconomics" sebagai="div" kelas="text-[34px] leading-none text-ink max-lg:text-[24px]" />
+                  <PapanNama teks="Loconomics" sebagai="div" kelas="text-[34px] leading-none text-ink max-lg:text-[20px]" />
                   <span className="g-ai-sapuan pointer-events-none absolute inset-y-[-22px] inset-x-[-18px]" aria-hidden />
                 </span>
 
@@ -1293,19 +1293,19 @@ function PanelAI({
       </div>
 
       {terkunci && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-surface/45 px-6 text-center">
-          <span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-ink text-surface">
-            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-surface/45 px-6 text-center max-lg:px-4">
+          <span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-ink text-surface max-lg:mb-2 max-lg:h-10 max-lg:w-10">
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden className="max-lg:h-4 max-lg:w-4">
               <path d="M10 2.5 11.7 7l4.8 1.4L11.7 10l-1.7 4.5L8.3 10 3.5 8.4 8.3 7Z" fill="currentColor" />
             </svg>
           </span>
-          <h2 className="papan text-[19px]">{t.kunci.judul}</h2>
-          <p className="mx-auto mt-2 max-w-[34ch] text-[13.5px] leading-relaxed text-ink-2">
+          <h2 className="papan text-[19px] max-lg:text-[16px]">{t.kunci.judul}</h2>
+          <p className="mx-auto mt-2 max-w-[34ch] text-[13.5px] leading-relaxed text-ink-2 max-lg:mt-1.5 max-lg:text-[12px]">
             {akun ? t.kunci.isiGratis : t.kunci.isiTamu}
           </p>
           <button
             onClick={bukaKunci}
-            className="mt-4 cursor-pointer rounded-full bg-ink px-5 py-2.5 text-[13.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.03]"
+            className="mt-4 cursor-pointer rounded-full bg-ink px-5 py-2.5 text-[13.5px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.03] max-lg:mt-3 max-lg:px-4 max-lg:py-2 max-lg:text-[12.5px]"
           >
             {akun ? t.kunci.tombolGratis : t.kunci.tombolTamu}
           </button>

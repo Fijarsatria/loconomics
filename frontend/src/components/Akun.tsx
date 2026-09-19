@@ -1355,6 +1355,7 @@ const K_TOMBOL = {
     preferensiCatatan: 'Jenis usaha, kawasan incaran, dan anggaran sewa',
     keluar: 'Keluar',
     keluarCatatan: (n: string) => `Sesi ${n} diakhiri`,
+    tutup: 'Tutup menu akun',
     tanggal: 'id-ID',
   },
   en: {
@@ -1372,6 +1373,7 @@ const K_TOMBOL = {
     preferensiCatatan: 'Business type, target areas, and rent budget',
     keluar: 'Sign out',
     keluarCatatan: (n: string) => `End ${n}’s session`,
+    tutup: 'Close the account menu',
     tanggal: 'en-GB',
   },
 }
@@ -1481,8 +1483,26 @@ export function TombolAkun({
    */
   const isiMenu = (
     <>
-      <div className="border-b border-line/70 px-4 py-3.5">
-        <div className="flex items-center gap-3">
+      <div className="relative border-b border-line/70 px-4 py-3.5">
+        {/* Silang tutup. Di varian `bar` menunya POP UP di tengah layar, dan
+            tanpa jalan keluar yang terlihat orang hanya bisa menutupnya dengan
+            menebak bahwa ketukan di luar kartu menutupnya. */}
+        <button
+          onClick={() => setBuka(false)}
+          aria-label={t.tutup}
+          title={t.tutup}
+          className="absolute right-2 top-2 grid h-8 w-8 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+            <path
+              d="M3 3l8 8M11 3l-8 8"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        <div className="flex items-center gap-3 pr-8">
           <span
             className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[14px] font-bold ${
               premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'

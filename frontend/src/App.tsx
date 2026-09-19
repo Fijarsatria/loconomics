@@ -108,7 +108,7 @@ import type { AksiPetaRef, KendaliPeta } from './components/PetaInteraktif'
  * jadi ia tidak menyeret modulnya kembali ke bundel utama.
  */
 const PetaInteraktif = lazy(() => import('./components/PetaInteraktif'))
-import { Glif, Menu, MenuPengaturan, PapanNama, PilihBasemap } from './components/primitif'
+import { Glif, Markah, Menu, MenuPengaturan, PapanNama, PilihBasemap } from './components/primitif'
 
 /** Layer yang diwarnai menurut kuadran — hanya di sini Kompas benar. */
 /**
@@ -1367,13 +1367,18 @@ export default function App() {
     // yang akan menanganinya, sama seperti sebelum tirai ini ada.
     const chunk = import('./components/Gerbang').catch(() => null)
     const tertutup = new Promise<void>((r) => {
-      jamPulang.current.push(window.setTimeout(r, 430))
+      // 520ms: sinkron dengan durasi `pulang-tumbuh` di index.css. Angka yang
+      // lebih pendek membuat halaman ditukar SEBELUM tirai menutup penuh -
+      // satu bingkai peta masih terlihat di baliknya.
+      jamPulang.current.push(window.setTimeout(r, 520))
     })
     void Promise.all([chunk, tertutup]).then(() => {
       if (!hidupPulang.current) return
       selesaikan()
       setPulang('buka')
-      jamPulang.current.push(window.setTimeout(() => setPulang(null), 430))
+      // Sedikit lebih lama dari `pulang-pudar` (460ms) supaya lapisannya tidak
+      // dicabut tepat di bingkai terakhir animasinya.
+      jamPulang.current.push(window.setTimeout(() => setPulang(null), 500))
     })
   }, [])
 
@@ -1940,6 +1945,12 @@ export default function App() {
       {pulang && (
         <div className="pulang" data-fase={pulang} data-tema={tema} aria-hidden>
           <span className="pulang-heks" />
+          {/* Markah di tengah tirai: jalan pulang sekarang MEMPERKENALKAN
+              produknya lagi, bukan sekadar gelembung heksagon yang lewat.
+              Bentuknya sama dengan favicon dan logo halaman gerbang. */}
+          <span className="pulang-markah">
+            <Markah kelas="h-16 w-16 sm:h-20 sm:w-20" />
+          </span>
         </div>
       )}
       {pembuka && (
@@ -2120,11 +2131,12 @@ export default function App() {
                 pb-[42px] menyisakan baris skala + atribusi MapLibre di kiri
                 bawah. Angkanya dikunci oleh .maplibregl-ctrl-bottom-left di
                 index.css; kedua sisi angka ajaib ini ada di repo yang sama. */}
-            {/* `max-lg:pb-[9rem]`: chip aksi (Simulasi di sini / baki komparasi)
-                harus mengambang DI ATAS deretan pil Filter + atribusi, yang
-                duduk di 6rem, dan di atas bilah bawah (~81px). 4.75rem membuatnya
-                menabrak bar. */}
-            <div className="flex min-h-0 flex-1 flex-col gap-3 pb-[42px] max-lg:pb-[9rem]">
+            {/* `max-lg:pb-[6rem]`: chip aksi (Simulasi di sini / baki komparasi)
+                duduk sebaris dengan pil atribusi + kompas, di atas bilah bawah.
+                Filter sudah pindah ke KIRI ATAS, jadi baris ini lengang dan
+                chipnya bisa benar-benar di TENGAH - sebelumnya ia digeser kiri
+                (`pr-[4.75rem]`) untuk menghindari tombol tersimpan. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-3 pb-[42px] max-lg:pb-[6rem]">
               {/* Baris bawah: legenda di kiri, tombol melayang di kanan, dan
                   pertanyaan layer TEPAT di tengah.
 
@@ -2178,7 +2190,7 @@ export default function App() {
                 </div>
 
                 <div
-                  className={`pointer-events-none order-3 flex min-w-0 flex-1 justify-center pb-0.5 transition-opacity duration-300 max-lg:pr-[4.75rem] ${
+                  className={`pointer-events-none order-3 flex min-w-0 flex-1 justify-center pb-0.5 transition-opacity duration-300 ${
                     simulasiTerbuka ? 'opacity-0' : 'opacity-100'
                   }`}
                 >
@@ -2219,7 +2231,7 @@ export default function App() {
                     <div className="pointer-events-auto flex max-w-full items-center gap-2">
                     <button
                       onClick={bukaSimulasi}
-                      className="group flex w-fit min-w-0 cursor-pointer items-center gap-3 rounded-full bg-ink px-5 py-2.5 text-surface shadow-lg transition-transform duration-300 ease-jelly hover:scale-[1.03]"
+                      className="group flex w-fit min-w-0 cursor-pointer items-center gap-3 rounded-full bg-ink px-5 py-2.5 text-surface shadow-lg transition-transform duration-300 ease-jelly hover:scale-[1.03] max-lg:gap-2 max-lg:px-4 max-lg:py-2"
                     >
                       <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden className="shrink-0">
                         <path
@@ -2236,7 +2248,7 @@ export default function App() {
                         {t.simulasiDiSini}
                       </span>
                       {!premium && (
-                        <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                        <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider max-lg:hidden">
                           {t.premium}
                         </span>
                       )}
@@ -2404,17 +2416,26 @@ export default function App() {
                     </svg>
                   </button>
 
-                  <PilihBasemap
-                    arah="kanan"
-                    nilai={gaya}
-                    opsi={Object.entries(GAYA_BASEMAP).map(([k, g]) => ({
-                      nilai: k as NamaGaya,
-                      label: t.basemap[k] ?? g.label,
-                    }))}
-                    onUbah={gantiGaya}
-                    buka={panelKiri === 'basemap'}
-                    onBuka={(v) => setPanelKiri(v ? 'basemap' : 'tidak')}
-                  />
+                  {/* Di ponsel pemilih basemap DIPINDAH ke kolom kanan yang
+                      sama dengan lokasi tersimpan (9,5rem) dan Kompas/legenda
+                      (6rem) - dulu ia sendirian di kanan-ATAS, jadi tiga tombol
+                      bulat itu tidak pernah segaris (permintaan 19 Sep 2026).
+                      Ia masih memanjang ke KIRI (`arahSempit`), jadi tombolnya
+                      tidak bergeser. */}
+                  <div className="max-lg:fixed max-lg:bottom-[13rem] max-lg:right-2.5 max-lg:z-30">
+                    <PilihBasemap
+                      arah="kanan"
+                      arahSempit="kiri"
+                      nilai={gaya}
+                      opsi={Object.entries(GAYA_BASEMAP).map(([k, g]) => ({
+                        nilai: k as NamaGaya,
+                        label: t.basemap[k] ?? g.label,
+                      }))}
+                      onUbah={gantiGaya}
+                      buka={panelKiri === 'basemap'}
+                      onBuka={(v) => setPanelKiri(v ? 'basemap' : 'tidak')}
+                    />
+                  </div>
 
                   {/* Pembuka Kompas Kuadran / Legenda. Ikonnya IKUT ISI yang
                       dibukanya: grid 2x2 untuk Kompas, tumpukan baris untuk
@@ -2760,29 +2781,28 @@ export default function App() {
             )}
           </div>
 
-          {/* --- Pil filter kiri-bawah (ponsel) -----------------------------
-              Meniru "Community Filter" MAPID: satu tombol gelap di kiri bawah,
-              tepat di atas bar navigasi. Isinya dua dropdown yang di desktop
-              duduk di bilah atas - kawasan dan layer - dan keduanya membuka KE
-              ATAS supaya daftarnya tidak jatuh keluar layar. Desktop tidak
+          {/* --- Pil Filter kiri-atas (ponsel) ------------------------------
+              Meniru "Community Filter" MAPID. Isinya dua dropdown yang di
+              desktop duduk di bilah atas - kawasan dan layer. Desktop tidak
               merendernya (`lg:hidden`): di sana keduanya ada di bilah atas. */}
-          {/* `ref` duduk di WADAH, bukan di popover. Dulu ia di popover, jadi
-              ketukan pada tombolnya sendiri dianggap "di luar" - penangan
-              dokumen menutupnya lebih dulu, lalu `onClick` membukanya lagi, dan
-              pilnya tidak pernah bisa ditutup dengan menekannya sekali lagi. */}
+          {/* Pil Filter di KIRI-ATAS, di bawah bilah atas (permintaan 19 Sep
+              2026: "ditaro di pojok kiri atas, biar kalau diklik memanjang
+              kesamping kayak layer dan area"). Karena itu tombolnya DULUAN di
+              DOM, lalu popover memanjang ke KANAN - bukan ke atas seperti pil
+              kiri-bawah yang lama.
+
+              `ref` duduk di WADAH, bukan di popover: dulu ia di popover, jadi
+              ketukan pada tombolnya sendiri dianggap "di luar", penangan
+              dokumen menutupnya lebih dulu, lalu `onClick` membukanya lagi -
+              dan pilnya tidak pernah bisa ditutup dengan menekannya sekali lagi. */}
           <div
             ref={filterRef}
-            className="pil-filter pointer-events-none absolute left-2.5 z-30 flex flex-col items-stretch gap-2 lg:hidden"
+            className="pil-filter pointer-events-none absolute left-2.5 z-30 flex flex-row items-center gap-1.5 lg:hidden"
           >
-            {filterTerbuka && (
-              <div className="kendali-peta pop kaca pointer-events-auto flex w-[15rem] max-w-[calc(100vw-1.25rem)] flex-col items-stretch gap-1.5 rounded-xl p-2.5">
-                {kendaliFilter('naik')}
-              </div>
-            )}
             <button
               onClick={() => setFilterTerbuka((v) => !v)}
               aria-expanded={filterTerbuka}
-              className="pointer-events-auto flex cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[13.5px] font-semibold text-surface shadow-[0_14px_30px_-12px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.03]"
+              className="pointer-events-auto flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[13.5px] font-semibold text-surface shadow-[0_14px_30px_-12px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.03]"
             >
               <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden className="shrink-0">
                 <path
@@ -2794,6 +2814,12 @@ export default function App() {
               </svg>
               {bahasa === 'en' ? 'Filters' : 'Filter'}
             </button>
+
+            {filterTerbuka && (
+              <div className="kendali-peta pop-kanan kaca pointer-events-auto flex min-w-0 max-w-[calc(100vw_-_7.5rem)] flex-row items-center gap-1 rounded-full p-1.5">
+                {kendaliFilter('turun')}
+              </div>
+            )}
           </div>
 
           {/* --- Lembar simulasi ------------------------------------------
@@ -2865,7 +2891,7 @@ export default function App() {
                 title={t.navBeranda}
                 className="flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-1.5 text-ink-3 transition-colors hover:text-ink"
               >
-                <svg width={22} height={22} viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                <svg width={26} height={26} viewBox="0 0 20 20" aria-hidden className="shrink-0">
                   <path
                     d="M3 8.6 10 3l7 5.6V16a1 1 0 0 1-1 1h-3.6v-4.4H7.6V17H4a1 1 0 0 1-1-1z"
                     fill="none"
@@ -2894,7 +2920,10 @@ export default function App() {
                       pusat
                         ? 'relative flex min-w-0 flex-1 cursor-pointer items-center justify-center'
                         : `flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-1.5 transition-colors ${
-                            aktif ? 'bg-surface-2 text-ink' : 'text-ink-3'
+                            // TANPA `bg-surface-2`: yang menandai butir aktif
+                            // adalah pendarnya di IKON (`.sinar-ikon`), bukan
+                            // kotak di belakangnya - permintaan 19 Sep 2026.
+                            aktif ? 'text-ink' : 'text-ink-3'
                           }`
                     }
                   >
@@ -2907,11 +2936,11 @@ export default function App() {
                         melayang di TENGAH bilah, bukan tumbuh darinya. */}
                     {pusat ? (
                       <span
-                        className={`absolute bottom-[-0.375rem] left-1/2 grid h-16 w-16 -translate-x-1/2 place-items-center rounded-full bg-ink text-surface shadow-[0_14px_28px_-8px_rgb(22_33_28/0.85)] transition-transform duration-300 ease-jelly ${
+                        className={`absolute bottom-[-0.375rem] left-1/2 grid h-24 w-24 -translate-x-1/2 place-items-center rounded-full bg-ink text-surface shadow-[0_16px_32px_-10px_rgb(22_33_28/0.9)] transition-transform duration-300 ease-jelly ${
                           aktif ? 'scale-105' : ''
                         }`}
                       >
-                        <svg width={28} height={28} viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                        <svg width={32} height={32} viewBox="0 0 20 20" aria-hidden className="shrink-0">
                           <circle cx="5" cy="5" r="1.6" fill="currentColor" />
                           <circle cx="5" cy="10" r="1.6" fill="currentColor" />
                           <circle cx="5" cy="15" r="1.6" fill="currentColor" />
@@ -2925,7 +2954,10 @@ export default function App() {
                       </span>
                     ) : (
                       <>
-                        <svg width={24} height={24} viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                        <span
+                          className={`isolate relative grid place-items-center ${aktif ? 'sinar-ikon' : ''}`}
+                        >
+                        <svg width={26} height={26} viewBox="0 0 20 20" aria-hidden className="shrink-0">
                           {k === 'rekomendasi' ? (
                             <>
                               <path
@@ -2950,6 +2982,7 @@ export default function App() {
                             </>
                           )}
                         </svg>
+                        </span>
                         <span className="text-[10.5px] font-semibold leading-none">{label}</span>
                       </>
                     )}

@@ -440,7 +440,7 @@ export function MenuKawasan({
             : 'border-line bg-surface/60 hover:border-line-2 hover:bg-surface'
         }`}
       >
-        <span className="eyebrow hidden max-lg:inline 2xl:inline">{tk.kawasan}</span>
+        <span className="eyebrow hidden 2xl:inline">{tk.kawasan}</span>
         <span className="whitespace-nowrap">{label}</span>
         {dipilih.length > 1 && (
           <span className="rounded-full bg-gem px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-white">

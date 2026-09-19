@@ -697,7 +697,7 @@ function Kartu({
       <button
         onClick={() => onPilih(h3)}
         aria-current={aktif ? 'true' : undefined}
-        className={`w-full cursor-pointer border-b border-line px-4 py-3 text-left transition-colors max-lg:px-3 max-lg:py-2.5 ${
+        className={`w-full cursor-pointer border-b border-line px-4 py-3 text-left transition-colors max-lg:px-3 max-lg:py-2 ${
           aktif ? 'bg-surface-2' : 'hover:bg-surface-2'
         }`}
       >
@@ -711,7 +711,7 @@ function Kartu({
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
               <span className="flex items-baseline gap-1.5">
-                <span className="papan tabular text-[22px] leading-none">{nilai}</span>
+                <span className="papan tabular text-[22px] leading-none max-lg:text-[19px]">{nilai}</span>
                 <span className="text-[12px] text-ink-3">{satuan}</span>
               </span>
               {kuadran && <Glif kuadran={kuadran} ukuran={11} />}

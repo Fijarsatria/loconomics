@@ -1301,12 +1301,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // kebetulan berbunyi mirip, dan yang kedua tidak gugur oleh yang pertama.
     m.addControl(
       new AttributionControl({
-        // `compact: false` (19 Sep 2026, permintaan pemilik repo): tombol (i)
-        // yang membuka daftar dianggap "menghalangi". Sekarang atribusinya
-        // berupa BARIS TEKS tipis yang selalu terlihat - tidak ada lagi pil
-        // yang harus diketuk, dan A.3 tetap terpenuhi karena sumbernya tetap
-        // disebut di layar. Gayanya diatur index.css (font 9,5px, redup).
-        compact: false,
+        // `compact: true`, tapi DIKECILKAN (19 Sep 2026, permintaan pemilik
+        // repo). Percobaan sebelumnya memakai baris teks penuh; pemilik repo
+        // menilainya "mengganggu di atas", jadi yang benar: tombol kecil saja
+        // di kiri-bawah, dan daftar sumbernya baru terbuka kalau diketuk.
+        // A.3 tetap terpenuhi - sumbernya ada di DOM dan satu ketukan jauhnya.
+        compact: true,
         customAttribution: [
           '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>',
           '<a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">© openrouteservice</a>',
@@ -1320,6 +1320,15 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }),
       'bottom-left',
     )
+    // Di ponsel daftarnya JANGAN terbuka sendiri: `compact:true` membuat
+    // MapLibre menambahkan `maplibregl-compact-show`, dan tanpa dilepas tombol
+    // kecilnya langsung menjadi kotak sumber selebar layar. Yang diinginkan
+    // cuma tombolnya; daftarnya muncul saat diketuk.
+    if (window.matchMedia('(max-width: 1023.98px)').matches) {
+      m.getContainer()
+        .querySelector('.maplibregl-ctrl-attrib')
+        ?.classList.remove('maplibregl-compact-show')
+    }
     // DUA pemicu, dan yang kedua bukan sabuk pengaman berlebihan.
     //
     // 'load' baru menyala sesudah render pertama yang lengkap, dan itu

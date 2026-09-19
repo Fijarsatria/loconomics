@@ -15,6 +15,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent as EventPapanKetik,
@@ -486,6 +487,51 @@ let langkahWarna = 0
  * Selisih tempo itulah efeknya — gerak yang mendarat duluan meninggalkan
  * warnanya sebagai jejak, bukan sebagai getaran yang tidak berhenti.
  */
+/**
+ * Markah Loconomics: heksagon dengan satu blok lebih terang di dalamnya dan
+ * satu garis transit menembusnya - persis `public/favicon.svg`.
+ *
+ * Ada karena pemilik repo menemukan logo di halaman gerbang BERBEDA dari
+ * favicon yang muncul di tab peramban (19 Sep 2026). Yang dipakai di gerbang
+ * dulu cuma garis heksagon + satu titik: bentuk yang belum menyatakan apa pun
+ * tentang produk ini. Sekarang keduanya satu gambar, dan bila favicon berubah,
+ * satu tempat ini yang ikut berubah.
+ *
+ * Gradiennya lewat `useId`, bukan id tetap: dua markah di satu halaman dengan
+ * id gradien yang sama membuat yang kedua mengambil gradien yang pertama.
+ */
+export function Markah({ kelas = '' }: { kelas?: string }) {
+  const id = useId()
+  const isi = `url(#${id})`
+  return (
+    <svg viewBox="0 0 48 48" className={kelas} aria-hidden>
+      <defs>
+        <linearGradient id={id} x1="8" y1="4" x2="40" y2="44" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#2DE8C0" />
+          <stop offset="1" stopColor="#12836C" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M24 3.2 42 13.6 42 34.4 24 44.8 6 34.4 6 13.6Z"
+        fill="none"
+        stroke={isi}
+        strokeWidth="3.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 31.2 19.2 23.6 28.8 29.1 42 21.5"
+        fill="none"
+        stroke={isi}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.45"
+      />
+      <path d="M28.8 14.6 34.6 17.9 34.6 24.5 28.8 27.8 23 24.5 23 17.9Z" fill={isi} />
+    </svg>
+  )
+}
+
 export function PapanNama({
   teks,
   kelas = 'text-[20px] leading-none',
@@ -882,7 +928,7 @@ export function Menu<T extends string>({
             : 'border-line bg-surface/60 hover:border-line-2 hover:bg-surface'
         }`}
       >
-        <span className="eyebrow hidden max-lg:inline 2xl:inline">{label}</span>
+        <span className="eyebrow hidden 2xl:inline">{label}</span>
         <span className="whitespace-nowrap">{terpilih?.label ?? '—'}</span>
         {terpilih?.catatan && (
           <span className="hidden text-[12px] text-ink-3 lg:inline">{terpilih.catatan}</span>
@@ -1073,6 +1119,7 @@ export function PilihBasemap<T extends string>({
   opsi,
   onUbah,
   arah = 'kanan',
+  arahSempit,
   buka: bukaLuar,
   onBuka,
 }: {
@@ -1085,6 +1132,13 @@ export function PilihBasemap<T extends string>({
    * jadi bawaannya ke kanan.
    */
   arah?: 'kiri' | 'kanan'
+  /**
+   * Arah saat layar SEMPIT (<1024px). Tumpukan kendali peta pindah ke kanan
+   * tepi di ponsel, jadi pilnya harus memanjang ke KIRI - kalau tidak, ia
+   * mendorong tombolnya sendiri ke kiri alih-alih mengembang ke samping.
+   * Di desktop tumpukannya di kiri, jadi `arah` biasa tetap dipakai.
+   */
+  arahSempit?: 'kiri' | 'kanan'
   /**
    * Terbuka atau tidak, DIKENDALIKAN dari luar. Boleh dikosongkan; tanpa
    * keduanya komponen ini mengurus keadaannya sendiri seperti sebelumnya.
@@ -1099,6 +1153,12 @@ export function PilihBasemap<T extends string>({
   buka?: boolean
   onBuka?: (v: boolean) => void
 }) {
+  const arahKini: 'kiri' | 'kanan' =
+    arahSempit &&
+    typeof window !== 'undefined' &&
+    window.matchMedia('(max-width: 1023.98px)').matches
+      ? arahSempit
+      : arah
   const [bukaDalam, setBukaDalam] = useState(false)
   const terkendali = bukaLuar !== undefined
   const buka = terkendali ? bukaLuar : bukaDalam
@@ -1172,7 +1232,7 @@ export function PilihBasemap<T extends string>({
          tersimpan dan kompas di atas-bawahnya. Di desktop tumpukannya
          dirapatkan ke kiri, jadi jaraknya tidak menggeser tombolnya. */
       className={`flex items-center gap-2 max-lg:!gap-0 ${
-        arah === 'kanan' ? 'flex-row-reverse justify-start' : 'justify-end'
+        arahKini === 'kanan' ? 'flex-row-reverse justify-start' : 'justify-end'
       }`}
     >
       {/* Pil yang memanjang. Lebarnya dianimasikan dalam px, bukan dari `auto`:
@@ -1185,7 +1245,7 @@ export function PilihBasemap<T extends string>({
           // Isi pil selalu selebar penuh; yang menyusut wadahnya. Supaya
           // isinya tampak keluar DARI tombol, sisi yang dipotong harus yang
           // jauh dari tombol.
-          direction: arah === 'kanan' ? 'rtl' : 'ltr',
+          direction: arahKini === 'kanan' ? 'rtl' : 'ltr',
         }}
         aria-hidden={!buka}
       >

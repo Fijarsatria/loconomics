@@ -49,7 +49,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SplitText } from 'gsap/SplitText'
 
 import { IDENTITAS, KUADRAN, PENDIRI, URUTAN_KUADRAN } from '../config'
-import { MenuPengaturan, PapanNama } from './primitif'
+import { Markah, MenuPengaturan, PapanNama } from './primitif'
 import { TombolAkun, useSesi } from './Akun'
 import BentoKeputusan, { type PilihanKawasan } from './GerbangPeta'
 import { KARTU_GERBANG, potretUntukTema } from '../lib/kartu-gerbang'
@@ -2112,16 +2112,9 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
             aria-label={IDENTITAS.produk}
             className={`flex shrink-0 cursor-pointer items-center gap-2.5 ${navGelap ? 'text-white' : ''}`}
           >
-            <svg viewBox="-50 -55 100 110" className="h-[18px] w-[16px] sm:h-5 sm:w-[18px]" aria-hidden>
-              <polygon
-                points={jalurHeks(44)}
-                fill="none"
-                stroke={navGelap ? '#7cf7dd' : 'var(--g-teal)'}
-                strokeWidth="11"
-                strokeLinejoin="round"
-              />
-              <circle r="11" fill={navGelap ? '#7cf7dd' : 'var(--g-teal)'} />
-            </svg>
+            {/* Markah yang SAMA dengan `public/favicon.svg`, bukan heksagon
+                garis + titik yang dipakai sampai 19 Sep 2026. */}
+            <Markah kelas="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px]" />
             <PapanNama
               teks={IDENTITAS.produk}
               sebagai="span"
