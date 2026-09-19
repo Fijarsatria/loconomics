@@ -805,11 +805,18 @@ export function Menu<T extends string>({
   nilai,
   opsi,
   onUbah,
+  arah = 'turun',
 }: {
   label: string
   nilai: T
   opsi: { nilai: T; label: string; catatan?: string }[]
   onUbah: (v: T) => void
+  /**
+   * Ke mana daftar pilihannya membuka. `turun` (bawaan) untuk menu di bilah
+   * atas; `naik` untuk menu yang duduk di dekat dasar layar - pil filter
+   * kiri-bawah di ponsel - supaya daftarnya tidak jatuh keluar layar.
+   */
+  arah?: 'turun' | 'naik'
 }) {
   const [buka, setBuka] = useState(false)
   const { tampil, menutup } = useTutupHalus(buka)
@@ -896,7 +903,9 @@ export function Menu<T extends string>({
           role="listbox"
           aria-label={label}
           data-menutup={menutup ? '1' : undefined}
-          className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 max-h-[60vh] min-w-full overflow-auto rounded-md p-1.5"
+          className={`kaca-tebal pop pop-kanan absolute right-0 z-50 max-h-[60vh] min-w-full overflow-auto rounded-md p-1.5 ${
+            arah === 'naik' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
+          }`}
         >
           {opsi.map((o, i) => {
             const aktif = o.nilai === nilai
@@ -1157,7 +1166,12 @@ export function PilihBasemap<T extends string>({
   return (
     <div
       ref={wadah}
-      className={`flex items-center gap-2 ${
+      /* `max-lg:!gap-0`: di ponsel tumpukan kendali peta dirapatkan ke tepi
+         KANAN. Jarak 8px antara tombol dan pil yang sedang tertutup (lebar 0)
+         mendorong tombolnya 8px ke kiri, sehingga tidak sejajar dengan tombol
+         tersimpan dan kompas di atas-bawahnya. Di desktop tumpukannya
+         dirapatkan ke kiri, jadi jaraknya tidak menggeser tombolnya. */
+      className={`flex items-center gap-2 max-lg:!gap-0 ${
         arah === 'kanan' ? 'flex-row-reverse justify-start' : 'justify-end'
       }`}
     >
@@ -1550,7 +1564,7 @@ export function MenuPengaturan({
           <div
             role="menu"
             data-menutup={menutup ? '1' : undefined}
-            className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[15.5rem] overflow-hidden rounded-md p-1.5 text-ink"
+            className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[15.5rem] overflow-hidden rounded-md p-1.5 text-ink max-lg:max-h-[72svh] max-lg:w-[12rem] max-lg:overflow-y-auto max-lg:p-1 max-lg:[&_.ungkap]:px-2.5 max-lg:[&_.ungkap]:py-1 max-lg:[&_.ungkap]:text-[11.5px]"
           >
             {/* Bahasa di baris PERTAMA, sebagai sakelar - bukan sebagai layar
                 yang harus dibuka dulu. Ia satu-satunya pengaturan yang

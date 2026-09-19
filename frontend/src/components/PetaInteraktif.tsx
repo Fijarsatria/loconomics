@@ -1295,6 +1295,17 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }),
       'bottom-left',
     )
+    // Di ponsel daftar atribusi penuh memakan empat baris dan menutupi peta.
+    // MapLibre sudah menyediakan bentuk RINGKASnya sendiri - pil (i) yang
+    // membuka daftar saat diketuk - tetapi `compact: true` membuatnya terbuka
+    // sejak awal, jadi kelasnya dicabut sekali di sini. Atribusi tetap
+    // terlihat (ketentuan A.3): tombolnya yang membukanya. Desktop tidak
+    // disentuh, daftarnya tetap terbuka seperti sebelumnya.
+    if (window.matchMedia('(max-width: 1023.98px)').matches) {
+      m.getContainer()
+        .querySelector('.maplibregl-ctrl-attrib')
+        ?.classList.remove('maplibregl-compact-show')
+    }
     // DUA pemicu, dan yang kedua bukan sabuk pengaman berlebihan.
     //
     // 'load' baru menyala sesudah render pertama yang lengkap, dan itu

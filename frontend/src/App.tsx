@@ -317,6 +317,12 @@ const K_APP: Record<
     tabRekomendasi: string
     tabDaftar: string
     tabAI: string
+    navUntuk: string
+    navLokasi: string
+    navAI: string
+    navBeranda: string
+    navAkun: string
+    navBawah: string
     lipat: string
     bukaPanel: string
     bukaPanelDaftar: string
@@ -368,6 +374,12 @@ const K_APP: Record<
     tabRekomendasi: 'Untuk Anda',
     tabDaftar: 'Daftar lokasi',
     tabAI: 'Loconomics AI',
+    navUntuk: 'Untuk Anda',
+    navLokasi: 'Lokasi',
+    navAI: 'AI',
+    navBeranda: 'Beranda',
+    navAkun: 'Akun',
+    navBawah: 'Navigasi utama',
     lipat: 'Lipat panel',
     bukaPanel: 'Buka panel',
     bukaPanelDaftar: 'Buka panel daftar lokasi',
@@ -431,6 +443,12 @@ const K_APP: Record<
     tabRekomendasi: 'For you',
     tabDaftar: 'Locations',
     tabAI: 'Loconomics AI',
+    navUntuk: 'For you',
+    navLokasi: 'Places',
+    navAI: 'AI',
+    navBeranda: 'Home',
+    navAkun: 'Account',
+    navBawah: 'Main navigation',
     lipat: 'Collapse panel',
     bukaPanel: 'Open panel',
     bukaPanelDaftar: 'Open the locations panel',
@@ -495,11 +513,15 @@ function Cari({
   onPilihKawasan,
   onPilihSimpul,
   onPilihHeksagon,
+  kelas = '',
 }: {
   simpul: SimpulTransit[]
   onPilihKawasan: (nama: string) => void
   onPilihSimpul: (s: SimpulTransit) => void
   onPilihHeksagon: (h3: string) => void
+  /* Kelas tambahan dari pemanggil. Dipakai App untuk menaruh pencarian di
+     baris pertama grid bilah atas di layar sempit tanpa menyentuh desktop. */
+  kelas?: string
 }) {
   const t = useTeks(K_APP)
   const [q, setQ] = useState('')
@@ -538,7 +560,7 @@ function Cari({
   }
 
   return (
-    <div ref={wadah} className="relative min-w-0 flex-1 md:max-w-[19rem]">
+    <div ref={wadah} className={`relative min-w-0 flex-1 md:max-w-[19rem] ${kelas}`}>
       <div className="fokus-pil flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3.5 py-1.5 transition-colors focus-within:border-line-2 focus-within:bg-surface">
         <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className="shrink-0 text-ink-3">
           <circle cx="6" cy="6" r="4.3" stroke="currentColor" strokeWidth="1.6" fill="none" />
@@ -900,7 +922,27 @@ export default function App() {
    */
   const [tabDikunjungi, setTabDikunjungi] = useState<ReadonlySet<NamaTab>>(() => new Set([tab]))
   if (!tabDikunjungi.has(tab)) setTabDikunjungi(new Set([...tabDikunjungi, tab]))
-  const [panelTerbuka, setPanelTerbuka] = useState(true)
+  /**
+   * Panel kanan: TERBUKA di layar lebar, TERTUTUP di ponsel.
+   *
+   * Sejak tata letak ponsel memakai bilah bawah (MapID-style), lembar yang
+   * langsung terbuka setinggi separuh layar justru menyembunyikan peta -
+   * keluhan yang persis memicunya. Di ponsel peta dulu tampil penuh, dan
+   * lembar dibuka lewat bilah bawah. Syaratnya dibaca dari viewport, bukan
+   * lebar 0: SSR tidak dipakai di sini, jadi `window` selalu ada.
+   */
+  const [panelTerbuka, setPanelTerbuka] = useState(
+    () => typeof window === 'undefined' || window.matchMedia('(min-width: 1024px)').matches,
+  )
+  /**
+   * Lembar bawah ponsel sedang mekar penuh atau tidak. Di desktop tidak
+   * dipakai sama sekali (panel jadi kolom tetap).
+   */
+  const [lembarPenuh, setLembarPenuh] = useState(false)
+  /* Titik sentuh awal + penanda "barusan digeser", supaya klik setelah seretan
+     tidak ikut membalik keadaan. Lihat penangan di kepala lembar. */
+  const mulaiLembar = useRef(0)
+  const geserLembar = useRef(false)
   /**
    * Kompas Kuadran / Legenda: sekarang dibuka lewat tombol, tidak berdiri terus.
    *
@@ -924,6 +966,13 @@ export default function App() {
    */
   const [panelKiri, setPanelKiri] = useState<'tidak' | 'kartu' | 'basemap'>('tidak')
   const panelKiriTerbuka = panelKiri === 'kartu'
+  /**
+   * Pil filter kiri-bawah di ponsel (kawasan + layer), meniru "Community
+   * Filter" MAPID. Desktop tidak memakainya: kedua dropdown itu sudah duduk di
+   * bilah atas. Ditutup oleh ketukan di luar, sama seperti menu lain.
+   */
+  const [filterTerbuka, setFilterTerbuka] = useState(false)
+  const filterRef = useRef<HTMLDivElement>(null)
   const [diagram, setDiagram] = useState<DiagramKuadran | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
   /**
@@ -1702,6 +1751,91 @@ export default function App() {
     return selisih === 0 ? 'aktif' : selisih < 0 ? 'kiri' : 'kanan'
   }
 
+  /**
+   * Satu ketukan bilah bawah: pindah tab dan buka lembarnya. Mengetuk tab yang
+   * SEDANG aktif menutup lembar - pola yang sudah dikenal dari aplikasi peta,
+   * dan satu-satunya jalan menutup yang tidak menuntut tombol tersembunyi.
+   */
+  const pilihTabBawah = useCallback(
+    (k: NamaTab) => {
+      if (tab === k && panelTerbuka) {
+        setPanelTerbuka(false)
+        return
+      }
+      setTab(k)
+      setPanelTerbuka(true)
+    },
+    [tab, panelTerbuka],
+  )
+
+  useEffect(() => {
+    if (!filterTerbuka) return
+    const luar = (e: MouseEvent) => {
+      if (!filterRef.current?.contains(e.target as Node)) setFilterTerbuka(false)
+    }
+    const kunci = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFilterTerbuka(false)
+    }
+    document.addEventListener('mousedown', luar)
+    document.addEventListener('keydown', kunci)
+    return () => {
+      document.removeEventListener('mousedown', luar)
+      document.removeEventListener('keydown', kunci)
+    }
+  }, [filterTerbuka])
+
+  /**
+   * Kendali peta dirakit SEKALI lalu dipakai ulang, supaya sumbernya tidak
+   * digandakan. 19 Sep 2026, permintaan pemilik repo:
+   *
+   *   `kendaliFilter` (kawasan + layer) - di desktop menyatu di bilah atas; di
+   *   ponsel pindah ke PIL FILTER di kiri bawah, meniru "Community Filter"
+   *   MAPID. Karena itu dropdownnya dibuka KE ATAS (`naik`) di sana.
+   *
+   *   `pengaturanEl` (gerigi) - tetap di bilah atas pada kedua lebar.
+   */
+  const kendaliFilter = (arah: 'turun' | 'naik') => (
+    <>
+      <MenuKawasan nilai={kawasan} onUbah={gantiKawasan} arah={arah} />
+      <Menu
+        label="Layer"
+        arah={arah}
+        nilai={layerNyala ? layer : 'mati'}
+        /* "Tanpa layer" DI ATAS, bukan di bawah: ia keadaan bawaan, dan keadaan
+           bawaan yang harus dicari dulu di ujung daftar bukan keadaan bawaan
+           yang berguna. */
+        opsi={[
+          { nilai: 'mati' as NamaLayer, label: t.tanpaLayer },
+          ...Object.entries(LAYER).map(([k, l]) => ({
+            nilai: k as NamaLayer,
+            label: l.nama,
+          })),
+        ]}
+        onUbah={(v) => {
+          if ((v as string) === 'mati') {
+            setLayerNyala(false)
+            return
+          }
+          setLayer(v)
+          setLayerNyala(true)
+        }}
+      />
+    </>
+  )
+
+  const pengaturanEl = (
+    /* Sakelar tema PINDAH ke dalam menu pengaturan (11 Sep 2026, permintaan
+       pemilik repo). Preferensi tampilan bukan benda yang ditekan orang tiap
+       menit, dan ia berdiri di sebelah sakelar bahasa yang sifatnya sama. */
+    <MenuPengaturan
+      namaTempat={namaTempat}
+      onNamaTempat={setNamaTempat}
+      tigaDimensi={tigaDimensi}
+      onTigaDimensi={setTigaDimensi}
+      onSumber={() => setSumberTerbuka(true)}
+    />
+  )
+
   return (
     <>
       {gerbang && (
@@ -1824,19 +1958,27 @@ export default function App() {
             Lapisannya sendiri tidak menerima klik; hanya panel di dalamnya.
             Tanpa ini, seluruh peta jadi mati tersentuh oleh sebuah div kosong
             setinggi layar. */}
-        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col gap-3 p-3 sm:gap-4 sm:p-4">
-          {/* --- Bilah atas ------------------------------------------------ */}
-          <header className="kaca pointer-events-auto relative z-40 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2.5 rounded-lg px-4 py-2.5 sm:px-5">
-            {/* Tombol pulang BERDIRI SENDIRI di sebelah kiri logo, selalu
-                terlihat. Versi sebelumnya menyembunyikannya di dalam logo dengan
-                panah yang baru muncul saat disorot - dan tidak ada yang menyorot
-                logo untuk mencari jalan pulang. Pintu yang harus ditemukan dulu
-                bukan pintu. */}
+        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col gap-3 p-3 max-lg:!gap-2 max-lg:!p-2.5 sm:gap-4 sm:p-4">
+          {/* --- Bilah atas, SATU BARIS -------------------------------------
+              Di desktop: jalan pulang + logo + pencarian + kawasan/layer +
+              gerigi + akun, persis seperti semula.
+
+              Di ponsel: logo Loconomics + pencarian + gerigi. Tombol jalan
+              pulang TIDAK di sini - rumahnya tombol "Home" di bar bawah (kiri
+              paling pojok), dan kawasan/layer pindah ke pil filter kiri-bawah.
+              Seluruh busur `max-lg:` - desktop tidak tersentuh. */}
+          <header className="kaca pointer-events-auto relative z-40 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2.5 rounded-lg px-4 py-2.5 max-lg:!flex max-lg:!flex-nowrap max-lg:!items-center max-lg:gap-x-2 max-lg:px-2.5 max-lg:py-2 sm:px-5">
+            {/* Tombol pulang BERDIRI SENDIRI di sebelah kiri logo di desktop.
+                Versi sebelumnya menyembunyikannya di dalam logo dengan panah
+                yang baru muncul saat disorot - dan tidak ada yang menyorot logo
+                untuk mencari jalan pulang. Pintu yang harus ditemukan dulu
+                bukan pintu. Di ponsel ia disembunyikan karena tombol Home di
+                bar bawah sudah mengambil alih perannya. */}
             <button
               onClick={keLanding}
               title={t.kembaliGerbang}
               aria-label={t.kembaliGerbang}
-              className="group grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full border border-line text-ink-2 transition-all duration-300 ease-jelly hover:-translate-x-0.5 hover:border-line-2 hover:text-ink"
+              className="group grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full border border-line text-ink-2 transition-all duration-300 ease-jelly hover:-translate-x-0.5 hover:border-line-2 hover:text-ink max-lg:hidden"
             >
               <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden>
                 <path
@@ -1849,11 +1991,17 @@ export default function App() {
                 />
               </svg>
             </button>
+            {/* Logo Loconomics. Di desktop sudah tampil; di ponsel kini JUGA
+                tampil - identitas produk tumbuh di bilah atas yang tinggal satu
+                baris, persis seperti aplikasi peta. */}
             <div className="flex shrink-0 items-baseline gap-2.5">
-              <PapanNama teks="Loconomics" />
+              {/* Di ponsel logonya dikecilkan: 20px membuat "Loconomics"
+                  memakan hampir separuh bilah sampai pencariannya tercekik. */}
+              <PapanNama teks="Loconomics" kelas="text-[20px] leading-none max-lg:!text-[16px]" />
             </div>
 
             <Cari
+              kelas="max-lg:!w-auto max-lg:!flex-1"
               simpul={simpul}
               onPilihKawasan={gantiKawasan}
               onPilihSimpul={(s) => {
@@ -1868,51 +2016,23 @@ export default function App() {
               }}
             />
 
-            <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
-              <MenuKawasan nilai={kawasan} onUbah={gantiKawasan} />
-              <Menu
-                label="Layer"
-                nilai={layerNyala ? layer : 'mati'}
-                /* "Tanpa layer" DI ATAS, bukan di bawah: ia keadaan bawaan, dan
-                   keadaan bawaan yang harus dicari dulu di ujung daftar bukan
-                   keadaan bawaan yang berguna. */
-                opsi={[
-                  { nilai: 'mati' as NamaLayer, label: t.tanpaLayer },
-                  ...Object.entries(LAYER).map(([k, l]) => ({
-                    nilai: k as NamaLayer,
-                    label: l.nama,
-                  })),
-                ]}
-                onUbah={(v) => {
-                  if ((v as string) === 'mati') {
-                    setLayerNyala(false)
-                    return
-                  }
-                  setLayer(v)
-                  setLayerNyala(true)
-                }}
-              />
-              {/* Tombol "Lokasi tersimpan" pindah ke tumpukan kiri di atas
-                  peta, sesumbu dengan pemilih basemap. Lihat alasannya di sana. */}
-              {/* Sakelar tema BERDIRI SENDIRI, bukan di dalam menu pengaturan.
-                  Ia satu-satunya setelan yang diubah orang berkali-kali dalam
-                  satu sesi - siang di kereta, malam di rumah - dan setelan
-                  sesering itu tidak boleh butuh dua ketukan. */}
-              {/* Sakelar tema PINDAH ke dalam menu pengaturan (11 Sep 2026,
-                  permintaan pemilik repo). Bilah ini sudah memuat pencarian,
-                  kawasan, layer, pengaturan, dan akun; preferensi tampilan
-                  bukan benda yang ditekan orang tiap menit, dan ia berdiri di
-                  sebelah sakelar bahasa yang sifatnya sama persis. */}
-              <MenuPengaturan
-                namaTempat={namaTempat}
-                onNamaTempat={setNamaTempat}
-                tigaDimensi={tigaDimensi}
-                onTigaDimensi={setTigaDimensi}
-                onSumber={() => setSumberTerbuka(true)}
-              />
-              {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
-                  visual keduanya terbaca sebagai satu kelompok tombol. */}
-              <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-line sm:block" aria-hidden />
+            {/* Gerigi pengaturan DI PONSEL: tetap di bilah atas. Desktop
+                memakai salinan di blok kendali bawah ini. */}
+            <div className="hidden shrink-0 max-lg:block">{pengaturanEl}</div>
+
+            {/* Kelompok kendali peta DI DESKTOP: satu blok flex yang didorong ke
+                kanan (`ml-auto gap-2`), persis seperti semula. */}
+            <div className="ml-auto hidden max-w-full shrink-0 flex-wrap items-center justify-end gap-2 lg:flex">
+              {kendaliFilter('turun')}
+              {pengaturanEl}
+            </div>
+            {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
+                visual keduanya terbaca sebagai satu kelompok tombol. */}
+            <span
+              className="mx-0.5 hidden h-6 w-px shrink-0 bg-line sm:block max-lg:hidden"
+              aria-hidden
+            />
+            <div className="hidden shrink-0 lg:block">
               <TombolAkun />
             </div>
           </header>
@@ -1922,7 +2042,11 @@ export default function App() {
                 pb-[42px] menyisakan baris skala + atribusi MapLibre di kiri
                 bawah. Angkanya dikunci oleh .maplibregl-ctrl-bottom-left di
                 index.css; kedua sisi angka ajaib ini ada di repo yang sama. */}
-            <div className="flex min-h-0 flex-1 flex-col gap-3 pb-[42px]">
+            {/* `max-lg:pb-[9rem]`: chip aksi (Simulasi di sini / baki komparasi)
+                harus mengambang DI ATAS deretan pil Filter + atribusi, yang
+                duduk di 6rem, dan di atas bilah bawah (~81px). 4.75rem membuatnya
+                menabrak bar. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-3 pb-[42px] max-lg:pb-[9rem]">
               {/* Baris bawah: legenda di kiri, tombol melayang di kanan, dan
                   pertanyaan layer TEPAT di tengah.
 
@@ -1943,6 +2067,13 @@ export default function App() {
                     kanan dengan sendirinya dan tidak ada yang bisa bertumpuk. */}
                 <div
                   className="kolom-kartu order-2 overflow-hidden"
+                  onClick={(e) => {
+                    // Di ponsel kartunya MODAL (lihat `.kolom-kartu` di
+                    // index.css); ketukan di latar gelap menutupnya. Di desktop
+                    // pembungkus ini persis seukuran kartunya, jadi tidak ada
+                    // latar yang bisa diketuk dan aturan ini tidak terpakai.
+                    if (e.target === e.currentTarget) setPanelKiri('tidak')
+                  }}
                   data-buka={panelKiriTerbuka && !simulasiTerbuka}
                   style={
                     {
@@ -1969,7 +2100,7 @@ export default function App() {
                 </div>
 
                 <div
-                  className={`pointer-events-none order-3 flex min-w-0 flex-1 justify-center pb-0.5 transition-opacity duration-300 ${
+                  className={`pointer-events-none order-3 flex min-w-0 flex-1 justify-center pb-0.5 transition-opacity duration-300 max-lg:pr-[4.75rem] ${
                     simulasiTerbuka ? 'opacity-0' : 'opacity-100'
                   }`}
                 >
@@ -2052,7 +2183,7 @@ export default function App() {
                     </button>
                     </div>
                   ) : (
-                  <div className="kaca pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-full px-4 py-2">
+                  <div className="kaca pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-full px-4 py-2 max-lg:hidden">
                     <span className="truncate text-[13.5px] text-ink-2">
                       {bahasa === 'en' ? LAYER[layer].pertanyaanEn : LAYER[layer].pertanyaan}
                     </span>
@@ -2077,11 +2208,17 @@ export default function App() {
                     tombolnya dan tidak ada apa pun yang terlihat muncul.
                     `relative` ikut alur normal persis seperti `static`, bedanya
                     cuma ia tetap jadi jangkar. */}
-                {/* BARIS di bawah lg, KOLOM mulai lg. Terukur 14 Sep 2026 di 360x640,
-                    390x664, 412x780, dan 768x1024: tumpukan tegak naik
-                    menembus bilah atas di keempatnya, karena tinggi layar di
-                    atas lembar 56svh terlalu pendek untuknya. */}
-                <div className="pointer-events-auto absolute bottom-[calc(56svh+0.75rem)] left-0 z-30 order-1 flex flex-row items-end gap-2 lg:relative lg:flex-col lg:items-start lg:bottom-auto lg:left-auto lg:mr-auto">
+                {/* Tumpukan kendali peta.
+
+                    Di desktop ia tetap kolom yang duduk di alur baris bawah
+                    (relative), persis seperti semula.
+
+                    Di ponsel ia `fixed` di tepi KANAN ATAS, TEGAK, tepat di
+                    bawah bilah atas - meniru tata letak MAPID, tempat pemilih
+                    layer menggantung di bawah kolom pencarian. Kiri bawah sudah
+                    dipakai pil filter, dan bar bawah sudah memuat navigasi,
+                    jadi sudut kanan atas yang tersisa. */}
+                <div className="tumpukan-peta pointer-events-auto absolute z-30 order-1 flex gap-2 max-lg:fixed max-lg:right-2.5 max-lg:top-[4.75rem] max-lg:flex-col max-lg:items-end lg:relative lg:bottom-auto lg:left-auto lg:mr-auto lg:flex-col lg:items-start">
                   {/* Tombol perbesar/perkecil DISEMBUNYIKAN di layar sempit.
                       Bukan karena tidak berguna, melainkan karena di sana ia
                       satu-satunya yang bisa pergi tanpa kehilangan apa pun:
@@ -2182,7 +2319,7 @@ export default function App() {
                     }}
                     title={t.tersimpanPanjang}
                     aria-label={t.tersimpan}
-                    className="grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.06]"
+                    className="grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.06] max-lg:fixed max-lg:bottom-[9.5rem] max-lg:right-2.5"
                   >
                     <svg width="19" height="19" viewBox="0 0 20 20" aria-hidden>
                       <path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor" />
@@ -2210,7 +2347,7 @@ export default function App() {
                     aria-expanded={panelKiriTerbuka}
                     aria-label={`${panelKiriTerbuka ? 'Tutup' : 'Buka'} ${pakaiKompas ? 'Kompas Kuadran' : 'legenda'}`}
                     title={pakaiKompas ? 'Kompas Kuadran' : 'Legenda layer'}
-                    className={`grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full transition-transform duration-200 ease-jelly hover:scale-[1.06] ${
+                    className={`grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full transition-transform duration-200 ease-jelly hover:scale-[1.06] max-lg:fixed max-lg:bottom-[6rem] max-lg:right-2.5 ${
                       panelKiriTerbuka
                         ? 'kaca text-ink'
                         : 'bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)]'
@@ -2242,20 +2379,18 @@ export default function App() {
                 Di bawah 1024px ia jadi lembar bawah, bukan kolom: panel selebar
                 25rem di layar 900px menyisakan peta yang terlalu sempit untuk
                 membandingkan heksagon — dan membandingkan heksagon adalah
-                seluruh gunanya peta ini. */}
+                seluruh gunanya peta ini.
+
+                Di ponsel lembar duduk DI ATAS bilah navigasi (`bottom: 6rem` +
+                safe-area, lihat `.lembar-peta`) dan tingginya dua keadaan:
+                ringkas (45svh) dan PENUH - menyeret naik membuatnya setinggi
+                layar penuh, berhenti tepat di bawah bilah atas
+                (`calc(100svh - 10.5rem)`, lihat `.lembar-peta[data-penuh]`). */}
             <aside
               data-buka={panelTerbuka}
+              data-penuh={lembarPenuh}
               aria-hidden={!panelTerbuka}
-              /* `56svh`, BUKAN `56%`, dan itu memperbaiki tumpang tindih yang
-                 nyata di ponsel. Lembar ini dan tumpukan tombol kiri sama-sama
-                 memakai angka 56 - tetapi PERSEN selalu relatif terhadap induk
-                 masing-masing, dan keduanya punya induk yang berbeda. Terukur di
-                 390x844: lembar 473px tinggi (56% dari lapisan chrome), tombol
-                 kiri berhenti di 571px (56% dari pembungkus dalamnya yang cuma
-                 369px) - jadi tiga tombol terbawah duduk DI ATAS daftar lokasi.
-                 `svh` diukur terhadap viewport untuk keduanya, jadi angkanya
-                 tidak bisa lagi berarti dua hal. */
-              className="kolom-geser melayang absolute inset-x-0 bottom-0 h-[56svh] min-h-0 lg:static lg:h-auto"
+              className="kolom-geser lembar-peta melayang absolute inset-x-0 min-h-0 max-lg:h-[45svh] max-lg:rounded-t-2xl max-lg:shadow-[0_-18px_50px_-24px_rgb(10_20_16/0.55)] max-lg:transition-[height] max-lg:duration-300 max-lg:ease-liquid lg:static lg:h-auto"
               style={
                 {
                   '--lebar-kolom': panelTerbuka ? '25rem' : '0rem',
@@ -2264,7 +2399,7 @@ export default function App() {
                 } as CSSProperties
               }
             >
-              <div className="kaca-tebal flex h-full w-full flex-col overflow-hidden rounded-lg lg:w-[25rem]">
+              <div className="kaca-tebal flex h-full w-full flex-col overflow-hidden rounded-lg max-lg:rounded-t-2xl max-lg:rounded-b-none lg:w-[25rem]">
                 <div className="flex shrink-0 items-center gap-1 p-2">
                   {/* SATU penunjuk yang meluncur, bukan tiga latar yang
                       bergantian menyala. Versi sebelumnya memberi tiap tombol
@@ -2299,7 +2434,7 @@ export default function App() {
                       Salinannya `aria-hidden`; yang dibaca pembaca layar tetap
                       tombolnya, dan penunjuknya `pointer-events-none` supaya
                       klik jatuh ke tombol di bawahnya. */}
-                  <div className="relative grid min-w-0 flex-1 grid-cols-3">
+                  <div className="relative grid min-w-0 flex-1 grid-cols-3 max-lg:hidden">
                     {URUTAN_TAB.map((k) => (
                       <button
                         key={k}
@@ -2336,7 +2471,7 @@ export default function App() {
                     onClick={() => setPanelTerbuka(false)}
                     aria-label={t.lipat}
                     title={t.lipat}
-                    className="ml-1 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+                    className="ml-1 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink max-lg:hidden"
                   >
                     <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden>
                       <path
@@ -2347,6 +2482,46 @@ export default function App() {
                         strokeLinecap="round"
                       />
                     </svg>
+                  </button>
+
+                  {/* Pegangan lembar ponsel. Menggantikan deret tiga tab yang di
+                      sana tinggal mengulang bilah bawah. Seret naik = mekar
+                      penuh, seret turun = ringkas lalu tutup, ketuk = beralih.
+                      `touch-none` supaya gerakannya tidak ikut menggulir isi. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (geserLembar.current) return
+                      setLembarPenuh((v) => !v)
+                    }}
+                    onPointerDown={(e) => {
+                      mulaiLembar.current = e.clientY
+                      geserLembar.current = false
+                      e.currentTarget.setPointerCapture(e.pointerId)
+                    }}
+                    onPointerMove={(e) => {
+                      if (Math.abs(e.clientY - mulaiLembar.current) > 16)
+                        geserLembar.current = true
+                    }}
+                    onPointerUp={(e) => {
+                      const dy = e.clientY - mulaiLembar.current
+                      if (dy < -30) setLembarPenuh(true)
+                      else if (dy > 30) {
+                        if (lembarPenuh) setLembarPenuh(false)
+                        else setPanelTerbuka(false)
+                      }
+                    }}
+                    aria-label={lembarPenuh ? t.lipat : 'Perbesar panel'}
+                    className="flex min-w-0 flex-1 cursor-grab touch-none flex-col items-center gap-1 py-1.5 active:cursor-grabbing lg:hidden"
+                  >
+                    <span className="h-1.5 w-10 rounded-full bg-line-2" />
+                    <span className="truncate text-[12.5px] font-semibold text-ink-2">
+                      {tab === 'rekomendasi'
+                        ? t.tabRekomendasi
+                        : tab === 'daftar'
+                          ? t.tabDaftar
+                          : t.tabAI}
+                    </span>
                   </button>
                 </div>
 
@@ -2485,10 +2660,14 @@ export default function App() {
               </div>
             </aside>
 
+            {/* Pintu buka panel DI DESKTOP saja. Di ponsel pintu itu sudah jadi
+                bilah navigasi bawah - tombol kecil di pojok kanan bawah inilah
+                yang dilaporkan "kayak dipojok kanan bawah banget, dan kayak
+                jelek". `hidden lg:flex`: desktop persis seperti semula. */}
             {!panelTerbuka && (
               <button
                 onClick={() => setPanelTerbuka(true)}
-                className="kaca pop pointer-events-auto absolute bottom-0 right-0 flex cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold transition-transform duration-200 ease-jelly hover:scale-105 lg:static lg:h-full lg:flex-col lg:justify-center lg:rounded-lg lg:px-2.5 lg:py-4 lg:hover:scale-100"
+                className="kaca pop pointer-events-auto absolute bottom-0 right-0 hidden cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold transition-transform duration-200 ease-jelly hover:scale-105 lg:static lg:flex lg:h-full lg:flex-col lg:justify-center lg:rounded-lg lg:px-2.5 lg:py-4 lg:hover:scale-100"
                 aria-label={t.bukaPanelDaftar}
                 title={t.bukaPanel}
               >
@@ -2506,6 +2685,38 @@ export default function App() {
                 </span>
               </button>
             )}
+          </div>
+
+          {/* --- Pil filter kiri-bawah (ponsel) -----------------------------
+              Meniru "Community Filter" MAPID: satu tombol gelap di kiri bawah,
+              tepat di atas bar navigasi. Isinya dua dropdown yang di desktop
+              duduk di bilah atas - kawasan dan layer - dan keduanya membuka KE
+              ATAS supaya daftarnya tidak jatuh keluar layar. Desktop tidak
+              merendernya (`lg:hidden`): di sana keduanya ada di bilah atas. */}
+          <div className="pil-filter pointer-events-none absolute left-2.5 z-30 flex flex-col items-start gap-2 lg:hidden">
+            {filterTerbuka && (
+              <div
+                ref={filterRef}
+                className="kendali-peta pop kaca pointer-events-auto flex flex-col items-stretch gap-1.5 rounded-xl p-2"
+              >
+                {kendaliFilter('naik')}
+              </div>
+            )}
+            <button
+              onClick={() => setFilterTerbuka((v) => !v)}
+              aria-expanded={filterTerbuka}
+              className="pointer-events-auto flex cursor-pointer items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[13.5px] font-semibold text-surface shadow-[0_14px_30px_-12px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.03]"
+            >
+              <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                <path
+                  d="M3 5.5h14M5.5 10h9M8 14.5h4"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+              {bahasa === 'en' ? 'Filters' : 'Filter'}
+            </button>
           </div>
 
           {/* --- Lembar simulasi ------------------------------------------
@@ -2552,6 +2763,130 @@ export default function App() {
                 </code>
               </div>
             </div>
+          )}
+
+          {/* --- Bilah navigasi bawah (ponsel) -----------------------------
+              Pintu masuk ketiga bagian wajib dalam satu layar, dalam bentuk
+              yang dikenal dari aplikasi peta: pil kaca mengambang, item tengah
+              "Lokasi" menonjol. Ketukan membuka lembar pada tab itu; ketukan
+              pada tab yang sedang aktif menutupnya.
+
+              Tidak dirender saat simulasi terbuka: lembar simulasi menempel
+              dasar layar dan bilah ini hanya akan berebut tempat dengannya. */}
+          {!simulasiTerbuka && (
+            <nav
+              aria-label={t.navBawah}
+              className="nav-peta pointer-events-auto absolute inset-x-2.5 z-40 flex items-stretch gap-0.5 rounded-lg kaca px-1 py-1.5 shadow-[0_16px_36px_-16px_rgb(22_33_28/0.5)] lg:hidden"
+            >
+              {/* Butir kiri PALING POJOK: Beranda - pulang ke halaman gerbang.
+                  Menggantikan tombol kembali yang dulu di bilah atas, atas
+                  permintaan pemilik repo ("kasih aja tombol home untuk kembali
+                  ke landing page"). */}
+              <button
+                onClick={keLanding}
+                aria-label={t.navBeranda}
+                title={t.navBeranda}
+                className="flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-1.5 text-ink-3 transition-colors hover:text-ink"
+              >
+                <svg width={22} height={22} viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                  <path
+                    d="M3 8.6 10 3l7 5.6V16a1 1 0 0 1-1 1h-3.6v-4.4H7.6V17H4a1 1 0 0 1-1-1z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="text-[10.5px] font-semibold leading-none">{t.navBeranda}</span>
+              </button>
+
+              {URUTAN_TAB.map((k) => {
+                const aktif = panelTerbuka && tab === k
+                const pusat = k === 'daftar'
+                const label =
+                  k === 'rekomendasi' ? t.navUntuk : k === 'daftar' ? t.navLokasi : t.navAI
+                const nama =
+                  k === 'rekomendasi' ? t.tabRekomendasi : k === 'daftar' ? t.tabDaftar : t.tabAI
+                return (
+                  <button
+                    key={k}
+                    onClick={() => pilihTabBawah(k)}
+                    aria-current={aktif ? 'page' : undefined}
+                    aria-label={nama}
+                    className={
+                      pusat
+                        ? 'relative flex min-w-0 flex-1 cursor-pointer items-center justify-center'
+                        : `flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-1.5 transition-colors ${
+                            aktif ? 'bg-surface-2 text-ink' : 'text-ink-3'
+                          }`
+                    }
+                  >
+                    {/* "Lokasi" kini bulatan BESAR yang terangkat, seperti FAB
+                        MAPID, dan tanpa label - persis bentuk di aplikasi itu.
+                        Ikon butir lain 24 px. (Permintaan 19 Sep 2026: "ikon dan
+                        buletan daftar lokasi dibuat lebih besar".) */}
+                    {pusat ? (
+                      <span
+                        className={`grid h-14 w-14 -translate-y-3.5 place-items-center rounded-full bg-ink text-surface shadow-[0_12px_24px_-8px_rgb(22_33_28/0.8)] transition-transform duration-300 ease-jelly ${
+                          aktif ? 'scale-105' : ''
+                        }`}
+                      >
+                        <svg width={24} height={24} viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                          <circle cx="5" cy="5" r="1.6" fill="currentColor" />
+                          <circle cx="5" cy="10" r="1.6" fill="currentColor" />
+                          <circle cx="5" cy="15" r="1.6" fill="currentColor" />
+                          <path
+                            d="M9.2 5h6.3M9.2 10h6.3M9.2 15h4.4"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
+                    ) : (
+                      <>
+                        <svg width={24} height={24} viewBox="0 0 20 20" aria-hidden className="shrink-0">
+                          {k === 'rekomendasi' ? (
+                            <>
+                              <path
+                                d="M10 2.4l1.9 4.6 4.6 1.9-4.6 1.9L10 15.4l-1.9-4.6L3.5 8.9l4.6-1.9z"
+                                fill="currentColor"
+                              />
+                              <path
+                                d="M4 14.2l.8 1.9 1.9.8-1.9.8L4 19.6l-.8-1.9-1.9-.8 1.9-.8z"
+                                fill="currentColor"
+                                opacity="0.75"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <path
+                                d="M3.2 9.4c0-3.1 3-5.6 6.8-5.6s6.8 2.5 6.8 5.6-3 5.6-6.8 5.6c-.7 0-1.4-.1-2-.2L4 16.2l1-2.5c-1.1-1-1.8-2.6-1.8-4.3z"
+                                fill="currentColor"
+                              />
+                              <circle cx="7.4" cy="9.4" r="1" fill="var(--color-surface, #fff)" />
+                              <circle cx="10" cy="9.4" r="1" fill="var(--color-surface, #fff)" />
+                              <circle cx="12.6" cy="9.4" r="1" fill="var(--color-surface, #fff)" />
+                            </>
+                          )}
+                        </svg>
+                        <span className="text-[10.5px] font-semibold leading-none">{label}</span>
+                      </>
+                    )}
+                  </button>
+                )
+              })}
+
+              {/* Butir kanan PALING POJOK: akun, meniru tombol profil MAPID.
+                  Tamu mendapat lingkaran berpendar (ajakan mendaftar); pelanggan
+                  lingkaran berinisial. Menunya membuka KE ATAS. */}
+              <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1.5">
+                <TombolAkun varian="bar" arahMenu="atas" />
+                <span className="text-[10.5px] font-semibold leading-none text-ink-3">
+                  {t.navAkun}
+                </span>
+              </div>
+            </nav>
           )}
         </div>
 

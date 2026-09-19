@@ -3061,6 +3061,119 @@ input:focus-visible {
   align-items: flex-end;
   gap: 8px;
 }
+/* ==========================================================================
+   Kerangka peta PONSEL (19 Sep 2026)
+
+   Seluruh blok ini hanya berlaku di bawah 1024px; desktop memakai tata letak
+   yang sama sekali tidak disentuh. Yang dirapikan berasal dari satu keluhan:
+   "acak dan hambur, semuanya besar sampai tidak muat".
+
+   1. BILAH BAWAH mengambang dengan bentuk yang sama seperti bilah atas -
+      kaca membulat, jarak 10px dari tepi - bukan bar penuh yang menempel
+      dasar layar.
+   2. LEMBAR bawah duduk tepat di atas bilah itu dan tingginya dikurangi
+      supaya peta tetap terlihat saat dibuka.
+   3. Kendali peta (basemap, tersimpan, legenda) dinaikkan ke atas bilah, dan
+      skala jarak disembunyikan supaya tidak ada tulisan yang menggantung di
+      atas bilah.
+
+   Satu angka acuan (`4.75rem` + safe-area) dipakai lembar dan kendali, jadi
+   keduanya tidak bisa berselisih tinggi dengan bilahnya.
+   ========================================================================== */
+@media (max-width: 1023.98px) {
+  /* Bilah bawah MENGAMBANG seperti bilah atas: kaca membulat dengan jarak
+     dari tepi layar (10px, sama dengan bantalan chrome), bukan bar penuh
+     yang menempel dasar. Safe-area ikut ditambahkan supaya ia tetap terangkat
+     di perangkat ber-home-indicator. */
+  .nav-peta {
+    bottom: calc(0.625rem + env(safe-area-inset-bottom));
+  }
+  /* Semua yang duduk di atas bilah bawah memakai satu angka yang sama, supaya
+     tidak bisa berselisih. Bilah ber-FAB besar kini setinggi ~81px + jarak
+     10px + sela 6px => 6rem. Diukur 390x844: bilah atasnya di 754px; angka ini
+     menaruh pil filter di 748px, tidak lagi ketimpa. */
+  .lembar-peta,
+  .pil-filter {
+    bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+  /* Keadaan PENUH: menyeret lembar naik membuatnya setinggi layar, berhenti
+     tepat di bawah bilah atas (4.5rem) - bukan 76svh yang menyisakan celah.
+     Satu angka dengan bilah atas dan `bottom` di atas, jadi tidak bisa
+     berselisih. */
+  .lembar-peta[data-penuh='true'] {
+    height: calc(100svh - 10.5rem - env(safe-area-inset-bottom));
+  }
+  /* Lembar Simulasi menempel DASAR layar, jadi keadaan penuhnya tidak dikurangi
+     `bottom`: setinggi layar dikurangi tinggi bilah atas saja. */
+  .simulasi-sheet[data-penuh='true'] {
+    max-height: calc(100svh - 4.5rem);
+  }
+  /* Skala jarak ("5 km") disembunyikan di ponsel. Ia satu-satunya tulisan yang
+     masih menggantung di atas bilah, dan skalanya bukan kewajiban atribusi -
+     berbeda dari (i) MAPID yang tetap ada. */
+  .maplibregl-ctrl-scale {
+    display: none !important;
+  }
+  /* Atribusi MAPID (wajib terlihat, ketentuan A.3) dipindah ke KANAN bawah -
+     kiri bawah kini milik pil filter - dan dinaikkan tepat di atas bilah.
+     `!important` bukan kelalaian: CSS MapLibre disuntikkan berkas yang malas
+     dimuat (PetaInteraktif), jadi urutannya SELALU sesudah index.css dan
+     menang pada spesifisitas yang sama. Tanpa ini, aturan di sini tidak
+     berpengaruh apa-apa - persis kegagalan diam yang pernah membuat atribusi
+     tertutup bilah bawah tanpa satu pun galat. */
+  /* Atribusi (i) ditaruh di SEBELAH KANAN pil filter - sebaris dengannya.
+     Kanan bawah kini milik tombol tersimpan + kompas, jadi (i) tidak boleh ke
+     sana. */
+  .maplibregl-ctrl-bottom-left,
+  .maplibregl-ctrl-bottom-right {
+    bottom: calc(6rem + env(safe-area-inset-bottom)) !important;
+    left: 7.5rem !important;
+    right: auto !important;
+  }
+  /* Saat lembar bawah terbuka, ia menutupi dasar peta - dan atribusi yang
+     duduk tepat di atas bilah masih menyembul menembus kaca lembar. Disembunyikan
+     selama itu: yang tertutup lembar bukan atribusi yang "terlihat". Begitu
+     lembar ditutup, ia kembali. `:has` dipilih supaya lembar tidak perlu tahu
+     soal kendali peta, dan sebaliknya. */
+  body:has(aside[data-buka='true']) .maplibregl-ctrl-bottom-left,
+  body:has(aside[data-buka='true']) .pil-filter {
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* Kendali di pil filter dipadatkan. Menu/MenuKawasan tetap pil. */
+  .kendali-peta button {
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+    font-size: 12.5px;
+  }
+  /* Kartu Kompas/Legenda di ponsel menjadi MODAL di tengah layar. Sebelumnya
+     ia kartu di baris bawah dan laporannya "ketutup bar bawah". Desktop tetap
+     kartu yang tumbuh dari samping tombolnya - `max-lg` seluruhnya. */
+  .kolom-kartu {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    margin: 0;
+    padding: 1.25rem;
+    opacity: 1;
+    overflow: visible;
+    pointer-events: auto;
+    background: color-mix(in srgb, #0b1512 42%, transparent);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+  .kolom-kartu[data-buka='false'] {
+    display: none;
+  }
+  .kolom-kartu > div {
+    max-height: 100%;
+    overflow-y: auto;
+  }
+}
 .maplibregl-ctrl-group {
   border-radius: var(--radius-sm) !important;
   overflow: hidden;

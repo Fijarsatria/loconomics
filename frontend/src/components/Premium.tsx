@@ -359,9 +359,12 @@ function Lembar({
 export function MenuKawasan({
   nilai,
   onUbah,
+  arah = 'turun',
 }: {
   nilai: string
   onUbah: (v: string) => void
+  /** Ke mana daftar kawasan membuka. Lihat `Menu` di primitif.tsx. */
+  arah?: 'turun' | 'naik'
 }) {
   const { premium, mintaLangganan } = useSesi()
   const tk = useTeks(K)
@@ -460,7 +463,9 @@ export function MenuKawasan({
           role="listbox"
           aria-label={tk.kawasan}
           data-menutup={menutup ? '1' : undefined}
-          className="kaca-tebal pop pop-kanan absolute left-0 top-[calc(100%+8px)] z-50 w-[min(17rem,calc(100vw-2rem))] overflow-hidden rounded-md sm:left-auto sm:right-0"
+          className={`kaca-tebal pop pop-kanan absolute left-0 z-50 w-[min(17rem,calc(100vw-2rem))] overflow-hidden rounded-md sm:left-auto sm:right-0 ${
+            arah === 'naik' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
+          }`}
         >
           <div className="p-1.5">
             <button

@@ -348,7 +348,7 @@ function Rekomendasi({
           Orang berhak tahu atas dasar apa daftar ini disusun — dan kalau salah
           satu kriterianya bukan yang ia maksud, ia melihatnya DI SINI alih-alih
           menyimpulkan produknya salah. */}
-      <div className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 py-3.5 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 py-3.5 backdrop-blur max-lg:px-3 max-lg:py-2.5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="eyebrow flex items-center gap-1.5">
@@ -399,7 +399,7 @@ function Rekomendasi({
         />
       ) : (
         <>
-          <div className="p-4 pb-2">
+          <div className="p-4 pb-2 max-lg:p-3 max-lg:pb-1.5">
             <Kartu r={data.hasil[0]} no={1} utama onPilih={onPilih} />
           </div>
           {data.hasil.length > 1 && (

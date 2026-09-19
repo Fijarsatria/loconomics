@@ -965,7 +965,7 @@ function PanelAI({
         </div>
       )}
 
-      <div className="scroll-tipis flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
+      <div className="scroll-tipis flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3 max-lg:px-3 max-lg:py-2">
         {/* --- Pembuka -------------------------------------------------------
             TIDAK dilepas dari DOM begitu ada pesan pertama; ia DITUTUP.
             Melepasnya membuat percakapan melompat ke atas sejauh tinggi
@@ -1005,10 +1005,10 @@ function PanelAI({
 
                   Semuanya `transform` dan `opacity`; tidak satu pun gradiennya
                   dihitung ulang per bingkai. */}
-              <span className="g-ai-mercu relative mb-5 inline-flex flex-col items-center">
-                <span className="g-ai-nyala pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full" aria-hidden />
-                <span className="g-ai-kilau pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full" aria-hidden />
-                <span className="g-ai-cincin-kabut pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[152px] w-[152px] -translate-x-1/2 -translate-y-1/2 rounded-full" aria-hidden />
+              <span className="g-ai-mercu relative mb-5 inline-flex flex-col items-center max-lg:mb-3">
+                <span className="g-ai-nyala pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full max-lg:h-[190px] max-lg:w-[190px]" aria-hidden />
+                <span className="g-ai-kilau pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full max-lg:h-[150px] max-lg:w-[150px]" aria-hidden />
+                <span className="g-ai-cincin-kabut pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[152px] w-[152px] -translate-x-1/2 -translate-y-1/2 rounded-full max-lg:h-[104px] max-lg:w-[104px]" aria-hidden />
                 {/* Aurora dan orbit, 13 Sep 2026 - "lebih hidup, lebih dinamis".
                     Tiga gumpal cahaya yang HANYUT dengan periode berbeda (9, 13,
                     dan 17 detik) tidak pernah kembali ke susunan yang sama dalam
@@ -1040,7 +1040,7 @@ function PanelAI({
                       opacity="0.6"
                     />
                   </svg>
-                  <PapanNama teks="Loconomics" sebagai="div" kelas="text-[34px] leading-none text-ink" />
+                  <PapanNama teks="Loconomics" sebagai="div" kelas="text-[34px] leading-none text-ink max-lg:text-[24px]" />
                   <span className="g-ai-sapuan pointer-events-none absolute inset-y-[-22px] inset-x-[-18px]" aria-hidden />
                 </span>
 
@@ -1070,7 +1070,7 @@ function PanelAI({
               )}
 
               {!terkunci && (
-              <div className="mt-6 w-full space-y-1.5">
+              <div className="mt-6 w-full space-y-1.5 max-lg:mt-3">
                 {t.contoh.map((c, i) => (
                   <button
                     key={c}

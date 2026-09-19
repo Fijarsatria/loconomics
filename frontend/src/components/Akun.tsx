@@ -1376,7 +1376,14 @@ const K_TOMBOL = {
   },
 }
 
-export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' }) {
+export function TombolAkun({
+  varian = 'peta',
+  arahMenu = 'bawah',
+}: {
+  varian?: 'peta' | 'gerbang' | 'bar'
+  /** Ke mana menunya membuka. `atas` dipakai tombol di bar bawah ponsel. */
+  arahMenu?: 'bawah' | 'atas'
+}) {
   const { akun, premium, memuat, keluar, mintaMasuk, mintaLangganan, mintaPreferensi } = useSesi()
   const t = useTeks(K_TOMBOL)
   const [buka, setBuka] = useState(false)
@@ -1384,11 +1391,17 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
   // hanya dipanggil sebagian waktu mengacaukan urutan kait React.
   const { tampil, menutup } = useTutupHalus(buka)
   const wadah = useRef<HTMLDivElement>(null)
+  // Untuk varian `bar`, kartunya dipindah ke <body> lewat portal - sehingga ia
+  // BUKAN lagi keturunan `wadah`. Tanpa ref ini, klik di dalam kartunya sendiri
+  // akan terbaca sebagai "klik di luar" dan menutupnya seketika.
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!buka) return
     const luar = (e: MouseEvent) => {
-      if (!wadah.current?.contains(e.target as Node)) setBuka(false)
+      const t = e.target as Node
+      if (wadah.current?.contains(t) || menuRef.current?.contains(t)) return
+      setBuka(false)
     }
     const kunci = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setBuka(false)
@@ -1407,6 +1420,24 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
   // yang bisa dibuka. Ikon orang-orangan menjawab pertanyaan yang belum ia
   // ajukan. Kalimatnya yang mengajukan pertanyaan itu untuknya.
   if (!akun) {
+    // Di bar bawah ponsel: satu lingkaran dengan pendar ajakan (`.g-catalyst`),
+    // bukan pil bertulisan "Daftar". Meniru tombol profil MAPID yang bulat;
+    // teksnya dipindah ke label butir bar di luar komponen ini.
+    if (varian === 'bar') {
+      return (
+        <div ref={wadah} className="relative shrink-0">
+          <button
+            onClick={() => mintaMasuk(null)}
+            disabled={memuat}
+            aria-label={t.masukAtauDaftar}
+            title={t.masukAtauDaftar}
+            className="g-catalyst grid h-10 w-10 cursor-pointer place-items-center rounded-full"
+          >
+            <Kilau />
+          </button>
+        </div>
+      )
+    }
     const digerbang = varian === 'gerbang'
     // DIBALIK 11 Sep 2026, membatalkan keputusan 9 Sep.
     //
@@ -1439,6 +1470,97 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
   }
 
   const inisial = (akun.nama_tampilan || akun.nama_pengguna).slice(0, 2).toUpperCase()
+  const bulat = varian === 'bar'
+
+  /**
+   * Isi menu dipisah supaya bisa dipakai DUA bentuk wadah: dropdown biasa, dan
+   * pop-up yang di-portal ke <body> (varian `bar`). Portal WAJIB untuk varian
+   * `bar`: tombolnya duduk di dalam <nav class="kaca">, dan `backdrop-filter`
+   * pada `.kaca` membuat elemen `fixed` berkontainer ke kotak nav yang cuma
+   * setinggi bilah - itulah sebabnya pop-up-nya dulu terpotong di dasar layar.
+   */
+  const isiMenu = (
+    <>
+      <div className="border-b border-line/70 px-4 py-3.5">
+        <div className="flex items-center gap-3">
+          <span
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[14px] font-bold ${
+              premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
+            }`}
+          >
+            {inisial}
+          </span>
+          <div className="min-w-0">
+            <p className="papan truncate text-[14.5px]">
+              {akun.nama_tampilan || akun.nama_pengguna}
+            </p>
+            <p className="truncate text-[12px] text-ink-3">{akun.email}</p>
+          </div>
+        </div>
+
+        <div className="mt-3.5 flex items-center gap-2">
+          <span
+            className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${
+              premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
+            }`}
+          >
+            {premium ? t.premium : t.gratis}
+          </span>
+          {akun.peran === 'admin' && (
+            <span className="rounded-full bg-pemenang-soft px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-pemenang">
+              Admin
+            </span>
+          )}
+        </div>
+
+        {premium ? (
+          <p className="mt-2.5 text-[12px] leading-snug text-ink-3">
+            {akun.langganan?.selamanya
+              ? t.selamanya
+              : akun.langganan?.berlaku_sampai
+                ? t.aktifSampai(
+                    new Date(akun.langganan.berlaku_sampai).toLocaleDateString(t.tanggal, {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    }),
+                  )
+                : t.langgananAktif}
+          </p>
+        ) : (
+          <button
+            onClick={() => {
+              setBuka(false)
+              mintaLangganan(null)
+            }}
+            className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.02]"
+          >
+            <Kilau />
+            {t.jadiPremium} — {rp(25000)}{t.perBulan}
+          </button>
+        )}
+      </div>
+
+      <div className="p-1.5">
+        <BarisMenu
+          onClick={() => {
+            setBuka(false)
+            mintaPreferensi()
+          }}
+          label={t.preferensi}
+          catatan={t.preferensiCatatan}
+        />
+        <BarisMenu
+          onClick={() => {
+            setBuka(false)
+            keluar()
+          }}
+          label={t.keluar}
+          catatan={t.keluarCatatan(akun.nama_pengguna)}
+        />
+      </div>
+    </>
+  )
 
   return (
     <div ref={wadah} className="relative shrink-0">
@@ -1446,29 +1568,46 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
         onClick={() => setBuka((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={buka}
-        className={`flex cursor-pointer items-center gap-2 rounded-full border py-1 pl-1 pr-3 transition-all duration-300 ease-jelly hover:scale-[1.03] ${
-          buka ? 'border-transparent bg-ink text-surface' : 'border-line text-ink hover:border-line-2'
-        } ${varian === 'gerbang' ? 'sm:py-1.5 sm:pl-1.5 sm:pr-4' : ''}`}
+        aria-label={akun.nama_pengguna}
+        className={
+          bulat
+            ? `grid h-10 w-10 cursor-pointer place-items-center rounded-full text-[13px] font-bold transition-transform duration-300 ease-jelly hover:scale-[1.05] ${
+                // Pelanggan berpendar teal - sinyal status yang ikut terbawa ke
+                // bar bawah, tempat label "Premium" tidak lagi muat.
+                premium
+                  ? 'bg-gem text-white shadow-[0_0_18px_-2px_rgb(45_232_192/0.6)]'
+                  : 'kaca-tebal text-ink'
+              } ${buka ? 'ring-2 ring-ink/60' : ''}`
+            : `flex cursor-pointer items-center gap-2 rounded-full border py-1 pl-1 pr-3 transition-all duration-300 ease-jelly hover:scale-[1.03] ${
+                buka ? 'border-transparent bg-ink text-surface' : 'border-line text-ink hover:border-line-2'
+              } ${varian === 'gerbang' ? 'sm:py-1.5 sm:pl-1.5 sm:pr-4' : ''}`
+        }
         title={akun.nama_pengguna}
       >
-        <span
-          className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11.5px] font-bold ${
-            premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
-          } ${varian === 'gerbang' ? 'sm:h-8 sm:w-8 sm:text-[12.5px]' : ''}`}
-        >
-          {inisial}
-        </span>
-        <span
-          className={`hidden max-w-[7rem] truncate text-[12.5px] font-semibold sm:inline ${
-            varian === 'gerbang' ? 'sm:max-w-[9rem] sm:text-[14px]' : ''
-          }`}
-        >
-          {akun.nama_pengguna}
-        </span>
-        {premium && (
-          <span className="hidden rounded-full bg-gem-soft px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-gem md:inline">
-            Premium
-          </span>
+        {bulat ? (
+          inisial
+        ) : (
+          <>
+            <span
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11.5px] font-bold ${
+                premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
+              } ${varian === 'gerbang' ? 'sm:h-8 sm:w-8 sm:text-[12.5px]' : ''}`}
+            >
+              {inisial}
+            </span>
+            <span
+              className={`hidden max-w-[7rem] truncate text-[12.5px] font-semibold sm:inline ${
+                varian === 'gerbang' ? 'sm:max-w-[9rem] sm:text-[14px]' : ''
+              }`}
+            >
+              {akun.nama_pengguna}
+            </span>
+            {premium && (
+              <span className="hidden rounded-full bg-gem-soft px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-gem md:inline">
+                Premium
+              </span>
+            )}
+          </>
         )}
       </button>
 
@@ -1477,92 +1616,38 @@ export function TombolAkun({ varian = 'peta' }: { varian?: 'peta' | 'gerbang' })
           kelas warna, dan di bilah gerbang yang turun ke jurang pada tema
           terang ia mewarisi tinta GELAP gerbang di atas kaca yang sudah gelap:
           terlihat di potret sesi yang dipalsukan, 11 Sep 2026. */}
-      {tampil && (
-        <div
-          role="menu"
-          data-menutup={menutup ? '1' : undefined}
-          className="kaca-tebal pop pop-kanan absolute right-0 top-[calc(100%+8px)] z-50 w-[19rem] overflow-hidden rounded-md text-ink"
-        >
-          <div className="border-b border-line/70 px-4 py-3.5">
-            <div className="flex items-center gap-3">
-              <span
-                className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[14px] font-bold ${
-                  premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
+      {tampil &&
+        (bulat
+          ? // Varian `bar`: pop-up di TENGAH layar, di-portal ke <body> supaya
+            // `backdrop-filter` pada <nav class="kaca"> tidak menjadikan nav
+            // sebagai containing block (dulu itu yang memotongnya di dasar).
+            createPortal(
+              <div
+                className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/45 p-5 backdrop-blur-[3px]"
+                onClick={() => setBuka(false)}
+              >
+                <div
+                  ref={menuRef}
+                  role="menu"
+                  className="kaca-tebal melayang max-h-[calc(100svh-3rem)] w-[19rem] max-w-full overflow-y-auto rounded-xl text-ink"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {isiMenu}
+                </div>
+              </div>,
+              document.body,
+            )
+          : (
+              <div
+                role="menu"
+                data-menutup={menutup ? '1' : undefined}
+                className={`kaca-tebal pop pop-kanan absolute right-0 z-50 w-[19rem] overflow-hidden rounded-md text-ink ${
+                  arahMenu === 'atas' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
                 }`}
               >
-                {inisial}
-              </span>
-              <div className="min-w-0">
-                <p className="papan truncate text-[14.5px]">
-                  {akun.nama_tampilan || akun.nama_pengguna}
-                </p>
-                <p className="truncate text-[12px] text-ink-3">{akun.email}</p>
+                {isiMenu}
               </div>
-            </div>
-
-            <div className="mt-3.5 flex items-center gap-2">
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${
-                  premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
-                }`}
-              >
-                {premium ? t.premium : t.gratis}
-              </span>
-              {akun.peran === 'admin' && (
-                <span className="rounded-full bg-pemenang-soft px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-pemenang">
-                  Admin
-                </span>
-              )}
-            </div>
-
-            {premium ? (
-              <p className="mt-2.5 text-[12px] leading-snug text-ink-3">
-                {akun.langganan?.selamanya
-                  ? t.selamanya
-                  : akun.langganan?.berlaku_sampai
-                    ? t.aktifSampai(
-                        new Date(akun.langganan.berlaku_sampai).toLocaleDateString(t.tanggal, {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        }),
-                      )
-                    : t.langgananAktif}
-              </p>
-            ) : (
-              <button
-                onClick={() => {
-                  setBuka(false)
-                  mintaLangganan(null)
-                }}
-                className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-surface transition-transform duration-300 ease-jelly hover:scale-[1.02]"
-              >
-                <Kilau />
-                {t.jadiPremium} — {rp(25000)}{t.perBulan}
-              </button>
-            )}
-          </div>
-
-          <div className="p-1.5">
-            <BarisMenu
-              onClick={() => {
-                setBuka(false)
-                mintaPreferensi()
-              }}
-              label={t.preferensi}
-              catatan={t.preferensiCatatan}
-            />
-            <BarisMenu
-              onClick={() => {
-                setBuka(false)
-                keluar()
-              }}
-              label={t.keluar}
-              catatan={t.keluarCatatan(akun.nama_pengguna)}
-            />
-          </div>
-        </div>
-      )}
+            ))}
     </div>
   )
 }

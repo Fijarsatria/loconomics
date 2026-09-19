@@ -289,7 +289,7 @@ function DaftarLokasi({
 
           Yang tersisa: nama layer, jumlah lokasi, pita sebaran, satu tombol
           saringan, dan satu tombol urutan. Lima baris jadi dua. */}
-      <div className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur max-lg:px-3 max-lg:py-2">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="eyebrow">{LAYER[layer].nama}</h2>
           {ringkasKuadran && (
@@ -304,7 +304,7 @@ function DaftarLokasi({
           <>
             {/* Pita sebaran. Lebarnya sebanding jumlahnya, jadi "kawasan ini
                 isinya Hindari semua" terbaca sebelum satu baris pun dibaca. */}
-            <div className="mt-2.5 flex h-2 gap-[2px] overflow-hidden rounded-full" aria-hidden>
+            <div className="mt-2.5 flex h-2 gap-[2px] overflow-hidden rounded-full max-lg:mt-2" aria-hidden>
               {ringkasKuadran.bagian.map((b) => (
                 <span
                   key={b.kunci}
@@ -317,7 +317,7 @@ function DaftarLokasi({
               ))}
             </div>
 
-            <div className="mt-2.5 flex items-center gap-2">
+            <div className="mt-2.5 flex items-center gap-2 max-lg:mt-2">
               <SaringZona
                 bagian={ringkasKuadran.bagian}
                 nilai={saring}
@@ -347,16 +347,23 @@ function DaftarLokasi({
                 melaporkannya tidak terlihat. Ia bukan catatan kaki: ia satu-
                 satunya keterangan kenapa jumlah baris di sini bisa lebih sedikit
                 daripada jumlah heksagon di peta. */}
-            <p className="mt-2 flex items-start gap-1.5 rounded-sm bg-surface-2 px-2 py-1.5 text-[11px] leading-snug text-ink-2">
+            <p className="mt-2 flex items-start gap-1.5 rounded-sm bg-surface-2 px-2 py-1.5 text-[11px] leading-snug text-ink-2 max-lg:mt-1.5 max-lg:py-1">
               <span className="mt-[3px] h-2 w-2 shrink-0 rounded-[2px] bg-bahaya" aria-hidden />
               {t.terlarang}
             </p>
 
             {/* Pemotongan dinyatakan, tidak dibiarkan terbaca sebagai jumlah
                 sebenarnya. Daftar yang berhenti di 200 tanpa berkata apa-apa
-                akan terbaca sebagai "cuma segini yang ada". */}
+                akan terbaca sebagai "cuma segini yang ada".
+
+                Di ponsel kalimat ini disembunyikan (`max-lg:hidden`): kepala
+                daftar bersama judul lembar memakan hampir separuh lembar
+                sebelum satu baris pun terlihat (keluhan 19 Sep 2026).
+                Keterangan yang sama tetap muncul di desktop. */}
             {isi.baris.length >= BATAS_BARIS && (
-              <p className="mt-1.5 text-[11px] leading-snug text-ink-3">{t.potong(BATAS_BARIS)}</p>
+              <p className="mt-1.5 text-[11px] leading-snug text-ink-3 max-lg:hidden">
+                {t.potong(BATAS_BARIS)}
+              </p>
             )}
           </>
         )}
@@ -690,7 +697,7 @@ function Kartu({
       <button
         onClick={() => onPilih(h3)}
         aria-current={aktif ? 'true' : undefined}
-        className={`w-full cursor-pointer border-b border-line px-4 py-3 text-left transition-colors ${
+        className={`w-full cursor-pointer border-b border-line px-4 py-3 text-left transition-colors max-lg:px-3 max-lg:py-2.5 ${
           aktif ? 'bg-surface-2' : 'hover:bg-surface-2'
         }`}
       >

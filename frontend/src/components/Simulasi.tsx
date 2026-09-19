@@ -89,6 +89,8 @@ const K = {
     blokLepas: 'Seluruh heksagon',
     blokLabel: 'Simulasi blok',
     tutup: 'Tutup simulasi',
+    perbesar: 'Perbesar lembar simulasi',
+    ringkas: 'Perkecil lembar simulasi',
     unduh: 'Unduh laporan PDF',
     mengunduh: 'Menyiapkan PDF…',
     gagalUnduh: 'Gagal menyiapkan laporan PDF.',
@@ -202,6 +204,8 @@ const K = {
     blokLepas: 'Whole hexagon',
     blokLabel: 'Block simulation',
     tutup: 'Close the simulation',
+    perbesar: 'Expand the simulation sheet',
+    ringkas: 'Shrink the simulation sheet',
     unduh: 'Download PDF report',
     mengunduh: 'Preparing the PDF…',
     gagalUnduh: 'Could not prepare the PDF report.',
@@ -666,7 +670,7 @@ function Turunan({
       {label && <p className="eyebrow text-[9.5px]">{label}</p>}
       <p
         className={`papan tabular leading-none ${
-          raksasa ? 'mt-1 text-[44px]' : besar ? 'text-[30px]' : 'text-[16px]'
+          raksasa ? 'mt-1 text-[44px] max-lg:text-[36px]' : besar ? 'text-[30px]' : 'text-[16px]'
         }`}
         style={{ color: warna }}
       >
@@ -731,6 +735,14 @@ export default function Simulasi({
   const [banding, setBanding] = useState<HasilSimulasi | null>(null)
   const hasilBanding = banding
   const [galat, setGalat] = useState<string | null>(null)
+  /**
+   * Lembar ini bisa DITARIK jadi setinggi layar (berhenti di bawah bilah atas),
+   * sama seperti lembar tab. Bawaannya tetap ringkas 64vh. `sudahGeser` menahan
+   * klik yang menyusul seretan agar tidak ikut membalik keadaan.
+   */
+  const [penuh, setPenuh] = useState(false)
+  const mulaiSeret = useRef(0)
+  const sudahGeser = useRef(false)
 
   // Ditunda 240ms: penggeser mengirim satu perubahan per piksel, dan tanpa
   // penundaan satu geseran jadi puluhan permintaan yang urutan mendaratnya
@@ -875,13 +887,46 @@ export default function Simulasi({
 
   return (
     <section
-      className="kaca-tebal lembar-naik pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex max-h-[64vh] min-h-[19rem] flex-col overflow-hidden rounded-t-xl border-b-0"
+      data-penuh={penuh}
+      className="simulasi-sheet kaca-tebal lembar-naik pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex max-h-[64vh] min-h-[19rem] flex-col overflow-hidden rounded-t-xl border-b-0 max-lg:max-h-[74svh]"
       aria-label={t.simulasiUsaha}
     >
       {/* --- Bilah lembar ---------------------------------------------------- */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-line/70 px-4 py-2.5">
+      <div className="flex min-w-0 shrink-0 items-center gap-3 border-b border-line/70 px-4 py-2.5 max-lg:gap-2 max-lg:px-3">
+        {/* Pegangan seret: naik = penuh (setinggi layar, berhenti di bawah
+            bilah atas), turun = ringkas lalu tutup. Sama seperti lembar tab. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (sudahGeser.current) return
+            setPenuh((v) => !v)
+          }}
+          onPointerDown={(e) => {
+            mulaiSeret.current = e.clientY
+            sudahGeser.current = false
+            e.currentTarget.setPointerCapture(e.pointerId)
+          }}
+          onPointerMove={(e) => {
+            if (Math.abs(e.clientY - mulaiSeret.current) > 16) sudahGeser.current = true
+          }}
+          onPointerUp={(e) => {
+            const dy = e.clientY - mulaiSeret.current
+            if (dy < -30) setPenuh(true)
+            else if (dy > 30) {
+              if (penuh) setPenuh(false)
+              else onTutup()
+            }
+          }}
+          aria-label={penuh ? t.ringkas : t.perbesar}
+          title={penuh ? t.ringkas : t.perbesar}
+          className="-ml-1.5 flex shrink-0 cursor-grab touch-none items-center justify-center px-1 py-2 active:cursor-grabbing lg:hidden"
+        >
+          <span className="h-1.5 w-8 rounded-full bg-line-2" />
+        </button>
+
         <button
           onClick={onKeDetail}
+          aria-label={t.detailLokasi}
           className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12.5px] font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
@@ -894,11 +939,11 @@ export default function Simulasi({
               strokeLinejoin="round"
             />
           </svg>
-          {t.detailLokasi}
+          <span className="max-lg:hidden">{t.detailLokasi}</span>
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="eyebrow">{t.simulasiUsaha}</p>
+          <p className="eyebrow max-lg:hidden">{t.simulasiUsaha}</p>
           <p className="truncate text-[12px] font-medium text-ink-2">
             {hasil ? kodeLokasi(h3, hasil.kawasan) : nomorLokasi(h3)}
             {h3Banding && hasilBanding ? ` vs ${kodeLokasi(h3Banding, hasilBanding.kawasan)}` : ''}
@@ -997,7 +1042,7 @@ export default function Simulasi({
         // --- Langkah 1: satu pertanyaan saja --------------------------------
         // Empat penggeser dan tiga grafik yang muncul sekaligus akan membuat
         // orang menutup lembar ini sebelum membacanya. Satu pertanyaan dulu.
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 max-lg:px-4 max-lg:py-4">
           <p className="mb-1 text-center text-[19px] font-semibold text-ink">
             {t.mauBuka}
           </p>
@@ -1019,15 +1064,15 @@ export default function Simulasi({
             {KELOMPOK_JENIS.map((kel) => (
               <div key={kel}>
                 <p className="eyebrow mb-2">{t.kelompok[kel] ?? kel}</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
                   {JENIS.filter((j) => j.kelompok === kel).map((j) => (
                     <button
                       key={j.nilai}
                       onClick={() => pilihJenis(j.nilai)}
-                      className="group flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface p-3 text-left transition-all duration-300 ease-jelly hover:-translate-y-0.5 hover:border-ink"
+                      className="group flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface p-3 text-left transition-all duration-300 ease-jelly hover:-translate-y-0.5 hover:border-ink max-lg:gap-2.5 max-lg:p-2.5"
                     >
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-surface transition-transform duration-300 ease-jelly group-hover:scale-110">
-                        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-surface transition-transform duration-300 ease-jelly group-hover:scale-110 max-lg:h-8 max-lg:w-8">
+                        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden className="h-5 w-5 max-lg:h-4 max-lg:w-4">
                           <path
                             d={j.glif}
                             fill="none"
@@ -1060,13 +1105,13 @@ export default function Simulasi({
       ) : (
         <>
           {/* --- Navigasi slide ---------------------------------------------- */}
-          <div className="flex shrink-0 items-center gap-1 border-b border-line/70 px-3 py-1.5">
+          <div className="scroll-tipis flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-b border-line/70 px-3 py-1.5 max-lg:px-2">
             {SLIDE.map((s, i) => (
               <button
                 key={s.kunci}
                 onClick={() => keSlide(i)}
                 aria-current={slide === i ? 'true' : undefined}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-all duration-300 ease-liquid ${
+                className={`flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-all duration-300 ease-liquid max-lg:px-2.5 ${
                   slide === i ? s.aktif : 'text-ink-3 hover:bg-surface-2 hover:text-ink-2'
                 }`}
               >
@@ -1103,11 +1148,11 @@ export default function Simulasi({
             className="scroll-tipis flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
           >
             {/* ================= 1. Untung atau rugi ======================== */}
-            <div className="min-w-full shrink-0 snap-center overflow-y-auto px-5 py-4">
+            <div className="w-full shrink-0 snap-center overflow-y-auto px-5 py-4 max-lg:px-4 max-lg:py-3">
               <div className="mx-auto grid max-w-[60rem] gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                 <div>
                   <div
-                    className="rounded-xl p-5"
+                    className="rounded-xl p-5 max-lg:p-4"
                     style={{
                       background: untung
                         ? 'color-mix(in srgb, var(--q-menang-lembut) 70%, transparent)'
@@ -1134,7 +1179,7 @@ export default function Simulasi({
                         warna={untung ? 'var(--q-menang)' : 'var(--q-jebakan)'}
                       />
                     ) : bisaImpas ? (
-                      <p className="papan tabular mt-1 text-[44px] leading-none text-ink">
+                      <p className="papan tabular mt-1 text-[44px] leading-none text-ink max-lg:text-[34px]">
                         {Math.ceil(impasPembeli as number)}
                         <span className="ml-1.5 text-[15px] font-normal text-ink-2">
                           {t.orangHari}
@@ -1229,7 +1274,7 @@ export default function Simulasi({
                       <p className="text-[12px] font-medium text-ink-2">
                         {t.supayaTertutup}
                       </p>
-                      <p className="papan tabular mt-1 text-[34px] leading-none">
+                      <p className="papan tabular mt-1 text-[34px] leading-none max-lg:text-[28px]">
                         {angka(impas, 1)}%
                       </p>
                       <p className="mt-1 text-[12px] leading-snug text-ink-2">
@@ -1297,7 +1342,7 @@ export default function Simulasi({
             </div>
 
             {/* ================= 2. Kepekaan ================================ */}
-            <div className="min-w-full shrink-0 snap-center overflow-y-auto px-5 py-4">
+            <div className="w-full shrink-0 snap-center overflow-y-auto px-5 py-4 max-lg:px-4 max-lg:py-3">
               <div className="mx-auto max-w-[46rem]">
                 <p className="text-[14.5px] font-semibold text-ink">
                   {t.pekaJudul}
@@ -1359,7 +1404,7 @@ export default function Simulasi({
             </div>
 
             {/* ================= 3. Jam ===================================== */}
-            <div className="min-w-full shrink-0 snap-center overflow-y-auto px-5 py-4">
+            <div className="w-full shrink-0 snap-center overflow-y-auto px-5 py-4 max-lg:px-4 max-lg:py-3">
               <div className="mx-auto max-w-[46rem]">
                 <p className="text-[14.5px] font-semibold text-ink">{t.jamJudul}</p>
                 <p className="mt-1 text-[12.5px] leading-snug text-ink-2">{t.jamIsi}</p>
@@ -1429,7 +1474,7 @@ export default function Simulasi({
             </div>
 
             {/* ================= 4. Sekitar sini ============================ */}
-            <div className="min-w-full shrink-0 snap-center overflow-y-auto px-5 py-4">
+            <div className="w-full shrink-0 snap-center overflow-y-auto px-5 py-4 max-lg:px-4 max-lg:py-3">
               <div className="mx-auto max-w-[52rem]">
                 <p className="text-[14.5px] font-semibold text-ink">{t.sekitarJudul}</p>
                 <p className="mt-1 text-[12.5px] leading-snug text-ink-2">{t.sekitarIsi}</p>
@@ -1476,8 +1521,8 @@ export default function Simulasi({
               bergantung pada keempat penggeser ini, jadi menyembunyikannya di
               slide tertentu berarti orang harus menggeser bolak-balik untuk
               melihat akibat dari yang baru saja ia ubah. */}
-          <div className="shrink-0 border-t border-line/70 bg-surface-2/50 px-5 py-3">
-            <div className="mx-auto flex max-w-[60rem] flex-wrap items-end gap-x-6 gap-y-3">
+          <div className="shrink-0 border-t border-line/70 bg-surface-2/50 px-5 py-3 max-lg:px-4 max-lg:py-2.5">
+            <div className="mx-auto flex max-w-[60rem] flex-wrap items-end gap-x-6 gap-y-3 max-lg:gap-x-4 max-lg:gap-y-2.5">
               <div className="shrink-0">
                 <p className="eyebrow text-[9.5px]">{t.rencanaAnda}</p>
                 <button
