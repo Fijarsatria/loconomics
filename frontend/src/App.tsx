@@ -875,6 +875,27 @@ export default function App() {
     [tema, gantiTema],
   )
 
+  /**
+   * Gaya vektor terakhir yang benar-benar terpasang, untuk dikembalikan kalau
+   * gaya berikutnya gagal (satelit, yang berkasnya dari basemap.mapid.io).
+   * Diperbarui HANYA oleh gaya vektor, jadi memilih satelit lalu gagal
+   * mengembalikan orangnya ke peta yang tadi ia lihat - bukan ke gaya bawaan.
+   */
+  const gayaTerakhir = useRef<NamaGaya | null>(null)
+  useEffect(() => {
+    if (gaya !== 'satelit') gayaTerakhir.current = gaya
+  }, [gaya])
+  const kembalikanGaya = useCallback(() => {
+    const g = gayaTerakhir.current
+    if (!g) return
+    setGaya(g)
+    // Temanya ikut dikembalikan: satelit tidak punya versi gelap/terang, jadi
+    // memilihnya tidak mengubah tema - tetapi peta yang kembali ke vektor tetap
+    // harus segaya dengan chrome yang sedang terpasang.
+    const petaGelap = BASEMAP_GELAP.includes(g)
+    if ((petaGelap ? 'gelap' : 'terang') !== tema) gantiTema()
+  }, [tema, gantiTema])
+
   const [saringKuadran, setSaringKuadran] = useState<NamaKuadran | null>(null)
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
   const [kuadranPenuh, setKuadranPenuh] = useState(false)
@@ -2039,6 +2060,7 @@ export default function App() {
             // perkenalan dan penonton tidak pernah melihatnya - persis jebakan
             // yang sama yang dulu terjadi dengan layar pembuka.
             tampil={!pembuka && !gerbang}
+            onGayaGagal={kembalikanGaya}
             onArah={(a) =>
               setArahPeta((p) =>
                 // Dibandingkan dulu: `rotate` menyala tiap bingkai selama peta

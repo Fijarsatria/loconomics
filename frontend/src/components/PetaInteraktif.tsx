@@ -1068,6 +1068,16 @@ interface Props {
   onArah?: (a: { bearing: number; pitch: number }) => void
   /** Mode 3D: kamera miring dan gedung MAPID berdiri. Milik App, disimpan di peramban. */
   tigaDimensi?: boolean
+  /**
+   * Gaya yang diminta TIDAK berhasil dipasang (sejauh ini hanya satelit, yang
+   * berkasnya datang dari basemap.mapid.io alih-alih dari berkas statis).
+   *
+   * App mengembalikan pilihannya ke gaya sebelumnya. Tanpa itu pemilih basemap
+   * tetap menulis "Satelit" di atas peta yang jelas-jelas bukan citra - layar
+   * yang berbohong tentang keadaannya sendiri, dan itu yang dilaporkan pemilik
+   * repo sebagai "ganti ke satelit selalu error".
+   */
+  onGayaGagal?: () => void
 }
 
 /** Satu kalimat yang muncul di kartu sorot peta. */
@@ -1093,6 +1103,8 @@ const K_PETA = {
       'Gaya vektor MAPID memakai server ubin yang sama, jadi berganti ke gaya vektor lain tidak menolong. Heksagon, skor, dan seluruh analisisnya tidak terpengaruh.',
     basemapLanjut:
       'Pilih basemap lain lewat menu di kanan atas; heksagon dan skornya tidak terpengaruh.',
+    satelitGagal:
+      'Citra satelit tidak dapat dimuat sekarang. Basemap sebelumnya tetap dipakai.',
     cobaLagi: 'Coba muat ulang basemap',
     otomatis: (n: number) =>
       `Peta juga mencoba sendiri tiap menit, ${n} kali lagi. Pemadaman seperti ini biasanya pulih dalam belasan menit.`,
@@ -1119,6 +1131,8 @@ const K_PETA = {
       'The MAPID vector styles share the same tile server, so switching to another vector style does not help. The hexagons, the scores, and every analysis are unaffected.',
     basemapLanjut:
       'Pick another basemap from the menu at the top right; hexagons and scores are unaffected.',
+    satelitGagal:
+      'The satellite imagery cannot be loaded right now. The previous basemap is kept.',
     cobaLagi: 'Try reloading the basemap',
     otomatis: (n: number) =>
       `The map also retries by itself every minute, ${n} more times. Outages like this usually clear within a quarter of an hour.`,
@@ -1147,6 +1161,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     tampil,
     onArah,
     tigaDimensi = false,
+    onGayaGagal,
   },
   ref,
 ) {
@@ -1707,9 +1722,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       })
       .catch((e: unknown) => {
         if (batal) return
-        // Gaya lama dipertahankan - peta tidak mendadak kosong; yang gagal
-        // cuma citranya, dan itu keterangan yang jujur.
+        // Gaya lama dipertahankan - peta tidak mendadak kosong - DAN pilihannya
+        // dikembalikan, supaya pemilih basemap tidak menulis "Satelit" di atas
+        // peta vektor. Pita kecilnya menjelaskan kenapa.
         console.warn('[basemap] gaya satelit tidak terambil; gaya sebelumnya dipertahankan', e)
+        setGalatPeta((g) => g ?? { pesan: teksZona.satelitGagal, ubin: false })
+        onGayaGagal?.()
       })
     return () => {
       batal = true
