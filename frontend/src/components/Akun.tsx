@@ -1,26 +1,3 @@
-/**
- * Akun, masuk/daftar, dan Loconomics Premium.
- *
- * Satu berkas, empat hal yang memang tidak bisa dipisah tanpa merugikan:
- *
- *   SesiProvider    keadaan sesi + PEMILIK kedua dialognya
- *   TombolAkun      tombol di bilah atas (peta maupun gerbang)
- *   DialogAkun      masuk / daftar
- *   DialogLangganan langganan dan layar QRIS
- *
- * KENAPA DIALOGNYA MILIK PROVIDER, bukan milik tombol. Yang membuka dialog
- * langganan bukan cuma tombol akun: tirai di panel detail membukanya, tombol
- * unduh laporan membukanya, tombol komparasi membukanya. Kalau dialognya
- * dimiliki masing-masing, ada empat salinan yang harus sepakat soal keadaan
- * mana yang sedang terbuka. Sebagai milik provider, siapa pun cukup memanggil
- * `mintaLangganan()` dan tidak perlu tahu dialognya ada di mana.
- *
- * SATU ATURAN YANG TIDAK BOLEH DILANGGAR DI BERKAS INI: tingkat akses SELALU
- * dibaca dari respons backend (`akun.tingkat`), tidak pernah disimpulkan dari
- * "ada tiket berarti sudah bayar". Tiket membuktikan SIAPA, bukan membuktikan
- * SUDAH BAYAR - dan produk ini punya tingkat 'gratis' yang justru berdiri
- * tepat di antara keduanya.
- */
 
 import {
   createContext,
@@ -59,40 +36,13 @@ interface IsiSesi {
   daftar: (p: { nama_pengguna: string; email: string; sandi: string }) => Promise<void>
   keluar: () => void
   segarkan: () => Promise<void>
-  /**
-   * Naik satu setiap kali daftar lokasi tersimpan berubah, dari mana pun.
-   * Peta memakainya untuk menyegarkan pin tanpa harus tahu SIAPA yang
-   * menyimpan - panel detail dan dialog Tersimpan sama-sama menaikkannya.
-   */
   sinyalSimpan: number
   catatSimpan: () => void
-  /**
-   * Heksagon yang SEDANG tersimpan, menurut server.
-   *
-   * Naik ke sini 3 September 2026 untuk memperbaiki bug yang nyata: panel
-   * detail menyimpan keadaan "sudah dipantau" sebagai state LOKAL yang hanya
-   * pernah disetel oleh tombolnya sendiri. Akibatnya dua-duanya salah -
-   * menyimpan lewat klik dua kali di peta tidak menyalakan tombolnya (jadi
-   * orang menekannya lagi dan menyimpan dua kali), dan heksagon yang tersimpan
-   * di sesi sebelumnya selalu tampil sebagai "Simpan lokasi".
-   *
-   * Satu himpunan di provider, dibaca peta DAN panel. Keadaan yang disalin ke
-   * dua tempat adalah keadaan yang suatu saat berselisih - dan di sini ia sudah
-   * berselisih.
-   */
   tersimpan: Set<string>
   /** Buka dialog masuk. `alasan` tampil sebagai kalimat pengantar. */
   mintaMasuk: (alasan?: AlasanKunci) => void
   /** Buka dialog langganan. Kalau belum masuk, dialog masuk yang dibuka dulu. */
   mintaLangganan: (alasan?: AlasanKunci) => void
-  /**
-   * Buka dialog preferensi usaha.
-   *
-   * Milik provider, sama alasannya dengan kedua dialog lain: yang membukanya
-   * bukan satu tombol melainkan tiga - menu akun, kartu kriteria di tab "Untuk
-   * Anda", dan ajakan saat preferensinya masih kosong. Tiga salinan dialog
-   * berarti tiga keadaan yang harus sepakat soal mana yang sedang terbuka.
-   */
   mintaPreferensi: () => void
 }
 
@@ -118,15 +68,6 @@ export interface DetailBukaPeta {
 export function SesiProvider({ anak }: { anak: ReactNode }) {
   const [akun, setAkun] = useState<Akun | null>(null)
   const [memuat, setMemuat] = useState(adaTiket())
-  /**
-   * SATU alur untuk ketiga layar - masuk/daftar, paket, dan preferensi usaha.
-   *
-   * Sampai 13 Sep 2026 ketiganya tiga dialog terpisah dengan tirainya sendiri,
-   * jadi berpindah dari "Daftar" ke "Pilih paket" ke "Preferensi usaha" berarti
-   * tirai lama lenyap dan tirai baru muncul pada bingkai yang sama: kedipan,
-   * tanpa transisi apa pun. Pemilik repo melaporkannya. Sekarang tirainya satu
-   * dan tetap berdiri; yang berganti cuma isinya, lewat `Panggung`.
-   */
   const [alur, setAlur] = useState<Alur | null>(null)
 
   // Validasi tiket tersimpan, sekali saat memuat. Tiket yang kedaluwarsa atau
@@ -193,13 +134,6 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
   const [sinyalSimpan, setSinyalSimpan] = useState(0)
   const catatSimpan = useCallback(() => setSinyalSimpan((n) => n + 1), [])
 
-  /**
-   * Daftar lokasi tersimpan, disegarkan tiap kali `sinyalSimpan` naik.
-   *
-   * Pemantauan fitur berbayar, jadi untuk tamu dan akun gratis ia SELALU
-   * himpunan kosong - dan itu benar, bukan penyembunyian: mereka memang tidak
-   * punya lokasi tersimpan. Backend tetap penjaganya.
-   */
   const [tersimpan, setTersimpan] = useState<Set<string>>(new Set())
   const premiumKini = akun?.tingkat === 'premium'
   useEffect(() => {
@@ -276,10 +210,6 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
               alasan={alur.alasan}
               onTutup={() => setAlur(null)}
               onBerhasil={(baru) => {
-                // Sesudah MENDAFTAR, langsung tawarkan Premium - permintaan
-                // eksplisit pemilik repo. Sesudah MASUK, jangan: orang yang
-                // kembali ke akunnya sedang menuju sesuatu, dan etalase harga
-                // di tengah jalan terbaca sebagai penghalang.
                 setAlur(baru ? { langkah: 'paket', alasan: null, rayakan: true } : null)
               }}
             />
@@ -296,11 +226,6 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
               onTutup={() => setAlur(null)}
               onSelesai={(hasil) => {
                 setAlur(null)
-                // "Simpan & buka peta" benar-benar MEMBUKA peta. Sebelum 13 Sep
-                // 2026 tombol ini cuma menutup dialog - dari halaman gerbang
-                // orangnya tetap di gerbang, dan pemilik repo melaporkannya
-                // sebagai bug. Provider tidak memiliki peta, jadi ia MENGUMUMKAN;
-                // App yang memiliki peta yang mendengarkan.
                 if (hasil) {
                   window.dispatchEvent(
                     new CustomEvent<DetailBukaPeta>(PERISTIWA_BUKA_PETA, { detail: hasil }),
@@ -319,21 +244,6 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
 // Kerangka dialog
 // ---------------------------------------------------------------------------
 
-/**
- * Pembungkus dialog. `createPortal` ke body, dan itu WAJIB di repo ini.
- *
- * Bilah atas peta memakai `.kaca`, yang punya `backdrop-filter`. Elemen
- * ber-backdrop-filter menjadi containing block bagi SELURUH keturunan
- * `position: fixed` - jadi `fixed inset-0` di dalamnya berarti "sebesar bilah
- * atas", bukan "seluruh layar". Jebakan ini sudah pernah kena di repo ini dan
- * tercatat di CLAUDE.md.
- */
-/**
- * Diisi `TiraiAlur`. Selama ada, `Tirai` TIDAK memasang tirainya sendiri: ia
- * cuma melaporkan lebar yang ia inginkan lalu merender isinya. Dengan begitu
- * ketiga dialog tetap ditulis seolah berdiri sendiri, dan tetap bisa dipakai
- * berdiri sendiri, sementara di dalam alur tirainya satu.
- */
 const PanggungKonteks = createContext<((lebar: string) => void) | null>(null)
 
 function Tirai({
@@ -388,10 +298,6 @@ function TiraiDasar({
 
   return createPortal(
     <div
-      // Tirainya HITAM, bukan `bg-ink`: di tema gelap `--color-ink` adalah
-      // krem-putih, dan tirai putih 45% di atas halaman gerbang yang hitam
-      // mengubah seluruh layar jadi abu-abu susu - terlihat begitu di potret.
-      // Tirai gelap benar di kedua tema.
       className="tirai-latar fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-[4px] sm:p-6"
       onClick={onTutup}
       role="dialog"
@@ -410,13 +316,6 @@ function TiraiDasar({
   )
 }
 
-/**
- * Tirai yang TETAP BERDIRI selama alurnya berjalan; yang berganti isinya.
- *
- * Lebarnya ikut dianimasikan (`tirai-panel` punya transisi `max-width`), jadi
- * perpindahan dari formulir daftar yang sempit ke etalase paket yang lebar
- * terbaca sebagai satu kartu yang melebar - bukan dua kartu yang bergantian.
- */
 function TiraiAlur({
   kunci,
   judul,
@@ -441,28 +340,12 @@ function TiraiAlur({
   )
 }
 
-/**
- * Isi lama keluar ke kiri sambil memudar, isi baru masuk dari kanan, dan tinggi
- * kartunya berpindah halus di antara keduanya.
- *
- * Isi yang KELUAR dirender ulang dari elemen yang ditangkap, dengan `key` yang
- * sama seperti saat ia masih aktif - jadi React mempertahankan komponennya,
- * lengkap dengan keadaannya, selama 300 ms ia memudar. Tanpa kunci yang sama,
- * yang memudar adalah salinan baru yang sudah lupa isiannya.
- */
 function Panggung({ kunci, children }: { kunci: string; children: ReactNode }) {
   const lapor = useContext(PanggungKonteks)
   const [kunciLalu, setKunciLalu] = useState(kunci)
   const [isiLalu, setIsiLalu] = useState<ReactNode>(children)
   const [keluar, setKeluar] = useState<{ kunci: string; isi: ReactNode } | null>(null)
 
-  // Dihitung SAAT RENDER, bukan di efek. Versi pertama memasang lapisan keluar
-  // dari `useLayoutEffect`, dan itu satu komit terlambat: komit pertama sudah
-  // membuang isi lama, komit kedua memasangnya lagi sebagai komponen BARU -
-  // yang lupa isiannya, dan yang efeknya melaporkan lebar lama SESUDAH isi
-  // baru melaporkan lebarnya. Terukur di potret: langkah preferensi tetap
-  // selebar etalase paket. Menyetel keadaan saat render membuat React merender
-  // ulang sebelum komit, jadi komit pertama sudah memuat kedua lapisan.
   if (kunci !== kunciLalu) {
     setKeluar({ kunci: kunciLalu, isi: isiLalu })
     setKunciLalu(kunci)
@@ -662,10 +545,6 @@ function DialogAkun({
   const { masuk, daftar } = useSesi()
   const t = useTeks(K_DIALOG)
   const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk')
-  /** Arah perpindahan terakhir: +1 ke Daftar (kanan), -1 ke Masuk (kiri).
-   *  Dipakai supaya isi barunya masuk dari sisi yang SAMA dengan arah
-   *  geseran penunjuk sakelarnya - kalau berlawanan, keduanya terbaca
-   *  sebagai dua kejadian yang tidak berhubungan. */
   const [arah, setArah] = useState<1 | -1>(1)
   const [identitas, setIdentitas] = useState('')
   const [namaPengguna, setNamaPengguna] = useState('')
@@ -917,14 +796,6 @@ function DialogAkun({
 // ---------------------------------------------------------------------------
 
 
-/**
- * Dialog langganan dan onboarding, dua bahasa.
- *
- * `p.nama`, `p.rincian`, dan `katalog.catatan_pembayaran` datang dari
- * `/akun/paket` dan dibiarkan apa adanya - katalog harga hidup di backend
- * supaya harganya bisa berubah tanpa menerbitkan ulang frontend, dan menyalin
- * namanya ke sini berarti dua daftar harga yang cepat atau lambat berselisih.
- */
 const K_BAYAR = {
   id: {
     locale: 'id-ID',
@@ -1349,17 +1220,6 @@ function KartuPaket({
 // Tombol akun di bilah atas
 // ---------------------------------------------------------------------------
 
-/**
- * Tombol akun.
- *
- * `varian="gerbang"` dipakai di halaman perkenalan, yang punya palet sendiri
- * (hijau tua di atas latar terang) dan tidak memakai token `.kaca`.
- *
- * WADAHNYA `relative`, BUKAN `static`. Ini jebakan yang sudah kena di repo ini
- * dan tercatat di CLAUDE.md: begitu wadah jangkar berhenti jadi konteks posisi,
- * kartu ber-`absolute` di dalamnya naik menempel ke lapisan chrome setinggi
- * layar dan dirender jauh di luar layar.
- */
 const K_TOMBOL = {
   id: {
     masukAtauDaftar: 'Masuk atau daftar',
@@ -1437,11 +1297,6 @@ export function TombolAkun({
     }
   }, [buka])
 
-  // --- Tamu: ajakan, bukan ikon -------------------------------------------
-  //
-  // Orang yang belum punya akun tidak sedang mencari "akun"; ia belum tahu ada
-  // yang bisa dibuka. Ikon orang-orangan menjawab pertanyaan yang belum ia
-  // ajukan. Kalimatnya yang mengajukan pertanyaan itu untuknya.
   if (!akun) {
     // Di bar bawah ponsel: satu lingkaran dengan pendar ajakan (`.g-catalyst`),
     // bukan pil bertulisan "Daftar". Meniru tombol profil MAPID yang bulat;
@@ -1462,16 +1317,6 @@ export function TombolAkun({
       )
     }
     const digerbang = varian === 'gerbang'
-    // DIBALIK 11 Sep 2026, membatalkan keputusan 9 Sep.
-    //
-    // Dulu: di gerbang tombol ini pil biasa dan yang berpendar "Masuk ke peta".
-    // Sekarang: selama BELUM ada akun, yang berpendar justru tombol ini - di
-    // kedua tempatnya. Permintaan pemilik repo, dan alasannya kuat: peta bisa
-    // dibuka siapa pun tanpa mendaftar, jadi mengarahkan mata ke sana lebih
-    // dulu menunda satu-satunya langkah yang mengubah apa yang akan ia lihat
-    // di sana. Begitu akunnya ada, cabang ini tidak dirender sama sekali dan
-    // pendarnya kembali ke "Masuk ke peta" - lihat `tombolMasuk` di
-    // Gerbang.tsx.
     const kelas = digerbang
       ? 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold sm:px-5 sm:py-2.5 sm:text-[14.5px]'
       : 'g-catalyst group inline-flex cursor-pointer items-center gap-2 rounded-full px-3.5 py-2 text-[12.5px] font-semibold'
@@ -1493,25 +1338,8 @@ export function TombolAkun({
   }
 
   const inisial = (akun.nama_tampilan || akun.nama_pengguna).slice(0, 2).toUpperCase()
-  /**
-   * Bentuk BULAT, bukan pil: dipakai di bilah bawah peta dan di bilah gerbang.
-   *
-   * Di gerbang ia dulu pil dengan nama pengguna di sebelah avatarnya. Yang
-   * terlihat di layar sempit cuma bulatannya - dan karena pilnya menyisakan
-   * bantalan kanan untuk teks yang tidak dirender, bulatannya duduk tidak di
-   * tengah dan terbaca sebagai "kurang bulat" (permintaan pemilik repo 19 Sep
-   * 2026). Sekarang bulatannya sama di ketiga varian, dan namanya pindah ke
-   * kepala menu yang terbuka - tempat ia memang dibaca.
-   */
   const bulat = varian === 'bar' || varian === 'gerbang'
 
-  /**
-   * Isi menu dipisah supaya bisa dipakai DUA bentuk wadah: dropdown biasa, dan
-   * pop-up yang di-portal ke <body> (varian `bar`). Portal WAJIB untuk varian
-   * `bar`: tombolnya duduk di dalam <nav class="kaca">, dan `backdrop-filter`
-   * pada `.kaca` membuat elemen `fixed` berkontainer ke kotak nav yang cuma
-   * setinggi bilah - itulah sebabnya pop-up-nya dulu terpotong di dasar layar.
-   */
   const isiMenu = (
     <>
       <div className="relative border-b border-line/70 px-4 py-3.5">
@@ -1780,13 +1608,6 @@ function Pusaran() {
   )
 }
 
-/**
- * Sarang lebah kecil sebagai tekstur latar.
- *
- * Satu `<pattern>`, bukan puluhan poligon - alasan yang sama dengan hero di
- * halaman gerbang, dan tercatat di CLAUDE.md: perender melukis ubinnya sekali
- * lalu mengulanginya sebagai tekstur.
- */
 function SarangKecil({ pudar }: { pudar?: boolean } = {}) {
   const id = pudar ? 'sarang-qris' : 'sarang-akun'
   return (
@@ -1825,20 +1646,6 @@ function SarangKecil({ pudar }: { pudar?: boolean } = {}) {
  *  pintas mengisi kolomnya, dan kolomnya tetap menerima angka apa pun. */
 const PRESET_ANGGARAN = [5, 10, 15, 25]
 
-/**
- * Tiga pertanyaan, seluruhnya boleh dilewati.
- *
- * Dirombak 13 Sep 2026 atas laporan pemilik repo: layar ini masih memegang
- * EMPAT jenis usaha - sisa sebelum simulasi diperluas jadi enam belas - dan
- * tampil sebagai satu formulir panjang tanpa hierarki. Sekarang daftarnya dari
- * `lib/jenis-usaha.ts` yang SAMA dengan simulasi, dikelompokkan dalam tiga
- * tab, dan tiap pertanyaan bernomor supaya terbaca sebagai langkah.
- *
- * Yang dijawab menyetel dua hal nyata: jenis usaha jadi bawaan panel simulasi,
- * kawasan memindahkan peta ke sana. Yang TIDAK berubah karenanya: satu pun
- * skor, peringkat, atau kuadran - itu milik pipeline, dan preferensi pengguna
- * tidak pernah boleh menyentuhnya.
- */
 function OnboardingUsaha({
   pesan,
   judul,
@@ -2092,12 +1899,6 @@ function PertanyaanOnboarding({
   )
 }
 
-/**
- * Preferensi usaha: langkah ketiga alur pendaftaran, DAN layar yang bisa dibuka
- * kapan saja dari menu akun. Satu komponen untuk keduanya - kalau dipisah jadi
- * dua formulir, keduanya cepat atau lambat berbeda dalam hal yang tidak
- * disengaja. Persis itu yang terjadi pada daftar jenis usahanya.
- */
 export function DialogPreferensi({
   pesan,
   onTutup,

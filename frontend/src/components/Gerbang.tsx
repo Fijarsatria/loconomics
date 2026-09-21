@@ -1,47 +1,3 @@
-/**
- * Gerbang — halaman pertama. Perkenalan sekaligus pintu masuk ke peta.
- *
- * ENAM BAGIAN, dan urutannya adalah ceritanya:
- *
- *   1. HERO       nama, satu kalimat, satu tombol.
- *   2. MASALAH    latar belakang DAN alasan produk ini ada, dijadikan SATU.
- *                 Sebelumnya dua blok berjudul besar yang berdiri sendiri-
- *                 sendiri ("Keramaian bisa dilihat…" lalu "Dua dunia yang belum
- *                 pernah dipertemukan…") - dua tesis untuk satu gagasan, dan
- *                 pembacanya harus menyambung sendiri. Sekarang satu judul,
- *                 lalu TIGA masalah yang dijelaskan satu per satu, masing-
- *                 masing dengan gambarnya sendiri, dan ditutup satu panel yang
- *                 mempertemukan ketiganya.
- *   3. SOLUSI     enam keputusan, enam potret peta sungguhan.
- *   4. EKOSISTEM  enam bagian produk, ZIG-ZAG satu per satu.
- *   5. PENUTUP    ajakan terakhir dan kaki halaman.
- *   6. TIM        jurang hitam, lima orang.
- *
- * TIAP BAGIAN MASUK DENGAN CARANYA SENDIRI.
- *
- *   MENUTUP   hero DIPATOK (sticky) dan bagian berikutnya menggulir NAIK
- *             MENUTUPINYA seperti lembaran. Yang di bawah menyusut dan meredup.
- *   BERGANTIAN Masalah: tiga baris, masing-masing masuk DARI SISI GAMBARNYA,
- *             dan sisinya berselang. Di antaranya JEDA - satu tali yang tumbuh
- *             mengikuti gulir, supaya hero sempat selesai menutup sebelum
- *             bagian berikutnya mulai berbicara.
- *   MENYAPU   judul Solusi terungkap dari kiri ke kanan lewat clip-path, lalu
- *             kartunya mekar dari tengah susunan ke tepinya.
- *   MERANGKAI Ekosistem: tulang punggung tumbuh mengikuti gulir, tiap simpul
- *             menyala saat dilewati, dan tiap barisnya masuk DARI SISINYA
- *             sendiri - kiri, kanan, kiri - jadi zig-zagnya ikut terasa waktu
- *             masuknya, bukan cuma terlihat di tata letaknya.
- *   TENGGELAM huruf raksasa penutup bergerak lebih lambat daripada halamannya.
- *   JURANG    bagian tim: turun ke bawah berarti turun ke dalam, sampai hitam.
- *
- * Semua gerak HANYA `transform`, `opacity`, dan `clip-path`. Tidak ada blur,
- * tidak ada bayangan yang dianimasikan - pelajaran yang sudah mahal dibayar
- * halaman ini (jebakan #116, #124).
- *
- * DUA BAHASA. Seluruh kalimat di berkas ini hidup di `K` di bawah, dalam dua
- * cabang yang bertipe sama. Kalimat yang tidak punya pasangan Inggrisnya
- * gagal di `tsc` - lihat `lib/bahasa.tsx`.
- */
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { gsap } from 'gsap'
@@ -319,13 +275,6 @@ const K = {
   },
 }
 
-// ---------------------------------------------------------------------------
-// Gambar-gambar kecil
-//
-// Semuanya SVG yang digambar di tempat, bukan berkas. Aset yang disimpan akan
-// basi diam-diam pada perubahan palet berikutnya, dan tidak ada uji yang bisa
-// menangkapnya. Yang di bawah ini mengambil warnanya dari token halaman.
-// ---------------------------------------------------------------------------
 
 /** Heksagon bertopi runcing, dipusatkan di (0,0). */
 function jalurHeks(r: number) {
@@ -335,19 +284,6 @@ function jalurHeks(r: number) {
   }).join(' ')
 }
 
-/**
- * Letak satu kartu di kisi tim: tiga sebaris di layar lebar, dua di layar
- * sedang, satu di ponsel - dan baris terakhir yang tidak penuh selalu di
- * TENGAH. Permintaan pemilik repo, 11 Sep 2026: "3 di atas, 2 di bawah".
- * Sebelumnya dua kartu terakhir menempel ke kiri dan menyisakan lubang
- * selebar satu kartu di kanan.
- *
- * Kisinya enam kolom di `lg` supaya "dua kartu di tengah" bisa dinyatakan
- * tanpa angka ajaib: tiap kartu dua kolom, dan baris sisanya berangkat dari
- * kolom 2 (dua kartu) atau kolom 3 (satu kartu). Ditulis untuk jumlah orang
- * berapa pun, bukan untuk lima - dan setiap kelas ditulis utuh, karena
- * Tailwind hanya membangkitkan kelas yang muncul harfiah di sumber.
- */
 function kelasSelTim(i: number, n: number): string {
   const kelas = ['lg:col-span-2']
   const sisaLebar = n % 3
@@ -358,23 +294,10 @@ function kelasSelTim(i: number, n: number): string {
   return kelas.join(' ')
 }
 
-/**
- * Sarang lebah hidup di latar hero.
- *
- * Bentuknya bukan hiasan: heksagon ADALAH bentuk data proyek ini (H3), jadi
- * latar yang bergerak di sini sekaligus memperkenalkan grid yang akan dipakai
- * di seluruh aplikasi.
- */
 const R_SARANG = 44
 const UBIN_W = R_SARANG * Math.sqrt(3)
 const UBIN_H = R_SARANG * 3
 
-/**
- * Sarang digambar sebagai SATU `<pattern>`, bukan sebagai ratusan poligon.
- * Perender melukis ubinnya SEKALI lalu mengulanginya sebagai tekstur. Lima
- * heksagon per ubin: yang di keempat sudut harus digambar utuh supaya
- * potongannya menyambung dengan ubin sebelahnya.
- */
 function Sarang({ id, warna, tebal }: { id: string; warna: string; tebal: number }) {
   const titik = jalurHeks(R_SARANG - 2.5)
   const pusat: [number, number][] = [
@@ -414,15 +337,6 @@ function bungkus(nilai: number, periode: number): number {
   return nilai - Math.ceil(nilai / periode) * periode
 }
 
-/**
- * Latar hero: kisi heksagon yang garis tepinya MENYALA di sekitar kursor.
- *
- * Dua transform yang saling meniadakan: LENSA (jendela bundar digeser ke
- * kursor) dan ISI (sarang terang di dalamnya, digeser berlawanan sejauh yang
- * sama). Sarang terang itu DIAM terhadap halaman - tepat menimpa sarang redup
- * di bawahnya. Yang bergerak cuma jendelanya, dan keduanya `transform`: nol
- * piksel dilukis ulang.
- */
 function LatarHero() {
   const akar = useRef<HTMLDivElement>(null)
   const lensa = useRef<HTMLDivElement>(null)
@@ -615,14 +529,6 @@ function LabelAlat({
   )
 }
 
-/**
- * 1 · Angka orang yang lewat berhenti di tengah jalan.
- *
- * Titik-titik berangkat dari stasiun, menyusuri jalur, lalu PADAM di sebuah
- * garis putus - dan yang di seberang garis itu tidak pernah menerima satu pun.
- * Gerakan yang berhenti sebelum sampai adalah satu-satunya cara menggambarkan
- * "datanya ada, tapi tidak sampai" tanpa satu kata pun.
- */
 function AlatSampai({ t }: { t: AlatTeks }) {
   return (
     <svg viewBox="0 0 320 180" className="block h-auto w-full" aria-hidden>
@@ -680,14 +586,6 @@ function AlatSampai({ t }: { t: AlatTeks }) {
   )
 }
 
-/**
- * 2 · Sewa dipatok dari gengsi, bukan dari penjualan.
- *
- * Dua batang tumbuh berbeda tinggi, dan GARIS SEWA naik mengikuti yang KIRI.
- * Yang membuatnya terbaca bukan batangnya melainkan garis itu: ia berhenti
- * sejajar dengan tampilan, jauh di atas penjualan, dan di situlah selisih yang
- * dibayar tiap bulan.
- */
 function AlatSewa({ t }: { t: AlatTeks }) {
   return (
     <svg viewBox="0 0 320 180" className="block h-auto w-full" aria-hidden>
@@ -740,30 +638,8 @@ function AlatSewa({ t }: { t: AlatTeks }) {
   )
 }
 
-/**
- * Yang jadi jawabannya, sebagai INDEKS ke `SEL_KONTRAS`.
- *
- * Sel ke-5 di sana ditulis `[-1, 1, 0.35, 'HIDDEN_GEM']`: menonjolnya 0,35 -
- * di bawah ambang "terlihat menonjol" - dan zonanya Hidden Gem. Persis kalimat
- * yang sedang digambarkan: datanya bagus, tampilannya biasa saja. Kalau suatu
- * saat sel itu diubah, gambar ini ikut salah, dan `assert` di bawah yang
- * memberitahunya - bukan mata siapa pun berbulan-bulan kemudian.
- */
 const I_TEMU = 5
 
-/**
- * 3 · Lokasi terbaik sering tidak kelihatan istimewa.
- *
- * Petaknya SAMA PERSIS dengan petak panel "satu kawasan, dua cara melihat" di
- * bawah - dan itu bukan penghematan, itu kalimatnya. Gambar ini memperlihatkan
- * kawasan yang sama sebelum ada yang menghitung: seluruh petaknya seragam, dan
- * tidak ada satu pun yang terlihat lebih menjanjikan. Satu sapuan lewat, satu
- * petak berubah jadi Hidden Gem, dan panel di bawah melanjutkan dari situ
- * dengan keempat zonanya.
- *
- * Yang membuat gambar ini bekerja adalah petak itu tidak pernah terlihat
- * berbeda sebelum sapuannya sampai.
- */
 function AlatTemu({ t }: { t: AlatTeks }) {
   const r = 15
   const titik = jalurHeks(r - 1.4)
@@ -867,16 +743,6 @@ function PelatMasalah({ i, t }: { i: number; t: AlatTeks }) {
 const R_KONTRAS = 21
 type KunciKuadran = (typeof URUTAN_KUADRAN)[number]
 
-/**
- * q, r (koordinat aksial), seberapa MENONJOL ia terlihat (0..1), lalu zona
- * yang keluar dari datanya.
- *
- * Angkanya dirancang, bukan diukur - ini gambar tentang sebuah gagasan, dan
- * angka sungguhan ada di enam kartu bagian berikutnya. Yang dijaga cuma
- * hubungannya: tiap sel yang ber-zona Hidden Gem TIDAK boleh terlihat menonjol,
- * dan tiap Jebakan Gengsi HARUS terlihat menonjol - kalau tidak, gambarnya
- * membantah kalimat yang menyertainya.
- */
 const SEL_KONTRAS: [number, number, number, KunciKuadran][] = [
   [0, 0, 0.95, 'PEMENANG_JELAS'],
   [1, 0, 0.85, 'JEBAKAN_GENGSI'],
@@ -905,11 +771,6 @@ const warnaZona = (k: KunciKuadran) => `color-mix(in srgb, ${KUADRAN[k].warna} 7
 /** Ambang "terlihat menonjol". Dipakai menghitung kalimat di bawah gambar. */
 const AMBANG_MENONJOL = 0.6
 
-/**
- * Gambar ketiga bagian masalah meminjam sel ini dan MENYEBUTNYA Hidden Gem
- * yang tidak menonjol. Kalau daftarnya diurut ulang, gambarnya jadi berbohong
- * tanpa satu pun galat - jadi biarkan ini yang berteriak lebih dulu.
- */
 if (import.meta.env.DEV) {
   const s = SEL_KONTRAS[I_TEMU]
   if (!s || s[3] !== 'HIDDEN_GEM' || s[2] >= AMBANG_MENONJOL) {
@@ -923,15 +784,6 @@ function KontrasKawasan() {
   const akar = useRef<HTMLDivElement>(null)
   const [fase, setFase] = useState(0)
 
-  /**
-   * Pergantiannya BERHENTI saat gambarnya di luar layar.
-   *
-   * Bukan demi hemat - satu interval 3,6 detik nyaris gratis - melainkan demi
-   * yang membaca: kalau ia terus berdetak sementara tidak terlihat, orang yang
-   * baru menggulir ke sini mendarat di tengah pergantian, dan setengah
-   * pergantian tidak menyatakan apa pun. Dengan ini ia selalu mulai dari
-   * "kasat mata", yaitu dari cara orang melihat sebelum ada datanya.
-   */
   useEffect(() => {
     const el = akar.current
     if (!el) return
@@ -1309,10 +1161,6 @@ function BarisBanding({ label, a, b }: { label: string; a: number; b: number }) 
   )
 }
 
-/**
- * Teks yang benar-benar setebal benda: delapan salinan huruf ditumpuk mundur
- * di sumbu Z. `perspective` dipasang di pembungkusnya.
- */
 const LAPIS_3D = 8
 function Teks3D({ teks, kelas }: { teks: string; kelas?: string }) {
   return (
@@ -1335,10 +1183,6 @@ function Teks3D({ teks, kelas }: { teks: string; kelas?: string }) {
   )
 }
 
-/**
- * Tombol yang tertarik ke kursor. Titik jangkarnya diukur saat kursor MASUK,
- * bukan tiap kali kursor bergerak; pulangnya pantulan elastis milik GSAP.
- */
 function Magnet({
   anak,
   kelas,
@@ -1525,23 +1369,8 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         delay: 0.55,
       })
 
-      /**
-       * Dipakai DUA blok di bawah, jadi ia diukur sekali di sini.
-       *
-       * Geseran mendatar hanya boleh di layar lebar, dan itu bukan selera:
-       * elemen yang PARKIR di keadaan awalnya (`x: 54`) sebelum pemicunya
-       * sampai benar-benar berdiri 54 px di luar wadahnya. Terukur di 390 px:
-       * halaman jadi bisa digulir MENDATAR sampai 420 px, persis gejala yang
-       * dilarang B.6.
-       */
       const lebarBesar = window.matchMedia('(min-width: 1024px)').matches
 
-      // --- MENUTUP: hero dipatok, bagian berikutnya menggulir menutupinya ---
-      //
-      // Hero-nya `sticky`, jadi pembungkus di bawahnya naik MENIMPANYA. Yang
-      // dianimasikan cuma isi hero: menyusut dan meredup seiring tertutup,
-      // supaya yang terbaca adalah lembaran yang menutup benda di bawahnya -
-      // bukan dua bagian yang kebetulan bertumpuk.
       gsap.to('.g-hero-isi', {
         scale: 0.93,
         y: -36,
@@ -1550,21 +1379,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         scrollTrigger: { scroller, trigger: '.g-tutup', start: 'top bottom', end: 'top 12%', scrub: 0.5 },
       })
 
-      /**
-       * Latar hero DIPADAMKAN begitu lembar penutupnya benar-benar menutupinya.
-       *
-       * Hero itu `sticky`, jadi ia tidak pernah keluar dari viewport dan tidak
-       * pernah dipadamkan pengamat `[data-diam]` - dan sarang heksagon plus
-       * lensanya terus DILUKIS di belakang lembar pekat sepanjang halaman.
-       * Terukur di build produksi, gulir 55px/bingkai: bingkai median 43,2 ms
-       * dengan latar itu hidup, 32,0 ms tanpa. Sebelas milidetik per bingkai
-       * untuk gambar yang tidak bisa dilihat siapa pun.
-       *
-       * Yang dipadamkan HANYA lapisan hiasnya, yang memang sudah `aria-hidden`.
-       * Isi hero - judul, kalimat, kedua tombol - dibiarkan utuh: ia masih di
-       * pohon aksesibilitas, dan pembaca layar yang menggulir kembali ke atas
-       * tetap menemukannya.
-       */
       ScrollTrigger.create({
         scroller,
         trigger: '.g-tutup',
@@ -1573,11 +1387,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         onLeaveBack: () => akar.current?.querySelector('.g-hero')?.removeAttribute('data-tertutup'),
       })
 
-      // --- JEDA: tali yang tumbuh mengikuti gulir --------------------------
-      //
-      // `scrub`, bukan tween yang berjalan sendiri: benda yang menandai JARAK
-      // harus tumbuh sepanjang jarak itu, bukan selesai dalam satu detik lalu
-      // menunggu. Yang tumbuh `scaleY` dengan titik asal di atas.
       gsap.fromTo(
         '.g-jeda-isi',
         { scaleY: 0 },
@@ -1587,13 +1396,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
           scrollTrigger: { scroller, trigger: '.g-jeda', start: 'top 78%', end: 'bottom 62%', scrub: 0.5 },
         },
       )
-      // Heksagon di ujung tali ikut SCRUB yang sama, bukan tween sendiri.
-      //
-      // Tween `from` di sini pernah meninggalkannya di opacity 0 selamanya:
-      // pemicunya `bottom 72%`, dan siapa pun yang mendarat di bagian ini lewat
-      // tautan langsung sudah melewatinya sebelum ScrollTrigger sempat
-      // mengukurnya. Jebakan yang sama persis pernah memakan tombol "gulir" di
-      // hero. Diikat ke scrub, ia tidak punya keadaan "belum dipicu".
       gsap.fromTo(
         '.g-jeda-heks',
         { scale: 0.2, opacity: 0 },
@@ -1605,37 +1407,8 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         },
       )
 
-      // --- Kosakata gerak bersama: MASALAH dan SOLUSI ------------------------
-      //
-      // Diminta pemilik repo, 11 Sep 2026: "semuanya dikasih animasi/transisi
-      // kemunculan yang keren dan mewah/elegan" untuk bagian Latar belakang,
-      // dan Solusi "dipermewah". Sebelumnya di bagian Latar belakang cuma tiga
-      // baris masalah yang bergerak; judul, paragraf pembuka, garis pengantar,
-      // dan panel penutupnya sudah berdiri diam sebelum orang sampai.
-      //
-      // YANG MEMBUATNYA TERBACA MEWAH, dan tidak satu pun berupa efek tambahan:
-      //
-      //   1. KURVA. `expo.out` - berangkat cepat, lalu mendarat sangat panjang.
-      //      Benda murah berhenti mendadak; benda mahal melambat lama.
-      //   2. TOPENG. Kata dan baris naik dari balik tepi yang tidak terlihat,
-      //      bukan memudar di tempat. Mata membacanya sebagai huruf yang
-      //      DIBUKA, seperti cetakan yang diangkat dari kertasnya.
-      //   3. URUTAN. Tidak ada dua benda yang tiba bersamaan: garis dulu, label,
-      //      judul kata demi kata, lalu paragrafnya baris demi baris.
-      //
-      // Semua gerak tetap HANYA `transform`, `opacity`, dan `clip-path` - kepala
-      // berkas ini. Dan semuanya SEKALI JALAN: tidak ada scrub, jadi tidak ada
-      // yang dilukis ulang tiap bingkai selama orang menggulir.
       const MEWAH = 'expo.out'
 
-      /**
-       * Kata atau baris yang naik dari balik topengnya sendiri.
-       *
-       * `autoSplit` + tween yang DIKEMBALIKAN dari `onSplit`: saat font selesai
-       * dimuat atau lebar berubah, SplitText memecah ulang dan GSAP memutar
-       * ulang tween-nya pada potongan yang baru - bukan menganimasikan baris
-       * lama yang sudah tidak ada di DOM.
-       */
       const pecahNaik = (pilih: string, jenis: 'words' | 'lines', mulai: string) => {
         gsap.utils.toArray<HTMLElement>(pilih).forEach((el) => {
           const jeda = Number(el.dataset.jeda ?? 0)
@@ -1706,28 +1479,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         })
       })
 
-      // --- BERGANTIAN: tiga masalah, satu per satu -------------------------
-      //
-      // Tiap baris masuk DARI SISI GAMBARNYA, dan sisinya berselang - jadi
-      // arah masuknya sendiri yang memberi tahu bahwa ini masalah berikutnya,
-      // bukan lanjutan dari yang barusan.
-      //
-      // Pelatnya kini TERBUKA seperti tirai dari sisinya (clip-path), bukan
-      // cuma meluncur sambil memudar, dan gambar di dalamnya mendarat dari
-      // sedikit lebih besar - dua gerak yang berlawanan arah, jadi yang
-      // terbaca adalah JENDELA yang dibuka, bukan kartu yang digeser.
-      //
-      // TANPA hanyut pada pelatnya, dan itu keputusan yang diukur, bukan selera.
-      //
-      // Versi pertama menghanyutkan pelat 3,5% naik-turun sepanjang barisnya
-      // lewat. Terlihat bagus, dan mahal: pelat itu berlatar dua gradien
-      // bergaris seperti kertas milimeter, dan menggesernya tiap bingkai
-      // memaksa seluruh latar itu DILUKIS ULANG bersama SVG di atasnya.
-      // Terukur di build produksi, gulir sungguhan 55px/bingkai: bingkai median
-      // 48,2 ms dengan hanyut, 40,4 ms tanpa - hampir seluruh ongkos tiga
-      // pelat ini ada di sana, untuk gerakan setinggi sepuluh piksel. Tween
-      // sekali jalan di bawah ini tidak membayar ongkos itu: ia selesai dalam
-      // satu setengah detik dan tidak disetir gulir.
       gsap.utils.toArray<HTMLElement>('.g-mas-baris').forEach((el) => {
         const kiri = el.dataset.sisi === 'kiri'
         const panggung = el.querySelector('.g-mas-panggung')
@@ -1791,16 +1542,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         )
       })
 
-      // --- SOLUSI: kartu TERBUKA dari tengah susunan, petanya MENDARAT -------
-      //
-      // Tiga gerak per kartu, berundak, dan ketiganya berbeda jenis:
-      //   bingkai  terbuka dari potongan yang lebih kecil ke ukuran penuhnya
-      //   peta     mendarat dari perbesaran 1,3x - seperti kamera yang turun
-      //   kata     naik sesudah bingkainya cukup lebar untuk menampungnya
-      // lalu satu kilau menyapu permukaannya SEKALI.
-      //
-      // Undakannya dari TENGAH susunan ke tepinya (`from: 'center'`), sama
-      // dengan heksagon yang mekar dari pusat kawasan di peta sungguhan.
       const bento = gsap.utils.toArray<HTMLElement>('.g-bento')
       if (bento.length) {
         const undak = { each: 0.09, from: 'center', grid: 'auto' } as const
@@ -1845,13 +1586,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         tl.from('.g-bento-catatan', { y: 16, opacity: 0, duration: 1.1, ease: MEWAH }, 0.9)
       }
 
-      // --- MERANGKAI: ekosistem ---------------------------------------------
-      //
-      // Judulnya memakai kedua gerakan yang dulu membuka bagian MASALAH -
-      // tirai clip-path dan baris yang naik dari balik topeng. Dipindahkan ke
-      // sini atas permintaan pemilik repo: bagian pertama sesudah hero tidak
-      // butuh gerakan tambahan, bagian keempat butuh sesuatu yang menandai
-      // bahwa ceritanya berganti babak.
       gsap.utils.toArray<HTMLElement>('.g-tirai').forEach((el) => {
         gsap.from(el, {
           clipPath: 'inset(100% 0% 0% 0%)',
@@ -1898,16 +1632,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         },
       )
 
-      // Tiap baris masuk DARI SISINYA sendiri. Itu yang membuat zig-zagnya
-      // terasa sebagai jalur, bukan sebagai dua kolom yang kebetulan berselang.
-      //
-      // GESERAN MENDATARNYA HANYA DI LAYAR LEBAR, dan itu bukan selera. Di
-      // bawah `lg` barisnya satu kolom - tidak ada kiri dan kanan untuk
-      // dimasuki - dan yang lebih menentukan: elemen yang PARKIR di keadaan
-      // awalnya (`x: 54`) sebelum pemicunya sampai benar-benar berdiri 54 px di
-      // luar wadahnya. Terukur di 390 px: halaman jadi bisa digulir MENDATAR
-      // sampai 420 px, persis gejala yang dilarang B.6. Di layar sempit
-      // gerakannya jadi tegak, yang tidak pernah menambah lebar.
       gsap.utils.toArray<HTMLElement>('.g-eko-baris').forEach((el) => {
         const kiri = el.dataset.sisi === 'kiri'
         const media = el.querySelector('.g-eko-media')
@@ -1969,18 +1693,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
         ease: 'none',
         scrollTrigger: { scroller, trigger: '.g-jurang', start: 'top 40%', end: 'top -18%', scrub: 0.4 },
       })
-      // `top 14%`, bukan `top 34%`.
-      //
-      // Ambangnya setinggi 46vh (52vh di halaman terang) dan berakhir TEPAT di
-      // atas `.g-jurang`, jadi saat puncak jurang berada 34% dari atas layar,
-      // bilah atas masih berdiri di sepertiga pertama gradien itu - tempat
-      // alfanya belum 0,05. Bilahnya tetap berbahan terang di atas latar yang
-      // sudah nyaris hitam, dan tulisan "Loconomics" hilang ke dalamnya.
-      // Terlihat di potret mode terang, dan sudah ada sejak ambangnya
-      // ditinggikan.
-      //
-      // 14% menaruh bilah itu di sekitar 85% gradien - tempat alfanya sudah
-      // melewati 0,7 - dan angka yang sama bekerja untuk kedua tinggi ambang.
       ScrollTrigger.create({
         scroller,
         trigger: '.g-jurang',
@@ -2033,20 +1745,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
     // SplitText harus memecah teks yang baru - bukan memegang baris yang lama.
   }, [gerakMati, bahasa])
 
-  /**
-   * `sorot` menentukan tombol ini BERPENDAR atau tidak.
-   *
-   * Di bilah atas ia berpendar hanya untuk yang SUDAH masuk. Sebelum itu yang
-   * berpendar "Daftar" - permintaan pemilik repo, 11 Sep 2026, membalik
-   * keputusan 9 Sep: "saya gamau button itu di highlight kalau belum sign up".
-   * Alasannya masuk akal dan bukan selera: peta bisa dibuka siapa pun, jadi
-   * mengarahkan mata ke sana lebih dulu berarti menunda satu-satunya langkah
-   * yang benar-benar mengubah apa yang akan ia lihat di sana.
-   *
-   * Di HERO tombolnya tetap berpendar apa pun keadaannya - di sana tidak ada
-   * tombol daftar untuk berebut perhatian, dan hero tanpa satu ajakan yang
-   * jelas adalah hero tanpa ajakan.
-   */
   const { akun } = useSesi()
 
   const tombolMasuk = (kelas: string, ukuran: 'kecil' | 'besar', sorot = true) => (
@@ -2437,18 +2135,6 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                         loading="lazy"
                         decoding="async"
                         draggable={false}
-                        // Peredupannya berbeda menurut basemap potretnya. Lima
-                        // dari enam kartu dipotret di atas basemap TERANG dan
-                        // satu di atas gelap; satu angka untuk keduanya membuat
-                        // barisnya terbaca sebagai enam gambar dari enam tempat
-                        // yang berbeda - terlihat begitu di potret, kartu kedua
-                        // menyala jauh lebih terang daripada tetangganya.
-                        //
-                        // Pindah ke CSS 11 Sep 2026: angkanya sekarang harus
-                        // bergantung pada TEMA juga, dan tema tidak bisa dibaca
-                        // dari ternary di dalam `style`. `brightness(0.24)` yang
-                        // benar di halaman hitam mengubah kartunya jadi lubang
-                        // hitam di halaman putih.
                         data-gelap={potret.gelap ? '1' : '0'}
                         className="g-eko-gambar block h-[16rem] w-full scale-[1.06] object-cover sm:h-[18.5rem]"
                       />

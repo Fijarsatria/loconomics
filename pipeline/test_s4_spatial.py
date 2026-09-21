@@ -1,16 +1,4 @@
-"""Uji rantai spasial: Commuter Clock, PriceLens, D04, dan Kompetisi.
-
-Tidak butuh basis data, jaringan, maupun data lapangan:
-
-    cd pipeline && python test_s4_spatial.py
-    atau:  python -m pytest test_s4_spatial.py -v
-
-Ikut menguji `s2_clean.poi_dari_osm` dan `s2_clean.simpul_dari_osm` walau
-keduanya tinggal di s2, bukan di s4. Alasannya bukan kemalasan: keduanya
-satu-satunya pintu masuk data OSM ke variabel Kompetisi yang diuji di berkas
-ini, dan menguji agregatnya tanpa menguji penguraiannya berarti separuh rantai
-yang menghasilkan angka di layar tidak pernah diperiksa sama sekali.
-"""
+"""Uji rantai spasial: Commuter Clock, PriceLens, D04, dan Kompetisi."""
 
 import numpy as np
 import pandas as pd
@@ -197,11 +185,7 @@ def test_harga_per_m2_buang_periode_tidak_jelas():
 
 
 def test_harga_per_m2_median_dari_rasio():
-    """Median dari rasio, BUKAN rasio dari median.
-
-    Dua properti: 10jt/100m2 = 100rb/m2, dan 3jt/10m2 = 300rb/m2.
-    Median rasio  = 200rb.  Rasio median = 6,5jt / 55m2 = 118rb - salah.
-    """
+    """Median dari rasio, BUKAN rasio dari median."""
     prop = pd.DataFrame(
         [
             {"h3_index": HEX[0], "harga_nominal": 10_000_000, "periode": "bulan", "luas_m2": 100.0},
@@ -228,17 +212,7 @@ def test_harga_per_m2_luas_nol_tidak_bikin_pembagian_nol():
 
 
 def contoh_rute() -> pd.DataFrame:
-    """Tiga heksagon dengan bentuk kasus yang berbeda-beda.
-
-    hex 1: tiga alternatif, dan yang TERCEPAT sengaja tidak ber-urutan 0
-    hex 2: rute ke dua simpul berbeda
-    hex 3: satu rute saja
-
-    `jarak_m` ikut, seperti di tabel `hex_routes` yang sebenarnya. Sengaja
-    TIDAK sebanding lurus dengan menit - rute tercepat hex 1 bukan yang
-    terpendek - supaya uji D03 benar-benar membuktikan keduanya diambil dari
-    baris yang sama, bukan kebetulan cocok karena datanya seragam.
-    """
+    """Tiga heksagon dengan bentuk kasus yang berbeda-beda."""
     return pd.DataFrame(
         [
             {"h3_index": HEX[0], "urutan": 0, "menit": 14.0, "jarak_m": 900.0},
@@ -252,12 +226,7 @@ def contoh_rute() -> pd.DataFrame:
 
 
 def test_d04_ambil_yang_tercepat_bukan_urutan_nol():
-    """Inti fungsinya: minimum, bukan baris pertama.
-
-    Kalau suatu saat ini diganti jadi `urutan == 0`, uji ini yang jatuh -
-    dan itu memang jebakan yang pernah kena di produksi: ORS mengurutkan
-    menurut weight internalnya, bukan menurut durasi.
-    """
+    """Inti fungsinya: minimum, bukan baris pertama."""
     d = waktu_jalan_dari_rute(contoh_rute())
     assert d[HEX[0]] == 9.5, f"harus memilih 9,5 menit, bukan {d[HEX[0]]}"
 
@@ -268,10 +237,7 @@ def test_d04_lintas_simpul_ambil_yang_terdekat():
 
 
 def test_d04_heksagon_tanpa_rute_tidak_muncul():
-    """Aturan 4: kosong tetap kosong.
-
-    Heksagon yang belum pernah dirutekan bukan heksagon berjarak nol menit.
-    """
+    """Aturan 4: kosong tetap kosong."""
     d = waktu_jalan_dari_rute(contoh_rute())
     assert "89hex99999" not in d.index
     assert len(d) == 3
@@ -302,13 +268,6 @@ def test_d04_semua_positif():
 
 
 
-# ---------------------------------------------------------------------------
-# Kompetisi - C01, C02, C03, C05, C06
-# ---------------------------------------------------------------------------
-#
-# Heksagon di sini H3 SUNGGUHAN (Manggarai), bukan string karangan seperti
-# HEX di atas: C01 memanggil `h3.grid_disk`, dan itu menolak indeks yang tidak
-# sah. Uji yang memakai heksagon palsu akan gagal karena sebab yang salah.
 
 PUSAT = h3.latlng_to_cell(-6.2131, 106.8496, 9)
 TETANGGA = [t for t in h3.grid_disk(PUSAT, 1) if t != PUSAT]
@@ -325,11 +284,7 @@ def test_kelas_dominan_ambil_yang_terbanyak():
 
 
 def test_kelas_dominan_seri_diputus_urutan_kelas_induk():
-    """Dua kelas sama banyak -> yang lebih dulu di KELAS_INDUK menang.
-
-    Yang diuji bukan 'F1 menang', melainkan bahwa hasilnya TIDAK bergantung
-    pada urutan baris - dua urutan yang berbeda wajib menghasilkan hal sama.
-    """
+    """Dua kelas sama banyak -> yang lebih dulu di KELAS_INDUK menang."""
     maju = poi_df([(PUSAT, "F1", False), (PUSAT, "R2", False)])
     mundur = poi_df([(PUSAT, "R2", False), (PUSAT, "F1", False)])
     assert kelas_dominan(maju)[PUSAT] == kelas_dominan(mundur)[PUSAT]
@@ -412,13 +367,7 @@ def test_dimensi_kompetisi_poi_kosong_aman():
 
 
 def test_dimensi_kompetisi_tidak_mengarang_c07_c08():
-    """Kolom yang menuntut data misi TIDAK boleh muncul dari OSM.
-
-    C04 dulu ikut di sini. Ia keluar bukan karena aturannya melonggar melainkan
-    karena sumbernya ketemu: OSM membawa taksonomi masakan sendiri lewat tag
-    `cuisine`, jadi C04 tidak lagi menuntut A4. C07 dan C08 tetap - keduanya
-    menuntut penanda pedagang KELILING, dan OSM tidak memetakan gerobak.
-    """
+    """Kolom yang menuntut data misi TIDAK boleh muncul dari OSM."""
     poi = poi_df([(PUSAT, "F2", False), (TETANGGA[0], "R1", True)])
     kolom = set(dimensi_kompetisi(poi, pop=pd.Series({PUSAT: 500.0})).columns)
     assert not kolom & {"rasio_keliling", "n_menetap_kuliner"}
@@ -629,7 +578,7 @@ def test_d03_diambil_dari_rute_tercepat_bukan_terpendek():
     """Inti aturannya. Hex 1 punya rute 700 m (21 menit) dan 820 m (9,5 menit).
     Yang benar 820 m - jarak perjalanan yang waktunya kita tampilkan. Mengambil
     minimum jarak sendiri-sendiri akan menghasilkan pasangan "700 m, 9,5 menit"
-    untuk perjalanan yang tidak pernah ada."""
+    """
     d = simpul_terdekat_dari_rute(contoh_rute())
     assert d.loc[HEX[0], "jarak_simpul_m"] == 820.0, d.loc[HEX[0], "jarak_simpul_m"]
     assert d.loc[HEX[0], "waktu_jalan_menit"] == 9.5
@@ -665,14 +614,6 @@ def test_d03_semua_positif():
     assert (d["jarak_simpul_m"] > 0).all()
 
 
-# ---------------------------------------------------------------------------
-# D01 - raster WorldPop -> heksagon
-# ---------------------------------------------------------------------------
-#
-# Raster tiruan dibuat di sekitar Manggarai dengan ukuran piksel WorldPop yang
-# sebenarnya (0,0008333 derajat). Yang diuji BUKAN angka penduduknya - itu milik
-# WorldPop - melainkan bahwa penjumlahannya tidak menciptakan dan tidak
-# menghilangkan orang.
 
 PIKSEL = 0.0008333333
 KIRI, ATAS = 106.8400, -6.2050
@@ -785,12 +726,7 @@ def test_bangunan_tanpa_geometri_dibuang():
 
 
 def test_m01_rasio_terhadap_luas_sel_h3_sendiri():
-    """Satu bangunan seluas X di sel seluas A harus memberi 100*X/A.
-
-    Pembaginya luas sel ITU SENDIRI, bukan konstanta 105.000 m2 - sel res-9
-    berbeda-beda beberapa persen, dan pembagi yang salah meleset searah untuk
-    seluruh kawasan sekaligus.
-    """
+    """Satu bangunan seluas X di sel seluas A harus memberi 100*X/A."""
     la, lo = h3.cell_to_latlng(PUSAT)
     b = bangunan_dari_osm([{"type": "way", "id": 1, "geometry": kotak(la, lo, 0.0002)}])
     sel = b.iloc[0]["h3_index"]
@@ -835,14 +771,6 @@ def test_morfologi_kosong_aman():
     assert m.empty and "rasio_tutupan_bangunan" in m.columns
 
 
-# ---------------------------------------------------------------------------
-# Data misi MAPID
-# ---------------------------------------------------------------------------
-#
-# Yang diuji paling keras di sini SATU aturan: heksagon yang tidak disurvei
-# harus KOSONG, bukan nol. Data misi adalah survei bertitik - 688 dari 708
-# heksagon tidak pernah dikunjungi siapa pun, dan mengisinya nol akan
-# menggambarkan Jabodetabek sebagai kawasan mati.
 
 KOSONG_MISI = pd.DataFrame(columns=["h3_index"])
 
@@ -974,13 +902,6 @@ def test_dimensi_misi_seluruhnya_kosong_aman():
     assert v.drop(columns=["n_titik_misi"]).isna().all().all()
 
 
-# ---------------------------------------------------------------------------
-# Zonasi RDTR - L01, L02, L03
-# ---------------------------------------------------------------------------
-#
-# L01 adalah GERBANG: FALSE menolkan skor lokasi berapa pun nilai variabel
-# lainnya. Karena itu ujinya bukan cuma "apakah terhitung", melainkan apakah ia
-# cukup enggan menolak.
 
 
 def _z(kod, nam, pangsa, krb="Tidak Ada"):

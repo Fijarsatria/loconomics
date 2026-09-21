@@ -1,24 +1,4 @@
-"""Bentuk galat yang seragam untuk seluruh API.
-
-Tanpa berkas ini, kegagalan basis data keluar ke pengguna sebagai traceback
-Python mentah: bocor nama tabel, jalur berkas, dan kadang potongan connection
-string. Selain tidak sopan, itu juga membocorkan struktur internal ke siapa pun
-yang memanggil endpoint.
-
-Setiap galat keluar dalam amplop yang sama:
-
-    {
-      "galat": {
-        "kode": "HEKSAGON_TIDAK_DITEMUKAN",
-        "pesan": "Heksagon 89abc tidak ditemukan.",
-        "detail": {...},
-        "request_id": "3f9c1a2b"
-      }
-    }
-
-`kode` yang dibaca program, `pesan` yang dibaca manusia. Frontend bercabang pada
-`kode`, tidak pernah pada `pesan` - pesan boleh berubah kapan saja, kode tidak.
-"""
+"""Bentuk galat yang seragam untuk seluruh API."""
 
 from __future__ import annotations
 
@@ -38,12 +18,7 @@ HEADER_REQUEST_ID = "X-Request-ID"
 
 
 class KesalahanAPI(Exception):
-    """Galat yang memang kita duga dan sudah kita namai.
-
-    Dipakai untuk keadaan yang bisa dijelaskan ke pengguna. Segala hal yang
-    TIDAK diturunkan dari kelas ini dianggap bug dan pesannya tidak pernah
-    diteruskan apa adanya ke luar.
-    """
+    """Galat yang memang kita duga dan sudah kita namai."""
 
     status_code = status.HTTP_400_BAD_REQUEST
     kode = "PERMINTAAN_TIDAK_VALID"
@@ -60,12 +35,7 @@ class TidakDitemukan(KesalahanAPI):
 
 
 class KawasanTidakDikenal(KesalahanAPI):
-    """Salah ketik nama kawasan.
-
-    Sebelumnya kasus ini mengembalikan daftar kosong dengan status 200, dan
-    pemanggil menyimpulkan "tidak ada lokasi bagus di sana" padahal yang terjadi
-    hanya salah eja. Sekarang ditolak dengan daftar kawasan yang sah.
-    """
+    """Salah ketik nama kawasan."""
 
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     kode = "KAWASAN_TIDAK_DIKENAL"
@@ -91,13 +61,6 @@ class BasisDataBermasalah(KesalahanAPI):
     kode = "BASIS_DATA_BERMASALAH"
 
 
-# --- Akun dan langganan ----------------------------------------------------
-#
-# Empat kode, bukan satu. Frontend memperlakukan keempatnya sangat berbeda:
-# yang pertama membuka dialog masuk, yang kedua membuka dialog langganan, yang
-# ketiga memberi pesan di dalam formulir, yang keempat menawarkan beli token.
-# Menggabungkannya jadi satu 403 memaksa frontend menebak dari teks pesan -
-# persis yang dilarang di kepala berkas ini.
 
 
 class TidakTerautentikasi(KesalahanAPI):
@@ -108,12 +71,7 @@ class TidakTerautentikasi(KesalahanAPI):
 
 
 class KredensialSalah(KesalahanAPI):
-    """Surel/nama pengguna atau kata sandi tidak cocok.
-
-    Pesannya sengaja TIDAK memberi tahu yang mana yang salah. Pesan "surel tidak
-    terdaftar" mengubah formulir masuk jadi alat pemeriksa keanggotaan: siapa
-    pun bisa mencoba daftar surel dan tahu mana yang punya akun di sini.
-    """
+    """Surel/nama pengguna atau kata sandi tidak cocok."""
 
     status_code = status.HTTP_401_UNAUTHORIZED
     kode = "KREDENSIAL_SALAH"
@@ -132,12 +90,7 @@ class AkunSudahAda(KesalahanAPI):
 
 
 class ButuhPremium(KesalahanAPI):
-    """Sudah masuk, tetapi tingkatnya belum cukup.
-
-    402 Payment Required, bukan 403. Statusnya memang jarang dipakai, tetapi ini
-    persis maknanya - dan ia membedakan "Anda tidak boleh" dari "Anda belum
-    membayar", yang di produk ini dua jalan keluar yang berbeda.
-    """
+    """Sudah masuk, tetapi tingkatnya belum cukup."""
 
     status_code = status.HTTP_402_PAYMENT_REQUIRED
     kode = "BUTUH_PREMIUM"
@@ -165,12 +118,7 @@ def pasang(app: FastAPI) -> None:
 
     @app.middleware("http")
     async def tandai_request(request: Request, call_next):
-        """Beri setiap permintaan satu id pendek.
-
-        Id yang sama muncul di log server dan di badan respons galat, jadi
-        laporan pengguna "error-nya 3f9c1a2b" langsung bisa ditelusuri ke baris
-        log yang tepat - tanpa menebak dari stempel waktu.
-        """
+        """Beri setiap permintaan satu id pendek."""
         request.state.request_id = request.headers.get(HEADER_REQUEST_ID) or uuid.uuid4().hex[:8]
         respons = await call_next(request)
         respons.headers[HEADER_REQUEST_ID] = request.state.request_id
@@ -202,12 +150,7 @@ def pasang(app: FastAPI) -> None:
 
     @app.exception_handler(OperationalError)
     async def _db_mati(request: Request, exc: OperationalError):
-        """Supabase free tier dijeda kalau lama menganggur.
-
-        Ini keadaan yang paling mungkin dialami juri kalau mereka membuka tautan
-        setelah beberapa hari, jadi pesannya dibuat jelas dan bisa ditindaklanjuti
-        alih-alih "Internal Server Error".
-        """
+        """Supabase free tier dijeda kalau lama menganggur."""
         rid = _request_id(request)
         log.error("[%s] basis data tidak terjangkau: %s", rid, exc)
         return _amplop(
@@ -232,12 +175,7 @@ def pasang(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _tak_terduga(request: Request, exc: Exception):
-        """Jaring terakhir.
-
-        Pesan aslinya SENGAJA tidak diteruskan ke pengguna - isinya bisa memuat
-        nama tabel, jalur berkas, atau potongan konfigurasi. Yang keluar hanya
-        request_id; isinya lengkap ada di log server.
-        """
+        """Jaring terakhir."""
         rid = _request_id(request)
         log.exception("[%s] galat tak terduga", exc_info=exc)
         return _amplop(

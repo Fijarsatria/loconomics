@@ -1,23 +1,4 @@
-"""Tabel database Loconomics.
-
-Struktur mengikuti Kamus Data Final (docs/data.md): 43 variabel analisis
-+ 3 penanda kualitas, seluruhnya melekat pada satu heksagon H3 resolusi 9.
-
-Empat kelompok tabel:
-  1. Referensi spasial  - transport_nodes, catchment_areas, hex_routes
-  2. Observasi mentah   - business_pois, *_observations
-                          TIDAK PERNAH diekspos lewat API publik (aturan panitia)
-  3. Hasil analisis     - hex_features (input), hex_hourly_profiles (Commuter Clock),
-                          location_scores + score_factors (output)
-  4. Akun dan langganan - users, subscriptions, token_ledger, premium_unlocks,
-                          watchlist_items
-
-Kelompok keempat tidak bersinggungan sama sekali dengan tiga di atasnya: tidak
-ada kolom akun di hex_features, dan tidak ada kolom heksagon di users. Yang
-menghubungkan keduanya cuma h3_index sebagai teks, di dua tabel terakhir. Batas
-itu sengaja - data misi MAPID dan data pelanggan tidak boleh pernah ikut ter-JOIN
-hanya karena kebetulan duduk di satu diagram.
-"""
+"""Tabel database Loconomics."""
 
 from datetime import datetime
 
@@ -74,29 +55,7 @@ class CatchmentArea(Base):
 
 
 class HexRoute(Base):
-    """Rute jalan kaki dari pusat satu heksagon ke simpul transportasi terdekat.
-
-    KENAPA TABEL, BUKAN KOLOM. Satu heksagon punya beberapa rute: yang tercepat
-    plus alternatifnya. Alternatif bukan hiasan - dua jalur yang selisih
-    waktunya tipis tetapi lewat jalan yang sama sekali berbeda adalah informasi
-    nyata bagi orang yang menimbang lokasi, dan itu hubungan satu-ke-banyak.
-
-    KENAPA DISIMPAN, BUKAN DIHITUNG SAAT DIMINTA. Tiga alasan, dan ketiganya
-    berdiri sendiri:
-
-      1. Arsitektur. s4_spatial.py menyatakannya sejak awal - routing jaringan
-         jalan berjalan OFFLINE, backend cuma membaca.
-      2. Kuota. OpenRouteService memberi 2.000 permintaan per hari untuk
-         seluruh akun. Kalau tiap klik heksagon memanggil ORS, kuota sehari
-         habis oleh 2.000 klik pengunjung - dan satu skrip iseng bisa
-         menghabiskannya dalam hitungan menit.
-      3. Waktu tanggap. Panggilan ORS makan ratusan milidetik. Membaca satu
-         baris dari tabel ini tidak.
-
-    Konsekuensinya jujur: heksagon yang belum pernah dirutekan TIDAK punya baris
-    di sini, dan endpoint-nya mengatakan apa adanya alih-alih menggambar garis
-    lurus lalu menyebutnya rute.
-    """
+    """Rute jalan kaki dari pusat satu heksagon ke simpul transportasi terdekat."""
 
     __tablename__ = "hex_routes"
 
@@ -114,19 +73,6 @@ class HexRoute(Base):
     #: Lama jalan kaki menurut ORS, menit. Profil foot-walking.
     menit: Mapped[float] = mapped_column(Float, nullable=False)
     geom: Mapped[str] = mapped_column(Geometry("LINESTRING", srid=4326), nullable=False)
-    #: Profil ORS yang dipakai: "foot-walking", "driving-car", atau
-    #: "cycling-regular" (sejak 11 Sep 2026).
-    #:
-    #: Ia bagian dari KUNCI UNIK, bukan sekadar penanda. Satu heksagon punya
-    #: rute jalan kaki DAN rute mobil ke simpul yang sama, dan keduanya
-    #: sama-sama urutan 0. Tanpa profil di dalam kuncinya, penarikan mobil akan
-    #: menimpa rute jalan kaki lewat ON CONFLICT alih-alih menambahkannya -
-    #: gagal diam, dan yang hilang data yang butuh berjam-jam dibuat.
-    #:
-    #: Motor TIDAK ADA di sini dan tidak akan pernah ada dari ORS: profil
-    #: sepeda motor bukan bagian dari layanan yang dipakai. Menyodorkan mobil
-    #: sebagai "kira-kira motor" akan salah ke arah yang paling merugikan -
-    #: motor melewati jalan yang mobil tidak bisa.
     profil: Mapped[str] = mapped_column(String(24), default="foot-walking", nullable=False)
     dihitung_pada: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -224,12 +170,7 @@ class PropertyObservation(Base):
 
 
 class HexFeature(Base):
-    """Tabel pusat. Satu baris = satu heksagon H3 res-9 (±0,10 km², lebar ±350 m).
-
-    43 variabel analisis + 3 penanda kualitas. Kode variabel (D01, B07, ...)
-    dipertahankan di nama kolom lewat komentar supaya bisa ditelusuri balik ke
-    Kamus Data Final di docs/data.md.
-    """
+    """Tabel pusat. Satu baris = satu heksagon H3 res-9 (±0,10 km², lebar ±350 m)."""
 
     __tablename__ = "hex_features"
 
@@ -307,25 +248,7 @@ class HexFeature(Base):
 
 
 class HexHourlyProfile(Base):
-    """Commuter Clock - satu baris per (heksagon, jam). 18 baris per heksagon, 05:00-22:00.
-
-    Kenapa tabel terpisah dan bukan kolom di hex_features: B01-B04 hanya membagi
-    hari jadi empat ember, sedangkan kriteria penerimaan fitur ini menuntut pola
-    per jam. Delapan belas kolom baru di hex_features akan membuat tabel itu sulit
-    dibaca dan tetap tidak bisa menyimpan pembagian captive/choice per jam.
-
-    `pangsa_captive` disimpan; `pangsa_choice` diturunkan sebagai 1 - pangsa_captive.
-    Menyimpan keduanya membuka kemungkinan jumlahnya tidak 1 setelah suatu
-    pembaruan - satu angka tidak bisa salah begitu.
-
-    Definisi yang dipakai (docs/produk.md bagian Commuter Clock):
-      captive rider  - tidak punya alternatif, bergantung penuh pada transit
-      choice rider   - punya kendaraan pribadi tetapi memilih transit
-
-    Kolom `metode` jujur menyatakan asal angkanya: `observed` kalau berasal dari
-    jam yang benar-benar tercetak di struk, `proxy` kalau diestimasi dari konteks
-    heksagon. Antarmuka wajib membedakan keduanya.
-    """
+    """Commuter Clock - satu baris per (heksagon, jam). 18 baris per heksagon, 05:00-22:00."""
 
     __tablename__ = "hex_hourly_profiles"
 
@@ -346,11 +269,7 @@ class HexHourlyProfile(Base):
 
 
 class LocationScore(Base):
-    """Keluaran mesin skoring. Diversikan supaya bobot bisa diubah tanpa menimpa baseline.
-
-    Versi dipakai oleh uji sensitivitas bobot (rho Spearman > 0,85) dan oleh
-    fitur B3 simulator skenario yang menghitung ulang bobot sesuai preferensi pengguna.
-    """
+    """Keluaran mesin skoring. Diversikan supaya bobot bisa diubah tanpa menimpa baseline."""
 
     __tablename__ = "location_scores"
 
@@ -377,10 +296,6 @@ class LocationScore(Base):
     # pada seluruh kawasan, jadi tidak bisa direproduksi dari satu baris saja.
     prestise_visual: Mapped[float | None] = mapped_column(Float)
 
-    # Berapa dari tiga metode hidden gem yang menandai heksagon ini. Sebuah
-    # lokasi baru disebut Hidden Gem kalau >= 2 - lihat docs/skoring.md.
-    # Disimpan supaya GemFinder bisa menjelaskan ALASAN terpilihnya, bukan
-    # sekadar menampilkan skor.
     n_metode_lolos: Mapped[int | None] = mapped_column(Integer)
 
     peringkat: Mapped[int | None] = mapped_column(Integer)
@@ -390,11 +305,7 @@ class LocationScore(Base):
 
 
 class ScoreFactor(Base):
-    """Rincian kontribusi tiap variabel ke skor akhir. Sumber jawaban jelaskan_skor().
-
-    Ada supaya penjelasan AI tidak perlu menghitung apa pun - angka kontribusi
-    sudah tersedia di basis data dan LLM tinggal merangkainya jadi kalimat.
-    """
+    """Rincian kontribusi tiap variabel ke skor akhir. Sumber jawaban jelaskan_skor()."""
 
     __tablename__ = "score_factors"
 
@@ -412,20 +323,7 @@ class ScoreFactor(Base):
 
 
 class BlokHeksagon(Base):
-    """Blok di DALAM heksagon - anak H3 resolusi 10, tujuh per heksagon.
-
-    Menjawab pertanyaan yang tidak bisa dijawab heksagon: "di dalam lokasi yang
-    sudah saya pilih, sisi mana yang paling layak". Satu heksagon res-9 selebar
-    ±350 m bisa memuat blok di muka stasiun dan blok di gang belakangnya, dan
-    rata-rata keduanya menyembunyikan justru perbedaan yang dicari penyewa.
-
-    SELURUH indikatornya dari data TERBUKA (OSM, OpenRouteService, RDTR). Tidak
-    satu pun dari misi MAPID: satu blok selebar ±130 m, dan agregat misi di
-    satuan sekecil itu hampir sama dengan menunjuk satu baris survei (aturan 2).
-
-    Dihitung offline oleh `pipeline/s7_publish.py --blok`; skornya oleh
-    `s6_score.skor_blok` (aturan 1). Backend hanya membaca.
-    """
+    """Blok di DALAM heksagon - anak H3 resolusi 10, tujuh per heksagon."""
 
     __tablename__ = "blok_heksagon"
 
@@ -464,11 +362,6 @@ class BlokHeksagon(Base):
     skor_blok: Mapped[float | None] = mapped_column(Float, index=True)
     #: Skor per kelas induk usaha, {"F1": 72.4, ...} - memuat penalti pesaing sekelas.
     skor_per_kelas: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    #: Sumbangan tiap indikator ke skor mentah blok ini, dari `s6_score`.
-    #:
-    #: Disimpan, bukan dihitung ulang saat melayani: aritmetika skor tinggal di
-    #: pipeline (aturan 1), dan backend yang menghitung ulang bobotnya sendiri
-    #: akan berselisih dengan pipeline pada hari seseorang menggeser satu bobot.
     kontribusi: Mapped[dict | None] = mapped_column(JSONB)
     #: 1 = blok terbaik di heksagon induknya.
     peringkat_induk: Mapped[int | None] = mapped_column(Integer)
@@ -478,22 +371,7 @@ class BlokHeksagon(Base):
 
 
 class HexPerkiraan(Base):
-    """PERKIRAAN pendukung per heksagon - terpisah dari `hex_features` dengan sengaja.
-
-    Ini rumah bagi angka yang bukan hasil pengukuran di heksagon itu sendiri:
-    median harga porsi dari survei di SEKITARNYA, kisaran sewa dari spanduk
-    yang dibaca AI di kawasan yang sama, pola jam dari struk-struk di sekitar
-    simpul transit. Semuanya diturunkan dari data sungguhan, tetapi bukan
-    pengamatan DI heksagon itu - jadi ia tidak boleh duduk di kolom yang sama
-    dengan pengamatan (docs/data.md 10.8: angka yang duduk di kolom yang sama
-    tidak bisa dibedakan dari luar oleh siapa pun).
-
-    Tiga larangan yang ditegakkan oleh letaknya:
-      - TIDAK PERNAH masuk skor. `s6_score` hanya membaca `hex_features`.
-      - TIDAK PERNAH menggambar peta. `/hex/layer` tidak membaca tabel ini.
-      - TIDAK PERNAH menaikkan lencana keyakinan. Q01-Q03 tetap milik survei.
-    Yang boleh: panel detail, simulasi, dan laporan - selalu berlabel Perkiraan.
-    """
+    """PERKIRAAN pendukung per heksagon - terpisah dari `hex_features` dengan sengaja."""
 
     __tablename__ = "hex_perkiraan"
 
@@ -519,11 +397,7 @@ class HexPerkiraan(Base):
 
 
 class AICallLog(Base):
-    """Catatan setiap panggilan AI (docs/ai.md 8.4).
-
-    Dipakai untuk menjawab pertanyaan juri "berapa banyak yang perlu koreksi manusia?"
-    dengan angka, bukan dengan perkiraan.
-    """
+    """Catatan setiap panggilan AI (docs/ai.md 8.4)."""
 
     __tablename__ = "ai_call_logs"
 
@@ -544,18 +418,7 @@ class AICallLog(Base):
 
 
 class User(Base):
-    """Satu akun.
-
-    `nama_pengguna` DAN `email` sama-sama unik, dan keduanya bisa dipakai masuk.
-    Alasannya sepele tapi nyata: orang yang mendaftar dengan surel panjang
-    hampir selalu mengetik nama pengguna saat kembali, dan formulir yang cuma
-    menerima surel membuat mereka mengira lupa kata sandi.
-
-    `saldo_token` duduk di sini, bukan dihitung ulang dari token_ledger tiap
-    kali. Buku besarnya tetap sumber kebenaran untuk RIWAYAT; saldo ini cache
-    yang ditulis di dalam transaksi yang sama dengan barisnya, jadi keduanya
-    tidak pernah bisa berselisih tanpa ada transaksi yang gagal separuh.
-    """
+    """Satu akun."""
 
     __tablename__ = "users"
 
@@ -564,17 +427,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
     sidik_sandi: Mapped[str] = mapped_column(String(255), nullable=False)
     nama_tampilan: Mapped[str | None] = mapped_column(String(80))
-    # "pengguna" | "admin". Admin TIDAK memberi kuasa apa pun di API ini - ia
-    # cuma penanda supaya panel akun bisa menyebutnya dan supaya akun pemilik
-    # gampang dikenali di basis data. Kuasa tambahan yang tidak dibutuhkan
-    # adalah kuasa yang suatu saat bocor.
     peran: Mapped[str] = mapped_column(String(20), nullable=False, default="pengguna")
     aktif: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     saldo_token: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # Preferensi usaha - JSON sebagai teks: {"jenis_usaha", "kawasan",
-    # "budget_sewa_bulanan"}. Teks, bukan kolom terpisah, karena isinya murni
-    # preferensi tampilan: tidak pernah di-JOIN, tidak pernah disaring SQL, dan
-    # bentuknya boleh tumbuh tanpa migrasi. Yang membacanya cuma ringkas_akun().
     preferensi: Mapped[str | None] = mapped_column(Text)
     dibuat_pada: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
@@ -583,18 +438,7 @@ class User(Base):
 
 
 class Subscription(Base):
-    """Satu periode langganan.
-
-    Baris, bukan kolom di users - supaya perpanjangan menumpuk jadi riwayat yang
-    bisa dibaca alih-alih menimpa tanggal sebelumnya. Yang menentukan tingkat
-    seseorang adalah ADA TIDAKNYA baris aktif yang belum lewat, bukan sebuah
-    boolean yang harus diingat untuk dimatikan.
-
-    `selamanya` memisahkan akun yang tidak boleh kedaluwarsa dari tanggal biasa.
-    Tanpa kolom ini, akun pemilik harus diberi tanggal jauh di masa depan - dan
-    tanggal jauh di masa depan tetap tanggal yang suatu saat lewat, biasanya
-    tepat saat sedang dipakai demo.
-    """
+    """Satu periode langganan."""
 
     __tablename__ = "subscriptions"
 
@@ -618,13 +462,7 @@ class Subscription(Base):
 
 
 class TokenLedger(Base):
-    """Buku besar token. Satu baris per mutasi, tidak pernah disunting.
-
-    Positif pembelian, negatif pemakaian. Saldo mana pun harus selalu sama
-    dengan jumlah seluruh barisnya; kalau tidak, ada transaksi yang gagal
-    separuh - dan itu harus bisa terlihat, bukan tertutup oleh angka saldo yang
-    kebetulan sudah ditimpa.
-    """
+    """Buku besar token. Satu baris per mutasi, tidak pernah disunting."""
 
     __tablename__ = "token_ledger"
 
@@ -643,14 +481,7 @@ class TokenLedger(Base):
 
 
 class PremiumUnlock(Base):
-    """Heksagon yang sudah dibuka dengan token oleh satu akun.
-
-    Sekali dibuka, selamanya terbuka untuk akun itu. Token yang dibayarkan untuk
-    melihat satu lokasi tidak boleh hangus hanya karena panelnya ditutup - dan
-    tanpa tabel ini, satu-satunya cara membuktikan seseorang pernah membayar
-    adalah membaca buku besar lalu menafsirkannya, yang berarti aturan yang sama
-    hidup di dua tempat.
-    """
+    """Heksagon yang sudah dibuka dengan token oleh satu akun."""
 
     __tablename__ = "premium_unlocks"
     __table_args__ = (UniqueConstraint("user_id", "h3_index", "jenis", name="uq_unlock"),)
@@ -667,14 +498,7 @@ class PremiumUnlock(Base):
 
 
 class WatchlistItem(Base):
-    """Heksagon yang dipantau satu akun. Fitur Pemantauan.
-
-    `skor_saat_dipantau` dan `versi_saat_dipantau` DIBEKUKAN saat baris ini
-    dibuat. Itu yang membuat pemantauannya jujur: yang dilaporkan nanti adalah
-    selisih terhadap angka yang benar-benar tercatat ketika orangnya mulai
-    memantau - bukan selisih terhadap angka yang dihitung ulang belakangan dan
-    kebetulan cocok.
-    """
+    """Heksagon yang dipantau satu akun. Fitur Pemantauan."""
 
     __tablename__ = "watchlist_items"
     __table_args__ = (UniqueConstraint("user_id", "h3_index", name="uq_watchlist"),)

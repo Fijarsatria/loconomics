@@ -1,28 +1,4 @@
-"""Bahasa visual bersama untuk ketiga laporan PDF.
-
-Berkas ini lahir 13 Sep 2026 atas satu permintaan pemilik repo: laporan PDF
-yang "kreatif, diperbanyak visualnya, dan enak untuk dipahami", berlogo
-Loconomics. Yang ada sebelumnya benar tetapi polos - tabel demi tabel, tanpa
-kop, tanpa markah, dan tanpa satu pun ringkasan yang bisa dibaca dalam tiga
-detik.
-
-Kenapa modul TERSENDIRI, padahal repo ini sengaja ramping: ada TIGA laporan
-(kelayakan, komparasi, simulasi) dan ketiganya harus terlihat seperti keluarga
-yang sama. Menaruh bahasa visualnya di `api/akun.py` berarti tiga endpoint
-mewarisi kop dan kaki lewat fungsi privat di modul API - dan laporan keempat
-yang ditulis orang berikutnya akan menyalinnya alih-alih meminjamnya.
-
-Yang TIDAK ada di sini, dan itu disengaja:
-
-  Tidak ada satu pun angka yang dihitung. Modul ini menggambar; yang
-  menghitung tetap pipeline dan `core/simulasi.py` (aturan 1).
-
-  Tidak ada tangkapan peta. Menyisipkannya berarti merender MapLibre di sisi
-  server - satu peramban tanpa kepala di dalam kontainer API - untuk gambar
-  yang tidak menambah satu pun angka yang bisa diaudit. Yang menggantikannya
-  diagram vektor yang digambar dari angka yang sama dengan yang dicetak di
-  sebelahnya, jadi keduanya tidak bisa berselisih.
-"""
+"""Bahasa visual bersama untuk ketiga laporan PDF."""
 
 from __future__ import annotations
 
@@ -94,13 +70,7 @@ def gaya() -> dict[str, ParagraphStyle]:
 
 
 def kop(judul: str, subjudul: str, lebar: float, g: dict) -> Table:
-    """Pita kop bermerek: markah, nama produk, judul dokumen.
-
-    Satu pita berwarna di kepala halaman pertama, bukan logo kecil di sudut.
-    Yang dituju bukan hiasan: dokumen ini dibawa ke pemberi modal bersama
-    berkas-berkas lain, dan yang membuatnya dikenali kembali di tumpukan itu
-    adalah blok warna, bukan tipografinya.
-    """
+    """Pita kop bermerek: markah, nama produk, judul dokumen."""
     kiri: list[Any] = []
     if MARKAH.exists():
         kiri.append(Image(str(MARKAH), width=13 * mm, height=13 * mm))
@@ -125,12 +95,7 @@ def kop(judul: str, subjudul: str, lebar: float, g: dict) -> Table:
 
 
 def kaki(canvas, dok) -> None:
-    """Kaki tiap halaman: markah kecil, nama produk, nomor halaman.
-
-    Dipasang lewat `onPage`, jadi ia ikut di SETIAP halaman - termasuk lampiran
-    yang panjang. Halaman lampiran yang terlepas dari dokumennya harus tetap
-    bisa dikenali asalnya.
-    """
+    """Kaki tiap halaman: markah kecil, nama produk, nomor halaman."""
     canvas.saveState()
     l, b = dok.leftMargin, 10 * mm
     kanan = dok.pagesize[0] - dok.rightMargin
@@ -147,11 +112,7 @@ def kaki(canvas, dok) -> None:
 
 
 def donat(nilai: float | None, maks: float = 100, ukuran: float = 46) -> Drawing:
-    """Cincin skor. Kosong digambar sebagai cincin ABU-ABU penuh, bukan nol.
-
-    Nol dan "belum dihitung" adalah dua pernyataan yang berbeda, dan cincin
-    yang kosong sampai habis terbaca sebagai yang pertama.
-    """
+    """Cincin skor. Kosong digambar sebagai cincin ABU-ABU penuh, bukan nol."""
     d = Drawing(ukuran, ukuran)
     r, c = ukuran / 2, ukuran / 2
     d.add(Circle(c, c, r, fillColor=None, strokeColor=GARIS, strokeWidth=5))
@@ -171,12 +132,7 @@ def donat(nilai: float | None, maks: float = 100, ukuran: float = 46) -> Drawing
 
 
 def heksagon_blok(sorot: int | None, ukuran: float = 46) -> Drawing:
-    """Tujuh blok res-10 di dalam satu heksagon, satu di antaranya disorot.
-
-    Dipakai laporan simulasi dan kelayakan untuk menyatakan hal yang paling
-    sering salah dipahami orang: skor itu milik petak selebar 350 m, dan di
-    dalamnya masih ada tujuh sisi yang berbeda.
-    """
+    """Tujuh blok res-10 di dalam satu heksagon, satu di antaranya disorot."""
     d = Drawing(ukuran, ukuran)
     c, R = ukuran / 2, ukuran / 2 - 1
     sudut = [90, 150, 210, 270, 330, 30]
@@ -188,10 +144,6 @@ def heksagon_blok(sorot: int | None, ukuran: float = 46) -> Drawing:
         return titik
 
     d.add(Polygon(segi(c, c, R), fillColor=None, strokeColor=GARIS, strokeWidth=1.2))
-    # Tujuh anak yang MUAT di dalam induknya: jari-jari sepertiga, dan pusat
-    # keenam tetangganya berjarak r*akar(3) - jarak antar-pusat heksagon yang
-    # bersentuhan sisi. Angka yang ditebak membuat anak-anaknya tumpang tindih
-    # atau menggantung keluar garis induknya.
     r = R / 3
     jarak_anak = r * math.sqrt(3)
     pusat = [(c, c)] + [
@@ -211,12 +163,7 @@ def heksagon_blok(sorot: int | None, ukuran: float = 46) -> Drawing:
 
 
 def bar_tumpuk(bagian: list[tuple[str, float, colors.Color]], lebar: float, tinggi: float = 13) -> Drawing:
-    """Satu batang bertumpuk - dipakai membedah omzet jadi sewa dan laba.
-
-    Bagian bernilai nol DILEWATI, tidak digambar setipis rambut: potongan
-    selebar setengah piksel dengan legenda di sebelahnya menyatakan ada sesuatu
-    di sana, dan tidak ada apa-apa di sana.
-    """
+    """Satu batang bertumpuk - dipakai membedah omzet jadi sewa dan laba."""
     total = sum(max(0.0, n) for _, n, _ in bagian) or 1.0
     d = Drawing(lebar, tinggi)
     x = 0.0
@@ -230,13 +177,7 @@ def bar_tumpuk(bagian: list[tuple[str, float, colors.Color]], lebar: float, ting
 
 
 def bar_banding(baris: list[tuple[str, float, colors.Color]], lebar: float, tinggi: float = 11) -> Drawing:
-    """Beberapa batang pada SKALA YANG SAMA, untuk membandingkan besarannya.
-
-    Dipakai saat rencananya rugi. Batang bertumpuk tidak bisa menyatakan bahwa
-    sewanya MELEBIHI omzet - ia menormalkan totalnya jadi seratus persen, jadi
-    sewa yang tiga kali omzet tergambar sebagai "seluruh omzet habis untuk
-    sewa". Itu pernyataan yang jauh lebih ringan daripada yang sebenarnya.
-    """
+    """Beberapa batang pada SKALA YANG SAMA, untuk membandingkan besarannya."""
     maks = max([n for _, n, _ in baris] + [1.0])
     tinggi_total = len(baris) * (tinggi + 5)
     d = Drawing(lebar, tinggi_total)
@@ -248,12 +189,7 @@ def bar_banding(baris: list[tuple[str, float, colors.Color]], lebar: float, ting
 
 
 def garis_sensitivitas(titik: list[tuple[float, float | None]], lebar: float, tinggi: float = 44) -> Drawing:
-    """Kurva laba terhadap pangsa pasar, plus garis impas.
-
-    Satu angka laba menjawab "kalau asumsinya benar"; kurva ini menjawab
-    "seberapa salah asumsinya boleh sebelum rugi" - dan itu pertanyaan yang
-    sebenarnya dibawa orang yang akan menyewa tempat.
-    """
+    """Kurva laba terhadap pangsa pasar, plus garis impas."""
     d = Drawing(lebar, tinggi)
     sah = [(x, y) for x, y in titik if y is not None]
     if len(sah) < 2:
@@ -285,12 +221,7 @@ def garis_sensitivitas(titik: list[tuple[float, float | None]], lebar: float, ti
 
 
 def kartu_angka(baris: list[tuple[str, str]], lebar: float, g: dict, kolom: int = 3) -> Table:
-    """Deret kartu angka besar - yang dibaca orang dalam tiga detik pertama.
-
-    Angka dulu, labelnya menyusul di bawah. Dibalik, mata membaca label lebih
-    dulu lalu harus turun untuk menemukan angkanya, dan deret seperti itu
-    berhenti bisa dipindai.
-    """
+    """Deret kartu angka besar - yang dibaca orang dalam tiga detik pertama."""
     sel = []
     for label, nilai in baris:
         sel.append([
@@ -321,13 +252,7 @@ def kartu_angka(baris: list[tuple[str, str]], lebar: float, g: dict, kolom: int 
 
 
 def putusan(judul: str, kalimat: str, nada: str, lebar: float, g: dict) -> Table:
-    """Satu kalimat putusan di kepala dokumen, berlatar warna nada.
-
-    Laporan yang menuntut pembacanya menyusun kesimpulan sendiri dari empat
-    tabel adalah laporan yang kesimpulannya berbeda-beda menurut siapa yang
-    membacanya. Kalimat ini dirakit dari angka yang sama dengan yang dicetak
-    di bawahnya - bukan ditulis tetap.
-    """
+    """Satu kalimat putusan di kepala dokumen, berlatar warna nada."""
     warna = {
         "baik": colors.HexColor("#e6f6f1"),
         "waspada": colors.HexColor("#fdf3e0"),

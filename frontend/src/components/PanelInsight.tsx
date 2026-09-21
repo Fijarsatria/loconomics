@@ -1,24 +1,3 @@
-/**
- * Bagian wajib 2 dari 3: Insight / Analisis.
- *
- * Menampilkan hasil, tidak pernah menghitung. Setiap angka di sini berasal dari
- * `location_scores` yang diisi `pipeline/s6_score.py`. Kalau suatu saat ada
- * aritmetika skor muncul di berkas ini, itu bug.
- *
- * Urutan bagiannya mengikuti urutan pertanyaan yang benar-benar ditanyakan calon
- * penyewa, bukan urutan tabel di basis data:
- *
- *   1. Boleh tidak buka usaha di sini?      ZoneGuard — kalau tidak, sisanya sia-sia
- *   2. Seberapa bagus lokasinya?            Skor + kuadran
- *   3. Berapa sewanya, wajar tidak?         PriceLens
- *   4. Kapan ramainya?                      Commuter Clock
- *   5. Ada yang perlu diwaspadai?           RiskRadar
- *   6. Kenapa skornya segitu?               Faktor
- *
- * ZoneGuard di urutan pertama bukan kebetulan. Kalau zonanya melarang, seluruh
- * angka di bawahnya tidak relevan, dan menaruhnya di bawah berarti membiarkan
- * orang membaca enam bagian sebelum tahu lokasinya tidak boleh dipakai.
- */
 
 import { memo, useEffect, useState } from 'react'
 
@@ -54,18 +33,6 @@ import {
 
 import { useIstilah, useTeks } from '../lib/bahasa'
 
-/**
- * Kalimat panel ini, dua bahasa.
- *
- * Yang TIDAK ada di sini, dan itu disengaja: `zoneguard.penjelasan`,
- * `jam.catatan`, `risiko.label`, `detail.kuadran_penjelasan`, dan tiap pesan
- * galat backend. Semuanya dirakit backend dari angka heksagon itu sendiri;
- * menyalinnya ke sini berarti membuat versi kedua yang cepat atau lambat
- * berselisih dengan yang dicetak Laporan PDF dan diucapkan Konsultan AI.
- *
- * Nama produk - Loconomics, PriceLens, ZoneGuard, RiskRadar, Commuter Clock,
- * Opportunity Score, NJOP, RDTR - sama di kedua bahasa. Ia nama, bukan kata.
- */
 const K = {
   id: {
     pilihJudul: 'Pilih satu heksagon',
@@ -408,21 +375,6 @@ const GLIF_MODA: Record<ProfilRute, string> = {
     'M3.8 8.6a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5ZM12.2 8.6a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5ZM3.8 11.1h3.9l2.9-4.4M3.8 11.1l2.4-4.1h4.4M7.7 11.1 5.9 5.6M5 5.6h1.9M10.6 6.7l1.6 4.4M10.6 6.7l-.5-1.9h1.7',
 }
 
-/**
- * Satu sumbu kuadran sebagai batang, dengan titik tengah sebagai garis tegak.
- *
- * Bukan bar biasa: yang penting bukan seberapa panjang batangnya melainkan di
- * sisi mana ia berhenti terhadap garis.
- *
- * Versi sebelumnya menulis MEKANISMENYA di bawah batang - "Separuh lokasi ada
- * di bawah 0,29. Yang ini di atas garis itu - itu yang menentukan kolom
- * kiri/kanan." Tiap kata di situ benar, dan gabungannya tetap tidak bisa
- * dipahami: 0,29 tidak punya arti bagi siapa pun, dan "kolom kiri/kanan"
- * menuntut pembacanya sudah hafal tata letak Kompas Kuadran.
- *
- * Sekarang pemanggilnya mengirim satu KALIMAT yang menyatakan artinya, dan
- * angka mentah sumbu prestise tidak ditampilkan sama sekali - ia diganti kata.
- */
 function SumbuKuadran({
   label,
   kalimat,
@@ -463,10 +415,6 @@ function SumbuKuadran({
           tahu 0,29 itu apa, dan tidak ada satu pun cara ia bisa tahu. */}
       <div className="relative h-2 rounded-full bg-ground-2" aria-hidden>
         <div
-          // Sama dengan bagian "Empat hal yang dinilai": pekat untuk sumbu yang
-          // tinggi = baik, redup untuk yang tidak. Prestise visual TIDAK
-          // diwarnai sebagai buruk - lokasi yang terlihat mahal belum tentu
-          // salah dipilih, ia cuma mahal.
           className={`h-full rounded-full transition-[width] duration-500 ease-liquid ${
             tinggiBaik ? 'bg-ink' : 'bg-ink-3'
           }`}
@@ -537,13 +485,6 @@ function PanelInsight({
   /** Apakah rute & kawasan jangkau sedang digambar di peta. */
   rutaTampil?: boolean
   onUbahRutaTampil?: (v: boolean) => void
-  /**
-   * Hasil bedah blok yang sedang tergambar di peta, dan blok yang disorot.
-   *
-   * Dimiliki App, bukan komponen ini, karena PETA yang menggambarnya. Kalau
-   * `BedahBlok` menyimpannya sendiri, panel dan peta akan memegang dua
-   * jawaban - dan peta tidak punya cara mengetahui yang mana yang benar.
-   */
   blok?: BedahBlokT | null
   onBlok?: (d: BedahBlokT | null) => void
   blokTerpilih?: string | null
@@ -562,24 +503,10 @@ function PanelInsight({
   } = useSesi()
   const [aksiSibuk, setAksiSibuk] = useState<string | null>(null)
   const [aksiPesan, setAksiPesan] = useState<string | null>(null)
-  // DITURUNKAN dari himpunan milik provider, bukan disimpan sendiri.
-  //
-  // Versi lama menyimpan boolean lokal yang hanya pernah disetel oleh tombol
-  // ini. Menyimpan lewat klik dua kali di peta tidak pernah menyalakannya, jadi
-  // tombolnya tetap berbunyi "Simpan lokasi" untuk lokasi yang SUDAH tersimpan
-  // - dan menekannya menyimpan untuk kedua kalinya.
   const [detail, setDetail] = useState<DetailHeksagon | null>(null)
   const [harga, setHarga] = useState<PriceLensHeksagon | null>(null)
   const [jam, setJam] = useState<CommuterClock | null>(null)
   const [konteks, setKonteks] = useState<KonteksSimpul | null>(null)
-  /**
-   * Konteks simpul untuk KETIGA profil tersimpan, bukan cuma yang aktif.
-   *
-   * Tombol moda menuliskan jarak dan waktu tempuhnya masing-masing, dan itu
-   * angka per profil - respons hanya membawa satu. Tiga permintaan, bukan
-   * satu; backend men-cache semuanya 15 menit, jadi yang berikutnya hampir
-   * selalu dijawab dari cache.
-   */
   const [perProfil, setPerProfil] = useState<Partial<Record<ProfilRute, KonteksSimpul>>>({})
   const [memuat, setMemuat] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
@@ -593,10 +520,6 @@ function PanelInsight({
       return
     }
     let batal = false
-    // Dikosongkan DULU, baru diminta. Tanpa ini panel terus memegang angka
-    // heksagon SEBELUMNYA sampai permintaan baru mendarat: bukan sekadar terasa
-    // lambat, tapi salah - judul, skor, dan harga milik heksagon lain terbaca
-    // sebagai milik yang baru diklik.
     setDetail(null)
     setHarga(null)
     setJam(null)
@@ -607,14 +530,6 @@ function PanelInsight({
     // dipantau" akan menempel di lokasi yang baru diklik dan belum dipantau.
     setAksiPesan(null)
 
-    // Ketiganya diminta bersamaan, bukan berurutan. Menunggu satu selesai
-    // sebelum meminta berikutnya akan melipattigakan waktu tunggu di jaringan
-    // yang lambat, tanpa alasan.
-    //
-    // Kartu harga dan Commuter Clock BERBAYAR sejak 23 Agustus. Untuk yang
-    // belum boleh, keduanya tidak diminta sama sekali - dua permintaan yang
-    // sudah pasti dijawab 401 cuma membebani jaringan dan mengotori konsol.
-    // Backend tetap penjaganya; ini sekadar tidak mengetuk pintu yang terkunci.
     const bolehDalam = premium
     Promise.allSettled([
       api.detailHeksagon(h3),
@@ -630,10 +545,6 @@ function PanelInsight({
       .then(([d, p, c, sk, sm, ss]) => {
         if (batal) return
         if (d.status === 'fulfilled') setDetail(d.value)
-        // String KOSONG, bukan kalimat: efek ini tidak boleh bergantung pada
-        // kamus, kalau tidak ia memuat ulang seluruh panel tiap kali bahasa
-        // ditukar. Yang membedakan "tidak ada galat" dari "galat tanpa pesan"
-        // adalah null vs '', dan penerjemahannya terjadi saat digambar.
         else setGalat(d.reason instanceof Error ? d.reason.message : '')
         setHarga(p.status === 'fulfilled' ? p.value : null)
         setJam(c.status === 'fulfilled' ? c.value : null)
@@ -649,15 +560,6 @@ function PanelInsight({
     return () => {
       batal = true
     }
-    // `premium` ikut jadi dependensi: begitu langganan aktif, detailnya diminta
-    // ULANG supaya 43 variabelnya benar-benar datang. Respons yang sudah ada di
-    // state dibuat untuk tingkat yang lama, dan tidak ada cara menambalnya di
-    // frontend - isinya memang tidak pernah dikirim.
-    // `bahasa` ikut jadi dependensi, dan itu bukan kelebihan.
-    // Belasan kalimat di respons ini DIRAKIT BACKEND dari angka heksagon -
-    // penjelasan kuadran, catatan pola jam, peringatan simulasi. Menukar
-    // bahasa tanpa meminta ulang meninggalkan kalimat lama di layar yang
-    // seluruh sisanya sudah berganti.
   }, [h3, premium, profilRute, ist.bahasa])
 
   if (!h3) return <Ajakan judul={t.pilihJudul} anak={t.pilihIsi} />
@@ -678,11 +580,6 @@ function PanelInsight({
 
   const { skor, indeks, faktor, zoneguard, risiko } = detail
 
-  // Dibaca dari BACKEND, bukan dari `premium` di frontend.
-  //
-  // Backend yang memutuskan apa yang ditahan (aturan 2b), jadi tirainya
-  // digambar dari daftar `terkunci` yang ia kirim - bukan dari tebakan
-  // frontend soal tingkat akun.
   const dipantau = tersimpan.has(skor.h3_index)
   const terkunci = detail.terkunci.length > 0
 
@@ -933,11 +830,6 @@ function PanelInsight({
           gembok={!premium}
           onClick={async () => {
             if (!akun) return mintaMasuk(t.simpanMasuk)
-            // Lokasi yang SUDAH tersimpan: tekan lagi = hapus dari simpanan.
-            // Dulu tekan kedua cuma menyimpan ulang, jadi tombol yang menyala
-            // tidak pernah bisa dimatikan - dilaporkan "gabisa hapus lokasi
-            // tersimpan" (13 Sep 2026). Menghapus sengaja tidak menuntut
-            // langganan, sama dengan API-nya.
             if (dipantau) {
               setAksiSibuk('pantau')
               try {
@@ -1231,10 +1123,6 @@ function PanelInsight({
                 satu pernyataan yang benar lebih jujur daripada empat baris
                 yang membuat kekosongan terlihat seperti kerusakan. */}
             {(() => {
-              // Berkunci KODE, bukan label. Versi lama menanyakan
-              // `l === 'NJOP'` untuk memilih keterangannya - cocok selama
-              // labelnya cuma pernah punya satu bentuk, dan diam-diam salah
-              // begitu label yang sama punya bentuk Inggris.
               const baris = [
                 { kode: 'P05', label: t.hb.sewa, bantuan: t.hb.sewaB,
                   nilai: rupiah(harga.harga_sewa_median), satuan: undefined },
@@ -1593,10 +1481,6 @@ function PanelInsight({
             <table className="w-full text-[13px]">
               <tbody>
                 {Object.entries(detail.variabel).map(([nama, nilai], i) => {
-                  // Nama benda, bukan nama kolom. "pop 100m" tidak berarti apa
-                  // pun bagi calon pemilik warung; "Penduduk di sekitar"
-                  // berarti. Kodenya tetap ada sebagai judul tooltip untuk yang
-                  // perlu menelusuri ke Kamus Data.
                   const arti = ist.variabel(nama)
                   return (
                     <tr key={nama} className={i % 2 ? 'bg-surface-2' : ''}>
@@ -1814,14 +1698,6 @@ function Gembok() {
   )
 }
 
-/**
- * Tombol aksi berbentuk lingkaran.
- *
- * `gembok` menandai yang belum terbuka tetapi TIDAK menonaktifkan tombolnya:
- * tombol mati tidak bisa menjelaskan dirinya, dan yang dibutuhkan orang yang
- * menekannya justru penjelasan. Yang ditekan tetap merespons — dengan dialog
- * yang mengatakan apa yang kurang.
- */
 function TombolBulat({
   label,
   onClick,

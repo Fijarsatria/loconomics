@@ -1,28 +1,4 @@
-"""Susun paket survei lapangan: target, lembar isian, dan templat CSV.
-
-KENAPA BERKAS INI ADA
----------------------
-Angka yang paling sering disalahpahami di proyek ini "25 dari 708 heksagon
-disurvei", dan salah pahamnya selalu ke arah yang sama: seolah 683 heksagon
-sisanya harus dikunjungi juga. Tidak. `s5_impute.py` menuntut
-`MIN_GROUND_TRUTH = 30` baris di `MIN_KAWASAN = 3` kawasan; sesudah ambang itu
-lewat, ia mengisi SELURUH 708 dan melaporkan R2 serta MAE-nya sendiri.
-
-Delapan dari sepuluh prediktornya sudah terisi penuh untuk 708 heksagon (POI
-OSM, penduduk WorldPop, skor simpul, jarak simpul, tutupan bangunan, luas
-bangunan median, pangsa waralaba, kepadatan kantor). Yang belum ada cuma
-LABELNYA. Jadi yang memisahkan basis data hari ini dari basis data yang penuh
-bukan 683 kunjungan, melainkan selisih antara ground truth yang ada dan 30.
-
-Targetnya DITURUNKAN dari basis data, bukan ditulis tangan - sama alasannya
-dengan pita status: daftar target yang ditulis tangan akan kedaluwarsa diam-diam
-begitu grid atau skornya berubah, dan tidak ada uji yang menangkapnya. Pusat
-Harjamukti yang bergeser 4.443 m sudah pernah membuktikan itu.
-
-    python rencana_survei.py                 # ringkasan + berapa lagi yang kurang
-    python rencana_survei.py --tulis         # -> data/04_survei/ (CSV + lembar HTML)
-    python rencana_survei.py --per-kawasan 8 # ambil lebih banyak per kawasan
-"""
+"""Susun paket survei lapangan: target, lembar isian, dan templat CSV."""
 
 from __future__ import annotations
 
@@ -43,13 +19,6 @@ from s5_impute import MIN_GROUND_TRUTH, MIN_KAWASAN  # noqa: E402
 
 KELUAR = Path(__file__).parent / "data" / "04_survei"
 
-#: Kuadran yang layak disurvei lebih dulu.
-#:
-#: Bukan "yang skornya tertinggi" begitu saja: yang menentukan nilai sebuah
-#: survei adalah seberapa sering angkanya akan DIPAKAI. Heksagon di kuadran
-#: rekomendasi itulah yang muncul di daftar, di tab "Untuk Anda", dan di
-#: jawaban Konsultan AI - jadi kesalahan di sana paling mahal, dan pengukuran
-#: di sana paling murah nilainya per kunjungan.
 KUADRAN_TARGET = ("HIDDEN_GEM", "PEMENANG_JELAS")
 
 #: Yang harus dicatat di tiap titik, berikut kolom tujuannya di pipeline.
@@ -95,18 +64,7 @@ def ambil(db) -> pd.DataFrame:
 
 
 def pilih(df: pd.DataFrame, per_kawasan: int) -> pd.DataFrame:
-    """Aturan pemilihan, ditulis sekali di sini supaya bisa dibantah.
-
-    Empat saringan, dan tiap satu punya alasan yang bisa diuji:
-      1. belum pernah disurvei  - mensurvei ulang titik yang sudah ada tidak
-         menambah satu pun baris ground truth
-      2. ada POI                - heksagon tanpa satu pun usaha tidak punya
-         menu, struk, atau papan sewa untuk dicatat; surveyornya akan berdiri
-         di sana dan pulang dengan tangan kosong
-      3. kuadran rekomendasi    - lihat KUADRAN_TARGET
-      4. zona tidak dilarang    - lokasi berzona terlarang tidak pernah
-         direkomendasikan produk ini, jadi mengukurnya tidak mengubah apa pun
-    """
+    """Aturan pemilihan, ditulis sekali di sini supaya bisa dibantah."""
     layak = df[
         (df["n_titik_misi"].fillna(0) == 0)
         & (df["kepadatan_poi_total"].fillna(0) > 0)
@@ -236,17 +194,6 @@ def main() -> None:
     sudah = int((df["n_titik_misi"].fillna(0) > 0).sum())
     target = pilih(df, arg.per_kawasan)
 
-    # Kekurangannya dihitung PER VARIABEL, bukan per heksagon.
-    #
-    # "25 heksagon punya titik misi" dan "25 baris ground truth" adalah dua
-    # pernyataan yang berbeda, dan selisihnya besar: satu kunjungan bisa
-    # mencatat menu tanpa mencatat struk, atau sebaliknya. s5_impute melatih
-    # satu model PER TARGET dan menghitung barisnya sendiri-sendiri, jadi
-    # ambang 30 berlaku untuk tiap kolom - bukan untuk himpunan kunjungannya.
-    #
-    # Menghitungnya per heksagon menghasilkan "kurang 5" padahal yang
-    # sebenarnya kurang 19. Angka yang terlalu optimistis di sini berakibat
-    # tim survei pulang terlalu cepat.
     db2 = SessionLocal()
     try:
         gt = pd.read_sql(text(

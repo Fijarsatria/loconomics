@@ -158,7 +158,13 @@ async function main() {
   console.log('\n[1] Grid H3 & pemilihan kawasan  (PRD langkah 2)')
   cek('/hex/layer dijawab', dijawab('/hex/layer').length > 0)
   const teksAwal = await page.evaluate(() => document.body.innerText)
-  cek('jumlah heksagon disebut', /70\d heksagon|\d+ heksagon/.test(teksAwal))
+  // Jumlah heksagon DIHAPUS dari pil layer (21 Sep 2026, permintaan pemilik
+  // repo: pilnya cukup pertanyaannya saja). Yang dijaga sekarang hal yang sama
+  // pentingnya: peta menyatakan APA yang sedang ditampilkannya.
+  cek(
+    'pertanyaan layer dinyatakan di peta',
+    /paling menjanjikan|harga sewa|dilirik|berisiko|boleh buka usaha/i.test(teksAwal),
+  )
 
   // Pilih satu kawasan supaya kamera mendekat dan heksagon bisa diklik.
   //

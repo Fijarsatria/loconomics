@@ -1,43 +1,3 @@
-/**
- * Layar pembuka - JEMBATAN dari halaman gerbang ke peta, bukan layar pertama.
- *
- * Sampai 23 Agustus 2026 ia berdiri paling depan: dibuka, layar ini dulu yang
- * muncul, baru gerbang, baru peta. Tiga layar berturut-turut sebelum satu pun
- * heksagon terlihat, dan yang pertama dari ketiganya memuat sesuatu yang belum
- * tentu jadi dilihat orangnya.
- *
- * Sekarang urutannya gerbang -> pembuka -> peta, dan pemindahan itu memperbaiki
- * dua hal sekaligus. Halaman gerbang jadi hal pertama yang terlihat, tanpa
- * jeda; dan layar ini akhirnya berada di satu-satunya tempat di mana orang
- * memang sedang menunggu sesuatu - persis setelah menekan "Masuk". Peta sendiri
- * sudah dipasang di belakang gerbang sejak awal, jadi keempat pekerjaannya
- * biasanya sudah selesai sebelum layar ini sempat digambar; TAHAN_MINIMAL_MS
- * yang menahannya cukup lama untuk terbaca sebagai perpindahan.
- *
- * PALETNYA MENGIKUTI GERBANG, bukan aplikasi. Mint #DFF6F0 -> #6DD5C4 yang sama
- * dengan halaman sebelumnya, karena layar ini adalah kelanjutan halaman itu -
- * kalau warnanya berganti gelap di tengah perpindahan, yang terbaca bukan
- * "sedang memuat" melainkan "salah tekan". Warna aplikasi baru masuk bersama
- * petanya.
- *
- * Tiga hal terjadi bersamaan di sini, dan hanya satu yang menghias:
- *
- *   1. KOTA HEKSAGON 3D  — kanvas di belakang. Heksagon adalah bentuk data
- *      proyek ini (H3), jadi kolom yang tumbuh dari cakrawala ke arah penonton
- *      bukan hiasan sembarangan: itu wujud grid yang sedang dimuat.
- *   2. PAPAN NAMA        — sepuluh huruf naik satu per satu, lalu terus
- *      berayun pelan, dengan satu titik warna yang berjalan menyusurinya.
- *   3. KEMAJUAN SUNGGUHAN — bilah di bawah TIDAK palsu. Ia bergerak karena
- *      empat pekerjaan nyata selesai satu per satu.
- *
- * Nomor 3 itu yang penting. Layar pembuka yang menghitung mundur ke angka yang
- * sudah ditentukan adalah kebohongan kecil yang selalu ketahuan: ia penuh
- * padahal aplikasinya belum siap, atau berhenti di 90% padahal sudah siap. Di
- * sini setiap langkah adalah janji yang ditepati - dan kalau backend mati,
- * layar ini yang memberi tahu, lengkap dengan perintah untuk menyalakannya.
- * Persis galat "Failed to fetch" yang tanpa layar ini cuma muncul diam-diam di
- * pojok peta.
- */
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
@@ -89,54 +49,13 @@ const K = {
 /** Kota tidak boleh lewat begitu saja. Di bawah ini pembuka terasa tersentak. */
 const TAHAN_MINIMAL_MS = 2400
 
-// --- Menunggu mesin data bangun -------------------------------------------
-//
-// Backend duduk di Render free tier: ia TIDUR sesudah 15 menit menganggur dan
-// bangunnya memakan puluhan detik. Sebelum ini, layar pembuka memanggil
-// /health SEKALI - jadi backend yang sedang bangun tidak bisa dibedakan dari
-// backend yang mati, dan yang tertulis di layar pertama yang dilihat juri
-// adalah "Mesin data belum bisa dihubungi" untuk mesin data yang beberapa
-// detik lagi menjawab. Pernyataan yang keliru, dan keliru ke arah yang paling
-// merugikan.
-//
-// Tiga angka, dan yang penting bukan besarnya melainkan pembagian tugasnya:
-// KETUKAN memutus satu percobaan yang menggantung supaya bilahnya bergerak;
-// ANGGARAN yang benar-benar memutuskan kapan menyerah.
 
 /** Satu percobaan. Pendek supaya kegagalan terlihat sebagai gerak, bukan beku. */
 const KETUKAN_MS = 6_000
 /** Jeda antar-percobaan. Cold start tidak akan selesai lebih cepat dari ini. */
 const JEDA_KETUKAN_MS = 1_500
-/**
- * Total kesabaran. Semula 40 detik, dihitung untuk Render dengan anggapan
- * `bangunkan()` di `main.tsx` sudah mengetuk sejak gerbang dibuka. Backend
- * kini Azure F1, dan log kontainernya (14 Sep 2026) mencatat bangun 38-55
- * detik dari permintaan pertama - pengunjung yang langsung menekan "Masuk ke
- * peta" melihat "Mesin data belum bisa dihubungi" beberapa detik sebelum
- * backend-nya menjawab. Anggaran ini hanya dipakai backend yang MENGGANTUNG;
- * yang menolak sambungan tetap menyerah seketika (`layakDicobaLagi`).
- */
 const ANGGARAN_BANGUN_MS = 90_000
 
-/**
- * Layak dicoba lagi, atau sudah pasti percuma?
- *
- * Menunggu 40 detik itu benar untuk backend yang sedang bangun dan salah besar
- * untuk backend yang memang tidak ada - orang yang menjalankan frontend tanpa
- * `uvicorn` akan menatap bilah yang bergerak tanpa arti sebelum akhirnya
- * diberi tahu apa yang sudah jelas sejak detik pertama.
- *
- * Keduanya bisa dibedakan, dan bedanya bukan tebakan:
- *
- * - **Habis waktu** - sambungannya DITERIMA lalu digantung. Itu persis bentuk
- *   cold start Render: routernya menjawab sambungan sambil menyalakan
- *   layanannya di belakang. Layak ditunggu.
- * - **502/503/504** - router menjawab, layanan di belakangnya belum siap.
- *   Bentuk kedua dari cold start yang sama. Layak ditunggu.
- * - **Sisanya** - `TypeError: Failed to fetch` (tidak ada yang mendengarkan,
- *   nama host tidak terpecahkan) atau galat HTTP lain. Menunggu tidak
- *   mengubah apa pun.
- */
 function layakDicobaLagi(e: unknown): boolean {
   // `AbortSignal.timeout` melempar DOMException bernama TimeoutError - bukan
   // AbortError, yang dipakai pembatalan manual.
@@ -144,14 +63,6 @@ function layakDicobaLagi(e: unknown): boolean {
   return e instanceof GalatAPI && [502, 503, 504].includes(e.status)
 }
 
-/**
- * Ketuk /health sampai menjawab, atau sampai anggarannya habis.
- *
- * `dibatalkan` dibaca ULANG di tiap putaran, bukan ditangkap sekali: komponen
- * ini bisa dilepas di tengah penantian, dan penantian yang tidak pernah
- * memeriksanya akan tetap memanggil `setGalat` pada komponen yang sudah tidak
- * ada.
- */
 async function tungguMesinData(
   dibatalkan: () => boolean,
   onMenunggu: () => void,
@@ -182,52 +93,10 @@ async function tungguMesinData(
 // Kota heksagon
 // ---------------------------------------------------------------------------
 
-/**
- * Proyeksi lubang jarum, bukan isometrik.
- *
- * Kamera duduk di (camX, TINGGI_KAMERA, 0) menghadap +Z, tanpa rotasi. Pilihan
- * itu disengaja: tanpa rotasi, cakrawala jatuh tepat di tengah kanvas dan
- * seluruh matematikanya cuma dua pembagian. Rotasi kamera akan menambah empat
- * baris trigonometri untuk hasil yang tidak berbeda di mata.
- *
- *   layar.x = cx + f * (X - camX) / (Z + Zdekat)
- *   layar.y = cy - f * (Y - camH) / (Z + Zdekat)
- *
- * Titik tanah punya Y = 0, jadi (Y - camH) negatif dan tanah selalu jatuh di
- * bawah cakrawala. Makin jauh, makin mendekati cakrawala. Itulah kedalamannya.
- */
-/**
- * Kamera dan skala kota.
- *
- * Ketiganya disetel ulang 10 Sep 2026. Nilai lamanya (26 / 58 / 84) membuat
- * heksagon terdekat selebar hampir 500 px: yang terlihat di layar bukan kota
- * melainkan tiga lempeng raksasa. Petak yang lebih kecil DAN kamera yang lebih
- * tinggi menyelesaikan keduanya sekaligus - kotanya jadi padat, dan yang
- * terdekat pun masih terbaca sebagai bangunan.
- *
- * Satu batas yang mengikat ketiganya: dasar baris terdekat wajib memproyeksi
- * MELEWATI tepi bawah layar, kalau tidak muncul lagi pita kosong di kaki yang
- * jadi keluhan awalnya. Batasnya `Z_DEKAT <= f x TINGGI_KAMERA / (0,5 x tinggi)`;
- * pada 1440x900 itu 182, dan yang dipakai 171.
- */
 const SISI = 18 // jari-jari heksagon dalam satuan dunia
 const TINGGI_KAMERA = 92
 const TINGGI_KOLOM = 100
 
-/**
- * Baris terdekat, dan angka ini yang memperbaiki keluhan "bawahnya ga sampai
- * bawah banget".
- *
- * Dulu 5,5 sisi. Dengan f = 0,62 x lebar, dasar kolom terdekat memproyeksi ke
- * y = cy + f x 58 / 143 - sekitar 70 piksel DI ATAS tepi bawah layar 900px.
- * Sisanya diisi warna tanah rata, dan pertemuan keduanya jadi satu garis
- * mendatar yang tegas melintasi layar. Terlihat begitu di potret yang dikirim
- * pemilik repo.
- *
- * 3,6 sisi membuat dasar kolom terdekat jatuh di y ~ 1019: LEWAT tepi bawah,
- * jadi ia terpotong bingkai - dan kolom yang terpotong bingkai justru yang
- * membuat orang merasa berdiri DI ANTARA bangunannya, bukan menonton maketnya.
- */
 const Z_DEKAT = 9.5 * SISI
 /** Grid harus jauh lebih lebar daripada layar, karena kolom terjauh menyusut
     sampai seperlima. Yang di luar layar disingkirkan per bingkai, jadi lebar
@@ -241,48 +110,8 @@ const SUDUT = Array.from({ length: 6 }, (_, k) => {
   return { x: Math.cos(a), z: Math.sin(a) }
 })
 
-/**
- * KOTA MALAM YANG DIBANGUN DARI DATANYA SENDIRI.
- *
- * Tiga hal yang membedakannya dari versi sebelumnya, dan ketiganya menjawab
- * satu keluhan yang sama - "kurang tajem, kayak kurang aja":
- *
- *   LANTAI  Seluruh bidang di bawah cakrawala sekarang berupa LANTAI HEKSAGON
- *           yang menyurut ke kejauhan, bergaris tepi. Sebelumnya ia bidang
- *           warna rata; bidang rata tidak punya detail yang bisa dilihat mata,
- *           dan itulah yang terbaca sebagai "tidak tajam". Lantainya juga yang
- *           menjamin tidak ada satu piksel pun di bawah yang kosong.
- *   SAPUAN  Satu cincin terang menyapu dari dekat ke jauh, berulang. Bukan
- *           hiasan: itu gerakan yang sama dengan gelombang layer heksagon di
- *           petanya - hal pertama yang akan dilihat orang begitu layar ini
- *           hilang.
- *   KEMAJUAN Tinggi kotanya terikat pada KEMAJUAN MEMUAT, bukan cuma pada
- *           waktu. Kotanya benar-benar selesai dibangun tepat saat datanya
- *           selesai dimuat, jadi bilah di bawah dan kota di belakangnya
- *           menceritakan hal yang sama.
- *
- * Paletnya tetap malam, dan yang MENYALA tetap sedikit: tujuh dari sepuluh
- * kolom cuma bahan bangunan, sisanya teal (datanya kuat) atau ungu (terlihat
- * mahal) - dua kutub yang sama dengan seluruh sisa situs ini.
- */
 type RGB = [number, number, number]
 
-/**
- * Membaca "#rrggbb".
- *
- * Dulu ia juga harus mengerti "rgb(r,g,b)", karena `campur()` dipanggil
- * BERSARANG dan keluarannya sendiri berbentuk rgb(). Sejak pencampuran pindah
- * ke tupel angka, bentuk itu tidak pernah lagi jadi masukan - tetapi
- * penerimaannya DIPERTAHANKAN, dan alasannya sejarah yang mahal:
- *
- * Sampai 23 Agustus 2026 parser ini hanya mengerti heksadesimal, jadi setiap
- * masukan "rgb(...)" jadi `rgb(NaN,NaN,7)`. Kanvas menolak fillStyle yang tidak
- * sah TANPA melempar galat - ia diam-diam mempertahankan fillStyle sebelumnya,
- * yang di sini kebetulan gradien langit. Akibatnya seluruh kota digambar dengan
- * warna langit di atas langit, dan layar ini tampak kosong padahal 16.229
- * heksagon per bingkai benar-benar digambar. Kegagalan yang paling sulit
- * disadari adalah kegagalan yang tidak berbunyi.
- */
 function urai(warna: string): RGB {
   if (warna.startsWith('#'))
     return [
@@ -303,27 +132,8 @@ const TANAH = '#060c0b'
     tekstur, bukan kisi yang berebut perhatian dengan tulisan di atasnya. */
 const LANTAI = '#091312'
 const LANTAI_TEPI = '#14302c'
-/**
- * Bayangan kolom dijatuhkan ke sini. Di langit malam, hitam hampir murni benar:
- * sisi yang tidak kena cahaya memang melebur ke latarnya, dan justru itu yang
- * memberi kolomnya bentuk.
- */
 const TINTA_KOTA = '#030605'
 
-/**
- * Palet yang sama, sudah diurai jadi angka SEKALI di muat modul.
- *
- * Ini perbaikan kinerja, bukan kerapian. Versi sebelumnya menyimpan warnanya
- * sebagai string dan memanggil `campur()` empat sampai lima kali per sel -
- * dan tiap panggilan mem-parse ulang kedua string masukannya. Pada ~600 sel
- * yang benar-benar digambar itu berarti sekitar 5.000 penguraian string per
- * BINGKAI. Terukur di Chromium tanpa GPU: bingkai median 66,7 ms, yaitu 15
- * bingkai per detik untuk layar yang seluruh gunanya terasa mulus.
- *
- * Yang dipakai di dalam gelung sekarang `campurRGB` - aritmetika murni di atas
- * tupel - dan string cuma dirakit sekali per isian, saat menyerahkannya ke
- * `fillStyle` yang memang menuntut string.
- */
 const RGB_KOTA: RGB[] = WARNA_KOTA.map(urai)
 const RGB_TINTA = urai(TINTA_KOTA)
 const RGB_LANGIT_BAWAH = urai(LANGIT_BAWAH)
@@ -407,10 +217,6 @@ function gambarKota(
       }
       const bawah = SUDUT.map((s) => proyeksi(s.x * SISI, s.z * SISI, 0))
 
-      // --- 1 · Petak lantai ------------------------------------------------
-      // Digambar untuk SETIAP sel, termasuk yang kolomnya belum berdiri. Ia
-      // yang mengisi seluruh kaki layar, dan garis tepinya yang memberi
-      // ketajaman yang hilang dari bidang warna rata.
       ctx.fillStyle = ke(campurRGB(RGB_LANTAI, RGB_LANGIT_BAWAH, kabut * 0.92))
       ctx.beginPath()
       bawah.forEach((p, k) => (k === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)))
@@ -429,10 +235,6 @@ function gambarKota(
       // Gelombang berjalan dari cakrawala ke arah penonton: kota yang sedang
       // dibangun, bukan kota yang sudah berdiri.
       const fase = detik * 1.15 - j * 0.42 + i * 0.22
-      // Dua pengunci sekaligus. `naik` yang lama menahan barisnya sampai
-      // waktunya tiba; `maju` menahan SELURUHNYA sampai datanya benar-benar
-      // sampai. Yang dipakai yang terkecil, jadi kotanya tidak pernah lebih
-      // jadi daripada muatannya.
       const naik = Math.min(1, Math.max(0, detik * 1.6 - j * 0.09))
       const tinggiRelatif = Math.min(naik, 0.25 + 0.75 * maju)
       const h =
@@ -449,10 +251,6 @@ function gambarKota(
 
       const atas = SUDUT.map((s) => proyeksi(s.x * SISI, s.z * SISI, h))
 
-      // TINGKAT RINCIAN. Di bawah 9 px, ketiga sisi kolom bersama-sama cuma
-      // selebar satu sampai dua piksel dan tidak menyumbang satu pun tepi yang
-      // bisa dilihat - tetapi tetap dibayar penuh: tiga jalur, tiga isian, dan
-      // tiga perakitan string warna. Yang jauh cukup atapnya saja.
       const rinci = lebarLayar > 9
 
       // Sisi yang menghadap kamera saja. Normal keluar sebuah rusuk sama dengan
@@ -465,11 +263,6 @@ function gambarKota(
         const pandang = { x: X - camX, z: dz }
         if (nx * pandang.x + nz * pandang.z >= 0) continue
 
-        // Cahaya dari kiri atas. Rentangnya dilebarkan dari 0,32-0,66 jadi
-        // 0,26-0,74: dua sisi yang terangnya berdekatan melebur jadi satu
-        // siluet datar, dan siluet datar itulah yang terbaca sebagai "kurang
-        // tajam". Yang membuat sebuah kotak terlihat sebagai kotak adalah
-        // selisih antar-sisinya, bukan jumlah pikselnya.
         const cahaya = 0.26 + 0.48 * (0.5 - nx / 2)
         ctx.fillStyle = ke(
           campurRGB(
@@ -511,10 +304,6 @@ function gambarKota(
     }
   }
 
-  // Kabut cakrawala menutup baris terjauh supaya grid tidak berhenti mendadak.
-  // Ia memuncak DI cakrawala dan tembus di kedua ujungnya: versi yang dimulai
-  // pekat di tepi atas menggambar satu garis mendatar tegas melintasi layar,
-  // karena langit di atasnya lebih gelap daripada kabutnya sendiri.
   const kabutAtas = ctx.createLinearGradient(0, cy - tinggi * 0.24, 0, cy + tinggi * 0.08)
   kabutAtas.addColorStop(0, 'rgba(14,43,47,0)')
   kabutAtas.addColorStop(0.76, LANGIT_BAWAH)
@@ -538,11 +327,6 @@ function KotaHeksagon({ maju }: { maju: React.RefObject<number> }) {
     const mulai = performance.now()
 
     const ukur = () => {
-      // Tetap 2, bukan 2,5. Ketajaman yang dicari datang dari GARIS TEPI yang
-      // digambar di tiap petak lantai dan tiap atap, bukan dari kerapatan
-      // pikselnya - dan menaikkan dpr menaikkan ongkos isian secara kuadratik
-      // untuk perbaikan yang nyaris tidak terlihat. Terukur: 2,5 menyeret
-      // bingkai median ke 66,7 ms.
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       el.width = Math.floor(el.clientWidth * dpr)
       el.height = Math.floor(el.clientHeight * dpr)
@@ -584,13 +368,6 @@ function KotaHeksagon({ maju }: { maju: React.RefObject<number> }) {
 export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
   const t = useTeks(K)
   const [selesai, setSelesai] = useState(0)
-  /**
-   * Kemajuan memuat, DIBACA PER BINGKAI oleh kota di belakangnya.
-   *
-   * Ref, bukan state yang diteruskan sebagai prop: kanvasnya menggambar 60 kali
-   * sedetik dan tidak boleh menunggu React merender ulang untuk tahu angkanya
-   * berubah. Efek di bawah yang menyalinnya tiap langkah selesai.
-   */
   const maju = useRef(0)
   const [galat, setGalat] = useState<string | null>(null)
   /** Percobaan pertama ke /health gagal - backend ada, tetapi masih bangun. */
@@ -619,18 +396,6 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
     const naik = () => !batal && setSelesai((n) => n + 1)
 
     const jalan = async () => {
-      // Tanpa backend yang DIKONFIGURASI, jangan mengetuk pintunya sama sekali.
-      //
-      // Terbitan statis (GitHub Pages) sengaja berjalan tanpa backend: heksagon
-      // datang dari GeoJSON di `public/data/`. Sebelum ini, layar pembuka tetap
-      // memanggil /health, gagal, lalu MEMBLOKIR seluruh aplikasi di balik
-      // pesan galat - padahal petanya sudah siap digambar di baliknya.
-      //
-      // Yang dilewati HANYA pemeriksaannya. Percobaan pertama melewati seluruh
-      // urutan lalu `return`, dan akibatnya layar pembuka berhenti di "Siap
-      // 100%" selamanya - `setPergi`/`onSelesai` ada di ujung urutan yang baru
-      // saja dilompati. Gagal yang lebih halus daripada sebelumnya, dan sama
-      // saja memblokir aplikasinya.
       if (import.meta.env.VITE_API_BASE_URL) {
         const hidup = await tungguMesinData(
           () => batal,
@@ -644,10 +409,6 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
       }
       naik()
 
-      // Basemap diambil di sini supaya peta tidak mulai dari nol setelah layar
-      // ini hilang. Gagalnya TIDAK menghentikan pembuka - peta bisa mencoba
-      // sendiri nanti, dan menahan seluruh aplikasi karena satu berkas gaya
-      // adalah hukuman yang terlalu berat.
       await fetch(urlGaya('terang')).catch(() => null)
       naik()
 
@@ -670,10 +431,6 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
   }, [onSelesai])
 
   const persen = Math.round((selesai / JUMLAH_LANGKAH) * 100)
-  // Menyebut SEBAB, dalam bahasa orang yang membuka tautan - bukan "cold start",
-  // bukan nama penyedianya. Yang dijawabnya satu pertanyaan yang muncul sendiri
-  // di kepala orang saat sebuah bilah berhenti bergerak: ini macet, atau memang
-  // sedang mengerjakan sesuatu?
   const keterangan = galat
     ? t.gagal
     : membangunkan
@@ -760,13 +517,6 @@ export default function Pembuka({ onSelesai }: { onSelesai: () => void }) {
               className="h-full rounded-full transition-[width] duration-700 ease-liquid"
               style={{
                 width: `${galat ? 100 : Math.max(persen, 6)}%`,
-                // Gradien palet gerbang, bukan warna kuadran - alasan yang
-                // sama dengan WARNA_KOTA di atas. Arahnya gelap ke terang
-                // supaya ujung yang sudah terisi tetap terbaca di atas jalur
-                // yang terang.
-                // Ungu ke teal: dua kutub yang sama dengan kolom yang menyala
-                // di kota di belakangnya, dan dengan gradien tombol ajakan di
-                // gerbang. Satu bahasa warna dari layar pertama sampai peta.
                 background: galat
                   ? '#e5484d'
                   : 'linear-gradient(90deg, #6f55f0, #2de8c0 70%, #7cf7dd)',

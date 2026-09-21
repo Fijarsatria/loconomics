@@ -1,20 +1,4 @@
-"""PriceLens - peta harga. Fitur prioritas tertinggi.
-
-Dua angka yang disajikan modul ini, P07 harga sewa per m² dan B10 belanja per jam,
-keduanya lahir dari OCR. Itu bukan detail teknis melainkan inti klaim proyek ini:
-dataset misi MAPID tidak punya satu pun kolom teks berisi rupiah - Properti Go
-punya 8 kolom tanpa harga, Struk Go punya 8 kolom tanpa nominal. Angkanya ada di
-foto. Tanpa A1 dan A2, modul ini tidak punya apa pun untuk ditampilkan.
-
-Kenapa per m² dan bukan sewa absolut: sewa Rp 8 juta untuk 20 m² dan Rp 8 juta
-untuk 80 m² adalah dua harga yang sangat berbeda. Angka absolut (P05) tetap
-disajikan berdampingan karena itu yang tertulis di spanduk dan yang dibayar
-penyewa, tetapi yang bisa dibandingkan antarlokasi hanya per m².
-
-Backend tidak menghitung P07 maupun B10 - keduanya sudah jadi di hex_features,
-diisi pipeline. Yang dihitung di sini hanya persentil kawasan, yaitu statistik
-deskriptif atas nilai yang sudah tersimpan, bukan bagian dari skor.
-"""
+"""PriceLens - peta harga. Fitur prioritas tertinggi."""
 
 import json
 
@@ -32,19 +16,11 @@ from app.schemas import PriceLensHeksagon, RentangWajar
 
 router = APIRouter(prefix="/pricelens", tags=["pricelens"])
 
-# Batas "wajar". Di dalam rentang persentil 25-75 kawasan disebut WAJAR; di luar
-# itu MURAH atau MAHAL. Kuartil dipilih, bukan simpangan baku, karena sebaran
-# harga sewa berekor panjang - beberapa ruko premium akan menggeser rata-rata
-# tetapi tidak menggeser kuartil.
 BATAS_BAWAH, BATAS_TENGAH, BATAS_ATAS = 0.25, 0.50, 0.75
 
 
 def _persentil(db: Session, kolom, kawasan: str) -> RentangWajar:
-    """Persentil 25/50/75 satu kolom dalam satu kawasan.
-
-    Dihitung SQL supaya tidak perlu menarik ribuan baris ke Python hanya untuk
-    mencari tiga angka. Heksagon tanpa nilai dikecualikan - bukan dianggap nol.
-    """
+    """Persentil 25/50/75 satu kolom dalam satu kawasan."""
     kuartil = [
         func.percentile_cont(q).within_group(kolom.cast(Float)).label(f"p{int(q * 100)}")
         for q in (BATAS_BAWAH, BATAS_TENGAH, BATAS_ATAS)
@@ -57,11 +33,7 @@ def _persentil(db: Session, kolom, kawasan: str) -> RentangWajar:
 
 
 def _posisi(nilai: float | None, wajar: RentangWajar) -> str:
-    """Murah, wajar, atau mahal - relatif terhadap kawasannya sendiri.
-
-    Perbandingan lintas kawasan tidak bermakna: Rp 200 ribu per m² di Dukuh Atas
-    murah, di Harjamukti mahal.
-    """
+    """Murah, wajar, atau mahal - relatif terhadap kawasannya sendiri."""
     if nilai is None or wajar.p25 is None or wajar.p75 is None:
         return "TIDAK_DIKETAHUI"
     if nilai < wajar.p25:
@@ -111,12 +83,7 @@ def layer_harga(
     hanya_berdata: Annotated[bool, Query(description="Buang heksagon yang belum punya angka harga sama sekali")] = False,
     limit: Annotated[int, Query(le=20000)] = 5000,
 ) -> dict:
-    """FeatureCollection untuk mewarnai peta menurut harga.
-
-    Heksagon tanpa data harga tetap dikirim dengan nilai `null`, bukan 0 - supaya
-    peta bisa membedakan "sewanya murah" dari "belum ada yang mensurvei di sini".
-    Itu dua pernyataan yang sangat berbeda dan warnanya harus berbeda juga.
-    """
+    """FeatureCollection untuk mewarnai peta menurut harga."""
     stmt = (
         select(
             HexFeature.h3_index,
@@ -174,12 +141,7 @@ def layer_harga(
 
 @router.get("/ringkasan", summary="Rentang harga wajar per kawasan")
 def ringkasan_kawasan(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
-    """Rentang wajar tiap kawasan, untuk legenda peta dan pembanding cepat.
-
-    Juga menyertakan cakupan data: berapa heksagon yang benar-benar punya angka
-    harga dibanding total. Angka itu yang menjawab jujur pertanyaan "seberapa bisa
-    saya percaya peta harga ini?" tanpa pengguna harus mengklik satu per satu.
-    """
+    """Rentang wajar tiap kawasan, untuk legenda peta dan pembanding cepat."""
     kawasan_list = db.execute(
         select(HexFeature.kawasan).distinct().order_by(HexFeature.kawasan)
     ).scalars().all()

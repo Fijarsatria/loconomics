@@ -1,17 +1,4 @@
-"""Tahap 2 - Pembersihan dan standardisasi.
-
-Bagian yang paling sering dilewati tim lomba, dan justru yang paling sering
-membuat hasil analisis salah tanpa disadari. Aturan di bawah bukan saran -
-semuanya spesifikasi yang harus jalan sebelum satu pun angka masuk perhitungan indeks.
-
-Enam kelompok aturan (docs/data.md bagian 9):
-  9.1 Koordinat            - 5 langkah berurutan, urutannya penting
-  9.2 Deduplikasi          - 3 syarat harus terpenuhi SEKALIGUS
-  9.3 Tanggal dan waktu    - gagal parse TIDAK membuang record
-  9.4 Harga dan nominal    - ambang + winsorisasi + MEDIAN bukan rata-rata
-  9.5 Nilai kosong         - kosong TIDAK PERNAH diisi nol
-  9.6 Normalisasi upaya    - pisahkan keramaian lokasi dari intensitas surveyor
-"""
+"""Tahap 2 - Pembersihan dan standardisasi."""
 
 import math
 import re
@@ -36,11 +23,7 @@ from config import (
 
 
 def bersihkan_koordinat(lat_mentah, lon_mentah) -> tuple[float, float] | None:
-    """Lima langkah berurutan. Mengembalikan None kalau titik harus dibuang.
-
-    Kalau sebuah titik jatuh di heksagon yang salah, seluruh rantai analisis di
-    atasnya ikut salah: catchment keliru, hitungan kompetitor keliru, skor keliru.
-    """
+    """Lima langkah berurutan. Mengembalikan None kalau titik harus dibuang."""
     # 1. Struk Go menyimpan lat/lon sebagai TEXT, pemisah desimal bisa titik atau koma
     try:
         lat = float(str(lat_mentah).strip().replace(",", "."))
@@ -76,13 +59,7 @@ def bersihkan_koordinat(lat_mentah, lon_mentah) -> tuple[float, float] | None:
 
 
 def _titik_osm(e: dict) -> tuple[float, float] | None:
-    """Koordinat satu elemen Overpass, node maupun way.
-
-    `way` tidak punya lat/lon sendiri; `out center` menaruhnya di `center`.
-    Elemen tanpa keduanya dibuang - bukan diisi nol, yang akan mendaratkannya
-    di lepas pantai Afrika dan tetap lolos setiap pemeriksaan yang mengira nol
-    adalah angka yang sah.
-    """
+    """Koordinat satu elemen Overpass, node maupun way."""
     if "lat" in e and "lon" in e:
         return bersihkan_koordinat(e["lat"], e["lon"])
     pusat = e.get("center")
@@ -92,25 +69,7 @@ def _titik_osm(e: dict) -> tuple[float, float] | None:
 
 
 def poi_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Elemen Overpass mentah -> baris siap masuk `business_pois`.
-
-    Yang dibuang di sini ada tiga macam, dan ketiganya sengaja dibuang DIAM:
-    elemen tanpa koordinat sah, elemen yang tagnya tidak memetakan ke satu pun
-    dari delapan kelas induk, dan elemen tanpa nama. Yang terakhir perlu
-    penjelasan - `business_pois.nama` tidak boleh kosong, dan POI tanpa nama di
-    OSM hampir selalu bukan tempat usaha yang berdiri sendiri melainkan bagian
-    dari sesuatu yang lain (ATM di dalam minimarket, apotek di dalam klinik).
-    Menghitungnya sebagai kompetitor akan menggandakan satu tempat yang sama.
-
-    `kategori_asli` menyimpan tag ASLINYA (`amenity=cafe`), bukan cuma kelas
-    indukinya. Tanpa itu, pemetaan 83 tag ke 8 kelas jadi kotak hitam yang
-    tidak bisa diaudit siapa pun - termasuk oleh kita sendiri saat sebuah
-    heksagon terlihat aneh dan pertanyaannya "isinya apa saja sebenarnya".
-
-    Deduplikasi antar-kawasan sudah dikerjakan `s1_ingest._per_kawasan` menurut
-    (tipe, id). Yang TIDAK dikerjakan di sini: penggabungan node dan way yang
-    mewakili tempat yang sama - itu `deduplikasi()`, dan syaratnya berbeda.
-    """
+    """Elemen Overpass mentah -> baris siap masuk `business_pois`."""
     baris = []
     for e in elemen:
         tag = e.get("tags") or {}
@@ -151,40 +110,7 @@ def poi_dari_osm(elemen: list[dict]) -> pd.DataFrame:
 
 
 def rute_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Relasi rute Overpass -> pasangan (titik henti, rute) - bahan D05.
-
-    Satu baris per ANGGOTA berperan henti, jadi satu rute muncul sebanyak
-    henti yang dilewatinya. Peran yang dihitung `stop*` dan `platform*`;
-    anggota berperan kosong adalah ruas jalan/rel yang dilalui, dan
-    menghitungnya akan mengubah "rute berhenti di sini" jadi "rute lewat sini".
-    Untuk lokasi usaha, dua hal itu berlawanan artinya - kendaraan yang lewat
-    tanpa berhenti tidak menurunkan satu pun calon pembeli.
-
-    `moda` diambil dari tag relasi, bukan dari tag hentinya. Sebuah
-    `stop_position` di Dukuh Atas dilewati kereta MRT dan bus Transjakarta
-    sekaligus; yang menentukan kapasitas bukan tiangnya, melainkan apa yang
-    berhenti di situ.
-
-    Kereta dipisah dua. `route=train` yang jaringannya tidak memuat "commuter"
-    diperlakukan ANTARKOTA dan ditimbang jauh lebih ringan - lihat
-    `config.BOBOT_RUTE`. Tanpa pemisahan itu, 46 lin Argo/Bima/Brantas yang
-    lewat sekali sehari mengalahkan 4 lin KRL yang mengangkut ratusan ribu
-    orang, dan Stasiun Bekasi berskor tiga kali Dukuh Atas.
-
-    `lin` - BUKAN id relasi - yang dipakai menghitung keunikan, dan ini bukan
-    kerapian melainkan koreksi atas kesalahan yang terukur. OSM memecah satu
-    layanan jadi satu relasi per arah dan per varian: "Lin Lingkar Cikarang"
-    hidup sebagai **14 relasi** (full racket, half racket, via Manggarai, via
-    Pasar Senen, masing-masing dua arah). Menghitung relasi membuat Stasiun
-    Bekasi berskor 702 sementara Dukuh Atas - simpul transit terbesar Jakarta,
-    tempat MRT, KRL, dan Transjakarta bertemu - hanya 259. Dikelompokkan
-    menurut lin, 297 relasi menyusut jadi 148 layanan, dan urutannya kembali
-    sesuai kenyataan.
-
-    Relasi tanpa `ref` (8 dari 297) memakai id-nya sendiri sebagai lin - satu
-    relasi tak bernomor lebih baik dihitung satu layanan daripada dilebur
-    dengan setiap relasi tak bernomor lainnya.
-    """
+    """Relasi rute Overpass -> pasangan (titik henti, rute) - bahan D05."""
     baris = []
     for e in elemen:
         if e.get("type") != "relation":
@@ -223,13 +149,7 @@ def rute_dari_osm(elemen: list[dict]) -> pd.DataFrame:
 
 
 def henti_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Titik henti berkoordinat -> (ref, lat, lon) - pasangan `rute_dari_osm`.
-
-    `ref` sengaja berbentuk "node/123", sama persis dengan yang ditulis
-    `rute_dari_osm`, supaya keduanya bisa disatukan tanpa penyesuaian apa pun.
-    Kalau salah satunya menyimpan id telanjang, penyatuannya menghasilkan nol
-    baris dan nol baris itu terbaca sebagai "tidak ada angkutan umum di sini".
-    """
+    """Titik henti berkoordinat -> (ref, lat, lon) - pasangan `rute_dari_osm`."""
     baris = []
     for e in elemen:
         titik = _titik_osm(e)
@@ -248,17 +168,7 @@ def henti_dari_osm(elemen: list[dict]) -> pd.DataFrame:
 
 
 def simpul_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Elemen Overpass -> baris `transport_nodes`.
-
-    Moda ditentukan dari tag, dengan urutan yang tidak boleh dibalik: sebuah
-    simpul bisa membawa `railway=station` DAN `public_transport=station`
-    sekaligus, dan yang pertama jauh lebih informatif.
-
-    `station=subway|light_rail` dibaca lebih dulu daripada `railway=station`
-    karena keduanya selalu muncul bersama - MRT Jakarta ditandai
-    `railway=station` + `station=subway`, dan membaca `railway` duluan akan
-    menamai seluruh MRT dan LRT sebagai KRL.
-    """
+    """Elemen Overpass -> baris `transport_nodes`."""
     peta_station = {"subway": "MRT", "light_rail": "LRT"}
     baris = []
     for e in elemen:
@@ -297,10 +207,6 @@ def simpul_dari_osm(elemen: list[dict]) -> pd.DataFrame:
     )
 
 
-#: Tag OSM yang BUKAN tempat usaha tetapi menjelaskan konteks heksagon.
-#: Dipisah dari `OSM_KE_KELAS` dengan sengaja: yang di sini tidak pernah boleh
-#: terhitung sebagai kompetitor siapa pun. Sekolah di sebelah warung menambah
-#: alasan orang lewat, bukan mengurangi pembelinya.
 KONTEKS_OSM: dict[tuple[str, str], str] = {
     ("amenity", "school"): "sekolah",
     ("amenity", "college"): "sekolah",
@@ -312,26 +218,7 @@ KONTEKS_OSM: dict[tuple[str, str], str] = {
 
 
 def konteks_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Elemen Overpass -> (h3_index, jenis) untuk D08 dan D09.
-
-    Empat jenis: `kantor`, `sekolah`, `rumah_sakit`, `pasar`, `ibadah`.
-
-    Kantor dibaca dari ADA-TIDAKNYA tag `office`, apa pun nilainya - "kepadatan
-    perkantoran" adalah pernyataan tentang berapa banyak orang bekerja di situ,
-    dan nilai tagnya (`office=company`, `office=lawyer`) tidak mengubah itu.
-
-    `ibadah` sengaja memuat SELURUH rumah ibadah muslim, bukan yang besar saja,
-    walau D09 didefinisikan "masjid besar". Alasannya bisa diperiksa siapa pun:
-    OSM tidak punya tag ukuran, dan menebak "besar" dari ada-tidaknya footprint
-    akan menghitung musholla yang kebetulan digambar sebagai bidang sementara
-    membuang masjid raya yang kebetulan cuma ditandai satu titik. Yang dipilih
-    hitungan yang bisa dijelaskan, dengan batasnya ditulis terus terang di sini
-    dan di docs/data.md - bukan angka yang terdengar lebih tepat tanpa dasar.
-
-    Satu elemen bisa menyumbang DUA baris: sekolah yang juga ditandai `office`
-    memang dua-duanya. Yang dilarang cuma satu - elemen di sini tidak boleh ikut
-    masuk `business_pois`, dan itu dijamin `kelas_dari_tag` yang menolaknya.
-    """
+    """Elemen Overpass -> (h3_index, jenis) untuk D08 dan D09."""
     baris = []
     for jenis, lat, lon in _konteks_bertitik(elemen):
         baris.append({"h3_index": h3.latlng_to_cell(lat, lon, H3_RESOLUSI), "jenis": jenis})
@@ -368,33 +255,17 @@ def _konteks_bertitik(elemen: list[dict]):
 
 
 def konteks_bertitik_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Kembaran `konteks_dari_osm` yang MEMPERTAHANKAN koordinatnya.
-
-    Heksagon cukup tahu "ada di sel mana"; blok tidak - satu blok selebar
-    ±130 m, dan yang ditanyakan di sana "berapa penarik keramaian dalam radius
-    250 m", jarak yang menembus batas sel. Penggolongannya lewat
-    `_jenis_konteks` yang sama, jadi sekolah di heksagon dan sekolah di blok
-    tidak bisa diam-diam berbeda definisi.
-    """
+    """Kembaran `konteks_dari_osm` yang MEMPERTAHANKAN koordinatnya."""
     return pd.DataFrame(list(_konteks_bertitik(elemen)), columns=["jenis", "lat", "lon"])
 
 
 def snap_ke_geometri(lat: float, lon: float, jaringan_jalan, bangunan):
-    """Tempel titik ke bangunan/jalan terdekat kalau jaraknya <= SNAP_GPS_M.
-
-    Ponsel kelas menengah di gang sempit atau di bawah jembatan layang bisa
-    meleset 15-40 m. Pada heksagon selebar 350 m efeknya baru terasa di batas
-    heksagon, tapi di situ efeknya nyata.
-    """
+    """Tempel titik ke bangunan/jalan terdekat kalau jaraknya <= SNAP_GPS_M."""
     raise NotImplementedError
 
 
 def bersihkan_harga_porsi(nilai) -> float | None:
-    """Menu Go: satu-satunya angka rupiah native di seluruh data misi.
-
-    Dua kesalahan sistematis yang disaring: surveyor menulis 25 untuk 25 ribu,
-    dan surveyor memasukkan harga paket keluarga alih-alih harga per porsi.
-    """
+    """Menu Go: satu-satunya angka rupiah native di seluruh data misi."""
     try:
         harga = float(nilai)
     except (TypeError, ValueError):
@@ -405,54 +276,24 @@ def bersihkan_harga_porsi(nilai) -> float | None:
 
 
 def parse_tanggal(teks: str):
-    """Coba beberapa format berurutan sampai ada yang cocok.
-
-    ATURAN TEGAS: record yang tanggalnya tidak terbaca TIDAK BOLEH DIBUANG.
-    Kolom waktunya diisi NULL, recordnya tetap disimpan, dan tetap dipakai untuk
-    seluruh analisis spasial. Informasi paling mahal dalam satu record misi
-    adalah lokasinya - itu hasil orang datang ke tempatnya secara fisik.
-    """
+    """Coba beberapa format berurutan sampai ada yang cocok."""
     raise NotImplementedError
 
 
 def deduplikasi(records: list) -> list:
-    """Dua record duplikat hanya kalau KETIGA syarat terpenuhi sekaligus:
-
-      - kemiripan nama  >= 0.85 (fuzzy)
-      - jarak antartitik <= 30 m
-      - tanggal pendataan sama persis
-
-    Memakai satu atau dua syarat saja akan menghapus usaha yang sah, misalnya
-    dua cabang warung dengan nama sama yang berjarak 300 m.
-
-    Untuk gabungan OSM x Overture syarat tanggal tidak berlaku (keduanya basis
-    data statis, bukan catatan kunjungan). Saat menggabung, record yang atributnya
-    lebih lengkap dipertahankan dan atribut dari record lain disalin masuk -
-    supaya penggabungan menambah informasi, bukan sekadar membuang baris.
-    """
+    """Dua record duplikat hanya kalau KETIGA syarat terpenuhi sekaligus:"""
     raise NotImplementedError
 
 
 def normalisasi_upaya_survei(n_struk: int, n_kunjungan_surveyor: int) -> float | None:
-    """Pisahkan keramaian lokasi dari intensitas kunjungan surveyor.
-
-    Tanpa ini, peta yang dihasilkan sebagian peta keramaian dan sebagian lagi
-    peta jadwal kerja surveyor - dan tidak ada cara membedakannya dari luar.
-
-    "Bagaimana Anda memastikan ini bukan sekadar bias pengumpulan data?" adalah
-    pertanyaan juri yang paling wajar diajukan pada proyek berbasis data misi.
-    """
+    """Pisahkan keramaian lokasi dari intensitas kunjungan surveyor."""
     if not n_kunjungan_surveyor:
         return None
     return n_struk / n_kunjungan_surveyor
 
 
 def koreksi_skor_ramai(kondisi: str, jam_kunjungan: int, baseline_per_jam: dict) -> float | None:
-    """Menu Go kolom "Kondisi Pembeli" bias terhadap jam kunjungan surveyor.
-
-    "Sepi pukul 10 pagi" tidak sama artinya dengan "Sepi pukul 12 siang".
-    Nilai mentah dikurangi baseline jam yang bersangkutan. Menghasilkan D10.
-    """
+    """Menu Go kolom "Kondisi Pembeli" bias terhadap jam kunjungan surveyor."""
     skala = {"Sepi": 1.0, "Sedang": 2.0, "Ramai": 3.0}
     dasar = skala.get(kondisi)
     if dasar is None:
@@ -465,18 +306,7 @@ def koreksi_skor_ramai(kondisi: str, jam_kunjungan: int, baseline_per_jam: dict)
 
 
 def luas_poligon_m2(titik: list[dict]) -> float | None:
-    """Luas satu poligon lat/lon dalam meter persegi.
-
-    Diproyeksikan ekuirektangular lebih dulu terhadap lintang TENGAH poligon
-    itu sendiri, lalu shoelace. Untuk bidang seukuran bangunan (puluhan meter)
-    galatnya jauh di bawah 0,1% - dan yang membuatnya kecil adalah pemakaian
-    lintang poligonnya sendiri, bukan lintang tetap untuk seluruh kota.
-
-    Mengembalikan None untuk cincin yang tidak bisa membentuk bidang. Nol tidak
-    dipakai sebagai penanda gagal: bangunan berluas nol dan bangunan yang
-    geometrinya rusak adalah dua hal berbeda, dan yang kedua tidak boleh ikut
-    menurunkan median.
-    """
+    """Luas satu poligon lat/lon dalam meter persegi."""
     if not titik or len(titik) < 3:
         return None
     try:
@@ -501,17 +331,7 @@ def luas_poligon_m2(titik: list[dict]) -> float | None:
 
 
 def bangunan_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Elemen Overpass `out geom` -> (h3_index, luas_m2) per bangunan.
-
-    Bangunan ditempatkan menurut TITIK TENGAH cincinnya, jadi bangunan yang
-    melintasi batas heksagon menyumbang seluruh luasnya ke satu heksagon saja.
-    Itu galat, tetapi galat yang kecil dan tidak berarah: bangunan di Jabodetabek
-    bermedian puluhan meter persegi sementara heksagon res-9 sekitar 105.000 m2,
-    dan yang melimpah ke tetangga kira-kira sebanyak yang melimpah masuk.
-    Memotong tiap poligon di batas heksagon menuntut pustaka geometri penuh dan
-    mengubah hasilnya jauh lebih sedikit daripada ketidakpastian pemetaan OSM
-    itu sendiri.
-    """
+    """Elemen Overpass `out geom` -> (h3_index, luas_m2) per bangunan."""
     bertitik = bangunan_bertitik_dari_osm(elemen)
     if bertitik.empty:
         return pd.DataFrame(columns=["h3_index", "luas_m2"])
@@ -528,12 +348,7 @@ def bangunan_dari_osm(elemen: list[dict]) -> pd.DataFrame:
 
 
 def bangunan_bertitik_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """(lat, lon, luas_m2) per bangunan - titik tengah cincinnya ikut disimpan.
-
-    Dipakai dua kali: heksagon memetakannya ke sel res-9, blok ke sel res-10.
-    Satu fungsi yang menghitung luas dan titik tengah, supaya M01 heksagon dan
-    tutupan bangunan blok tidak bisa berselisih karena rumus yang berbeda.
-    """
+    """(lat, lon, luas_m2) per bangunan - titik tengah cincinnya ikut disimpan."""
     baris = []
     for e in elemen:
         geom = e.get("geometry")
@@ -559,13 +374,7 @@ KELAS_JALAN_UTAMA = frozenset({
 
 
 def jalan_dari_osm(elemen: list[dict]) -> pd.DataFrame:
-    """Ruas jalan Overpass `out geom` -> (nama, kelas, utama, koordinat).
-
-    `koordinat` daftar (lon, lat) apa adanya. Ruas tanpa geometri atau dengan
-    kurang dari dua titik dibuang - ruas satu titik tidak punya panjang untuk
-    diukur jaraknya. Nama boleh kosong: banyak gang di OSM tidak bernama, dan
-    gang tak bernama tetap gang.
-    """
+    """Ruas jalan Overpass `out geom` -> (nama, kelas, utama, koordinat)."""
     baris = []
     for e in elemen:
         if e.get("type") != "way":
@@ -592,35 +401,10 @@ def jalan_dari_osm(elemen: list[dict]) -> pd.DataFrame:
         )
     return pd.DataFrame(baris, columns=["nama", "kelas", "utama", "koordinat"])
 
-# ---------------------------------------------------------------------------
-# API misi MAPID -> baris observasi
-# ---------------------------------------------------------------------------
-#
-# Tiga penguraian di bawah mengubah GeoJSON Feature dari
-# `server.mapid.io/web/competition/*` jadi baris tabel `*_observations`.
-#
-# Yang TIDAK dikerjakan di sini, dan sengaja: mengisi nominal rupiah. Struk Go
-# dan Properti Go sama sekali tidak punya kolom uang - angkanya cuma ada di
-# dalam foto, dan itu pekerjaan A1/A2 (s3_extract). Kolom `total_nominal` dan
-# `harga_nominal` dibiarkan kosong supaya perbedaan antara "belum di-OCR" dan
-# "nol rupiah" tetap terbaca.
 
 
 def parse_tanggal_misi(nilai) -> datetime | None:
-    """Tanggal dari API misi MAPID, yang bentuknya belum bisa dipastikan.
-
-    Terukur 26 Agu 2026: SELURUH 866 titik mengembalikan `{}` - sebuah objek
-    kosong, bukan string kosong dan bukan null. Jadi fungsi ini hampir selalu
-    mengembalikan None hari ini.
-
-    Ditulis toleran karena bentuknya bisa berubah tanpa pemberitahuan: kalau
-    MAPID mulai mengirim tanggalnya, ia bisa datang sebagai string ISO, sebagai
-    `$date` gaya Mongo, atau sebagai objek berisi tanggal dan waktu terpisah.
-    Yang tidak boleh terjadi adalah pipeline berhenti karena bentuk baru - dan
-    tanggal yang gagal dibaca TIDAK PERNAH membuang recordnya (aturan 9.3):
-    lokasinya jauh lebih mahal daripada waktunya, karena ia hasil orang datang
-    ke tempatnya secara fisik.
-    """
+    """Tanggal dari API misi MAPID, yang bentuknya belum bisa dipastikan."""
     if nilai in (None, "", {}, []):
         return None
     if isinstance(nilai, dict):
@@ -672,19 +456,7 @@ def _dasar(f: dict) -> dict | None:
 
 
 def menu_dari_mapid(fitur: list[dict]) -> pd.DataFrame:
-    """Menu Go -> `menu_observations`. Sumber B07, B08, C04, C07, C08, D10.
-
-    `kondisi_pembeli` disimpan sebagai LABEL ("Sepi"/"Sedang"/"Ramai"), bukan
-    angkanya. Alasannya bisa diperiksa: angka 0/0,5/1 adalah tafsir kita atas
-    jawaban surveyor, dan tafsir tidak boleh menggantikan jawaban aslinya di
-    tabel observasi. Yang menerjemahkannya `s4_spatial`, dan kalau kelak
-    skalanya berubah, tabelnya tidak perlu ditarik ulang.
-
-    `waktu_kunjungan` HAMPIR PASTI kosong: API mengembalikan `tanggal: {}` di
-    seluruh 866 titik (terukur 26 Agu 2026). Tetap dibaca kalau-kalau MAPID
-    memperbaikinya - kalau ia mulai terisi, D10 bisa dikoreksi terhadap jam
-    kunjungan seperti yang diniatkan `s2_clean.koreksi_skor_ramai`.
-    """
+    """Menu Go -> `menu_observations`. Sumber B07, B08, C04, C07, C08, D10."""
     kolom = ["h3_index", "nama_usaha", "kondisi_pembeli", "waktu_kunjungan",
              "mobilitas_keliling", "harga_rata_porsi", "menu_andalan", "lat", "lon"]
     baris = []
@@ -706,10 +478,6 @@ def menu_dari_mapid(fitur: list[dict]) -> pd.DataFrame:
 def struk_dari_mapid(fitur: list[dict]) -> pd.DataFrame:
     """Struk Go -> `receipt_observations`. Sumber B06 sekarang; B01-B05, B09,
     B10, D11 menyusul lewat A2.
-
-    `foto_url` WAJIB ikut tersimpan: ia satu-satunya jalan menuju nominal dan
-    jam transaksi, dan tanpa menyimpannya di sini, A2 harus menarik ulang
-    seluruh dataset hanya untuk mendapatkan URL-nya.
     """
     kolom = ["h3_index", "nama_merchant", "waktu_transaksi", "metode_bayar",
              "foto_url", "lat", "lon"]
@@ -745,13 +513,7 @@ def properti_dari_mapid(fitur: list[dict]) -> pd.DataFrame:
 
 
 def aktivitas_dari_mapid(aktivitas: list[dict]) -> pd.DataFrame:
-    """Activities -> (h3_index) per kegiatan. Sumber D12 aktivitas_komunitas.
-
-    Bentuknya berbeda dari ketiga misi: bukan GeoJSON Feature, melainkan objek
-    ber-`geometry` sendiri. Tidak ada tabel observasinya - yang dipakai cuma
-    hitungannya per heksagon, jadi menyimpan judul dan deskripsi tiap kegiatan
-    berarti menyimpan data yang tidak pernah ditanyakan siapa pun.
-    """
+    """Activities -> (h3_index) per kegiatan. Sumber D12 aktivitas_komunitas."""
     baris = []
     for a in aktivitas:
         g = a.get("geometry") or {}

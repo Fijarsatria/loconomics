@@ -1,9 +1,4 @@
-"""Endpoint heksagon - sumber data utama untuk peta dan panel insight.
-
-Catatan arsitektur: tidak ada endpoint yang menyajikan POI, menu, struk, atau
-properti satu per satu. Semuanya hanya keluar sebagai agregat per heksagon,
-karena ketentuan lomba melarang data misi MAPID mentah diekspos ke publik.
-"""
+"""Endpoint heksagon - sumber data utama untuk peta dan panel insight."""
 
 import json
 
@@ -137,38 +132,7 @@ def layer_heksagon(
     versi: Annotated[str, Query()] = "baseline",
     limit: Annotated[int, Query(ge=1, le=20000)] = 5000,
 ) -> dict:
-    """FeatureCollection siap render.
-
-    Dalam produksi layer ini disajikan sebagai GeoJSON statis dari CDN Cloudflare
-    (mitigasi free tier, lihat docs/arsitektur.md). Endpoint ini dipakai saat
-    pengembangan dan sebagai sumber untuk membangkitkan berkas statis itu -
-    lihat pipeline/s7_publish.py.
-
-    Layer ini TIDAK menyaring ZoneGuard: peta harus tetap menggambar heksagon
-    terlarang, justru supaya pengguna melihat bahwa area itu dikecualikan.
-    Yang menyaringnya adalah endpoint rekomendasi - lihat skor.py.
-
-    Tiga hal yang membuat endpoint ini tetap sanggup di free tier:
-
-    `bbox`  - hanya heksagon yang benar-benar terlihat yang dikirim. Peta yang
-              di-zoom ke satu blok tidak perlu menerima seluruh kawasan.
-    `sederhanakan` - heksagon punya enam titik; pada zoom rendah, presisi tujuh
-              desimal tidak menambah apa pun selain ukuran berkas.
-    cache   - isi tabel hanya berubah saat pipeline dijalankan, jadi permintaan
-              yang sama tidak perlu memindai ulang ribuan baris.
-    """
-    # Beberapa kawasan sekaligus adalah alat berbayar di antarmuka, TETAPI
-    # endpoint ini tidak menjaganya - dan itu disengaja, bukan lubang.
-    #
-    # Tabel fitur menyatakan baris pertamanya sendiri: "seluruh grid H3 resolusi
-    # 9 terbuka untuk dilihat". Tanpa parameter `kawasan`, endpoint ini memang
-    # sudah mengirim keenamnya. Menolak 'Bekasi,Depok Baru' sementara ''
-    # mengirim keduanya plus empat lagi bukan penjagaan, cuma gangguan yang
-    # bisa dilewati dengan menghapus satu parameter.
-    #
-    # Yang benar-benar dijaga di sisi server adalah yang memang tidak pernah
-    # gratis: 43 variabel granular, komparasi, riwayat, pemantauan, dan laporan.
-    # Lihat `detail_heksagon` di bawah dan modul /skor.
+    """FeatureCollection siap render."""
     daftar_kawasan = periksa_kawasan_banyak(kawasan)
     geom = HexFeature.geom
     if sederhanakan:
@@ -249,23 +213,7 @@ def commuter_clock(
     pengguna: PenggunaOpsional = None,
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> CommuterClock:
-    """Kapan uang benar-benar berpindah di lokasi ini, jam demi jam.
-
-    Ini yang membedakannya dari data POI mana pun: dataset POI hanya menyimpan
-    jam buka-tutup - kapan toko buka, bukan kapan transaksi terjadi. Jam di sini
-    dibaca dari yang tercetak di struk (A2).
-
-    Pemisahan captive dan choice rider:
-      captive - tidak punya alternatif selain transit. Terikat jadwal, sehingga
-                belanjanya menumpuk di jendela berangkat dan pulang yang sempit.
-      choice  - punya kendaraan pribadi tetapi memilih transit. Waktunya lebih
-                longgar, belanjanya lebih tersebar sepanjang hari.
-
-    Bedanya penting bagi calon penyewa: lokasi yang didominasi captive rider ramai
-    dua kali sehari dalam jendela pendek dan sepi di antaranya, sedangkan yang
-    didominasi choice rider punya arus yang lebih rata. Jenis usaha yang cocok di
-    keduanya tidak sama.
-    """
+    """Kapan uang benar-benar berpindah di lokasi ini, jam demi jam."""
     # Berbayar sejak 23 Agustus 2026 - keputusan pemilik repo. Grafik jam
     # per heksagon pindah ke kolom berbayar; ringkasan ember 4-slot yang di
     # respons detail tetap gratis.
@@ -323,10 +271,6 @@ def commuter_clock(
     semua_proxy = bool(baris) and all(b.metode == "proxy" for b in baris)
     catatan = None
     if not baris:
-        # Ini dibaca PELANGGAN, di fitur yang ia bayar. Sebelumnya ia berbunyi
-        # "jalankan pipeline s4_spatial" - instruksi untuk pengembang yang bocor
-        # ke layar orang yang tidak punya pipeline untuk dijalankan. Yang
-        # dibutuhkan pembacanya bukan perintah melainkan sebab.
         catatan = kalimat("jam_tanpa_baris", bahasa)
     elif semua_proxy:
         catatan = kalimat("jam_semua_proxy", bahasa)
@@ -363,16 +307,7 @@ def blok_heksagon(
     ] = None,
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> BedahBlok:
-    """Jawaban untuk "di dalam heksagon yang sudah saya pilih, sisi mana yang layak?".
-
-    GRATIS dan aman di-cache: isinya sama untuk siapa pun, seluruhnya dari data
-    terbuka, dan hanya berubah saat pipeline dijalankan (`s7_publish --blok`).
-    Kelas dan bahasa ikut jadi kunci cache karena keduanya parameter.
-
-    Blok berzona terlarang TETAP dikirim - berskor 0 dan berperingatan - supaya
-    orang melihat bahwa sisi itu dikecualikan dan kenapa, bukan cuma melihat
-    enam blok dan bertanya ke mana yang ketujuh.
-    """
+    """Jawaban untuk "di dalam heksagon yang sudah saya pilih, sisi mana yang layak?"."""
     if kelas is not None and kelas not in KELAS_USAHA:
         raise KesalahanAPI(
             f"Kelas usaha '{kelas}' tidak dikenal.", {"tersedia": sorted(KELAS_USAHA)}
@@ -469,11 +404,6 @@ def blok_heksagon(
     )
 
 
-#: Kata kerja tiap profil di kalimat catatan. Satu tabel, bukan ternary di dua
-#: tempat: ternary dua cabang yang dulu berdiri di sini akan diam-diam menyebut
-#: rute sepeda "jalan kaki", karena cabang `else`-nya menangkap apa pun yang
-#: bukan mobil. Profil yang tidak ada di tabel ini gagal KERAS (KeyError),
-#: dan `Literal` di parameter endpoint menjaga pintunya lebih dulu.
 KUNCI_CARA = {
     "foot-walking": "simpul_cara_kaki",
     "driving-car": "simpul_cara_mobil",
@@ -496,27 +426,7 @@ def simpul_terdekat(
     ] = "foot-walking",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> KonteksSimpul:
-    """Stasiun mana yang terdekat, lewat mana jalannya, berapa jauh, berapa menit.
-
-    GRATIS dengan sengaja. Ini konteks peta, bukan kedalaman data: orang harus
-    bisa tahu heksagon yang sedang dilihatnya itu dekat stasiun apa - dan
-    seberapa benar "dekat" itu - sebelum memutuskan lokasinya layak dibayar
-    untuk dibongkar.
-
-    YANG DIKEMBALIKAN RUTE SUNGGUHAN, mengikuti jalan yang benar-benar ada.
-    Geometrinya dihitung offline oleh `pipeline/rute_ors.py` lewat
-    OpenRouteService dan tinggal di `hex_routes`; endpoint ini hanya membaca.
-    Tidak ada panggilan jaringan di jalur permintaan - lihat alasannya di
-    docstring `models.HexRoute`.
-
-    Kalau heksagonnya belum pernah dirutekan, `rute` kosong dan jaraknya jatuh
-    kembali ke GARIS LURUS dengan `garis_lurus=True`. Itu keadaan yang jujur,
-    bukan kegagalan: yang tidak boleh terjadi adalah menggambar garis lurus lalu
-    menyebutnya rute.
-
-    Aman di-cache: isinya sama untuk siapa pun, dan hanya berubah kalau pipeline
-    memindahkan simpul atau menghitung ulang rutenya.
-    """
+    """Stasiun mana yang terdekat, lewat mana jalannya, berapa jauh, berapa menit."""
     hx = ambil_hex(db, h3_index)
 
     pusat = db.execute(
@@ -562,10 +472,6 @@ def simpul_terdekat(
         lon=baris["lon"],
     )
 
-    # ST_AsGeoJSON dipakai supaya PostGIS yang mengurai geometrinya, bukan kita.
-    # Presisi dipotong ke 5 desimal: itu ~1,1 meter di khatulistiwa, jauh lebih
-    # halus daripada yang bisa dibedakan mata pada zoom mana pun, dan memotong
-    # ukuran responsnya hampir separuh.
     rute_baris = db.execute(
         text(
             """
@@ -653,26 +559,12 @@ def simpul_terdekat(
     )
 
 
-#: Batas faktor permintaan blok. Sempit dengan sengaja: yang diketahui cuma
-#: bahwa satu sisi heksagon LEBIH BAIK dari sisi lain, bukan berapa kali lipat
-#: uang yang lewat di depannya. Tanpa batas, blok terbaik di heksagon yang
-#: ketujuh bloknya jomplang akan "menghasilkan" tiga kali omzet heksagonnya.
 FAKTOR_BLOK_MIN = 0.6
 FAKTOR_BLOK_MAKS = 1.4
 
 
 def _persempit_ke_blok(db, h3_index, h3_blok, jenis_usaha, variabel, zona_izin):
-    """Angka heksagon -> angka satu blok. Mengembalikan (blok, variabel, zona).
-
-    Yang disesuaikan HANYA belanja per jam - satu-satunya besaran yang wajar
-    berbeda antar-sisi heksagon dan tidak diukur per blok. Sewa dan harga
-    struk tidak disentuh: tidak ada dasar untuk menebak bahwa ruko di tepi
-    jalan utama lebih mahal PERSIS sekian persen.
-
-    Skor pembandingnya skor KELAS usaha kalau jenisnya punya kelas - pesaing
-    sekelas ikut menurunkan peringkatnya, dan itu yang relevan untuk usaha
-    yang sedang disimulasikan - dan skor umum kalau tidak.
-    """
+    """Angka heksagon -> angka satu blok. Mengembalikan (blok, variabel, zona)."""
     from app.core.galat import TidakDitemukan
 
     saudara = db.execute(
@@ -741,10 +633,6 @@ def simulasi_heksagon(
     luas_m2: Annotated[int, Query(ge=1, le=500)] = LUAS_BAWAAN_M2,
     pangsa_persen: Annotated[float, Query(gt=0, le=100)] = PANGSA_BAWAAN,
     margin_persen: Annotated[float, Query(gt=0, le=100)] = MARGIN_BAWAAN,
-    # Keduanya OPSIONAL dan tanpa nilai bawaan. Bawaan apa pun di sini akan
-    # jadi angka karangan yang menyamar jadi hitungan - persis yang dihindari
-    # seluruh modul simulasi. Kosong berarti "belum diisi", dan simulasi jatuh
-    # ke angka heksagon kalau ada.
     sewa_bulanan_diminta: Annotated[float | None, Query(ge=0, le=5_000_000_000)] = None,
     harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
     h3_blok: Annotated[
@@ -754,17 +642,7 @@ def simulasi_heksagon(
     versi: str = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> Simulasi:
-    """Skenario "kalau saya buka usaha di sini".
-
-    BUKAN skor dan BUKAN ramalan - lihat docstring `core/simulasi.py`. Yang
-    dihitung di sini tidak pernah tersimpan, tidak pernah ikut memeringkat, dan
-    tidak mengubah satu pun kuadran.
-
-    Heksagon berzona terlarang TETAP dilayani, dan itu disengaja. Endpoint ini
-    bukan jalur rekomendasi - pengguna sudah memilih heksagonnya sendiri, dan
-    menolak menghitungnya hanya akan menyembunyikan alasan kenapa lokasi itu
-    buruk. Yang dikirim adalah hitungannya PLUS peringatan zona di paling atas.
-    """
+    """Skenario "kalau saya buka usaha di sini"."""
     wajib_akses_penuh(db, pengguna, h3_index, "Simulasi usaha")
     if jenis_usaha not in JENIS_USAHA:
         raise KesalahanAPI(
@@ -878,35 +756,7 @@ def detail_heksagon(
     versi: str = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> DetailHeksagon:
-    """Isi panel insight saat heksagon diklik. Juga sumber jawaban jelaskan_skor().
-
-    SATU RESPONS, DUA ISI. Yang gratis - skor, kuadran, Commuter Clock,
-    ZoneGuard, RiskRadar - selalu ikut. Yang berbayar - 43 variabel granular,
-    rincian kontribusi tiap variabel ke skor, NILAI keempat indeks, dan kalimat
-    penjelasan kuadran - hanya ikut kalau pemanggilnya berlangganan atau sudah
-    membuka heksagon ini dengan token.
-
-    KEEMPAT INDEKS DAN PENJELASAN KUADRAN PINDAH KE SISI BERBAYAR 11 Sep 2026,
-    keputusan pemilik repo. Keduanya menjawab "kenapa angkanya segitu", dan itu
-    pertanyaan yang sama dengan yang sudah dijawab bagian berbayar di bawahnya -
-    memberikannya gratis di satu tempat dan menagihnya di tempat lain membuat
-    batas berbayarnya tidak bisa diterangkan ke siapa pun.
-
-    YANG TETAP GRATIS meski keduanya ditahan: `cakupan` dan `cakupan_prestise`.
-    Keduanya keterangan MUTU - berapa bahan sebuah indeks yang benar-benar
-    terukur, dan bahan mana yang menyusun sumbu prestise - dan tidak memuat satu
-    pun nilai. Menahannya berarti menahan pengakuan bahwa datanya tipis, dan
-    pengakuan tidak boleh pernah jadi barang dagangan.
-
-    Yang ditahan TIDAK dikirim lalu diburamkan di frontend. Buram itu lapisan
-    CSS; siapa pun yang membuka panel pengembang bisa mencabutnya, dan yang
-    tersisa di baliknya adalah data lengkap yang tidak pernah dibayar. Yang
-    ditahan di sini tidak pernah meninggalkan server.
-
-    `terkunci` memberi tahu antarmuka bagian mana yang ditahan, jadi tirainya
-    digambar dari keadaan backend yang sebenarnya - bukan dari tebakan frontend
-    tentang siapa yang sedang masuk.
-    """
+    """Isi panel insight saat heksagon diklik. Juga sumber jawaban jelaskan_skor()."""
     hx = ambil_hex(db, h3_index)
 
     if pengguna is None:
@@ -1019,11 +869,6 @@ def detail_heksagon(
             if (skor and skor.kuadran and boleh_penuh)
             else None
         ),
-        # Alasannya sama dengan `cakupan` di atas, dan taruhannya lebih besar:
-        # kuadran adalah tesis produk ini, dan sumbu datarnya berdiri di atas
-        # bahan yang dua di antaranya kosong di SELURUH wilayah studi. Yang
-        # dikirim daftar kodenya saja - tidak satu pun nilai, jadi ia tetap di
-        # sisi gratis bersama kuadrannya sendiri.
         cakupan_prestise=CakupanPrestise(**cakupan_prestise([hx])),  # type: ignore[arg-type]
         perkiraan=perkiraan,
     )

@@ -1,9 +1,4 @@
-"""Sumber kebenaran tunggal untuk seluruh pipeline.
-
-Semua skrip s1-s6 mengimpor dari sini. Jangan pernah menulis ulang nilai-nilai
-di bawah langsung di dalam skrip - kalau ada dua tempat, cepat atau lambat
-keduanya berbeda dan hasil analisis jadi tidak bisa direproduksi.
-"""
+"""Sumber kebenaran tunggal untuk seluruh pipeline."""
 
 from pathlib import Path
 
@@ -22,30 +17,6 @@ KAWASAN_PILOT = [
 # Bounding box Jabodetabek. Titik di luar ini dibuang saat pembersihan koordinat.
 BBOX = {"lon_min": 106.30, "lon_max": 107.10, "lat_min": -6.95, "lat_max": -5.95}
 
-# --- Pusat kawasan pilot ----------------------------------------------------
-#
-# SATU SUMBER KEBENARAN. Sebelum 29 Agu 2026 daftar ini ditulis TIGA KALI -
-# `s1_ingest.py`, `demo_seed.py`, dan `frontend/src/config.ts` - dan ketiganya
-# cocok satu sama lain, jadi tidak ada uji konsistensi yang bisa menangkap
-# bahwa ketiganya sama-sama salah.
-#
-# Dan memang ada yang salah: pusat Harjamukti duduk di (-6,3706 . 106,8556),
-# **4.443 m** dari Stasiun LRT Harjamukti yang sebenarnya. Seluruh heksagon
-# kawasan itu mengukur jarak ke titik yang bukan stasiun, dan penarikan OSM di
-# sana tidak pernah menemukan satu pun stasiun rel - nol, sementara lima kawasan
-# lain 2-10. Nol itu satu-satunya gejala yang pernah muncul.
-#
-# Keenamnya diverifikasi ulang ke OSM 29 Agu 2026 (Overpass, tag
-# `railway=station` + nama). Lima yang lain meleset 33-328 m, masih di dalam
-# satu heksagon, jadi dibiarkan:
-#
-#   Dukuh Atas BNI    33 m    Tanah Abang   90 m
-#   Bekasi           194 m    Depok Baru   255 m
-#   Manggarai        328 m    Harjamukti  4443 m  <- diperbaiki
-#
-# Frontend memegang salinannya sendiri (peramban tidak bisa mengimpor Python).
-# Yang menjaganya bukan disiplin melainkan uji: `backend/tests/test_aturan.py`
-# membandingkan keduanya dan gagal kalau berbeda lebih dari satu meter.
 PUSAT: dict[str, tuple[float, float]] = {
     "Manggarai": (-6.2131, 106.8496),
     "Tanah Abang": (-6.1858, 106.8117),
@@ -67,11 +38,6 @@ CRS = "EPSG:4326"
 H3_RESOLUSI = 9  # ±0,10 km², lebar ±350 m
 ISOCHRONE_MENIT = [5, 10, 15, 30, 60]
 
-#: Resolusi BLOK - satuan kedua, di BAWAH heksagon, untuk menjawab "blok mana di
-#: dalam heksagon ini". Res-10 = 7 anak per heksagon, ±15.000 m² dan lebar
-#: ±130 m: kira-kira satu blok jalan di Jabodetabek. Res-11 (49 anak, ±2.100 m²)
-#: sudah diukur dan ditolak: median bangunannya 2 per sel dan hanya 4,4% sel
-#: memuat satu POI, jadi yang dibandingkan di sana derau, bukan lokasi.
 H3_RESOLUSI_BLOK = 10
 
 # Moda yang dicakup. Pelabuhan dan bandara sengaja dikecualikan karena pola
@@ -100,12 +66,6 @@ KELAS_INDUK = {
 }
 
 
-# --- Tag OpenStreetMap -> kelas induk --------------------------------------
-# Satu POI hanya boleh menghasilkan SATU kelas. OSM tidak menjamin itu: sebuah
-# titik bisa membawa `amenity=restaurant` dan `shop=deli` sekaligus. Karena itu
-# ada urutan kunci - yang lebih menentukan fungsi utamanya menang, dan sisanya
-# diabaikan. Tanpa urutan yang tetap, hasil klasifikasi bergantung pada urutan
-# iterasi dict dan berubah-ubah antar-jalan tanpa sebab yang terlihat.
 URUTAN_TAG_OSM = ("amenity", "shop", "healthcare", "office", "craft", "leisure")
 
 OSM_KE_KELAS: dict[tuple[str, str], str] = {
@@ -207,21 +167,10 @@ OSM_KE_KELAS: dict[tuple[str, str], str] = {
 #: selalu ketinggalan. Kelas induknya sudah pasti sekalipun nilainya belum.
 KUNCI_OSM_TERBUKA = {"healthcare": "S2", "craft": "S1"}
 
-#: Perkantoran TIDAK punya kelas induk, dan itu disengaja. Delapan kelas induk
-#: adalah kelas KOMPETITOR - usaha yang memperebutkan pembeli yang sama. Sebuah
-#: kantor notaris bukan pesaing warung; ia justru pemasok pembelinya. Karena itu
-#: `office=*` hanya mengisi D08 kepadatan_kantor, kecuali dua nilai yang memang
-#: melayani pelanggan langsung dan sudah terdaftar di K1 di atas.
 
 
 def kelas_dari_tag(tag: dict[str, str]) -> tuple[str, str] | None:
-    """Tentukan kelas induk satu POI OSM. None kalau ia bukan usaha.
-
-    Mengembalikan (kelas_induk, kategori_asli). `kategori_asli` WAJIB disimpan
-    ke `business_pois.kategori_asli` - tanpa itu tidak ada cara memeriksa ulang
-    apakah sebuah POI dikelompokkan dengan benar, dan seluruh indeks kompetisi
-    jadi angka yang harus dipercaya begitu saja.
-    """
+    """Tentukan kelas induk satu POI OSM. None kalau ia bukan usaha."""
     for kunci in URUTAN_TAG_OSM:
         nilai = tag.get(kunci)
         if not nilai:
@@ -235,34 +184,10 @@ def kelas_dari_tag(tag: dict[str, str]) -> tuple[str, str] | None:
     return None
 
 
-#: Penanda waralaba (C05). OSM memakai `brand` atau `brand:wikidata` untuk merek
-#: yang punya identitas nasional. Ini proksi yang jujur arahnya tetapi tidak
-#: lengkap: warung yang sebenarnya bagian dari jaringan lokal jarang diberi tag
-#: `brand`, jadi pangsa waralaba dari OSM adalah BATAS BAWAH.
 def is_waralaba(tag: dict[str, str]) -> bool:
     return bool(tag.get("brand") or tag.get("brand:wikidata") or tag.get("operator:wikidata"))
 
 
-# --- Pemetaan nama kolom CSV misi MAPID ------------------------------------
-# Status: DIVERIFIKASI 25 Agustus 2026 terhadap dataset sampel resmi MAPID
-# (mapid.co.id/SampleMenuGo, /SampleStrukGo, /SamplePropertiGo,
-# /SampleActivityMAPIDAPPS). Berkasnya ada di data/01_mentah/, tidak di-commit.
-#
-# Peringatan yang ternyata benar. Nama kolom asli MEMANG berbeda dari PDF
-# ketentuan, dan bedanya bukan sepele:
-#
-#   Properti Go  nama kolomnya TERPOTONG 10 karakter - batas nama field DBF,
-#                karena CSV-nya diekspor berdampingan dengan shapefile.
-#                "Kategori Properti" jadi "Kategori P", "Foto Spanduk/Papan
-#                Promosi" jadi "Foto Spand". Dan " Tanggal" BERSPASI DI DEPAN.
-#   Struk Go     20 kolom, bukan 8. Tujuh di antaranya bertanda "(Lama)" -
-#                sisa skema lama, dan pada sampel SELURUHNYA kosong.
-#   Menu Go      "Nama Tempat Makan", tanpa garis miring seperti di PDF.
-#
-# Kedua bentuk didaftarkan sekaligus - yang terpotong DAN yang utuh. Ekspor
-# shapefile memberi yang terpotong; API MAPID kemungkinan besar memberi yang
-# utuh, dan kita belum bisa memastikannya sampai kuncinya ada. Memetakan
-# keduanya ke satu nama internal membuat kedua jalur bekerja tanpa cabang.
 
 KOLOM_MENU_GO: dict[str, str] = {
     "Nama Tempat Makan": "nama",
@@ -324,16 +249,6 @@ KOLOM_ACTIVITY: dict[str, str] = {
 }
 
 
-# --- Normalisasi nilai kategorikal misi ------------------------------------
-# Nilai di lapangan juga tidak sama dengan yang tertulis di PDF, dan yang ini
-# lebih berbahaya daripada nama kolom: nama kolom yang salah menghasilkan
-# KeyError yang langsung terlihat, sedangkan nilai yang tidak dikenali diam-diam
-# jatuh ke "tidak cocok" dan barisnya hilang dari agregasi tanpa satu pun galat.
-#
-# Ketiganya diverifikasi dari sampel yang sama:
-#   - Properti Go menulis "Disewa"/"Dijual", bukan "Sewa"/"Jual"
-#   - Menu Go menjawab dengan kalimat panjang berkurung, bukan satu kata
-#   - satu nilai mobilitas berspasi di depan
 
 NILAI_JENIS_PROPERTI = {"disewa": "sewa", "sewa": "sewa", "dijual": "jual", "jual": "jual"}
 
@@ -346,13 +261,7 @@ NILAI_MOBILITAS = {"ya": True, "tidak": False}
 
 
 def kunci_nilai(teks: str | None) -> str:
-    """Ambil kata pertama sebuah jawaban dropdown, dalam huruf kecil.
-
-    "Ramai (Terdapat antrean lebih dari 3 orang / kursi atau meja mayoritas
-    penuh terisi)" -> "ramai". " Tidak (Menetap/Mangkal di satu titik)" ->
-    "tidak". Bentuk panjangnya bisa saja diubah panitia kapan saja; kata
-    pertamanya jauh lebih stabil, dan itulah yang membawa artinya.
-    """
+    """Ambil kata pertama sebuah jawaban dropdown, dalam huruf kecil."""
     if not teks:
         return ""
     return teks.strip().split("(")[0].strip().split()[0].lower() if teks.strip() else ""
@@ -371,11 +280,6 @@ SNAP_GPS_M = 50  # tempel ke bangunan/jalan terdekat dalam radius ini
 OCR_CONFIDENCE_MIN = 0.7  # di bawah ini -> antrean verifikasi manusia, tidak dipakai langsung
 
 
-# --- Kamus Data Final: kode variabel -> nama kolom -------------------------
-# 43 variabel analisis. Kode (D01, B07, ...) adalah identitas kanonik yang dipakai
-# di dokumen, di tabel score_factors, dan di definisi bobot. Nama kolom adalah
-# implementasinya di hex_features. Pemetaan ini yang menghubungkan keduanya -
-# jangan pernah menulis salah satunya secara hardcode di skrip lain.
 
 KODE_KE_KOLOM = {
     # Dimensi Permintaan - 12
@@ -433,11 +337,6 @@ KOLOM_KE_KODE = {v: k for k, v in KODE_KE_KOLOM.items()}
 
 assert len(KODE_KE_KOLOM) == 43, f"Kamus Data harus 43 variabel, sekarang {len(KODE_KE_KOLOM)}"
 
-# B10 dan P07 sengaja TIDAK masuk bobot indeks mana pun. Keduanya variabel
-# tampilan untuk PriceLens. Memasukkan P07 ke IBR menggantikan P05 memang lebih
-# benar secara metodologi (sewa absolut mencampur harga dengan luas), tetapi
-# mengubah bobot tanpa data lapangan akan membatalkan angka uji sensitivitas yang
-# sudah dilaporkan. Ditinjau ulang setelah data survei masuk - lihat docs/skoring.md.
 VARIABEL_TAMPILAN = {"B10", "P07"}
 
 # Penanda kualitas - BUKAN variabel model, tidak masuk perhitungan skor
@@ -463,21 +362,6 @@ def tingkat_keyakinan(n_titik_misi: int) -> str:
 # Bobot ini yang divariasikan +-0,10 saat uji sensitivitas. Target: korelasi
 # peringkat Spearman terhadap baseline tetap di atas 0,85.
 
-# --- Bobot moda rute untuk D05 `skor_simpul` -------------------------------
-# D05 ditandai TURUNAN di docs/data.md - ia memang dihitung, bukan diukur. Yang
-# dihitung: berapa banyak RUTE berbeda yang berhenti di heksagon itu, masing
-# masing ditimbang menurut berapa banyak orang yang bisa dibawanya.
-#
-# Angkanya kasar dan memang tidak bisa presisi, tetapi urutannya bisa
-# dipertanggungjawabkan dan itu yang menentukan peringkat: satu rangkaian KRL
-# 12 gerbang membawa ~2.000 orang sekali jalan, satu bus gandeng Transjakarta
-# ~150, satu angkot ~12. Rasio 10 : 3 : 1 mengikuti akar dari perbandingan itu,
-# bukan perbandingannya mentah-mentah - memakai 160 : 12 : 1 akan membuat satu
-# stasiun menenggelamkan seluruh jaringan bus di sekitarnya, dan yang kita ukur
-# "seberapa penting simpul ini", bukan "berapa kursi yang lewat".
-#
-# `norm()` di s6 min-max, jadi yang berpengaruh pada skor hanya PERBANDINGAN
-# antar-bobot, bukan besarnya.
 BOBOT_RUTE = {
     "train": 10.0,
     "subway": 10.0,
@@ -485,12 +369,6 @@ BOBOT_RUTE = {
     "monorail": 8.0,
     "tram": 5.0,
     "brt": 3.0,          # Transjakarta koridor - lajur khusus, bukan bus biasa
-    # Kereta ANTARKOTA. Terukur 27 Agu 2026: OSM memuat 46 lin `network=KAI`
-    # (Argo Bromo Anggrek, Bima, Brantas...) melawan 4 lin `KAI Commuter`
-    # (A, B, C, R). Ditimbang sama, 46 kereta yang lewat satu-dua kali sehari
-    # menenggelamkan 4 lin yang mengangkut ratusan ribu orang setiap hari -
-    # dan Stasiun Bekasi jadi berskor tiga kali Dukuh Atas. Yang diukur D05
-    # keramaian harian, bukan panjang papan jadwal.
     "antarkota": 1.5,
     "bus": 1.0,
     "trolleybus": 1.0,
@@ -499,17 +377,8 @@ BOBOT_RUTE = {
     "ferry": 1.0,
 }
 
-#: Penanda jaringan KOMUTER di dalam `route=train`. Yang TIDAK memuatnya
-#: diperlakukan antarkota. Dicocokkan menurut kata, bukan daftar nama jaringan
-#: yang ditulis tangan: "KAI Commuter" hari ini, dan penamaan operator di OSM
-#: berubah lebih sering daripada layanannya.
 JARINGAN_KOMUTER = ("commuter", "krl")
 
-#: Jaringan yang diperlakukan BRT walau OSM menandainya `route=bus`.
-#: Transjakarta punya lajur terpisah dan kapasitas jauh di atas bus kota;
-#: menyamakannya dengan angkot membuat koridor busway tidak terlihat sama
-#: sekali di D05, padahal di Tanah Abang dan Dukuh Atas justru itu tulang
-#: punggungnya.
 JARINGAN_BRT = ("transjakarta", "trans jakarta", "brt")
 
 
@@ -524,21 +393,6 @@ BOBOT_HIDDEN_GEM = {"residual": 0.40, "iptt": 0.30, "peluang_x_prestise": 0.30}
 SENSITIVITAS_GESER = 0.10
 SENSITIVITAS_RHO_MIN = 0.85
 
-# --- Bobot skor BLOK (docs/skoring.md bagian "Blok di dalam heksagon") -------
-# Skor blok BUKAN pengganti Opportunity Score heksagon. Heksagon menjawab
-# "kawasan kecil mana"; blok menjawab "sisi mana di dalamnya". Karena itu
-# indikatornya hanya yang BERBEDA antarblok dalam jarak ratusan meter - bukan
-# penduduk WorldPop (piksel 92 m, 1,8 piksel per blok) dan bukan data misi.
-#
-# Urutan bobotnya mengikuti apa yang paling menentukan nasib toko di dekat
-# stasiun, dari yang paling kuat buktinya:
-#   akses ke stasiun   0,30  menit jalan kaki SUNGGUHAN (ORS), bukan garis lurus
-#   tepi jalan utama   0,20  toko di jalan utama dilihat arus yang lewat
-#   penarik keramaian  0,15  sekolah, pasar, RS, masjid, kantor dalam 250 m
-#   keramaian usaha    0,15  deret usaha dalam 150 m menandakan orang berbelanja
-#   halte pengumpan    0,10  angkot/bus yang menurunkan orang di dekatnya
-#   blok terbangun     0,10  lahan kosong/taman tidak punya muka toko
-# Sufiks _inv: makin kecil makin baik.
 BOBOT_BLOK = {
     "menit_jalan_inv": 0.30,
     "jarak_jalan_utama_m_inv": 0.20,

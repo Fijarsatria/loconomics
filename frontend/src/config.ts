@@ -1,60 +1,5 @@
-/**
- * Sumber kebenaran tunggal untuk frontend.
- *
- * Padanan `pipeline/config.py` di sisi peramban. Jangan menulis ulang nilai-nilai
- * di bawah langsung di komponen — kalau ada di dua tempat, cepat atau lambat
- * keduanya berbeda.
- */
 
-// --- Basemap MAPID ---------------------------------------------------------
-// Ketentuan lomba A.3: basemap WAJIB MAPID Maps. Jangan menambah sumber tile lain.
-//
-// TIDAK ADA KUNCI DI BERKAS INI, dan itu bukan kehati-hatian berlebihan.
-// Diukur 29 Agu 2026: kunci Map Services yang dulu duduk di sini SAMA PERSIS
-// dengan kunci di backend/.env, dan kunci itu menjawab 200 di
-// server.mapid.io/web/competition/{menugo,struckgo,propertigo,activities} —
-// 100 baris survei MENTAH per halaman. Vite mem-bundel setiap variabel VITE_
-// ke berkas publik, jadi kunci itu praktis diterbitkan bersama aplikasinya.
-//
-// Yang membuat pencabutannya murah: dari seluruh rantai basemap MAPID, HANYA
-// style.json yang menuntut kunci (401 tanpa kunci). Ubin, font, dan TileJSON
-// dilayani 200 tanpa kunci — ubin z14 Jakarta 397 KB, byte-nya identik. Jadi
-// backend memproksikan satu berkas JSON per gaya dan membuang kuncinya dari
-// badan respons; ubinnya tetap diambil peramban langsung dari MAPID.
-//
-// Lihat backend/app/api/meta.py::gaya_basemap.
 
-/**
- * Endpoint raster/XYZ MAPID yang tertulis di dokumentasi mengembalikan 404 di
- * setiap level zoom (sudah diverifikasi sampai 0/0/0). Jalur vector style.json
- * yang berfungsi — itu sebabnya proyek ini memakai MapLibre GL, bukan Leaflet.
- */
-/**
- * Gaya basemap resmi MAPID yang DITAWARKAN di pemilih. MAPID menerbitkan
- * lima (Light, Street 3D, Street 2D, Dark, Satellite); yang kedua dan ketiga
- * identik kecuali satu layer, jadi hanya satu yang ditawarkan - lihat
- * `GAYA_PINDAH` di bawah.
- *
- * SATELIT KEMBALI 12 September 2026, keputusan pemilik repo, dan cara
- * memasangnya yang membedakannya dari pencabutan 29 Agustus.
- *
- * Yang dulu jadi masalah: berkas gaya `satellite` membawa `access_token` Mapbox
- * dan kunci MapTiler milik akun MAPID, dan menyimpannya sebagai berkas statis
- * di repo berarti ikut menerbitkan kredensial itu dari deployment kita.
- * Diperiksa ulang 12 Sep 2026: MAPID TIDAK merender raster satelitnya sendiri -
- * `/styles/satellite/512/{z}/{x}/{y}.png` dan `/styles/512/satellite.json`
- * menjawab 404 "Cannot GET" untuk kunci mana pun, jadi citranya memang hanya
- * bisa tampil lewat GL Style resminya, yang menarik ubin dari penyedia hulu
- * MAPID (MapTiler dan Mapbox).
- *
- * Maka satelit dimuat LANGSUNG dari basemap.mapid.io saat dipilih (`langsung`),
- * tidak pernah disimpan ke repo: kredensial di dalamnya tetap milik dan
- * diterbitkan MAPID, bukan salinan di git kita. Basemap UTAMA tetap vektor
- * MAPID (ketentuan B.2: "MAPID MAPS sebagai basemap utama").
- *
- * `gedung3d`: gaya yang SUDAH membawa layer gedung 3D-nya sendiri. Sisanya
- * diberi layer ekstrusi dari ubin vektor MAPID yang sama saat mode 3D menyala.
- */
 export interface GayaBasemap {
   id: string
   label: string
@@ -70,25 +15,6 @@ export const GAYA_BASEMAP: Record<string, GayaBasemap> = {
   satelit: { id: 'satellite', label: 'Satelit', labelEn: 'Satellite', langsung: true },
 }
 
-/**
- * `street-2d-building` DIKELUARKAN dari pemilih 13 Sep 2026.
- *
- * Kedua berkas gayanya identik kecuali SATU layer: `basic` membawa
- * `building-3d`, `street-2d-building` tidak. Diberi label "Jalan 3D" dan
- * "Jalan 2D", keduanya terbaca sebagai sakelar 2D/3D - padahal sakelar 2D/3D
- * yang sebenarnya adalah tombol 3D di tumpukan zoom, yang bekerja di SETIAP
- * gaya. Jadi ada dua sumbu yang mengaku mengerjakan hal yang sama, dan yang
- * satu tidak berfungsi. Dilaporkan pemilik repo: "bedanya peta jalan 3d dan 2d
- * itu apa?".
- *
- * Dengan 3D menyala keduanya tampil sama persis, dan dengan 3D mati `basic`
- * menyembunyikan layer 3D-nya sehingga tampil sama persis juga. Pilihan yang
- * tidak pernah mengubah apa pun bukan pilihan.
- *
- * Berkasnya TETAP di `public/basemap/` dan tetap didukung `urlGaya` - yang
- * dicabut cuma tawarannya. Pilihan tersimpan yang menunjuk ke sana dipetakan
- * ke `dasar` oleh `gayaSah()` di bawah.
- */
 const GAYA_PINDAH: Record<string, string> = { jalan: 'dasar' }
 
 /** Nama gaya yang sah sekarang; yang sudah dipensiunkan dipetakan, bukan dibuang. */
@@ -99,15 +25,6 @@ export function gayaSah(nama: string | undefined | null): string {
 
 export type NamaGaya = keyof typeof GAYA_BASEMAP
 
-/**
- * Berkas STATIS di `public/basemap/` untuk keempat gaya vektor; URL MAPID
- * langsung untuk satelit.
- *
- * Statis, karena kalau peramban memintanya ke backend saat peta dibuka, basemap
- * ikut mati setiap kali backend sedang tidur - persis puluhan detik pertama saat
- * juri membuka tautan. Kuncinya tidak pernah ada di berkas mana pun: yang
- * membubuhkannya `transformRequest` lewat `bubuhiKunciBasemap` di bawah.
- */
 export const urlGaya = (nama: NamaGaya = 'terang') => {
   const g = GAYA_BASEMAP[nama] ?? GAYA_BASEMAP.terang
   return g.langsung
@@ -115,15 +32,6 @@ export const urlGaya = (nama: NamaGaya = 'terang') => {
     : `${import.meta.env.BASE_URL}basemap/${g.id}.json`
 }
 
-/**
- * Sumber vektor MAPID untuk gedung 3D di gaya yang tidak membawanya (satelit).
- *
- * Bentuknya SALINAN persis sumber `mapidtiles` di berkas gaya statis - TileJSON
- * yang sudah disisipkan, bukan `url` ke mapidtiles.json. Yang kedua 2,7 MB dan
- * terbukti gagal sesekali sebagai permintaan lintas-asal (lihat
- * scripts/gaya-basemap.mjs), sementara yang pertama tidak butuh permintaan
- * tambahan sama sekali.
- */
 export const SUMBER_UBIN_MAPID = {
   type: 'vector' as const,
   tiles: ['https://basemap.mapid.io/data/mapidtiles/{z}/{x}/{y}.pbf'],
@@ -133,11 +41,6 @@ export const SUMBER_UBIN_MAPID = {
     '<a href="https://mapid.co.id/" target="_blank">&copy; MAPID Maps</a> <a href="https://www.openmaptiles.org/" target="_blank">&copy; OpenMapTiles</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
 }
 
-/**
- * Atribusi citra satelit. Gaya satelit MAPID tidak membawa satu pun teks
- * atribusi di sumbernya, jadi tanpa ini peta citra tampil tanpa menyebut siapa
- * pemilik gambarnya - dan A.1 menuntut setiap sumber disebut.
- */
 export const ATRIBUSI_SATELIT =
   '<a href="https://mapid.co.id/" target="_blank">&copy; MAPID Maps</a> · Citra/Imagery <a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.mapbox.com/about/maps/" target="_blank">&copy; Mapbox</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>'
 
@@ -145,47 +48,9 @@ export const ATRIBUSI_SATELIT =
  *  Metropolis (angka heksagon). Diuji 12 Sep 2026: keduanya 200. */
 export const GLYPH_MAPID = 'https://basemap.mapid.io/fonts/{fontstack}/{range}.pbf'
 
-/**
- * Kunci basemap MAPID, dan kenapa ia sekarang ADA di peramban lagi.
- *
- * Sejak 6 September 2026 seluruh host `basemap.mapid.io` dijawab 401 oleh
- * nginx - BUKAN cuma ubinnya, melainkan `/`, `/health`, dan `/styles/` juga.
- * Yang semula terbaca sebagai pemadaman ternyata tembok otentikasi: dengan
- * kunci, `/styles/*` menjawab 200 dan satu ubin z14 di atas Manggarai pulang
- * 397 KB. Diuji 11 Sep 2026.
- *
- * Sebelum itu ubin MAPID terbuka tanpa kunci, jadi kuncinya bisa dicabut
- * seluruhnya dari peramban dan gayanya dilayani sebagai berkas statis. Itu
- * tidak mungkin lagi: peramban HARUS mengirim kunci di tiap permintaan ubin,
- * dan satu-satunya cara menghindarinya adalah memproksikan setiap ubin lewat
- * backend - yang berdiri di Azure F1 dan tidak akan sanggup.
- *
- * YANG TIDAK BERUBAH, dan ini bagian penting aturan 5: MAPID **Data** API key
- * dan kunci LLM tetap backend-only. Yang pindah ke peramban cuma kunci
- * basemap - kunci baca-saja untuk ubin peta, kelas kredensial yang memang
- * dirancang hidup di klien dan dijaga oleh pembatasan domain di sisi MAPID,
- * bukan oleh kerahasiaan. Terbukti: ia menuntut header `Referer` yang cocok.
- *
- * Nilainya TIDAK PERNAH masuk git. Berkas gaya di `public/basemap/` tetap
- * bersih dari kunci; yang membubuhkannya `transformRequest` MapLibre saat
- * permintaan berangkat, dari variabel yang diisi GitHub Actions dari sebuah
- * secret. Kalau variabelnya kosong, petanya berperilaku persis seperti
- * sebelumnya - dan pita "Ubin MAPID menolak" yang sudah ada yang menjelaskannya.
- */
 let KUNCI_BASEMAP: string = import.meta.env.VITE_MAPID_BASEMAP_KEY ?? ''
 let janjiKunciBasemap: Promise<void> | null = null
 
-/**
- * Pastikan kunci basemap tersedia sebelum ubin pertama diminta.
- *
- * Terbitan yang dibangun DENGAN kunci (GitHub Actions) selesai seketika. Yang
- * dibangun TANPA kunci (Cloudflare Pages - pengaturannya di luar repo) meminta
- * kuncinya ke `/meta/kunci-basemap`. Tanpa ini loconomics.pages.dev
- * menampilkan peta hitam setiap kali MAPID menegakkan kuncinya (13 Sep 2026).
- *
- * Tidak pernah melempar: backend yang tidak menjawab dalam 6 detik berarti
- * petanya berjalan tanpa kunci, persis seperti sebelum fungsi ini ada.
- */
 export function siapkanKunciBasemap(): Promise<void> {
   if (KUNCI_BASEMAP) return Promise.resolve()
   janjiKunciBasemap ??= mintaKunciBasemap()
@@ -201,15 +66,6 @@ function mintaKunciBasemap(): Promise<void> {
     .catch(() => {})
 }
 
-/**
- * Terus meminta kunci yang gagal diambil `siapkanKunciBasemap`, sampai 90 detik.
- *
- * Backend Azure F1 bangun 38-55 detik (log kontainer, 14 Sep 2026), jauh di
- * atas 6 detik percobaan pertama. Tanpa ini loconomics.pages.dev yang dibuka
- * saat backend tidur menampilkan peta hitam sepanjang kunjungan, padahal
- * kuncinya tersedia semenit kemudian. `true` berarti kunci baru tiba dan
- * gayanya perlu dipasang ulang - ubin yang sudah ditolak tidak diminta lagi.
- */
 export async function kunciBasemapSusulan(): Promise<boolean> {
   const tenggat = performance.now() + 90_000
   while (!KUNCI_BASEMAP && performance.now() < tenggat) {
@@ -225,84 +81,25 @@ export const adaKunciBasemap = () => !!KUNCI_BASEMAP
  *  pada permintaan ke mana pun selain pemiliknya. */
 const HOST_BASEMAP = 'basemap.mapid.io'
 
-/**
- * Bubuhkan kunci basemap ke sebuah URL, kalau memang perlu.
- *
- * Dipakai lewat `transformRequest` MapLibre - satu kait untuk gaya, TileJSON,
- * ubin, font, dan sprite sekaligus. Menuliskannya ke dalam berkas gaya akan
- * menaruh kuncinya di git; membubuhkannya di sini tidak.
- */
 export function bubuhiKunciBasemap(url: string): string {
   if (!KUNCI_BASEMAP || !url.includes(HOST_BASEMAP)) return url
   if (url.includes('key=')) return url
   return `${url}${url.includes('?') ? '&' : '?'}key=${KUNCI_BASEMAP}`
 }
 
-// --- Kuadran ---------------------------------------------------------------
-// Satu-satunya warna jenuh di seluruh antarmuka. Lolos enam pemeriksaan
-// validator palet: pita terang, lantai chroma, separasi CVD (deutan 19,0 ·
-// tritan 12,9), lantai penglihatan normal 25,2, kontras >= 3:1.
-//
-// HINDARI sengaja tanpa warna. Abu-abu selalu jatuh di bawah lantai chroma
-// sebagai warna kategorikal — dan itu justru benar maknanya: tidak ada apa-apa
-// di sini, jadi ia digambar tanpa isian.
-//
-// `glif` ada karena warna saja tidak pernah cukup. Setiap kuadran punya bentuk
-// sendiri, jadi peta tetap terbaca dicetak hitam-putih maupun oleh pembaca yang
-// tidak membedakan warna.
 
 export interface Kuadran {
   kunci: string
   nama: string
-  /**
-   * Nama zona dalam bahasa Inggris.
-   *
-   * Ada sejak sakelar bahasa dipasang (10 Sep 2026). Empat nama ini muncul di
-   * legenda peta, badge panel, Kompas Kuadran, dan halaman gerbang - dan
-   * membiarkannya berbahasa Indonesia di tampilan Inggris membuat satu-satunya
-   * kosakata yang benar-benar milik produk ini jadi satu-satunya yang tidak
-   * ikut berganti.
-   */
   namaEn: string
-  /**
-   * Satu frasa polos, untuk dibaca orang yang belum pernah melihat layar ini.
-   *
-   * "Pemenang Jelas" tidak memberi tahu apa pun tentang APA yang menang, dan
-   * "Hidden Gem" cuma berarti sesuatu kalau tesis produknya sudah dijelaskan
-   * lebih dulu. Nama kuadran tetap dipakai - ia identitas produk, dan kuncinya
-   * tersimpan di basis data - tapi ia tidak pernah lagi berdiri sendirian.
-   */
   ringkas: string
   /** `ringkas` dan `arti` dalam bahasa Inggris. Keduanya kalimat, bukan nama -
    *  jadi keduanya berpasangan; `nama` tidak (lihat `namaEn`). */
   ringkasEn: string
   artiEn: string
-  /**
-   * Warna untuk DOM. Sengaja `var(...)`, bukan hex.
-   *
-   * Hex harfiah membuat warna kuadran tidak bisa mengikuti tema: hijau #15803D
-   * yang pas di atas kaca terang berubah jadi nyaris hitam di atas kaca gelap,
-   * dan tidak ada satu pun cara memperbaikinya dari CSS karena nilainya tertulis
-   * di atribut style inline. Lewat variabel, `.peta-gelap` cukup mendefinisikan
-   * ulang empat baris.
-   */
   warna: string
-  /**
-   * Warna untuk MapLibre. WAJIB hex harfiah - kanvas WebGL tidak mengenal
-   * variabel CSS, dan `var(...)` di sana tidak menghasilkan galat, cuma
-   * heksagon yang diam-diam tidak terwarnai.
-   */
   warnaPeta: string
   lembut: string
-  /**
-   * Ujung PUCAT skala, untuk MapLibre. Alasannya sama persis dengan
-   * `warnaPeta`, dan biayanya sudah dibayar sekali: layer Hidden Gem memakai
-   * `lembut` di dalam ekspresi `interpolate` selama berminggu-minggu, dan
-   * `var(--q-gem-lembut)` di kanvas WebGL tidak melempar galat apa pun - ia
-   * membuat SELURUH layer isian gagal dipasang. Yang terlihat cuma garis
-   * heksagon di atas basemap tanpa satu pun warna, di peta maupun di kartu
-   * gerbang. Ditemukan 10 Sep 2026 dengan membaca kembali piksel kartunya.
-   */
   lembutPeta: string
   glif: string
   arti: string
@@ -310,29 +107,6 @@ export interface Kuadran {
   sel: [0 | 1, 0 | 1]
 }
 
-/**
- * Palet kuadran, dirombak 22 Agustus 2026 atas permintaan pemilik repo:
- * hijau = aman, biru = temuan, oranye = hati-hati, merah = jangan.
- *
- * Versi sebelumnya memakai teal/ungu/oranye dan MEMBIARKAN HINDARI tanpa warna,
- * dengan alasan abu-abu tidak lolos lantai chroma sebagai warna kategorikal.
- * Alasan itu benar tapi menyelesaikan masalah yang salah: yang dibutuhkan
- * bukan abu-abu, melainkan merah - dan "jangan" memang punya warna yang sudah
- * dipahami semua orang tanpa dijelaskan.
- *
- * Hue-nya tidak dipilih dari selera. Empat kandidat diuji dengan simulasi
- * dikromat Vienot 1999, diukur sebagai jarak minimum antar pasangan di CIELAB:
- *
- *                        normal  deutan  protan  tritan   minimum
- *   palet lama             32,7    17,2    11,4    23,9      11,4
- *   palet ini              51,1    27,1    14,9    18,9      14,9
- *
- * Jadi ia BUKAN penurunan mutu demi selera: lantai terburuknya justru naik dari
- * 11,4 ke 14,9. Yang dikorbankan cuma tritan (biru vs hijau, 23,9 -> 18,9), dan
- * itu ditebus oleh jarak terang-gelap yang sengaja dibuat lebar antara biru
- * #4C93F7 dan hijau #15803D - plus glif per kuadran, yang sejak awal memang ada
- * karena warna saja tidak pernah cukup.
- */
 export const KUADRAN: Record<string, Kuadran> = {
   HIDDEN_GEM: {
     kunci: 'HIDDEN_GEM',
@@ -353,15 +127,7 @@ export const KUADRAN: Record<string, Kuadran> = {
   },
   PEMENANG_JELAS: {
     kunci: 'PEMENANG_JELAS',
-    // Dipendekkan jadi "Aman" (3 Sep 2026). "Aman tapi Mahal" memuat DUA
-    // pernyataan dalam satu nama, dan yang kedua sudah dikatakan `ringkas` dan
-    // `arti` di bawah - jadi harganya cuma nama yang panjang dan sulit dibaca
-    // di lencana peta. Kuncinya tetap PEMENANG_JELAS.
     nama: 'Aman',
-    // "Safe", bukan "Safe Bet" (11 Sep 2026). Pemilik repo membacanya sebagai
-    // terjemahan yang kelebihan satu kata - "aku kira cuma Safe" - dan ia benar:
-    // "Aman" satu kata, dan nama zona di lencana peta memang harus sependek itu.
-    // Pasangannya di backend `aturan.LABEL_KUADRAN_EN` ikut diganti.
     namaEn: 'Safe',
     ringkas: 'bagus, dan Anda membayar gengsinya',
     ringkasEn: 'good, and you pay for the prestige',
@@ -416,37 +182,12 @@ export const URUTAN_KUADRAN = [
 /** Warna isian peta. HINDARI mengembalikan warna garis, bukan isian. */
 export const ABU_HINDARI = '#bcc5bf'
 
-/**
- * Roda warna: 17 langkah, urut mengelilingi roda, TIDAK acak.
- *
- * Urutan inilah efeknya. Penghitungnya global dan maju satu langkah tiap huruf
- * yang tersentuh — bukan satu warna tetap per huruf — sehingga satu sapuan
- * kursor meninggalkan gradasi yang menyambung. Warna acak menghasilkan
- * kebisingan; urutan roda menghasilkan sesuatu yang terlihat disengaja.
- *
- * Ini PENGECUALIAN terhadap "warna jenuh hanya berarti kuadran" di index.css,
- * dan dicatat juga di sana. Ia aman justru karena tidak pernah menyentuh data:
- * yang diwarnai hanya identitas, hanya selama kursor ada di atasnya, dan tidak
- * satu pun angka atau heksagon ikut berubah.
- */
 export const RODA_WARNA = [
   '#8B5CF6', '#A855F7', '#D946EF', '#EC4899', '#F43F5E', '#EF4444',
   '#F97316', '#F59E0B', '#EAB308', '#84CC16', '#22C55E', '#10B981',
   '#14B8A6', '#06B6D4', '#0EA5E9', '#3B82F6', '#6366F1',
 ]
 
-/**
- * Identitas tim, untuk menu Tentang & Kontak di bilah atas.
- *
- * Ditaruh di sini, bukan ditulis di dalam komponen, karena ini DATA - dan data
- * yang belum ada harus terlihat belum ada. Yang kosong dirender sebagai
- * "belum diisi", persis aturan 4 repo ini: kosong tetap kosong, tidak
- * disamarkan jadi sesuatu yang terlihat lengkap.
- *
- * Empat baris terakhir sengaja dibiarkan kosong sampai pemilik repo mengisinya
- * dengan alamat yang benar-benar berlaku. Menebak alamat surel tim di halaman
- * yang akan dibaca juri jauh lebih buruk daripada mengakui belum ada.
- */
 export const IDENTITAS = {
   produk: 'Loconomics',
   judulResmi: 'Transit-oriented Retail Recommender',
@@ -461,31 +202,9 @@ export const IDENTITAS = {
   repositori: '',
 }
 
-/**
- * Tim di balik Loconomics, untuk halaman gerbang.
- *
- * Kelimanya diberikan langsung oleh pemilik repo pada 23 Agustus 2026. Empat
- * ditulis dengan nama panggilan sebagaimana diberikan; hanya ketua tim yang
- * memakai nama lengkap, karena hanya nama itu yang tercatat di PRD. Nama
- * lengkap yang lain TIDAK dikarang untuk menyeragamkan tampilan - halaman ini
- * dibaca juri, dan nama karangan di sana jauh lebih mahal daripada dua gaya
- * penulisan yang berbeda dalam satu barisan kartu.
- *
- * `kerja` bukan basa-basi jabatan. Tiap baris menunjuk ke sesuatu yang benar
- * ada di repositori ini, jadi kartunya bisa diperiksa, bukan cuma dibaca.
- */
 export interface Pendiri {
   /** Nama panggilan. Tampil hanya selama `namaLengkap` belum diisi. */
   nama: string
-  /**
-   * Nama lengkap, program studi, dan angkatan - diminta pemilik repo untuk
-   * kartu tim (11 Sep 2026), karena prodi dan angkatan kelimanya berbeda.
-   *
-   * Diisi tangan dari data registrasi tim, BUKAN dibaca otomatis dari scan
-   * KTM: dokumen itu memuat NIM dan foto, dan yang boleh keluar ke halaman
-   * publik cuma ketiga kolom ini. Yang kosong tidak dikarang - kartunya
-   * memakai nama panggilan dan melewati baris prodi, persis aturan 4.
-   */
   namaLengkap?: string
   prodi?: string
   angkatan?: number
@@ -498,17 +217,6 @@ export interface Pendiri {
   kerjaEn?: string
   /** Ditandai di kartu. Hanya satu orang yang boleh membawanya. */
   ketua?: boolean
-  /**
-   * Warna identitas orangnya, [utama, pendamping] - cahaya yang bergerak di
-   * kepala kartunya di bagian tim gerbang. Diminta pemilik repo, 11 Sep 2026:
-   * "efek background ... tiap orang itu beda beda efek warnanya".
-   *
-   * Ini pengecualian KETIGA dari aturan "warna jenuh hanya berarti kuadran"
-   * (kepala index.css), dengan alasan yang sama dengan dua yang pertama: yang
-   * diwarnai identitas, bukan data. Karena itu kelimanya diambil dari luar
-   * rona kuadran sejauh mungkin - teal, ungu, fuchsia, langit, kuning emas -
-   * dan hidup di dasar jurang, bagian yang tidak memuat satu angka pun.
-   */
   rona: readonly [string, string]
 }
 
@@ -517,12 +225,12 @@ export const PENDIRI: Pendiri[] = [
     nama: 'Ajis',
     peran: 'Data Analyst',
     inisial: 'AG',
-    namaLengkap: 'Aziz Abdul Ghofur',
+    namaLengkap: 'Azziz Abdul Ghofur',
     prodi: 'Informatika',
     angkatan: 2023,
     rona: ['#2de8c0', '#22d3ee'],
-    kerja: 'Mengubah hasil misi survei MAPID jadi Kamus Data 43 variabel per heksagon — termasuk membiarkan yang kosong tetap kosong.',
-    kerjaEn: 'Turns MAPID survey missions into a 43-variable data dictionary per hexagon — including leaving the blanks blank.',
+    kerja: 'Inventarisasi dan pembersihan data misi MAPID, feature engineering, analisis spasial, sampai scoring 43 variabel per heksagon — termasuk membiarkan yang kosong tetap kosong.',
+    kerjaEn: 'Inventories and cleans the MAPID mission data, engineers the features, runs the spatial analysis, and scores all 43 variables per hexagon — including leaving the blanks blank.',
   },
   {
     nama: 'Ukas',
@@ -532,8 +240,8 @@ export const PENDIRI: Pendiri[] = [
     prodi: 'Teknik Komputer',
     angkatan: 2024,
     rona: ['#8b5cf6', '#6366f1'],
-    kerja: 'Loconomics AI: dua belas alat mode strict di dalam satu loop agentik. Modelnya menjawab, tidak pernah menghitung.',
-    kerjaEn: 'Loconomics AI: twelve strict-mode tools inside one agentic loop. The model answers; it never does the math.',
+    kerja: 'Membaca struk dan spanduk survei lewat OCR, melatih model untuk variabel yang kosong, lalu membangun Loconomics AI: dua belas alat mode ketat dalam satu loop agentik — beserta evaluasi dan validasinya.',
+    kerjaEn: 'Reads survey receipts and banners with OCR, trains the model that fills missing variables, then builds Loconomics AI: twelve strict-mode tools in one agentic loop — evaluation and validation included.',
   },
   {
     nama: 'Wily',
@@ -543,8 +251,8 @@ export const PENDIRI: Pendiri[] = [
     prodi: 'Teknologi Informasi',
     angkatan: 2024,
     rona: ['#e879f9', '#f472b6'],
-    kerja: 'Sistem visual dan Kompas Kuadran — empat kuadran yang bisa dipahami tanpa seorang pun menjelaskannya lebih dulu.',
-    kerjaEn: 'The visual system and the Quadrant Compass — four quadrants anyone can read without a walkthrough.',
+    kerja: 'Pengalaman pengguna dan responsivitasnya — dari wireframe dan mockup sampai sistem visual: peta, panel, dan Kompas Kuadran yang terbaca tanpa penjelasan.',
+    kerjaEn: 'User experience and responsiveness — from wireframes and mockups to the visual system: the map, the panels, and a Quadrant Compass anyone can read without a walkthrough.',
   },
   {
     nama: 'Fijar',
@@ -554,8 +262,8 @@ export const PENDIRI: Pendiri[] = [
     prodi: 'Teknologi Informasi',
     angkatan: 2024,
     rona: ['#38bdf8', '#3b82f6'],
-    kerja: 'Peta MapLibre di atas basemap MAPID, API FastAPI, dan basis data PostGIS di Supabase.',
-    kerjaEn: 'The MapLibre map on a MAPID basemap, the FastAPI backend, and the PostGIS database on Supabase.',
+    kerja: 'Arsitektur frontend dan backend, peta MapLibre di atas basemap MAPID, API FastAPI, basis data PostGIS di Supabase, sampai penerbitannya ke domain publik.',
+    kerjaEn: 'The frontend and backend architecture, the MapLibre map on a MAPID basemap, the FastAPI API, the PostGIS database on Supabase, and the deployment to its public domain.',
   },
   {
     nama: IDENTITAS.ketua,
@@ -565,20 +273,12 @@ export const PENDIRI: Pendiri[] = [
     prodi: 'Informatika',
     angkatan: 2023,
     rona: ['#fbbf24', '#fb923c'],
-    kerja: 'Merumuskan dua pertanyaan yang dijawab produk ini: mana yang tersembunyi, dan mana yang menjebak.',
-    kerjaEn: 'Framed the two questions this product answers: which places are hidden, and which ones are traps.',
+    kerja: 'Menyusun alur pengguna, narasi masalah, dan kebutuhan bisnisnya — termasuk merumuskan dua pertanyaan yang dijawab produk ini: mana yang tersembunyi, dan mana yang menjebak.',
+    kerjaEn: 'Shapes the user flow, the problem narrative, and the business needs — including the two questions this product answers: which places are hidden, and which ones are traps.',
     ketua: true,
   },
 ]
 
-/**
- * Enam fitur produk, untuk halaman gerbang.
- *
- * Sama persis dengan enam fitur di PRD dan dengan yang benar-benar terpasang di
- * backend. Tidak ada fitur ketujuh yang "sedang dikerjakan" di daftar ini —
- * halaman perkenalan yang menjanjikan sesuatu yang belum ada adalah utang yang
- * ditagih tepat saat demo.
- */
 export interface FiturProduk {
   nama: string
   ringkas: string
@@ -660,24 +360,6 @@ export const LAYER: Record<string, Layer> = {
 
 export type NamaLayer = keyof typeof LAYER
 
-/**
- * Serapat apa nama tempat basemap ditampilkan.
- *
- * Ada karena diminta pemilik repo (10 Sep 2026): "Gedung Wanita", "PTUN",
- * "Tugu Proklamasi" dan ratusan lainnya menyalakan diri begitu peta di-zoom
- * masuk, dan pada layer tematik yang penuh warna itu berubah dari konteks jadi
- * kebisingan. Yang salah bukan penandanya - tanpa penanda, peta berhenti bisa
- * dicocokkan dengan dunia yang dikenal orang - melainkan tidak adanya kendali
- * atas seberapa banyak.
- *
- * Yang disimpan GESERAN zoom, bukan zoom mutlak. Gaya MAPID punya tiga tingkat
- * penanda dengan ambang berbeda-beda (`ZOOM_POI` di PetaInteraktif.tsx), dan
- * menuliskan angka mutlak di sini berarti membuang perbedaan yang memang
- * disengaja gayanya. Geseran menjaga urutannya: yang penting tetap muncul
- * lebih dulu daripada yang tidak.
- *
- * `null` berarti dimatikan sama sekali.
- */
 export const KERAPATAN_NAMA: Record<string, { geser: number | null }> = {
   mati: { geser: null },
   jarang: { geser: 2 },
@@ -687,18 +369,6 @@ export const KERAPATAN_NAMA: Record<string, { geser: number | null }> = {
 
 export type KerapatanNama = keyof typeof KERAPATAN_NAMA
 
-// --- Wilayah studi ---------------------------------------------------------
-// Enam kawasan pilot. Sama persis dengan KAWASAN_PILOT di pipeline/config.py dan
-// app/core/aturan.py — kesamaannya dijaga oleh backend/tests/test_aturan.py.
-// MapLibre memakai urutan [lon, lat], kebalikan dari Leaflet.
-//
-// KOORDINATNYA juga dijaga uji, dan itu perbaikan 29 Agu 2026. Sebelumnya daftar
-// ini salah satu dari TIGA salinan pusat kawasan (bersama pipeline/s1_ingest.py
-// dan pipeline/demo_seed.py). Ketiganya cocok satu sama lain, jadi tidak ada uji
-// yang bisa menangkap bahwa ketiganya sama-sama salah — dan memang ada yang
-// salah: pusat Harjamukti duduk 4.443 m dari stasiun LRT-nya. Sekarang Python
-// punya satu sumber (pipeline/config.py::PUSAT) dan berkas ini dibandingkan
-// dengannya.
 
 export interface Kawasan {
   nama: string
@@ -716,30 +386,11 @@ export const KAWASAN_PILOT: Kawasan[] = [
   { nama: 'Harjamukti', pusat: [106.89567, -6.37389], moda: 'LRT' },
 ]
 
-/**
- * Nilai kawasan yang berarti "jangan disaring".
- *
- * Backend sudah memperlakukan `kawasan` yang tidak dikirim sebagai seluruh
- * kawasan (`periksa_kawasan(None)` mengembalikan None, filternya tidak dipasang),
- * jadi yang perlu ditambahkan hanya cara MENYATAKANNYA dari antarmuka. Sengaja
- * string kosong, bukan kata "Semua": string kosong tidak akan pernah lolos
- * `periksa_kawasan()` kalau suatu saat ikut terkirim, jadi salah pakai berujung
- * galat yang terlihat - bukan diam-diam menyaring ke kawasan yang tidak ada.
- */
 export const SEMUA_KAWASAN = ''
 
 /** Label untuk keadaan tanpa saringan. */
 export const LABEL_SEMUA_KAWASAN = 'Semua kawasan'
 
-/**
- * Nilai saringan kawasan itu bentuk MESIN: string kosong berarti "semua", koma
- * berarti "beberapa". Keduanya benar sebagai parameter kueri dan keduanya salah
- * begitu ditempel ke layar.
- *
- * Tanpa kedua fungsi di bawah, kalimat `Belum ada heksagon di {kawasan}`
- * berhenti di "Belum ada heksagon di " — dan justru pada tampilan BAWAAN, yang
- * paling sering dilihat orang.
- */
 
 /** Untuk chip, judul kartu, dan kepala panel. */
 export const labelKawasan = (kawasan: string): string =>
@@ -747,22 +398,11 @@ export const labelKawasan = (kawasan: string): string =>
     ? LABEL_SEMUA_KAWASAN
     : kawasan.split(',').filter(Boolean).join(' + ')
 
-/**
- * Untuk DI DALAM kalimat. Bedanya bukan gaya: "di Semua kawasan" terbaca
- * sebagai salah ketik, sedangkan "di seluruh kawasan pilot" terbaca sebagai
- * kalimat. Tidak menyebut angka enam supaya tidak bisa berselisih dengan
- * KAWASAN_PILOT kalau daftarnya berubah.
- */
 export const frasaKawasan = (kawasan: string): string =>
   kawasan === SEMUA_KAWASAN
     ? 'seluruh kawasan pilot'
     : kawasan.split(',').filter(Boolean).join(' dan ')
 
-/**
- * Bingkai yang memuat keenam kawasan pilot sekaligus, [barat, selatan, timur,
- * utara]. Dipakai saat kawasan tidak disaring - terbang ke salah satu pusatnya
- * akan menyembunyikan lima yang lain.
- */
 export const BINGKAI_SEMUA: [number, number, number, number] = [106.79, -6.41, 107.02, -6.17]
 
 /** Bawaan sekarang SEMUA kawasan: layar pertama menunjukkan seluruh cakupan. */
@@ -770,24 +410,6 @@ export const KAWASAN_AWAL = KAWASAN_PILOT[0]
 export const ZOOM_AWAL = 14
 
 // --- Nama heksagon yang bisa dibaca orang ----------------------------------
-/**
- * `898c1079dd7ffff` → `Manggarai-40407`.
- *
- * Indeks H3 adalah alamat sel di grid global Uber H3 resolusi 9. Ia kunci utama
- * basis data dan tidak akan pernah diganti — tetapi lima belas karakter
- * heksadesimal tidak bisa dibaca, tidak bisa diingat, dan tidak bisa disebutkan
- * lewat telepon. Nama di bawah untuk mata; indeksnya tetap ada di panel detail
- * bagi yang memang membutuhkannya.
- *
- * TANPA KEADAAN — diturunkan dari indeksnya sendiri, bukan nomor urut. Nomor
- * urut menuntut seluruh himpunan diketahui, dan tiap heksagon baru akan
- * menggeser nomor tetangganya, termasuk yang sudah tercetak di Laporan
- * Kelayakan orang. Potongan `h3[7:11]` adalah bagian yang membedakan sel
- * bertetangga: diuji ke seluruh 708 heksagon, nol bentrok, bahkan tanpa nama
- * kawasannya.
- *
- * Kembarannya di backend: `core/aturan.py::kode_lokasi`.
- */
 export const kodeLokasi = (h3: string, kawasan: string): string =>
   `${kawasan}-${String(parseInt(h3.slice(7, 11), 16)).padStart(5, '0')}`
 
@@ -796,16 +418,6 @@ export const nomorLokasi = (h3: string): string =>
   String(parseInt(h3.slice(7, 11), 16)).padStart(5, '0')
 
 // --- Bahasa untuk orang awam -----------------------------------------------
-/**
- * Yang membaca layar ini calon pemilik warung, bukan analis data.
- *
- * Tiga aturan: nama benda bukan nama kolom; PENDEK (satu frasa, bukan satu
- * kalimat); satuannya ikut. Kode variabel tetap ada di kolom pertama karena ia
- * identitas kanonik — yang berubah hanya apa yang sampai ke mata.
- *
- * Cerminan `backend/app/core/aturan.py::ARTI_VARIABEL`, dijaga sama oleh
- * `backend/tests/test_aturan.py`.
- */
 export const ARTI_VARIABEL: Record<string, { kode: string; nama: string; satuan: string }> = {
   pop_100m: { kode: 'D01', nama: 'Penduduk di sekitar', satuan: 'jiwa' },
   pop_usia_produktif: { kode: 'D02', nama: 'Penduduk usia kerja', satuan: 'jiwa' },
@@ -852,25 +464,6 @@ export const ARTI_VARIABEL: Record<string, { kode: string; nama: string; satuan:
   skor_prestise_visual: { kode: 'M03', nama: 'Kesan mewah dari foto', satuan: 'dari 5' },
 }
 
-/**
- * Keempat puluh tiga nama itu dalam bahasa Inggris.
- *
- * DIPISAH dari `ARTI_VARIABEL`, bukan disisipkan ke dalamnya sebagai bidang
- * `namaEn`, dan sebabnya bukan gaya: `backend/tests/test_aturan.py`
- * mencocokkan tiap BARIS `ARTI_VARIABEL` huruf per huruf dengan kembarannya di
- * `app/core/aturan.py` - satu-satunya hal yang menjaga Laporan PDF dan layar
- * tidak menyebut variabel yang sama dengan dua nama berbeda. Menyisipkan bidang
- * baru ke dalam baris itu memaksa uji tersebut dilonggarkan, dan penjaga yang
- * dilonggarkan supaya satu perubahan lewat adalah penjaga yang berhenti
- * menjaga.
- *
- * Kelengkapannya dijaga uji yang sama, dari sisi sebaliknya: satu kolom yang
- * lupa diterjemahkan membuat uji itu gagal, bukan memunculkan nama kolom mentah
- * di layar berbahasa Inggris.
- *
- * `satuan` ikut karena sebagiannya memang kata: jiwa, orang, menit, tempat,
- * unit. Sisanya (%, x, Rp, m2) sudah sama di kedua bahasa.
- */
 export const ARTI_VARIABEL_EN: Record<string, { nama: string; satuan: string }> = {
   pop_100m: { nama: 'Residents nearby', satuan: 'people' },
   pop_usia_produktif: { nama: 'Working-age residents', satuan: 'people' },
@@ -945,13 +538,6 @@ export const ARTI_INDEKS_EN: Record<string, string> = {
   IBR: 'cost and risk',
 }
 
-/**
- * Pertanyaan yang sebenarnya dijawab tiap indeks, dalam kalimat orang.
- *
- * "Indeks Potensi Transit 0,79" tidak menjawab pertanyaan siapa pun. Yang
- * dicari orang yang sedang menimbang lokasi adalah "gampang nggak orang ke
- * sini", dan itu yang ditulis di layar.
- */
 export const TANYA_INDEKS: Record<string, string> = {
   IPT: 'Gampang tidak orang sampai ke sini?',
   IAE: 'Ada tidak uang berputar di sini?',
@@ -959,12 +545,6 @@ export const TANYA_INDEKS: Record<string, string> = {
   IBR: 'Mahal dan berisiko tidak?',
 }
 
-/**
- * Bukan terjemahan harfiah, melainkan pertanyaan yang SAMA dalam mulut orang
- * yang berbahasa Inggris. "Gampang tidak orang sampai ke sini?" dialihbahasakan
- * kata per kata berbunyi seperti soal ujian; yang ditulis di sini kalimat yang
- * benar-benar dipakai orang saat menimbang sebuah ruko.
- */
 export const TANYA_INDEKS_EN: Record<string, string> = {
   IPT: 'Can people get here easily?',
   IAE: 'Is money actually moving here?',
@@ -972,18 +552,6 @@ export const TANYA_INDEKS_EN: Record<string, string> = {
   IBR: 'Is it expensive and risky?',
 }
 
-/**
- * Angka 0-1 diterjemahkan jadi KATA, per indeks.
- *
- * Empat kosakata terpisah, bukan satu "bagus/sedang/buruk" untuk semuanya, dan
- * itu bukan hiasan: dua dari empat indeks BERBALIK arah. Persaingan yang tinggi
- * bukan "bagus", dan biaya yang tinggi bukan "buruk" begitu saja - ia mahal.
- * Memakai satu kosakata memaksa antarmuka menempelkan "tinggi = buruk" di
- * sebelahnya, dan itu persis kalimat yang membuat orang berhenti membaca.
- *
- * Ambangnya aturan TAMPILAN. Menggesernya mengubah kata yang muncul, tidak
- * pernah mengubah peringkat satu lokasi pun.
- */
 const AMBANG_KATA = [0.75, 0.55, 0.35] as const
 
 const KATA_INDEKS: Record<string, readonly [string, string, string, string]> = {
@@ -1001,13 +569,6 @@ const KATA_INDEKS_EN: Record<string, readonly [string, string, string, string]> 
   IBR: ['Expensive', 'Somewhat expensive', 'Moderate', 'Cheap'],
 }
 
-/**
- * Apakah nilai TINGGI pada indeks ini kabar baik.
- *
- * Dipakai untuk mewarnai bilahnya, bukan untuk menempelkan kata "buruk":
- * lokasi yang persaingannya ketat belum tentu salah dipilih - kadang justru
- * di situ pembelinya.
- */
 export const TINGGI_BAIK: Record<string, boolean> = {
   IPT: true,
   IAE: true,
@@ -1015,13 +576,6 @@ export const TINGGI_BAIK: Record<string, boolean> = {
   IBR: false,
 }
 
-/**
- * Turunkan sebuah label jadi bentuk yang layak di TENGAH kalimat.
- *
- * `.toLowerCase()` saja tidak cukup: ia mengecilkan akronim juga, dan
- * "NJOP tanah" jadi "njop tanah". Yang benar cuma huruf pertama, dan itu pun
- * tidak kalau kata pertamanya memang ditulis kapital seluruhnya.
- */
 export function keKalimat(teks: string): string {
   const kata = teks.split(' ')[0] ?? ''
   if (kata.length > 1 && kata === kata.toUpperCase()) return teks
@@ -1034,32 +588,6 @@ function rangkai(bagian: string[], sambung: string): string {
   return `${bagian.slice(0, -1).join(', ')} ${sambung} ${bagian[bagian.length - 1]}`
 }
 
-/**
- * Sumbu datar kuadran berdiri di atas bahan apa — satu sampai dua kalimat.
- *
- * ADA KARENA `pipeline/s6_score.py::hitung_prestise_visual()` merata-ratakan
- * lima bahan dengan `skipna=True`: bahan yang kosong dilewati begitu saja, dan
- * sumbunya tetap menghasilkan angka untuk setiap heksagon. Terukur 2 Sep 2026,
- * DUA bahan kosong di seluruh wilayah studi — dan keduanya justru satu-satunya
- * yang menilai tampilan secara LANGSUNG (M03 dinilai dari foto, P02 dari nilai
- * tanah). Yang menggerakkan sumbunya tinggal porsi waralaba dan bentuk
- * bangunan: proksi yang masuk akal, tetapi proksi. Angkanya benar; nama sumbunya
- * yang menjanjikan lebih banyak daripada yang diukur.
- *
- * Ambang berbasis JUMLAH sengaja tidak dipakai — tiga dari lima itu 60%, jadi
- * ambang apa pun lolos dengan mulus justru pada keadaan yang jadi masalahnya.
- * Yang menentukan bahan yang MANA, jadi yang disebutkan daftarnya.
- *
- * Kalimatnya DITURUNKAN dari daftar itu, tidak ditulis tetap: begitu satu bahan
- * terisi ia berubah sendiri, dan begitu kelimanya terisi ia hilang sendiri.
- * Aturan yang sama dengan pita status dan bagian temuan di gerbang — kalau
- * sebuah pemicu perlu dihitung dari data supaya tidak berbohong, kalimat yang
- * menyertainya perlu dihitung juga.
- *
- * SATU fungsi untuk kedua tempat yang memakainya. Kalau dipecah, "sumbu ini
- * berdiri di atas apa" akan berarti dua hal berbeda di dua layar yang
- * memperlihatkan sumbu yang sama.
- */
 export function frasaPrestise(
   cakupan: { terisi: string[]; kosong: string[]; diukur_langsung: boolean } | null | undefined,
   lingkup: 'lokasi' | 'wilayah',
@@ -1098,13 +626,6 @@ export function frasaPrestise(
         `${daftar(terisi)}.`,
   ]
   if (!diukur_langsung) {
-    // DUA pernyataan, dipisah titik koma, dan pemisahan itu bukan gaya bahasa.
-    // Yang kedua mendaftar SELURUH yang kosong, termasuk proksi seperti porsi
-    // waralaba - kalau ia digabung jadi satu klausa dengan yang pertama, daftar
-    // itu terbaca seolah seluruh isinya penilai tampilan langsung, dan itu
-    // tidak benar. Memisahkannya juga yang membuat frontend tidak perlu
-    // menyalin BAHAN_PRESTISE_LANGSUNG dari backend: daftar yang dipelihara di
-    // dua tempat akan berpisah, dan `diukur_langsung` sudah menjawabnya.
     kalimat.push(
       en
         ? `No ingredient judges its appearance directly; ` +
@@ -1130,28 +651,7 @@ export function kataIndeks(
   return kata[3]
 }
 
-// --- Badge keyakinan (Q01–Q03) ---------------------------------------------
-// WAJIB tampil di setiap tempat skor muncul. Ambangnya didefinisikan di backend
-// (pipeline/config.py::tingkat_keyakinan); di sini hanya tampilannya.
-//
-// Perhatikan: tingkat keyakinan TIDAK memakai warna kuadran, dan tidak memakai
-// merah-kuning-hijau. Ia memakai jumlah balok terisi — ukuran, bukan suasana
-// hati. Keyakinan rendah bukan kesalahan yang perlu ditandai merah; ia hanya
-// berarti datanya belum banyak.
 
-//
-// `label` ditambahkan 3 September 2026, dan sebabnya keluhan yang tepat:
-// "ada kayak RENDAH terus ada bar gitu, maksudnya apa?".
-//
-// Lencana ini menampilkan TINGKAT tanpa pernah menyebut tingkat DARI APA. Kata
-// "RENDAH" di sebelah skor 47 nyaris pasti dibaca sebagai "lokasinya jelek" -
-// kebalikan dari artinya, karena yang rendah bukan lokasinya melainkan
-// banyaknya data yang menopang penilaiannya. Penjelasannya memang ada, tetapi
-// hidup di atribut `title` - dan tooltip tidak ada di ponsel, tidak ada saat
-// dibaca sekilas, dan tidak pernah ada bagi orang yang tidak tahu ada yang
-// perlu di-hover.
-//
-// `label` yang tampil di layar; `teks` tetap jadi kalimat panjangnya.
 export const KEYAKINAN: Record<
   string,
   { balok: number; teks: string; label: string; teksEn: string; labelEn: string }

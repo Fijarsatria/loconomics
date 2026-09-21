@@ -1,26 +1,4 @@
-"""Tahap 7 - Terbitkan: dari DataFrame ke basis data, lalu ke berkas statis.
-
-Tahap ini sebelumnya tidak ada, dan itu lubang yang cukup besar: s6_score.py
-mengembalikan DataFrame berisi skor, dan tidak ada satu pun kode yang
-memindahkannya ke tabel yang dibaca backend. Seluruh API menunjuk ke basis data
-yang tidak pernah bisa terisi.
-
-Dua arah kerja:
-
-  muat_*()          DataFrame -> PostgreSQL/PostGIS
-  ekspor_geojson()  PostgreSQL -> berkas statis untuk CDN
-
-Yang kedua adalah mitigasi free tier yang tertulis di docs/arsitektur.md tetapi
-belum pernah dikerjakan. Backend Render tidur setelah menganggur dan butuh
-puluhan detik untuk bangun; kalau juri membuka tautan lebih dulu, halaman
-terlihat rusak. Dengan layer disajikan sebagai berkas statis dari Cloudflare,
-peta tetap tampil walau backend masih bangun.
-
-Dijalankan dari dalam folder ini:
-
-    cd pipeline && python s7_publish.py --muat
-    cd pipeline && python s7_publish.py --ekspor
-"""
+"""Tahap 7 - Terbitkan: dari DataFrame ke basis data, lalu ke berkas statis."""
 
 from __future__ import annotations
 
@@ -49,10 +27,6 @@ from config import (
 # Berkas statis ditulis ke sini lalu di-deploy bersama frontend.
 EKSPOR = ROOT.parent / "frontend" / "public" / "data"
 
-# Ringkasan cakupan untuk halaman gerbang. Modul TypeScript, BUKAN JSON di
-# public/: halaman gerbang adalah satu-satunya bagian yang tetap hidup tanpa
-# backend, jadi ia tidak boleh punya satu pun permintaan jaringan yang bisa
-# gagal. Konstanta yang ikut ter-bundel tidak punya keadaan gagal.
 RINGKASAN_TS = ROOT.parent / "frontend" / "src" / "lib" / "ringkasan-data.ts"
 
 # Ditulis per potongan supaya satu kawasan besar tidak menahan seluruh transaksi
@@ -67,12 +41,7 @@ DESIMAL_GEOJSON = 6
 
 
 def _mesin():
-    """Koneksi dibaca dari backend/.env - satu tempat, bukan dua.
-
-    Kalau pipeline punya DATABASE_URL sendiri, cepat atau lambat keduanya
-    menunjuk basis data yang berbeda dan hasil pipeline "hilang" tanpa ada yang
-    error.
-    """
+    """Koneksi dibaca dari backend/.env - satu tempat, bukan dua."""
     env = ROOT.parent / "backend" / ".env"
     url = os.environ.get("DATABASE_URL")
     if not url and env.exists():
@@ -94,14 +63,7 @@ def _potong(baris: list[dict], n: int = UKURAN_POTONG) -> Iterable[list[dict]]:
 
 
 def _bersih(nilai: Any) -> Any:
-    """NaN pandas -> None SQL.
-
-    Ini bukan kerapian: NaN yang lolos ke basis data akan tersimpan sebagai
-    'NaN'::float di kolom numerik PostgreSQL, dan NaN itu TIDAK sama dengan NULL.
-    `WHERE kolom IS NULL` tidak akan menemukannya, sedangkan setiap perbandingan
-    dengannya bernilai false - jadi heksagonnya diam-diam hilang dari setiap
-    filter tanpa pernah memunculkan galat.
-    """
+    """NaN pandas -> None SQL."""
     if nilai is None or (isinstance(nilai, float) and pd.isna(nilai)):
         return None
     if isinstance(nilai, (pd.Timestamp,)):
@@ -117,13 +79,7 @@ def _bersih(nilai: Any) -> Any:
 
 
 def muat_skor(db: Session, skor: pd.DataFrame, versi: str = "baseline") -> int:
-    """Muat keluaran s6_score.skor_lengkap() ke location_scores.
-
-    `versi` yang sama ditimpa seluruhnya, bukan diperbarui baris per baris.
-    Alasannya: skor adalah hasil satu kali perhitungan atas seluruh kawasan -
-    memperbarui sebagian akan menghasilkan campuran dua perhitungan yang
-    peringkatnya tidak lagi konsisten satu sama lain.
-    """
+    """Muat keluaran s6_score.skor_lengkap() ke location_scores."""
     if skor.empty:
         return 0
 
@@ -157,20 +113,7 @@ def muat_skor(db: Session, skor: pd.DataFrame, versi: str = "baseline") -> int:
 
 
 def muat_faktor(db: Session, faktor: pd.DataFrame, versi: str = "baseline") -> int:
-    """Muat keluaran s6_score.rincian_faktor() ke score_factors.
-
-    Tabel ini sempat tidak pernah diisi oleh siapa pun, dan akibatnya tidak
-    terlihat sebagai galat: `/hex/{h3}` tetap menjawab 200, cuma dengan
-    `faktor: []`. Yang hilang justru dua janji sekaligus - panel "Kenapa skornya
-    segitu" untuk pelanggan, dan `sumber_angka` yang membuat setiap angka dalam
-    jawaban AI bisa ditelusuri.
-
-    Ditimpa seluruhnya per `versi`, sama seperti muat_skor. Rincian dan skor
-    WAJIB berasal dari satu perhitungan yang sama: kalau tercampur dua
-    perhitungan, jumlah kontribusi sebuah indeks tidak lagi sama dengan nilai
-    indeks yang tertulis di sebelahnya - dan selisih itu persis hal yang paling
-    mungkin ditanyakan juri.
-    """
+    """Muat keluaran s6_score.rincian_faktor() ke score_factors."""
     if faktor.empty:
         return 0
 
@@ -222,16 +165,7 @@ def muat_profil_jam(db: Session, profil: pd.DataFrame) -> int:
 
 
 def muat_variabel(db: Session, hex_df: pd.DataFrame) -> int:
-    """Perbarui sebagian kolom variabel di hex_features.
-
-    Berbeda dari skor, di sini yang dilakukan UPDATE dan bukan hapus-lalu-sisip:
-    hex_features punya kunci asing dari tabel lain, dan barisnya dibuat sekali
-    saat grid H3 dibangun. Yang berubah tiap kali pipeline jalan hanya isinya.
-
-    Hanya kolom yang benar-benar ada di DataFrame yang disentuh. Kolom yang tidak
-    dikirim TIDAK dinolkan - kalau s4 baru menghitung sebagian dimensi, sisanya
-    harus tetap seperti semula, bukan hilang.
-    """
+    """Perbarui sebagian kolom variabel di hex_features."""
     if hex_df.empty:
         return 0
 
@@ -258,22 +192,7 @@ def muat_variabel(db: Session, hex_df: pd.DataFrame) -> int:
 
 
 def muat_poi(db: Session, poi: pd.DataFrame) -> int:
-    """Muat keluaran `s2_clean.poi_dari_osm` ke `business_pois`.
-
-    Yang dihapus lebih dulu HANYA baris bersumber `osm`. POI hasil misi MAPID
-    tidak boleh ikut terhapus hanya karena OSM ditarik ulang - keduanya sumber
-    yang berbeda dengan siklus pembaruan yang berbeda.
-
-    Kalau ada `menu_observations` atau `receipt_observations` yang menunjuk POI
-    yang akan dihapus, kunci asingnya akan MENOLAK penghapusan itu dan seluruh
-    transaksi batal. Itu bukan kekurangan yang harus dikerjakan sekitarnya: satu
-    observasi yang kehilangan POI-nya adalah observasi yang tidak bisa lagi
-    dijelaskan asalnya, dan gagal dengan berisik jauh lebih baik daripada
-    menggantung baris misi yang mahal didapat.
-
-    Heksagon di luar 708 yang diskor sengaja ikut disimpan - C01 menghitung
-    k-ring 1, jadi kompetitor di seberang batas kawasan wajib ada di tabel ini.
-    """
+    """Muat keluaran `s2_clean.poi_dari_osm` ke `business_pois`."""
     db.execute(text("DELETE FROM business_pois WHERE sumber = 'osm'"))
     if poi.empty:
         return 0
@@ -294,17 +213,7 @@ def muat_poi(db: Session, poi: pd.DataFrame) -> int:
 
 
 def muat_osm(db: Session, berkas: Path | None = None) -> dict[str, int]:
-    """Berkas mentah OSM -> business_pois + C01, C02, C03, C05, C06, D08, D09.
-
-    Satu fungsi, satu transaksi, karena ketiganya satu pernyataan yang sama:
-    `business_pois` adalah BUKTI di balik angka kompetisi, dan basis data yang
-    memuat angkanya tanpa memuat buktinya - atau sebaliknya - tidak bisa
-    dipertanggungjawabkan ke siapa pun yang bertanya "dari mana angkanya".
-
-    D01 dibaca dari basis data, bukan dihitung, karena C06 = C01 / D01 dan D01
-    milik dimensi Permintaan. Heksagon yang D01-nya kosong menghasilkan C06
-    kosong - bukan nol (aturan 4).
-    """
+    """Berkas mentah OSM -> business_pois + C01, C02, C03, C05, C06, D08, D09."""
     from s2_clean import konteks_dari_osm, poi_dari_osm
     from s4_spatial import dimensi_kompetisi, dimensi_konteks
 
@@ -322,14 +231,6 @@ def muat_osm(db: Session, berkas: Path | None = None) -> dict[str, int]:
         "SELECT h3_index, pop_100m FROM hex_features", db.connection()
     ).set_index("h3_index")["pop_100m"]
 
-    # `semua_hex` diberikan ke KEDUANYA, dan itu bukan kerapian. Tanpa itu,
-    # heksagon yang tidak punya satu pun POI tidak muncul di hasil, tidak ikut
-    # ter-UPDATE, dan mempertahankan angka sintetis `demo_seed` di kolom yang
-    # tepat di sebelah angka OSM sungguhan - satu kolom berisi dua jenis angka,
-    # tanpa galat dan tanpa cara membedakannya dari luar.
-    #
-    # Heksagon di luar 708 yang diskor otomatis gugur lewat reindex ini. Mereka
-    # tetap hidup di business_pois - dipakai C01, tidak pernah dinilai sendiri.
     semua = pop.index
     variabel = dimensi_kompetisi(poi, pop=pop, semua_hex=semua).join(
         dimensi_konteks(konteks_dari_osm(elemen), semua_hex=semua), how="left"
@@ -341,31 +242,11 @@ def muat_osm(db: Session, berkas: Path | None = None) -> dict[str, int]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Basis data -> basis data: variabel yang sumbernya sudah ada di dalam DB
-# ---------------------------------------------------------------------------
-# Dua fungsi di bawah berbeda dari muat_* di atas: masukannya bukan berkas hasil
-# pipeline, melainkan tabel yang SUDAH terisi. Keduanya dibuat untuk satu pola
-# yang akan berulang - sebuah variabel berpindah dari sintetis ke nyata, dan
-# seluruh skor harus mengikutinya.
 
 
 def muat_transit(db: Session, berkas_rute: Path | None = None,
                  berkas_henti: Path | None = None) -> dict[str, int]:
-    """Relasi rute + titik henti OSM -> D05 `skor_simpul`.
-
-    Menggantikan satu-satunya variabel berbobot terbesar di IPT (0,40) yang
-    selama ini diisi `rng` oleh `demo_seed`. Yang menggantikannya bisa
-    dijelaskan dalam satu kalimat ke juri: jumlah rute angkutan umum BERBEDA
-    yang berhenti di heksagon itu dan tetangganya, ditimbang menurut kapasitas
-    modanya.
-
-    Dua berkas, bukan satu, karena Overpass tidak bisa memberi keduanya
-    sekaligus: `out body` pada relasi membawa daftar anggota TANPA koordinat,
-    dan menariknya bersama geometri menghasilkan respons puluhan megabyte yang
-    dijawab 504. Jadi relasi ditarik untuk keanggotaannya, titik henti ditarik
-    untuk koordinatnya, dan keduanya disatukan lewat id OSM di sini.
-    """
+    """Relasi rute + titik henti OSM -> D05 `skor_simpul`."""
     from s2_clean import henti_dari_osm, rute_dari_osm
     from s4_spatial import bobot_simpul
 
@@ -402,18 +283,6 @@ def muat_transit(db: Session, berkas_rute: Path | None = None,
     }
 
 
-#: Variabel yang MASIH diisi `demo_seed` dan tidak punya sumber sah per
-#: 27 Agustus 2026. Dikosongkan, bukan dibiarkan - dan sebabnya aturan 4 repo
-#: ini: "kosong tetap kosong". Angka karangan di kolom yang sama dengan angka
-#: hasil pengukuran tidak bisa dibedakan dari luar oleh siapa pun, termasuk oleh
-#: juri yang bertanya "yang ini datanya dari mana".
-#:
-#: Mengosongkannya TIDAK meruntuhkan skor: `s6_score._tertimbang()` menetralkan
-#: variabel hilang jadi 0,5, bukan menolkannya. Indeks yang seluruh variabelnya
-#: kosong menjadi tetapan 0,5 untuk setiap heksagon - artinya ia berhenti
-#: membedakan, dan itu memang pernyataan yang benar tentangnya.
-#:
-#: Alasan per variabel ada di docs/data.md bagian 10.
 KOLOM_SINTETIS = {
     # --- Menunggu LLM_API_KEY (foto misi MAPID sudah ada, tinggal dibaca) ---
     "puncak_pagi": "B01 - jam transaksi ada di FOTO struk, menunggu A2",
@@ -444,31 +313,7 @@ KOLOM_SINTETIS = {
 
 
 def kosongkan_sintetis(db: Session, kolom: dict[str, str] | None = None) -> dict[str, int]:
-    """Setel NULL setiap kolom yang isinya masih karangan `demo_seed`.
-
-    Ini operasi yang MEMBUANG angka, jadi ia sengaja tidak pernah dipanggil
-    diam-diam oleh jalur muat mana pun - hanya lewat `--kosongkan` yang
-    dituliskan orang. Yang dibuang tidak bisa dikembalikan tanpa menjalankan
-    `demo_seed` lagi, dan `demo_seed` sekarang menolak jalan di basis data yang
-    memuat data nyata.
-
-    `hex_hourly_profiles` ikut dikosongkan, dan itu bagian yang paling penting.
-    Tabel itu berisi 7.186 baris untuk 474 heksagon bertanda `sumber_data =
-    'observed'` - seluruhnya dibangkitkan `demo_seed` dari struk karangan,
-    sementara `receipt_observations` sungguhan cuma 12 baris dan tidak satu pun
-    membawa jam (API misi MAPID mengembalikan `tanggal` kosong di 691 dari 691
-    titik). Jadi ia bukan sekadar angka sintetis melainkan angka sintetis yang
-    MENGAKU hasil pengamatan, dan ia menggerakkan Commuter Clock - fitur
-    berbayar. Persis kesalahan yang sudah pernah diperbaiki pada badge
-    keyakinan, terulang di tabel yang berbeda.
-
-    Mengosongkannya aman: `/hex/{h3}/commuter-clock` sudah menangani tabel
-    kosong dengan benar - tiap jam tetap dikirim, `jam_puncak` dan `dominasi`
-    jadi None, dan `catatan` berbunyi "Belum ada profil jam untuk heksagon ini".
-
-    Yang dikembalikan jumlah baris yang SEBELUMNYA terisi per kolom, supaya
-    yang terjadi bisa dilaporkan apa adanya alih-alih "selesai".
-    """
+    """Setel NULL setiap kolom yang isinya masih karangan `demo_seed`."""
     kolom = kolom or KOLOM_SINTETIS
     hasil = {}
     n_jam = db.execute(
@@ -487,29 +332,9 @@ def kosongkan_sintetis(db: Session, kolom: dict[str, str] | None = None) -> dict
 
 
 def isi_d04_dari_rute(db: Session) -> dict[str, int]:
-    """Alirkan jarak (D03) dan waktu (D04) sungguhan dari `hex_routes`.
-
-    `hex_routes` berisi hasil OpenRouteService di atas jaringan jalan OSM;
-    kedua kolom itu selama ini diisi `demo_seed` sebagai fungsi jarak garis
-    lurus. Fungsi ini menutup jarak antara keduanya.
-
-    D03 ikut karena `models.py` memang menandainya "OSM+OSRM" - ia selalu
-    dimaksudkan jarak JARINGAN JALAN, bukan garis lurus. Ia juga tidak muncul
-    di satu pun bobot indeks (IPT memakai D05, D06, D04), jadi mengisinya tidak
-    menggeser satu pun peringkat: yang berubah cuma angka yang dibaca orang.
-
-    Yang TIDAK dilakukan di sini: menghitung ulang skor. Mengisi variabel dan
-    menghitung ulang peringkat adalah dua keputusan yang berbeda - yang pertama
-    memperbaiki satu angka, yang kedua mengubah setiap angka di layar. Pemanggil
-    yang memilih, lewat `hitung_ulang_dari_db()`.
-    """
+    """Alirkan jarak (D03) dan waktu (D04) sungguhan dari `hex_routes`."""
     from s4_spatial import simpul_terdekat_dari_rute
 
-    # HANYA profil jalan kaki. `hex_routes` memuat rute mobil sejak 2026, dan
-    # keduanya berbagi tabel: tanpa saringan ini `simpul_terdekat_dari_rute`
-    # mengambil minimum menit lintas profil, mobil selalu menang, dan D04 -
-    # yang bernama `waktu_jalan_menit` dan ikut menyusun IPT - jadi waktu
-    # BERKENDARA tanpa satu pun galat.
     rute = pd.read_sql(
         "SELECT h3_index, jarak_m, menit FROM hex_routes"
         " WHERE profil = 'foot-walking'",
@@ -528,15 +353,7 @@ def isi_d04_dari_rute(db: Session) -> dict[str, int]:
 
 
 def _grid_diharapkan() -> dict[str, list[str]]:
-    """Grid yang SEHARUSNYA ada, diturunkan dari config.PUSAT.
-
-    Salinan logika `demo_seed._grid()`, dan salinan itu disengaja: fungsi ini
-    harus tetap bisa dipanggil setelah `demo_seed` berhenti boleh dijalankan di
-    basis data berisi data nyata. Yang penting keduanya membaca PUSAT yang sama.
-
-    Heksagon yang diklaim dua kawasan jatuh ke pusat TERDEKAT - Manggarai dan
-    Dukuh Atas BNI hanya berjarak ~2,5 km sementara jari-jari cincinnya ~2 km.
-    """
+    """Grid yang SEHARUSNYA ada, diturunkan dari config.PUSAT."""
     import math
 
     import h3
@@ -570,12 +387,7 @@ def _wkt_heksagon(sel: str) -> str:
 
 
 def periksa_grid(db: Session) -> dict[str, object]:
-    """Bandingkan grid basis data dengan yang diturunkan dari config.PUSAT.
-
-    Tidak mengubah apa pun. Dipisah dari `selaraskan_grid` supaya keadaannya
-    bisa ditanyakan tanpa risiko - dan supaya `--grid` tanpa `--muat` selalu
-    aman dijalankan siapa pun.
-    """
+    """Bandingkan grid basis data dengan yang diturunkan dari config.PUSAT."""
     harap = _grid_diharapkan()
     milik_harap = {sel: kw for kw, sel_list in harap.items() for sel in sel_list}
 
@@ -599,19 +411,7 @@ def periksa_grid(db: Session) -> dict[str, object]:
 
 
 def selaraskan_grid(db: Session, beda: dict[str, object]) -> dict[str, int]:
-    """Terapkan selisihnya. MENGHAPUS heksagon, jadi ia menghapus turunannya juga.
-
-    Yang ikut terhapus lewat ON DELETE CASCADE: `hex_routes`, `location_scores`,
-    `score_factors`, `hex_hourly_profiles`. Yang TIDAK punya cascade dan harus
-    dibereskan sendiri: `business_pois` - ia berkolom `h3_index` tanpa foreign
-    key, jadi barisnya akan tertinggal sebagai POI yatim yang ikut terhitung di
-    variabel kompetisi kawasan lain.
-
-    Heksagon BARU disisipkan kosong: nol titik misi, keyakinan RENDAH, sumber
-    `predicted`. Bukan kelalaian - heksagon yang baru saja dibuat memang belum
-    punya satu pun pengukuran, dan mengisinya dengan apa pun selain kosong
-    adalah persis kesalahan yang aturan 4 larang.
-    """
+    """Terapkan selisihnya. MENGHAPUS heksagon, jadi ia menghapus turunannya juga."""
     tambah = beda["tambah"]
     buang = beda["buang"]
     milik = beda["milik"]
@@ -659,12 +459,7 @@ def selaraskan_grid(db: Session, beda: dict[str, object]) -> dict[str, int]:
 
 
 def selaraskan_simpul(db: Session) -> dict[str, int]:
-    """Simpul transit ikut pindah bersama pusat kawasannya.
-
-    UPSERT menurut kawasan, tidak pernah DELETE: `hex_routes` dan
-    `catchment_areas` keduanya ON DELETE CASCADE dari `transport_nodes`, jadi
-    menghapus satu simpul membuang seluruh rute ORS yang menempel padanya.
-    """
+    """Simpul transit ikut pindah bersama pusat kawasannya."""
     from config import PUSAT
 
     n = 0
@@ -682,19 +477,7 @@ def selaraskan_simpul(db: Session) -> dict[str, int]:
 
 
 def muat_rdtr(db: Session, berkas: Path | None = None) -> dict[str, int]:
-    """Zonasi RDTR ATR/BPN -> L01 izin usaha, L02 kelas zona, L03 risiko banjir.
-
-    L03 diambil dari kolom `KRB_03` RDTR ("Kawasan Rawan Banjir - Sangat
-    Tinggi"), bukan dari InaRISK. Keduanya sumber resmi; yang ini menang karena
-    ia datang dalam poligon yang SAMA dengan zonasinya, jadi risiko banjir dan
-    izin usaha selalu menggambarkan bidang yang sama persis - dan karena layanan
-    InaRISK menjawab 503 sepanjang 26 Agu 2026.
-
-    CAKUPAN: hanya DKI Jakarta. Tiga dari enam kawasan pilot. Kota Depok dan
-    Kota Bekasi tidak terdaftar di GISTARU sama sekali, jadi Depok Baru,
-    Bekasi, dan Harjamukti tetap `TIDAK_DIKETAHUI` - dan itu memang jawaban
-    yang benar untuk mereka, bukan kekurangan yang harus ditutupi.
-    """
+    """Zonasi RDTR ATR/BPN -> L01 izin usaha, L02 kelas zona, L03 risiko banjir."""
     from s4_spatial import dimensi_lahan
 
     berkas = berkas or DATA_MENTAH / "rdtr_dki.json"
@@ -721,20 +504,7 @@ def muat_rdtr(db: Session, berkas: Path | None = None) -> dict[str, int]:
 
 
 def muat_misi(db: Session, berkas: Path | None = None) -> dict[str, int]:
-    """Data misi MAPID -> tabel observasi + variabel per heksagon + Q01/Q02.
-
-    Tiga tabel observasi diisi APA ADANYA per titik, dan itu memang tempatnya:
-    aturan lomba melarang data misi mentah KELUAR lewat API atau layar, bukan
-    melarang menyimpannya. `backend/app/schemas.py` yang menegakkan batasnya -
-    tidak satu pun skema membawa record misi, jadi secara struktur ia tidak bisa
-    terkirim. Menyimpannya perlu supaya A1/A2/A3 punya `foto_url` untuk dikerjakan
-    tanpa menarik ulang seluruh dataset.
-
-    Yang ditulis ke `hex_features` hanya AGREGAT, dan hanya untuk heksagon yang
-    benar-benar disurvei. Sisanya dibiarkan NULL - lihat catatan panjang di
-    `s4_spatial.dimensi_misi` soal kenapa nol akan berbohong di sini padahal
-    tidak berbohong untuk OSM.
-    """
+    """Data misi MAPID -> tabel observasi + variabel per heksagon + Q01/Q02."""
     from s2_clean import (
         aktivitas_dari_mapid,
         menu_dari_mapid,
@@ -768,11 +538,6 @@ def muat_misi(db: Session, berkas: Path | None = None) -> dict[str, int]:
         ("menu", menu, "menu_observations",
          ["h3_index", "nama_usaha", "kondisi_pembeli", "waktu_kunjungan",
           "mobilitas_keliling", "harga_rata_porsi", "menu_andalan"]),
-        # `ocr_terverifikasi` ikut ditulis eksplisit. Kolomnya NOT NULL dengan
-        # `default=False` di ORM, dan default ORM TIDAK berlaku untuk INSERT SQL
-        # mentah - yang lewat cuma NULL, lalu ditolak basis data. Gagalnya
-        # berisik, jadi tidak berbahaya; tetapi ia mudah terulang untuk kolom
-        # berdefault berikutnya.
         ("struk", struk, "receipt_observations",
          ["h3_index", "nama_merchant", "waktu_transaksi", "metode_bayar", "foto_url",
           "ocr_terverifikasi"]),
@@ -826,11 +591,6 @@ def muat_misi(db: Session, berkas: Path | None = None) -> dict[str, int]:
 # Survei lapangan -> dua belas variabel yang tidak punya sumber lain
 # ---------------------------------------------------------------------------
 
-#: Kolom CSV survei yang boleh masuk basis data.
-#:
-#: Sengaja daftar POSITIF. Berkas isian tangan selalu memuat kolom bantu -
-#: nama surveyor, tanggal, catatan - dan daftar negatif ("semua kecuali...")
-#: akan melewatkan kolom baru yang belum terpikir, diam-diam, ke dalam UPDATE.
 KOLOM_SURVEI: tuple[str, ...] = (
     "harga_sewa_median", "harga_sewa_per_m2", "harga_median_porsi",
     "nominal_median_struk", "puncak_pagi", "puncak_siang", "puncak_sore",
@@ -838,11 +598,6 @@ KOLOM_SURVEI: tuple[str, ...] = (
     "skor_prestise_visual", "indeks_churn",
 )
 
-#: Rentang yang masuk akal per kolom. Nilai di luarnya DITOLAK, tidak dipangkas.
-#:
-#: Memangkas menyembunyikan salah ketik sambil tetap menyimpan angka yang salah;
-#: menolak memaksa orangnya melihat barisnya. Yang paling sering: rupiah ditulis
-#: dalam ribuan ("15" untuk Rp15.000.000) dan skala 1-5 diisi 0.
 RENTANG_SURVEI: dict[str, tuple[float, float]] = {
     "harga_sewa_median": (5e5, 5e8),
     "harga_sewa_per_m2": (1e4, 5e6),
@@ -860,15 +615,7 @@ RENTANG_SURVEI: dict[str, tuple[float, float]] = {
 
 
 def baca_survei(berkas: Path) -> tuple[pd.DataFrame, pd.Series]:
-    """Urai dan periksa CSV survei. TANPA basis data, supaya bisa diuji murni.
-
-    Dipisahkan dari `muat_survei` dengan sengaja: seluruh cara berkas ini bisa
-    salah - sel kosong, satuan tertukar, kolom asing, kunjungan ganda - hidup
-    di sini, dan tidak satu pun dari empat hal itu memunculkan galat kalau
-    tidak diperiksa. Bagian yang menyentuh basis data tinggal dua UPDATE.
-
-    Mengembalikan (median per heksagon, jumlah kunjungan per heksagon).
-    """
+    """Urai dan periksa CSV survei. TANPA basis data, supaya bisa diuji murni."""
     df = pd.read_csv(berkas, dtype={"h3_index": str})
     if "h3_index" not in df.columns:
         raise ValueError(f"{berkas} tidak punya kolom h3_index")
@@ -908,33 +655,7 @@ def baca_survei(berkas: Path) -> tuple[pd.DataFrame, pd.Series]:
 
 
 def muat_survei(db: Session, berkas: Path | None = None) -> dict[str, int]:
-    """Muat hasil survei lapangan dari CSV yang dibuat `rencana_survei.py`.
-
-    Ini pintu masuk untuk dua belas variabel yang tidak punya sumber terbuka
-    mana pun - harga sewa, pola jam, belanja, kesan visual, churn. Tanpa
-    fungsi ini, lembar survei cuma formulir: tim pulang membawa angka yang
-    tidak punya tujuan.
-
-    TIGA KEPUTUSAN YANG PERLU DIKETAHUI
-
-    1. Sel kosong tetap KOSONG. Surveyor yang tidak menemukan papan sewa
-       meninggalkan selnya kosong, dan itu pernyataan yang berbeda dari
-       "sewanya nol". Aturan 4, dan di sini paling mudah dilanggar karena
-       `pd.read_csv` dengan senang hati mengubah sel kosong jadi 0 kalau
-       dtype-nya dipaksa.
-
-    2. Beberapa kunjungan ke heksagon yang sama diringkas dengan MEDIAN,
-       bukan rata-rata dan bukan yang terakhir. Median tahan terhadap satu
-       salah ketik; rata-rata tidak, dan "yang terakhir menang" membuat
-       urutan baris di dalam berkas menentukan isinya.
-
-    3. `n_titik_misi` dihitung ULANG DARI NOL, bukan ditambahkan. Fungsi ini
-       memanggil `muat_misi` lebih dulu - yang menulis hitungan misi secara
-       mutlak untuk seluruh heksagon - lalu menambahkan jumlah kunjungan
-       survei di atasnya. Kalau ia menambah tanpa menghitung ulang, menjalankan
-       perintah yang sama dua kali akan menggandakan cakupan survei, badge
-       keyakinan ikut naik, dan tidak ada satu pun galat yang muncul.
-    """
+    """Muat hasil survei lapangan dari CSV yang dibuat `rencana_survei.py`."""
     berkas = berkas or DATA_MENTAH.parent / "04_survei" / "target_survei.csv"
     if not berkas.exists():
         raise FileNotFoundError(
@@ -952,17 +673,6 @@ def muat_survei(db: Session, berkas: Path | None = None) -> dict[str, int]:
     if ringkas.empty:
         return {"baris": 0, "heksagon": 0, "asing": len(asing), "hex_ditulis": 0}
 
-    # URUTANNYA MENENTUKAN, dan salahnya diam.
-    #
-    # `muat_misi` dijalankan LEBIH DULU, bukan sesudah. Ia menulis dua hal yang
-    # bertabrakan dengan survei: `n_titik_misi` (ditulis mutlak, itu yang
-    # membuat fungsi ini idempoten) dan sebagian VARIABEL yang juga ada di
-    # lembar survei - B07 `harga_median_porsi` di keduanya. Kalau ia jalan
-    # belakangan, angka hasil pengukuran langsung ditimpa balik oleh turunan
-    # misi yang untuk heksagon itu justru kosong.
-    #
-    # Ditangkap uji `heksagon kedua terisi`; tanpa itu ia akan lolos sebagai
-    # "survei dimuat, kolomnya tetap NULL" tanpa satu pun galat.
     try:
         muat_misi(db)
     except FileNotFoundError:
@@ -976,10 +686,6 @@ def muat_survei(db: Session, berkas: Path | None = None) -> dict[str, int]:
 
     sekarang = dict(
         db.execute(
-            # = ANY(:h), bukan IN :h. Yang kedua menuntut bindparam(expanding=True)
-            # di SQLAlchemy 2 dan tanpa itu tuple-nya dikirim apa adanya sebagai
-            # satu parameter - galatnya "syntax error at or near $1", yang tidak
-            # menyebut-nyebut parameter maupun tuple.
             text("SELECT h3_index, n_titik_misi FROM hex_features WHERE h3_index = ANY(:h)"),
             {"h": list(ringkas.index)},
         ).all()
@@ -1012,13 +718,7 @@ def muat_survei(db: Session, berkas: Path | None = None) -> dict[str, int]:
 
 
 def _fitur_luar_grid(elemen: list[dict], sel: list[str]) -> "pd.DataFrame":
-    """Prediktor untuk heksagon di luar grid, dari POI OSM yang sama.
-
-    Memakai FUNGSI YANG SAMA dengan jalur di dalam grid - bukan salinan yang
-    kebetulan mirip. Itu syaratnya: model yang dilatih pada fitur yang dihitung
-    berbeda dari fitur yang diprediksinya akan tetap melaporkan R2 yang
-    kelihatan bagus, karena spatial k-fold pun cuma melihat data latihnya.
-    """
+    """Prediktor untuk heksagon di luar grid, dari POI OSM yang sama."""
     from s2_clean import konteks_dari_osm, poi_dari_osm
     from s4_spatial import kepadatan_poi_total, pangsa_waralaba, dimensi_konteks
 
@@ -1031,10 +731,6 @@ def _fitur_luar_grid(elemen: list[dict], sel: list[str]) -> "pd.DataFrame":
     konteks = dimensi_konteks(konteks_dari_osm(elemen), semua_hex=indeks)
     f["kepadatan_kantor"] = konteks["kepadatan_kantor"].reindex(indeks)
 
-    # Heksagon yang benar-benar tidak punya POI di dalamnya bernilai NOL, bukan
-    # kosong - disc penarikannya menutup seluruh sel ini, jadi ketiadaan POI
-    # memang temuan. Ini kebalikan dari data misi. Sama persis dengan alasan
-    # `ISI_NOL` di s4_spatial.
     for k in ("kepadatan_poi_total", "pangsa_waralaba", "kepadatan_kantor"):
         f[k] = f[k].fillna(0.0)
     return f
@@ -1069,49 +765,7 @@ def _penduduk_luar_grid(sel: list[str], berkas: Path | None = None) -> "pd.Serie
 def gapfill_luar(
     db: Session, target: str = "harga_median_porsi", terapkan: bool = False
 ) -> dict[str, object]:
-    """Latih GapFill dengan ground truth SE-JABODETABEK, lalu isi 708 heksagon.
-
-    KENAPA GROUND TRUTH-NYA DARI LUAR GRID
-
-    `s5_impute` menuntut 30 baris; di dalam 708 heksagon kita cuma ada 11 untuk
-    B07. Itu bukan karena datanya sedikit melainkan karena LETAKNYA - API misi
-    MAPID disaring per POLIGON, bukan per tim, jadi ia mengembalikan survei
-    seluruh peserta lomba dan tiap tim memilih wilayahnya sendiri.
-
-    Ground truth untuk MELATIH tidak harus berada di dalam wilayah studi; ia
-    cuma perlu punya prediktornya. Yang ditambahkan di sini 99 heksagon
-    berlabel di luar grid, prediktornya dihitung lewat fungsi yang sama persis.
-
-    HASILNYA SEJAUH INI: DITOLAK, DAN ITU TEMUAN
-
-    Dijalankan 30 Agustus 2026 dengan 110 baris latih di 40 kelompok:
-
-        target                R2       MAE    MAE menebak rata-rata
-        harga_median_porsi  -0,092   11.581   10.775   -> LEBIH BURUK
-        skor_ramai_terkoreksi        korelasi nol untuk keempat prediktor
-
-    Jadi modelnya tidak dimuat, dan `terapkan` pun tidak menolongnya. Sebabnya
-    terukur, bukan ditebak: DI DALAM SATU HEKSAGON saja harga per porsi
-    berkisar Rp7.000-25.000, dan satu heksagon berisi 19 titik merentang
-    Rp15.000-50.000. Harga makanan ternyata sifat TEMPAT USAHANYA - warung dan
-    kafe di jalan yang sama berbeda tiga kali lipat - bukan sifat lokasinya.
-    Mengagregasinya ke median heksagon membuang justru hal yang menentukan
-    harganya, dan tidak ada prediktor bentuk kota yang bisa memulihkan itu.
-    Korelasi Spearman terkuat cuma +0,213 (kepadatan POI), dan ia tidak
-    menguat saat labelnya dipertebal.
-
-    Fungsi ini tetap ada, dan bukan sebagai peninggalan: ia membuat hasil
-    negatif itu bisa DIULANG oleh siapa pun, dan ia akan langsung berguna
-    begitu survei lapangan masuk - saat itu tiap heksagon punya beberapa
-    pengamatan, bukan satu, dan targetnya bisa diuji ulang dalam satu perintah.
-
-    YANG DILAPORKAN APA ADANYA
-
-    R2 dan MAE dari spatial k-fold, beserta pembanding "menebak rata-rata".
-    Kalau modelnya tidak mengalahkan tebakan rata-rata, ia TIDAK dimuat. Peta
-    yang kosong dan mengakuinya lebih baik daripada peta yang penuh dan tidak
-    bisa dipertanggungjawabkan.
-    """
+    """Latih GapFill dengan ground truth SE-JABODETABEK, lalu isi 708 heksagon."""
     import h3
 
     from s1_ingest import sel_berlabel_luar_grid
@@ -1129,10 +783,6 @@ def gapfill_luar(
     label = sel_berlabel_luar_grid()
     sel = sorted(label)
 
-    # Setiap heksagon berlabel HARUS berada di kelompok yang benar-benar
-    # ditarik. Kalau tidak, `_fitur_luar_grid` mengisinya nol - dan nol di
-    # situ berarti "belum diperiksa", bukan "tidak ada POI". Model yang
-    # belajar dari nol palsu tetap melaporkan R2 yang kelihatan bagus.
     from s1_ingest import RES_KELOMPOK
 
     ditarik = set(isi.get("kelompok") or [])
@@ -1196,29 +846,7 @@ def gapfill_luar(
 
 
 def muat_bangunan(db: Session, sumber: Path | None = None) -> dict[str, int]:
-    """M01 rasio tutupan dan M02 luas median, dari footprint bangunan OSM.
-
-    Membaca PETAK singgahan satu per satu kalau ada, dan jatuh ke berkas
-    gabungan kalau tidak. Alasannya memori, dan angkanya terukur: `json.loads`
-    membutuhkan sekitar 7,3x ukuran berkasnya sebagai objek Python, jadi
-    gabungan ~200 MB menuntut ~1,5 GB sekaligus. Satu petak cukup 56 MB, dan
-    yang disimpan sesudahnya bukan geometrinya melainkan dua angka per
-    bangunan - jadi puncaknya tidak pernah tumbuh seiring jumlah petak.
-
-    Bangunan yang melintasi batas petak dikembalikan Overpass di KEDUA petak,
-    jadi dedup menurut (tipe, id) wajib. Tanpa itu ia terhitung dua kali dan
-    M01 heksagon di sepanjang garis petak naik diam-diam.
-
-    Tidak ada yang disimpan per bangunan. `business_pois` menyimpan POI karena
-    tiap POI adalah kompetitor yang harus bisa ditelusuri satu per satu; sebuah
-    footprint bukan apa-apa selain luasnya, dan seperempat juta poligon yang
-    tidak pernah ditanyai satu per satu cuma akan memperlambat setiap kueri
-    tabel itu.
-
-    M02 masukan P07 `harga_sewa_per_m2` (= P05 / M02). Selama P05 masih
-    sintetis, P07 pun tetap sintetis - mengisi M02 memperbaiki satu dari dua
-    faktornya, dan itu tidak membuat hasil baginya jadi nyata.
-    """
+    """M01 rasio tutupan dan M02 luas median, dari footprint bangunan OSM."""
     from s2_clean import bangunan_dari_osm
     from s4_spatial import morfologi_bangunan
 
@@ -1270,11 +898,7 @@ def muat_bangunan(db: Session, sumber: Path | None = None) -> dict[str, int]:
 
 
 def _bangunan_bertitik() -> pd.DataFrame:
-    """Seluruh footprint (lat, lon, luas) dari petak singgahan, dedup (tipe, id).
-
-    Sama dengan cara `muat_bangunan` membaca - petak satu per satu, bukan berkas
-    gabungan 145 MB - karena alasan memori yang sama.
-    """
+    """Seluruh footprint (lat, lon, luas) dari petak singgahan, dedup (tipe, id)."""
     from s2_clean import bangunan_bertitik_dari_osm
 
     petak = sorted((DATA_MENTAH / "_singgah").glob("bangunan_*.json")) or [DATA_MENTAH / "osm_bangunan.json"]
@@ -1295,53 +919,12 @@ def _bangunan_bertitik() -> pd.DataFrame:
     return pd.concat(potongan, ignore_index=True) if potongan else pd.DataFrame(columns=["lat", "lon", "luas_m2"])
 
 
-# --- Serah terima tim AI ----------------------------------------------------
-#
-# Berkasnya TIDAK di-commit: `pipeline/data/` seluruhnya di-gitignore karena
-# ketentuan lomba B.7 melarang redistribusi data MAPID/mitra. Yang masuk git
-# cuma kode pembacanya dan angka mutunya di docs/.
 TIM_AI = DATA_MENTAH / "tim_ai"
 
-#: Satu-satunya kolom serah terima yang masuk `hex_features` sebagai DATA.
-#:
-#: WorldPop struktur umur - sumber yang sama dengan D01 yang sudah kita pakai,
-#: cuma lapisan yang berbeda, jadi ia pengukuran dan bukan perkiraan. D02 tidak
-#: ada di satu pun BOBOT_* (IPT, IAE, IKP, IBR), jadi memuatnya menambah satu
-#: variabel yang bisa dibaca orang TANPA menggeser satu pun skor - sudah
-#: diperiksa, bukan diasumsikan.
 KOLOM_TIM_AI_NYATA = {"pop_usia_produktif": "D02"}
 
-#: Dua keluaran MODEL, dan keduanya tidak boleh menyentuh `hex_features`.
-#:
-#: Alasannya ada di log training tim AI sendiri: dari 480 titik label, 15 asli
-#: (Menu Go di dalam bbox) dan ~465 sintetis dari formula populasi + jarak
-#: simpul + derau - 96,9%. Catatan serah terimanya menulis "BUKAN bukti model
-#: sudah akurat untuk dunia nyata" dan melarang file itu dipakai sebagai data
-#: 100% asli tanpa disclosure.
-#:
-#: Ditaruh di `hex_perkiraan`, angka itu tetap bisa dibaca orang di panel dan
-#: laporan - berlabel Perkiraan, lengkap dengan R2 dan MAE-nya. Ditaruh di
-#: `hex_features`, ia akan ikut memeringkat 708 lokasi dan menaikkan lencana
-#: keyakinan atas dasar label yang sebagian besar dikarang formula.
 KOLOM_TIM_AI_PERKIRAAN = {"skor_ramai_terkoreksi": "D10", "harga_median_porsi": "B07"}
 
-#: Yang SENGAJA tidak diambil, supaya alasannya tidak hilang bersama sesi ini.
-#:
-#: `jarak_simpul_m`  - milik mereka Euclidean (DATA_SCHEMA.md menyebutnya
-#:                     proksi dan melarang diklaim sebagai jaringan jalan);
-#:                     milik kita rute OpenRouteService sungguhan. Menambal 5
-#:                     heksagon yang kosong dengan angka berdefinisi lain
-#:                     membuat satu kolom memuat dua satuan yang tidak bisa
-#:                     dibedakan siapa pun sesudahnya (jebakan 5).
-#: `luas_bangunan_median`, `rasio_tutupan_bangunan`
-#:                   - milik mereka Google Open Buildings, milik kita jejak
-#:                     OSM. Alasan yang sama; selisihnya cuma 9 heksagon.
-#: `risiko_banjir`   - milik mereka indeks InaRISK 0-1, milik kita kelas dari
-#:                     RDTR GISTARU. Dua definisi berbeda, dan milik kita
-#:                     justru lebih lengkap (364 vs 344).
-#: `n_kompetitor`, `n_generator_keramaian`
-#:                   - sudah 708/708 di kita, dari taksonomi 8 kelas yang
-#:                     mereka sendiri catat belum punya.
 KOLOM_TIM_AI_DILEWATI = (
     "jarak_simpul_m", "luas_bangunan_median", "rasio_tutupan_bangunan",
     "risiko_banjir_indeks_mean", "risiko_banjir_indeks_max", "pop_100m",
@@ -1350,12 +933,7 @@ KOLOM_TIM_AI_DILEWATI = (
 
 
 def baca_tim_ai() -> tuple[pd.DataFrame, dict]:
-    """`hex_features_final.geojson` + `hasil_validasi.json` dari tim AI.
-
-    Mengembalikan (fitur berindeks h3_index, mutu model). Seluruh 40.288
-    heksagon dibaca lalu disaring ke heksagon KITA di pemanggilnya - menyaring
-    di sini akan menyembunyikan berapa banyak yang sebetulnya tersedia.
-    """
+    """`hex_features_final.geojson` + `hasil_validasi.json` dari tim AI."""
     berkas = TIM_AI / "hex_features_final.geojson"
     if not berkas.exists():
         raise SystemExit(
@@ -1371,12 +949,7 @@ def baca_tim_ai() -> tuple[pd.DataFrame, dict]:
 
 
 def muat_perkiraan(db: Session, baris: list[dict]) -> int:
-    """Hapus-lalu-sisip per KODE, bukan per tabel.
-
-    Menghapus seluruh isi `hex_perkiraan` akan ikut membuang perkiraan dari
-    sumber lain (spanduk OCR, pola jam) yang tidak sedang dimuat ulang - dan
-    hilangnya tidak akan memunculkan satu pun galat.
-    """
+    """Hapus-lalu-sisip per KODE, bukan per tabel."""
     if not baris:
         return 0
     kode = sorted({b["kode"] for b in baris})
@@ -1392,14 +965,6 @@ def muat_perkiraan(db: Session, baris: list[dict]) -> int:
     return len(baris)
 
 
-# --- Hasil OCR struk (A2) ---------------------------------------------------
-#
-# Tujuh variabel yang seluruhnya 0/708 sebelum ini, jadi tidak ada satu pun
-# kolom yang bisa memuat dua definisi sekaligus - keluarga jebakan "variabel
-# yang jadi nyata separuh" tidak berlaku di sini, dan itu disengaja: B06
-# (pangsa digital) SENGAJA tidak disentuh walaupun A2 membacanya juga, karena
-# ia sudah punya sumber dari misi dan menggabungkan keduanya berarti satu kolom
-# dengan dua asal yang tidak bisa dibedakan siapa pun sesudahnya.
 EMBER_JAM = {
     "puncak_pagi": range(5, 10),    # B01 05-09
     "puncak_siang": range(11, 15),  # B02 11-14
@@ -1409,26 +974,10 @@ EMBER_JAM = {
 
 
 def _hasil_ocr_a2() -> list[dict]:
-    """Hasil A2 dari CACHE, bukan dari ringkasan `ocr_a2.json`.
-
-    `s3_extract.jalankan()` menulis ringkasannya sekali di AKHIR, jadi lari
-    yang terputus di tengah - dan lari atas 462 foto lewat CDN yang sering
-    menolak memang sering terputus - meninggalkan ringkasan yang jauh lebih
-    pendek daripada yang sebenarnya sudah dibaca dan DIBAYAR. Cache-nya
-    sebaliknya ditulis per foto, jadi ia selalu mewakili keadaan sekarang.
-
-    Koordinatnya tidak ada di cache (ia cuma menyimpan jawaban model), jadi
-    dijahit ulang dari `mapid_misi.json` lewat SHA-1 URL fotonya - kunci yang
-    sama persis dengan yang dipakai `s3_extract._ekstrak`.
-    """
+    """Hasil A2 dari CACHE, bukan dari ringkasan `ocr_a2.json`."""
     import hashlib
 
     from config import CACHE_AI
-    # Aturan "boleh dipakai atau tidak" DIPINJAM dari `s3_extract`, tidak
-    # ditulis ulang. Menyalinnya sempat membuat dua angka yang berselisih di
-    # layar yang sama: log AI menghitung 1 yang perlu ditinjau sementara lari
-    # OCR-nya melaporkan 6 - karena salinannya cuma memeriksa keyakinan,
-    # sedangkan aslinya juga memeriksa apakah nominalnya masuk akal.
     from s3_extract import perlu_review as _perlu_review
 
     misi_berkas = DATA_MENTAH / "mapid_misi.json"
@@ -1461,21 +1010,7 @@ def _hasil_ocr_a2() -> list[dict]:
 
 
 def muat_log_ai(db: Session, baris: list[dict], fitur: str) -> int:
-    """Satu baris `ai_call_logs` per foto yang benar-benar dibaca model.
-
-    Ada karena kepala `s3_extract.py` menjanjikannya ("Setiap panggilan dicatat
-    ke tabel ai_call_logs") dan tabelnya tidak pernah bertambah - 330 foto
-    dibaca dan dibayar, nol tercatat. Tabel itu bukan hiasan: `docs/ai.md`
-    menyebutnya alat untuk menjawab pertanyaan juri "berapa banyak yang perlu
-    koreksi manusia?" dengan angka alih-alih dengan perkiraan.
-
-    Dicatat dari CACHE, bukan saat memanggil. Satu berkas cache = satu
-    panggilan sungguhan yang pernah dibayar, jadi hitungannya sama - dan
-    menuliskannya di sini membuatnya bisa diulang tanpa kuota.
-
-    Idempoten lewat `input_ref` (URL foto): menjalankan `--ocr` dua kali tidak
-    melipatduakan hitungan yang akan dibaca juri.
-    """
+    """Satu baris `ai_call_logs` per foto yang benar-benar dibaca model."""
     if not baris:
         return 0
     ada = {
@@ -1514,14 +1049,7 @@ def muat_log_ai(db: Session, baris: list[dict], fitur: str) -> int:
 
 
 def baca_ocr_struk() -> pd.DataFrame:
-    """`ocr_a2.json` -> DataFrame siap `s4_spatial.profil_jam`.
-
-    Yang DIBUANG di sini, dan tiap pembuangan dilaporkan pemanggilnya:
-    hasil yang `perlu_review`, yang jamnya tidak terbaca, dan yang jatuh di
-    luar 708 heksagon kita. Struk tanpa jam tidak boleh masuk sama sekali -
-    aturan prompt A2 - karena jam adalah satu-satunya hal yang membuat data
-    ini berbeda dari yang sudah kita punya.
-    """
+    """`ocr_a2.json` -> DataFrame siap `s4_spatial.profil_jam`."""
     baris = _hasil_ocr_a2()
     if not baris:
         return pd.DataFrame(columns=["h3_index", "jam", "total_nominal", "akhir_pekan"])
@@ -1539,11 +1067,6 @@ def baca_ocr_struk() -> pd.DataFrame:
         nominal = h.get("total_nominal")
         if not waktu or nominal is None or b.get("lat") is None:
             continue
-        # Struk nol rupiah tidak ada. Nol di sini berarti totalnya TIDAK
-        # TERBACA dan model menuliskannya sebagai angka alih-alih mengosongkan
-        # - dan nol yang lolos akan menarik turun median nominal serta membuat
-        # sebuah heksagon tampak seperti tempat orang membeli tanpa membayar
-        # (aturan 4).
         if float(nominal) <= 0:
             continue
         try:
@@ -1573,12 +1096,7 @@ def baca_ocr_struk() -> pd.DataFrame:
 
 
 def variabel_dari_struk(struk: pd.DataFrame, profil: pd.DataFrame) -> pd.DataFrame:
-    """B01-B05, B09, B10, D11 dari struk yang jamnya terbaca.
-
-    B01-B04 adalah PANGSA, jadi penyebutnya struk di dalam jam operasional -
-    bukan seluruh struk. Struk pukul 02.00 tidak mengurangi pangsa pagi sebuah
-    heksagon; ia cuma di luar jam yang diukur Commuter Clock.
-    """
+    """B01-B05, B09, B10, D11 dari struk yang jamnya terbaca."""
     from config import JAM_OPERASIONAL
     from s4_spatial import belanja_per_jam
 
@@ -1603,14 +1121,6 @@ def variabel_dari_struk(struk: pd.DataFrame, profil: pd.DataFrame) -> pd.DataFra
     if not bertanggal.empty:
         g = bertanggal.groupby(["h3_index", "akhir_pekan"]).size().unstack(fill_value=0)
         if True in g.columns and False in g.columns:
-            # Dua hari akhir pekan lawan lima hari kerja - dibagi jumlah harinya,
-            # bukan dibandingkan mentah. Tanpa itu tiap lokasi akan tampak sepi
-            # di akhir pekan hanya karena akhir pekan lebih pendek.
-            # `np.nan`, BUKAN `pd.NA`. Keduanya terbaca "kosong" di layar,
-            # tetapi `pd.NA` tidak punya `__round__` - jadi `.round(3)` di
-            # bawahnya melempar TypeError begitu ada satu heksagon yang
-            # strukya seluruhnya akhir pekan (pembagi nol -> inf -> kosong).
-            # Tidak muncul pada 166 struk pertama, muncul pada 310.
             hasil["rasio_weekend"] = (
                 ((g[True] / 2) / (g[False] / 5))
                 .replace([np.inf, -np.inf], np.nan)
@@ -1641,21 +1151,7 @@ MIN_STRUK_PERKIRAAN = 10
 
 
 def perkiraan_jam_kawasan(struk: pd.DataFrame, kawasan_hex: pd.Series) -> list[dict]:
-    """B01-B04 tingkat KAWASAN untuk heksagon yang tidak punya struknya sendiri.
-
-    Dari 163 struk yang jamnya terbaca, hanya 7 jatuh di dalam 708 heksagon
-    kita - misi disebar se-Jabodetabek, bukan di grid kita. Membuangnya berarti
-    membuang 156 pengamatan sungguhan; memakainya sebagai nilai heksagon
-    berarti mengaku mengukur tempat yang tidak pernah didatangi siapa pun.
-
-    Jalan ketiga: pola JAM-nya - bukan nominalnya - diperlakukan sebagai ciri
-    KAWASAN, dan disimpan sebagai perkiraan berlabel. Itu pernyataan yang bisa
-    dipertanggungjawabkan: "di sekitar simpul ini, transaksi memuncak sore",
-    bukan "heksagon ini memuncak sore".
-
-    Heksagon yang PUNYA strukya sendiri dilewati - perkiraan tidak pernah boleh
-    berdiri di sebelah pengukuran untuk hal yang sama.
-    """
+    """B01-B04 tingkat KAWASAN untuk heksagon yang tidak punya struknya sendiri."""
     import h3 as _h3
 
     from config import JAM_OPERASIONAL, PUSAT
@@ -1704,15 +1200,7 @@ def perkiraan_jam_kawasan(struk: pd.DataFrame, kawasan_hex: pd.Series) -> list[d
 
 
 def bangun_blok(heksagon: pd.Series) -> pd.DataFrame:
-    """Seluruh blok (anak H3 res-10) beserta indikator dan skornya.
-
-    `heksagon`: h3_index -> kawasan, untuk seluruh heksagon yang diskor.
-
-    Murni membaca berkas mentah - tidak menulis apa pun ke mana pun. Pemisahan
-    itu yang membuat `--blok --kering` bisa dijalankan tanpa basis data yang
-    boleh ditulisi: hasilnya bisa diperiksa dulu sebagai berkas sebelum ada
-    satu baris pun yang berubah.
-    """
+    """Seluruh blok (anak H3 res-10) beserta indikator dan skornya."""
     from config import H3_RESOLUSI_BLOK, PUSAT
     from s2_clean import henti_dari_osm, jalan_dari_osm, konteks_bertitik_dari_osm, poi_dari_osm
     from s4_spatial import blok_dari_heksagon, indikator_blok
@@ -1796,13 +1284,7 @@ def _baris_blok(df: pd.DataFrame) -> list[dict]:
 
 
 def muat_blok(db: Session, df: pd.DataFrame) -> int:
-    """Tulis seluruh blok ke `blok_heksagon`. Hapus-lalu-isi, satu transaksi.
-
-    Hapus-lalu-isi aman di SINI (tidak seperti transport_nodes): tidak ada
-    tabel lain yang menunjuk `blok_heksagon`, jadi tidak ada cascade yang bisa
-    membawa serta data lain. Diperiksa, bukan diasumsikan - grep `blok_heksagon`
-    di models.py hanya menemukan tabelnya sendiri.
-    """
+    """Tulis seluruh blok ke `blok_heksagon`. Hapus-lalu-isi, satu transaksi."""
     baris = _baris_blok(df)
     db.execute(text("DELETE FROM blok_heksagon"))
     sisip = text(
@@ -1831,29 +1313,7 @@ def muat_blok(db: Session, df: pd.DataFrame) -> int:
 
 
 def isi_penduduk_dari_worldpop(db: Session, berkas: Path | None = None) -> dict[str, int]:
-    """D01 `pop_100m` dari raster WorldPop, plus C06 yang bergantung padanya.
-
-    Sumbernya `idn_ppp_2020_UNadj_constrained.tif` - WorldPop Global 2000-2020
-    Constrained, disesuaikan ke total penduduk PBB. Lisensi CC BY 4.0, jadi
-    boleh dipakai asal disebut; atribusinya ada di `/meta/siap`.
-
-    C06 WAJIB ikut ditulis di sini. Ia didefinisikan C01 / D01, jadi mengganti
-    penyebutnya tanpa menghitung ulang hasilnya meninggalkan basis data yang
-    setiap barisnya konsisten dengan dirinya sendiri KECUALI yang satu itu -
-    dan tidak ada galat yang akan memberi tahu siapa pun.
-
-    BATAS YANG HARUS DIKETAHUI PEMBACANYA: produk `constrained` menyebar total
-    sensus ke piksel yang terbangun, dan Jabodetabek terbangun hampir merata.
-    Terukur atas 708 heksagon: rasio kuartil 3 terhadap kuartil 1 cuma 1,13 -
-    praktis setiap heksagon ~1.900 jiwa. Jadi D01 di sini nyaris tidak menambah
-    daya beda antar-lokasi; yang ia perbaiki adalah SKALA C06, bukan urutannya.
-    Peningkatan sebenarnya menunggu data BPS tingkat kelurahan.
-
-    D02 `pop_usia_produktif` sengaja TIDAK disentuh. Struktur umur menuntut
-    raster AgeSex WorldPop - dua puluh berkas terpisah, sekitar 1 GB - dan
-    mengalikan D01 dengan satu rasio nasional cuma akan menghasilkan salinan
-    D01 yang berpura-pura jadi variabel lain.
-    """
+    """D01 `pop_100m` dari raster WorldPop, plus C06 yang bergantung padanya."""
     import rasterio
     from rasterio.windows import from_bounds
 
@@ -1891,16 +1351,6 @@ def isi_penduduk_dari_worldpop(db: Session, berkas: Path | None = None) -> dict[
         t = r.window_transform(jendela)
         d01 = penduduk_per_heksagon(nilai, t.c, t.f, t.a, -t.e, nodata=r.nodata)
 
-    # Direindeks ke SELURUH heksagon yang diskor, dan yang tidak menerima
-    # penduduk dibiarkan NaN supaya tertulis NULL - BUKAN dibuang dari daftar.
-    # Kalau dibuang, `muat_variabel` tidak menyentuh barisnya dan heksagon itu
-    # mempertahankan angka `demo_seed` di kolom yang sama dengan angka WorldPop.
-    # Terjadi sungguhan 26 Agu 2026: satu heksagon Tanah Abang tertinggal
-    # memegang 2521,07087899426 - sebelas angka di belakang koma di tengah
-    # kolom yang seharusnya seluruhnya hasil pengukuran.
-    #
-    # Sel H3 di luar 708 yang kebetulan menerima piksel dari jendela yang sama
-    # gugur lewat reindex ini; ia memang bukan urusan tabel ini.
     d01 = d01.reindex(hx.index)
     if d01.notna().sum() == 0:
         return {"berpenduduk": 0, "diperbarui": 0, "tanpa_penduduk": len(hx)}
@@ -1919,17 +1369,7 @@ def isi_penduduk_dari_worldpop(db: Session, berkas: Path | None = None) -> dict[
 
 
 def hitung_ulang_dari_db(db: Session, versi: str = "baseline") -> dict[str, int]:
-    """Baca variabel dari hex_features, hitung ulang skor, muat kembali.
-
-    Aturan 1 tetap utuh: aritmetikanya seluruhnya milik `s6_score`. Yang
-    dikerjakan di sini cuma membaca, memanggil, dan menulis.
-
-    `rincian_faktor` dijalankan atas DataFrame YANG SAMA, bukan salinan yang
-    dibaca ulang. Normalisasi min-max bergantung pada seluruh baris yang ikut
-    dihitung, jadi rincian yang dibangun dari kumpulan lain akan menjelaskan
-    skor yang berbeda dari yang tersimpan - selisih yang tidak memunculkan
-    galat apa pun dan hanya terlihat kalau angkanya dijumlahkan dengan tangan.
-    """
+    """Baca variabel dari hex_features, hitung ulang skor, muat kembali."""
     from s6_score import rincian_faktor, skor_lengkap
 
     kolom = sorted(set(KODE_KE_KOLOM.values()))
@@ -1948,12 +1388,7 @@ def hitung_ulang_dari_db(db: Session, versi: str = "baseline") -> dict[str, int]
 
 
 def muat_semua(versi: str = "baseline") -> dict[str, int]:
-    """Baca berkas hasil pipeline di data/03_olahan/ lalu muat semuanya.
-
-    Seluruhnya dalam SATU transaksi. Kalau salah satu bagian gagal, tidak ada
-    yang tersimpan - lebih baik daripada basis data berisi skor baru dengan
-    profil jam lama, keadaan yang sulit disadari dan sulit diperbaiki.
-    """
+    """Baca berkas hasil pipeline di data/03_olahan/ lalu muat semuanya."""
     berkas = {
         "hex": DATA_OLAHAN / "hex_features.parquet",
         "skor": DATA_OLAHAN / "location_scores.parquet",
@@ -1987,16 +1422,7 @@ def muat_semua(versi: str = "baseline") -> dict[str, int]:
 
 
 def ekspor_geojson(tujuan: Path = EKSPOR, versi: str = "baseline") -> dict[str, int]:
-    """Tulis satu berkas GeoJSON per kawasan, plus satu berkas gabungan.
-
-    Per kawasan, bukan satu berkas besar: peta hanya menampilkan satu kawasan
-    pada satu waktu, jadi mengunduh keenamnya berarti mengunduh lima kali lipat
-    data yang tidak dipakai.
-
-    Properti yang dibawa sama persis dengan yang dikirim GET /hex/layer, supaya
-    frontend bisa berpindah antara sumber statis dan endpoint tanpa mengubah satu
-    baris pun kode rendering.
-    """
+    """Tulis satu berkas GeoJSON per kawasan, plus satu berkas gabungan."""
     tujuan.mkdir(parents=True, exist_ok=True)
     Sesi = sessionmaker(bind=_mesin())
     hasil: dict[str, int] = {}
@@ -2017,17 +1443,6 @@ def ekspor_geojson(tujuan: Path = EKSPOR, versi: str = "baseline") -> dict[str, 
 
     with Sesi() as db:
         for kawasan in [*KAWASAN_PILOT, None]:
-            # Klausa saringnya DIRAKIT, bukan dimatikan lewat `:kawasan IS NULL`.
-            #
-            # Bentuk itu terlihat rapi dan tidak pernah berhasil sekali pun:
-            # parameter yang hanya muncul di `IS NULL` tidak punya tipe yang bisa
-            # disimpulkan PostgreSQL, dan ia menjawab "could not determine data
-            # type of parameter". Jadi `--ekspor` selalu meledak - sementara
-            # docs/arsitektur.md sudah menyebutnya "tinggal disajikan" dan tidak
-            # ada satu pun uji yang menyentuhnya.
-            #
-            # Nama kawasan TIDAK ditempel ke SQL; ia tetap parameter. Yang
-            # dirakit cuma ada-tidaknya klausanya.
             q = text(
                 kueri.format(saring="" if kawasan is None else "WHERE h.kawasan = :kawasan")
             )
@@ -2064,21 +1479,6 @@ def ekspor_geojson(tujuan: Path = EKSPOR, versi: str = "baseline") -> dict[str, 
     return hasil
 
 
-#: Sumber yang menyumbang angka ke peta ini, beserta cara mengukur cakupannya.
-#:
-#: `ukur` bukan hiasan: ia yang membuat "berapa heksagon yang benar-benar
-#: disentuh sumber ini" bisa DIHITUNG alih-alih ditaksir. Sumber yang tidak
-#: menyentuh satu heksagon pun jadi tidak bisa mengaku menyentuh 708 - dan
-#: daftar sumber yang ditulis tangan selalu kedaluwarsa ke arah itu.
-#:
-#: Ekspresinya konstanta modul, tidak pernah datang dari masukan pengguna.
-#:
-#: `jenis` ditambahkan 12 Sep 2026, dan ia bukan label kosmetik: ia yang
-#: memisahkan "diukur" dari "diperkirakan" di daftar yang dibaca juri. Sebuah
-#: baris berjenis `perkiraan` TIDAK pernah mengisi kolom di `hex_features`,
-#: tidak pernah menghitung skor, dan tidak pernah mewarnai peta - jadi daftar
-#: ini sekaligus jawaban atas "mana yang resmi dan mana yang bukan", dibangun
-#: dari tempat yang sama dengan yang membangun datanya.
 SUMBER_DATA: list[dict[str, str | None]] = [
     {
         "kunci": "activity",
@@ -2153,11 +1553,6 @@ SUMBER_DATA: list[dict[str, str | None]] = [
         "ukur": "pop_usia_produktif IS NOT NULL",
     },
     {
-        # SATU-SATUNYA baris berjenis `perkiraan` di daftar ini, dan ia sengaja
-        # berdiri di daftar yang sama alih-alih disembunyikan di dokumen lain:
-        # yang membuat sebuah daftar sumber bisa dipercaya bukan karena isinya
-        # bagus semua, melainkan karena yang lemah ikut tercantum dengan
-        # namanya sendiri.
         "kunci": "model_tim_ai",
         "jenis": "perkiraan",
         "nama": "Model tim AI Loconomics (GradientBoosting)",
@@ -2170,24 +1565,12 @@ SUMBER_DATA: list[dict[str, str | None]] = [
 
 
 def _id(nilai: float, desimal: int = 2) -> str:
-    """Angka dalam bentuk yang dibaca orang Indonesia: koma, bukan titik.
-
-    Dipakai di dalam KALIMAT temuan, bukan cuma di kolom angka - dan itu yang
-    membuatnya perlu ada di Python alih-alih di frontend. Kalimatnya sendiri
-    dirangkai di sini supaya tidak ada satu pun angka yang bisa berpisah dari
-    prosa yang menerangkannya.
-    """
+    """Angka dalam bentuk yang dibaca orang Indonesia: koma, bukan titik."""
     return f"{nilai:,.{desimal}f}".replace(",", " ").replace(".", ",")
 
 
 def _batang(label: str, nilai: float, tekan: bool = False) -> dict[str, Any]:
-    """Satu batang di grafik kecil temuan.
-
-    `tekan` DIHILANGKAN kalau salah, tidak ditulis sebagai `false`. Bukan soal
-    ukuran berkas: keempat temuan merangkai deretnya dengan cara yang berbeda -
-    sebagian dari literal, sebagian dari hasil kueri - dan tanpa satu pintu
-    keluar bersama, keluarannya berbeda bentuk untuk data yang sama artinya.
-    """
+    """Satu batang di grafik kecil temuan."""
     batang: dict[str, Any] = {"label": label, "nilai": nilai}
     if tekan:
         batang["tekan"] = True
@@ -2195,32 +1578,9 @@ def _batang(label: str, nilai: float, tekan: bool = False) -> dict[str, Any]:
 
 
 def hitung_temuan(db: Session, n_hex: int) -> list[dict[str, Any]]:
-    """Empat kali pengukuran membantah dugaan yang wajar. Diturunkan, bukan ditulis.
-
-    Ini bagian `#temuan` di halaman gerbang, dan alasannya ada di sini alih-alih
-    ditulis tangan di komponennya sama dengan alasan `BATASAN` ada di sini:
-    angka yang ditulis tangan di halaman gerbang sudah pernah kedaluwarsa ke arah
-    yang paling merugikan. Kali ini taruhannya lebih besar, karena yang basi bukan
-    cuma angka melainkan KESIMPULAN - dan kesimpulan yang basi tidak terbaca
-    sebagai angka lama, ia terbaca sebagai tim yang tidak memeriksa pekerjaannya.
-
-    Bukti bahwa kekhawatiran itu bukan hipotesis: keenam angka yang tercatat di
-    `CLAUDE.md` untuk temuan-temuan ini SUDAH meleset seluruhnya saat berkas ini
-    ditulis - rasio memutar 1,82 melawan 1,78 yang terukur, jangkauan Manggarai
-    17 heksagon melawan 9, selisih kerapatan OSM "sepuluh kali" melawan 16, dan
-    ZoneGuard "2 heksagon dilarang" melawan 13. Semuanya bergeser saat grid
-    Harjamukti dibangun ulang, dan tidak satu pun memunculkan galat.
-
-    Kontraknya satu: **temuan yang bahannya tidak ada tidak diterbitkan.**
-    Tabel kosong menghasilkan daftar yang lebih pendek, bukan kalimat yang
-    mengarang. Itu sebabnya tiap blok di bawah memeriksa dulu barisnya ada.
-    """
+    """Empat kali pengukuran membantah dugaan yang wajar. Diturunkan, bukan ditulis."""
     temuan: list[dict[str, Any]] = []
 
-    # --- 1 · Jarak lurus berbohong -----------------------------------------
-    #
-    # `urutan = 0` adalah rute TERCEPAT, bukan yang pertama dikembalikan ORS -
-    # penomorannya sudah diurutkan ulang menurut durasi oleh `rute_ors --rapikan`.
     r = db.execute(
         text("""
             WITH r AS (
@@ -2278,11 +1638,6 @@ def hitung_temuan(db: Session, n_hex: int) -> list[dict[str, Any]]:
             "desimal": 0,
         })
 
-    # --- 2 · Kawasan jangkau yang dipotong jaringannya sendiri --------------
-    #
-    # Dihitung per SIMPUL, bukan per kawasan: yang memotongnya emplasemen rel,
-    # dan itu sifat stasiunnya. Luas dari geografi, jadi satuannya benar-benar
-    # km2 dan bukan derajat persegi.
     baris = db.execute(
         text("""
             SELECT tn.nama, tn.moda,
@@ -2329,11 +1684,6 @@ def hitung_temuan(db: Session, n_hex: int) -> list[dict[str, Any]]:
             "desimal": 2,
         })
 
-    # --- 3 · Kerapatan pemetaan bukan kerapatan usaha -----------------------
-    #
-    # Temuan yang paling gampang salah dipakai, dan justru itu sebabnya ia ada
-    # di halaman ini: "tidak ada kompetitor" adalah kalimat yang paling menggoda
-    # untuk dibaca sebagai peluang.
     baris = db.execute(
         text("""
             SELECT hf.kawasan,
@@ -2426,24 +1776,7 @@ def hitung_temuan(db: Session, n_hex: int) -> list[dict[str, Any]]:
 
 
 def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
-    """Tulis cakupan data hari ini sebagai modul TypeScript untuk halaman gerbang.
-
-    Kenapa dibangkitkan dan bukan ditulis tangan: halaman gerbang menyebut
-    angka, dan angka yang ditulis tangan di sana sudah pernah kedaluwarsa ke
-    arah yang paling merugikan - ia mengaku "43 variabel per titik" sementara
-    yang terisi 25, dan menjanjikan "18 jam profil harian" sementara tabelnya
-    nol baris. Aturannya sama dengan pita status di bilah atas: kalau sebuah
-    PEMICU perlu dihitung dari data supaya tidak berbohong, KALIMAT yang
-    menyertainya perlu dihitung dari data untuk alasan yang persis sama.
-
-    Batasannya ikut diturunkan, bukan didaftar tangan. Daftar batasan tulis
-    tangan basi ke dua arah sekaligus: ia tetap menyebut kekurangan yang sudah
-    diperbaiki, dan diam soal yang baru muncul.
-
-    Modul TypeScript, bukan JSON di `public/`: halaman gerbang satu-satunya
-    bagian yang tetap hidup tanpa backend, jadi ia tidak boleh punya satu pun
-    permintaan jaringan yang bisa gagal.
-    """
+    """Tulis cakupan data hari ini sebagai modul TypeScript untuk halaman gerbang."""
     Sesi = sessionmaker(bind=_mesin())
     kolom = list(KODE_KE_KOLOM.values())
     berukur = [s for s in SUMBER_DATA if s["ukur"]]
@@ -2493,13 +1826,6 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
             )
         ).one()
 
-        # Taksonomi 8 kelas induk, dengan jumlah POI dan sebaran heksagonnya.
-        #
-        # Dibangkitkan dan bukan didaftar di frontend dengan alasan yang sama
-        # dengan seluruh berkas ini: daftarnya sudah ada di `config.KELAS_INDUK`,
-        # dan daftar KEDUA yang harus sejalan dengannya adalah daftar yang suatu
-        # saat tidak sejalan. Kelas yang nol POI tetap diterbitkan - "belum ada
-        # yang terpetakan" itu temuan, bukan alasan menyembunyikan barisnya.
         cacah_kelas = dict(
             db.execute(
                 text(
@@ -2528,17 +1854,8 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
             key=lambda k: (-k["poi"], k["kode"]),
         )
 
-        # Di dalam sesi yang sama - temuan menanyakan tabel yang berbeda, tetapi
-        # tidak boleh menanyakan basis data yang berbeda. Ringkasan dan temuan
-        # yang dibaca dari dua potret waktu bisa saling membantah di halaman
-        # yang sama, dan itu jenis salah yang tidak akan pernah terlihat.
         temuan = hitung_temuan(db, n_hex)
 
-    # Berapa titik misi yang DITARIK, bukan cuma yang mendarat di wilayah studi.
-    # Dua angka yang berbeda dan dua-duanya perlu disebut: yang pertama
-    # menyatakan berapa banyak survei peserta yang tersedia, yang kedua berapa
-    # yang menyentuh enam kawasan pilot. Menyebut yang pertama saja melebih-
-    # lebihkan; menyebut yang kedua saja meremehkan sumbernya sendiri.
     berkas_misi = DATA_MENTAH / "mapid_misi.json"
     ditarik = None
     if berkas_misi.exists():
@@ -2720,11 +2037,7 @@ def ekspor_ringkasan(tujuan: Path = RINGKASAN_TS) -> dict[str, Any]:
 
 
 def periksa_cakupan() -> pd.DataFrame:
-    """Ringkasan cakupan data per kawasan, untuk dilihat sebelum demo.
-
-    Menjawab "kawasan mana yang sudah layak ditunjukkan" dengan angka, bukan
-    dengan perasaan.
-    """
+    """Ringkasan cakupan data per kawasan, untuk dilihat sebelum demo."""
     Sesi = sessionmaker(bind=_mesin())
     with Sesi() as db:
         baris = db.execute(
@@ -2843,12 +2156,6 @@ if __name__ == "__main__":
         p.print_help()
         raise SystemExit(0)
 
-    # --- Hasil OCR struk ---------------------------------------------------
-    #
-    # Transaksinya sendiri dan SEBELUM --hitung-ulang: B09 dan D11 masuk IAE,
-    # jadi memuatnya tanpa menghitung ulang meninggalkan skor yang tidak lagi
-    # cocok dengan variabel yang menyusunnya - dan selisih itu tidak akan
-    # memunculkan satu pun galat.
     if arg.ocr:
         print("Memuat hasil OCR struk (A2)...")
         mentah = _hasil_ocr_a2()
@@ -2895,12 +2202,6 @@ if __name__ == "__main__":
                 else:
                     print("  perkiraan jam kawasan 0 (tidak ada kawasan yang cukup strukya)")
 
-    # --- Serah terima tim AI ----------------------------------------------
-    #
-    # Transaksinya sendiri, dan berjalan sebelum --hitung-ulang supaya D02 yang
-    # baru masuk ikut terbaca kalau skornya memang dihitung ulang di lari yang
-    # sama. D02 tidak menggeser skor - tapi menggantungkan urutannya pada fakta
-    # itu berarti menaruh bom waktu untuk hari seseorang memberi D02 bobot.
     if arg.tim_ai:
         print("Serah terima tim AI (syahh-coder/Loconomics-AI, hasilTrain)...")
         tim, mutu = baca_tim_ai()
@@ -2919,16 +2220,6 @@ if __name__ == "__main__":
             for kol, kode in KOLOM_TIM_AI_NYATA.items():
                 print(f"  {kode} {kol:<22} {int(nyata[kol].notna().sum())}/{len(punya)} terisi")
 
-            # 2. Yang PERKIRAAN - ke tabelnya sendiri, berlabel dan bermutu.
-            #
-            # UJI SILANG TERHADAP UKURAN KITA, bukan cuma R2 yang mereka
-            # laporkan. R2 0,62 dan MAE 2.864 itu diukur terhadap label yang
-            # 96,9%-nya sintetis, jadi ia mengukur seberapa baik model menebak
-            # formula yang membuatnya - bukan seberapa dekat ia ke kenyataan.
-            # Yang kita punya justru pembanding yang tidak dilihat model:
-            # pengamatan misi MAPID di heksagon kita sendiri. Angkanya ikut
-            # disimpan supaya setiap tempat yang menampilkan perkiraan ini bisa
-            # menyebut selisihnya, bukan cuma menyebut R2-nya.
             terukur = pd.read_sql(
                 "SELECT h3_index, harga_median_porsi, skor_ramai_terkoreksi FROM hex_features",
                 db.connection(),
@@ -2939,11 +2230,6 @@ if __name__ == "__main__":
                 if pas.empty:
                     continue
                 beda = (irisan.loc[pas.index, kol] - pas).abs()
-                # MAPE hanya atas nilai terukur yang BUKAN nol. D10 sah bernilai
-                # nol ("Sepi"), dan membaginya menghasilkan tak hingga - yang
-                # bukan cuma mustahil ditulis ke JSON, tapi juga akan terbaca
-                # sebagai "modelnya salah tak terhingga" alih-alih "pembaginya
-                # nol".
                 bukan_nol = pas[pas != 0]
                 mape = (
                     round(float((beda[bukan_nol.index] / bukan_nol.abs()).mean() * 100), 1)
@@ -2971,10 +2257,6 @@ if __name__ == "__main__":
                         "kode": kode,
                         "nilai": float(nilai),
                         "metode": "model_gbr",
-                        # Berapa pengamatan SUNGGUHAN yang menyusunnya. 15, bukan
-                        # 480: sisanya augmentasi sintetis, dan menuliskan 480 di
-                        # kolom bernama n_sumber adalah cara paling rapi untuk
-                        # membuat angka karangan terbaca sebagai survei.
                         "n_sumber": 15,
                         "radius_m": None,
                         "rincian": json.dumps({
@@ -3038,13 +2320,6 @@ if __name__ == "__main__":
                 print(f"  dimuat         {muat_blok(db, blok)}")
                 db.commit()
 
-    # --- Grid ---------------------------------------------------------------
-    #
-    # Dijalankan lebih dulu dan di transaksinya SENDIRI, bukan digabung dengan
-    # pemuatan variabel di bawah. Sebabnya: ia mengubah heksagon MANA yang ada,
-    # dan setiap langkah sesudahnya bekerja atas daftar heksagon. Menggabungkan
-    # keduanya dalam satu transaksi berarti pemuat variabel membaca grid lama
-    # dari snapshot transaksinya sendiri.
     if arg.grid:
         Sesi = sessionmaker(bind=_mesin())
         with Sesi() as db:
@@ -3076,10 +2351,6 @@ if __name__ == "__main__":
                 print("    python rute_ors.py  &&  python rute_ors.py --isochrone")
                 print("    python s7_publish.py --isi-d04 --misi --hitung-ulang")
 
-    # Keduanya menulis, jadi keduanya berbagi satu transaksi: kalau perhitungan
-    # ulang gagal, D04 pun tidak jadi berubah. Basis data berisi variabel baru
-    # dengan skor lama adalah keadaan yang tidak memunculkan galat apa pun dan
-    # hanya ketahuan kalau ada yang menjumlahkan faktornya dengan tangan.
     if (arg.isi_d04 or arg.penduduk or arg.bangunan or arg.osm or arg.misi
             or arg.survei or arg.gapfill or arg.rdtr or arg.transit
             or arg.kosongkan or arg.hitung_ulang):

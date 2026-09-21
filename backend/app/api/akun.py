@@ -1,20 +1,4 @@
-"""Akun, langganan, pemantauan, dan Laporan Kelayakan.
-
-Mesinnya ada di `app/core/akun.py`; yang di sini rutenya.
-
-SATU HAL YANG PERLU DIBACA SEBELUM MENYUNTING BERKAS INI. Tidak ada uang
-sungguhan yang berpindah di sini. `POST /akun/langganan` langsung mengaktifkan
-tanpa memverifikasi pembayaran apa pun,
-karena QRIS-nya memang belum terpasang. Itu keadaan yang DINYATAKAN - responsnya
-membawa `metode_bayar: "demo"`, dan antarmuka menuliskannya di layar. Begitu
-gerbang pembayaran sungguhan masuk, yang berubah cuma satu hal: endpoint itu
-berhenti mengaktifkan langsung dan mulai menunggu webhook. Bentuk tabelnya
-sudah menyiapkan itu lewat `referensi_bayar`.
-
-Jangan pernah membuat endpoint ini terlihat seolah sudah memverifikasi
-pembayaran. Layar berbayar palsu yang meyakinkan lebih buruk daripada layar
-berbayar yang jujur mengaku demo.
-"""
+"""Akun, langganan, pemantauan, dan Laporan Kelayakan."""
 
 from __future__ import annotations
 
@@ -103,12 +87,7 @@ def daftar(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> SesiAkun:
-    """Akun baru selalu lahir sebagai `gratis`.
-
-    Tidak ada masa coba premium otomatis. Kalau ada, tingkat seseorang berubah
-    sendiri di suatu tanggal tanpa ia melakukan apa pun - dan fitur yang tiba-tiba
-    hilang terbaca sebagai kerusakan, bukan sebagai masa coba yang habis.
-    """
+    """Akun baru selalu lahir sebagai `gratis`."""
     batas.periksa_laju(
         f"daftar:{_pemanggil(request)}",
         kalimat="Terlalu banyak percobaan mendaftar. Tunggu sebentar lalu coba lagi.",
@@ -121,10 +100,6 @@ def daftar(
         select(User).where((User.nama_pengguna == nama) | (User.email == email))
     ).scalar_one_or_none()
     if ada is not None:
-        # Sengaja menyebut yang mana yang bentrok. Ini BUKAN kebocoran yang sama
-        # dengan pada formulir masuk: di sini orangnya sedang mencoba memakai
-        # nama itu, dan "sudah dipakai" adalah satu-satunya cara membuat ia bisa
-        # memilih nama lain. Yang dijaga di formulir masuk justru sebaliknya.
         bentrok = "nama pengguna" if ada.nama_pengguna == nama else "surel"
         raise AkunSudahAda(
             f"{bentrok.capitalize()} itu sudah dipakai. Coba yang lain, atau masuk saja.",
@@ -171,11 +146,6 @@ def masuk(
         )
     ).scalar_one_or_none()
 
-    # Sidik tetap diperiksa walau akunnya tidak ada, memakai sidik buangan yang
-    # bentuknya sah. Tanpa ini, permintaan untuk akun yang tidak ada kembali
-    # jauh lebih cepat daripada yang ada - dan selisih waktu itu sendiri sudah
-    # menjawab "apakah surel ini terdaftar", persis yang pesan galatnya tolak
-    # untuk jawab.
     tersimpan = user.sidik_sandi if user else _SIDIK_HANTU
     cocok = periksa_sandi(p.sandi, tersimpan)
 
@@ -195,12 +165,7 @@ _SIDIK_HANTU = sidik_sandi("sidik-hantu-yang-tidak-pernah-cocok-dengan-apa-pun")
 
 @router.get("/saya", response_model=Akun, summary="Akun yang sedang masuk")
 def saya(user: PenggunaWajib, db: Annotated[Session, Depends(get_db)]) -> Akun:
-    """Dipanggil frontend saat memuat, untuk memvalidasi tiket yang tersimpan.
-
-    Tiket yang sudah kedaluwarsa atau akunnya dinonaktifkan mendarat di 401, dan
-    frontend membuang tiketnya. Itu sebabnya tidak ada daftar pencabutan: setiap
-    permintaan sudah menyentuh basis data.
-    """
+    """Dipanggil frontend saat memuat, untuk memvalidasi tiket yang tersimpan."""
     return Akun(**ringkas_akun(db, user))
 
 
@@ -215,13 +180,7 @@ def simpan_preferensi(
     user: PenggunaWajib,
     db: Annotated[Session, Depends(get_db)],
 ) -> Akun:
-    """Diisi saat onboarding premium; boleh diubah kapan saja.
-
-    Yang divalidasi keras hanya dua hal yang dipakai bercabang di tempat lain:
-    jenis usaha harus salah satu dari katalog simulasi (ia jadi bawaan panel
-    simulasi), dan kawasan harus salah satu dari enam pilot (ia menyetel
-    saringan peta). Budget bebas - ia cuma ditampilkan kembali ke pemiliknya.
-    """
+    """Diisi saat onboarding premium; boleh diubah kapan saja."""
     if p.jenis_usaha is not None and p.jenis_usaha not in JENIS_USAHA:
         raise TidakDitemukan(
             f"Jenis usaha '{p.jenis_usaha}' tidak dikenal.",
@@ -305,19 +264,7 @@ def berlangganan(
 def daftar_pantauan(
     user: PenggunaPremium, db: Annotated[Session, Depends(get_db)]
 ) -> list[ButirPantauan]:
-    """Selisih dihitung terhadap angka yang DIBEKUKAN saat mulai memantau.
-
-    `PenggunaPremium`, bukan `PenggunaWajib` - sejak 13 Sep 2026. Pemantauan
-    tercatat sebagai fitur berbayar di tabel aturan 2b dan antarmuka memang
-    menahannya, tetapi ketiga pintu API-nya cuma menuntut akun: akun gratis
-    yang memanggil endpoint ini langsung mendapat fitur yang sama dengan
-    pelanggan. Menghapus dari simpanan sengaja TETAP boleh untuk akun apa pun -
-    langganan yang habis tidak boleh menyandera daftar milik orangnya.
-
-    Bukan terhadap angka yang dihitung ulang sekarang. Bedanya penting: yang
-    pertama melaporkan perubahan yang sungguh terjadi, yang kedua selalu
-    melaporkan nol dan terlihat seperti fitur yang bekerja.
-    """
+    """Selisih dihitung terhadap angka yang DIBEKUKAN saat mulai memantau."""
     butir = db.execute(
         select(WatchlistItem)
         .where(WatchlistItem.user_id == user.id)
@@ -453,16 +400,17 @@ def tambah_pantauan(
             db.refresh(ada)
 
     p75, p90 = persentil_churn(db, hx.kawasan)
-    # lat/lon ikut di sini juga, bukan cuma di GET. Frontend menggambar pin dari
-    # jawaban ini segera sesudah menyimpan; kalau kosong, pin baru muncul di
-    # pemuatan berikutnya - dan pin yang menunggu muat ulang bukan fitur.
-    titik = db.execute(
-        select(
-            func.ST_Y(func.ST_Centroid(HexFeature.geom)),
-            func.ST_X(func.ST_Centroid(HexFeature.geom)),
-        ).where(HexFeature.h3_index == p.h3_index)
-    ).one_or_none()
     sendiri = ada.lat is not None and ada.lon is not None
+    titik = (
+        None
+        if sendiri
+        else db.execute(
+            select(
+                func.ST_Y(func.ST_Centroid(HexFeature.geom)),
+                func.ST_X(func.ST_Centroid(HexFeature.geom)),
+            ).where(HexFeature.h3_index == p.h3_index)
+        ).one_or_none()
+    )
     return ButirPantauan(
         h3_index=ada.h3_index,
         kawasan=hx.kawasan,
@@ -530,17 +478,7 @@ def laporan_pdf(
     user: PenggunaPremium,
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
-    """Dokumen resmi untuk pengajuan modal atau sewa.
-
-    Premium saja, lewat dependensi `PenggunaPremium` - bukan `if` di badan
-    fungsi. Jalur token satuan dihapus 13 Sep 2026 atas permintaan pemilik
-    repo; lihat `core/akun.py::akses_penuh`.
-
-    Isinya membawa badge keyakinan di halaman pertama, bukan di catatan kaki.
-    Dokumen ini dibuat untuk dibawa ke pemberi modal, dan angka yang berdiri
-    tanpa keterangan seberapa tebal datanya adalah angka yang menyesatkan orang
-    yang paling perlu tahu.
-    """
+    """Dokumen resmi untuk pengajuan modal atau sewa."""
     hx = ambil_hex(db, h3_index)
 
     sc = db.execute(
@@ -601,16 +539,7 @@ def laporan_komparasi(
     h3: Annotated[list[str], Query(description="Ulangi 2-4 kali: ?h3=...&h3=...")],
     versi: Annotated[str, Query()] = VERSI_BAKU,
 ) -> Response:
-    """Tabel perbandingan berdampingan, siap dicetak.
-
-    TIDAK menghitung ulang apa pun: ia memanggil endpoint komparasi yang sama
-    dengan yang dipakai layar, lalu menyusun barisnya jadi PDF. Kalau angkanya
-    dihitung ulang di sini, cepat atau lambat PDF dan layar akan menyebut dua
-    angka berbeda untuk lokasi yang sama - dan yang dibawa orang ke pemberi
-    modal justru PDF-nya.
-
-    Premium saja.
-    """
+    """Tabel perbandingan berdampingan, siap dicetak."""
     from app.api.skor import komparasi as susun_komparasi
 
     hasil = susun_komparasi(pengguna=pengguna, db=db, h3=h3, versi=versi)
@@ -651,17 +580,7 @@ def laporan_simulasi_pdf(
     harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
     h3_blok: Annotated[str | None, Query()] = None,
 ) -> Response:
-    """Rencana usaha satu halaman, siap dibawa ke pemberi modal.
-
-    TIDAK menghitung ulang apa pun: ia memanggil `simulasi_heksagon` yang sama
-    dengan yang dipakai layar, dengan parameter yang sama. Dua jalur yang
-    menghitung sendiri-sendiri adalah dua jalur yang cepat atau lambat
-    berselisih - dan yang berselisih di sini angka yang dibawa orang ke bank.
-
-    Berbayar lewat penjaga yang sama dengan simulasinya sendiri: `wajib_akses_
-    penuh` dipanggil di dalam `simulasi_heksagon`, jadi tidak ada pintu kedua
-    yang bisa lupa dikunci.
-    """
+    """Rencana usaha satu halaman, siap dibawa ke pemberi modal."""
     from app.api.hex import simulasi_heksagon
 
     sim = simulasi_heksagon(
@@ -681,12 +600,7 @@ def laporan_simulasi_pdf(
 
 
 def _putusan_simulasi(sim) -> tuple[str, str, str]:
-    """Kalimat putusan simulasi, dirakit dari hasilnya sendiri.
-
-    Yang dinilai BUKAN skor lokasinya melainkan apakah rencananya menutup
-    biayanya - dua pertanyaan berbeda yang sering dikira satu. Lokasi berskor
-    90 dengan sewa yang terlalu mahal tetap rugi.
-    """
+    """Kalimat putusan simulasi, dirakit dari hasilnya sendiri."""
     laba = sim.hasil.laba_kotor_bulanan
     rasio = sim.hasil.rasio_sewa_terhadap_omzet
     if laba is None:
@@ -722,17 +636,7 @@ def _putusan_simulasi(sim) -> tuple[str, str, str]:
 
 
 def _rakit_pdf_simulasi(sim, user) -> bytes:
-    """Laporan Simulasi Usaha - satu skenario, satu lokasi.
-
-    Urutannya mengikuti pertanyaan yang benar-benar diajukan orang yang akan
-    menyewa tempat: untung tidak, dari mana angkanya, seberapa salah asumsinya
-    boleh, kapan ramainya, dan apa yang perlu diwaspadai.
-
-    `sensitivitas` naik ke halaman depan sebagai KURVA, bukan tabel. Satu angka
-    laba menjawab "kalau asumsinya benar"; kurva itu menjawab "seberapa salah
-    asumsinya boleh sebelum rugi" - dan itu pertanyaan yang sebenarnya dibawa
-    orangnya.
-    """
+    """Laporan Simulasi Usaha - satu skenario, satu lokasi."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -825,11 +729,6 @@ def _rakit_pdf_simulasi(sim, user) -> bytes:
                 ),
             ]
         else:
-            # RUGI: batang bertumpuk tidak boleh dipakai di sini. Ia menormalkan
-            # totalnya jadi 100%, jadi sewa yang tiga kali omzet tergambar
-            # sebagai "seluruh omzet habis untuk sewa" - pernyataan yang jauh
-            # lebih ringan daripada keadaannya. Dua batang pada SKALA YANG SAMA
-            # menyatakan selisihnya apa adanya.
             isi += [
                 Paragraph("1. Omzet tidak menutup sewanya", g["h2"]),
                 lap.bar_banding(
@@ -906,11 +805,6 @@ def _rakit_pdf_simulasi(sim, user) -> bytes:
     if sim.profil_jam:
         isi += [
             Paragraph("5. Kapan ramainya", g["h2"]),
-            # `_grafik_jam` menuntut objek ber-`.jam` dan `.n_transaksi`;
-            # `profil_jam` simulasi membawa `.relatif` (0-1, dinormalkan ke jam
-            # tersibuk). Dijembatani di sini alih-alih melonggarkan grafiknya:
-            # grafik yang menerima dua bentuk masukan adalah grafik yang suatu
-            # saat menggambar salah satunya dengan skala yang salah.
             _grafik_jam(
                 [SimpleNamespace(jam=j.jam, n_transaksi=j.relatif) for j in sim.profil_jam],
                 dok.width,
@@ -995,12 +889,7 @@ def _gaya_pdf():
 
 
 def _pita_keyakinan(keyakinan, lebar, gaya, colors):
-    """Badge keyakinan sebagai pita lebar, di ATAS - bukan di catatan kaki.
-
-    Dokumen ini dibawa ke pemberi modal, dan angka yang berdiri tanpa keterangan
-    seberapa tebal datanya adalah angka yang menyesatkan orang yang paling perlu
-    tahu.
-    """
+    """Badge keyakinan sebagai pita lebar, di ATAS - bukan di catatan kaki."""
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import Paragraph, Table, TableStyle
 
@@ -1030,16 +919,7 @@ def _pita_keyakinan(keyakinan, lebar, gaya, colors):
 
 
 def _putusan_lokasi(zona, sc, keyakinan) -> tuple[str, str, str]:
-    """Satu kalimat putusan untuk kepala Laporan Kelayakan.
-
-    DIRAKIT dari angka, bukan ditulis tetap - jebakan nomor 7 di
-    docs/jebakan.md: pemicu yang dihitung dari data dengan kalimat yang ditulis
-    tetap akan berbohong untuk sebagian besar kasusnya.
-
-    Urutan pemeriksaannya sama dengan urutan pertanyaan yang benar: boleh tidak
-    dulu, baru bagus tidak. Lokasi yang zonanya melarang tidak perlu tahu
-    skornya berapa.
-    """
+    """Satu kalimat putusan untuk kepala Laporan Kelayakan."""
     if zona.status == "DILARANG":
         return (
             "Tidak bisa dipakai usaha",
@@ -1087,17 +967,7 @@ def _putusan_lokasi(zona, sc, keyakinan) -> tuple[str, str, str]:
 def _rakit_pdf(
     hx, sc, zona, risiko, keyakinan, user, faktor=None, jam=None, ditahan: set[str] | None = None
 ) -> bytes:
-    """Laporan Kelayakan satu lokasi.
-
-    Sengaja tanpa gambar peta. Menyisipkan tangkapan peta berarti merender
-    MapLibre di sisi server - satu peramban tanpa kepala di dalam kontainer API,
-    untuk sebuah gambar yang tidak menambah satu pun angka yang bisa diaudit.
-    Yang dibawa dokumen ini angka dan asalnya.
-
-    Empat bagian, berurutan seperti pertanyaan yang benar-benar diajukan:
-    boleh tidak, seberapa bagus, berapa biayanya, kenapa skornya segitu. Lalu
-    seluruh 43 variabel sebagai lampiran, dalam bahasa orang - bukan nama kolom.
-    """
+    """Laporan Kelayakan satu lokasi."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -1120,10 +990,6 @@ def _rakit_pdf(
     skor_nilai = sc.opportunity_score if sc else None
     kuadran_kode = sc.kuadran if sc else None
 
-    # Putusan di KEPALA dokumen, dirakit dari angka yang sama dengan yang
-    # dicetak di bawahnya. Laporan yang menuntut pembacanya menyusun
-    # kesimpulan sendiri dari empat tabel adalah laporan yang kesimpulannya
-    # berbeda-beda menurut siapa yang membacanya.
     isi: list[Any] = [
         lap.kop(
             "Laporan Kelayakan Lokasi",
@@ -1164,12 +1030,6 @@ def _rakit_pdf(
         ["Risiko banjir", _angka_id(hx.risiko_banjir)],
     ], dok.width, colors))
 
-    # --- 2. Seberapa bagus lokasinya ----------------------------------------
-    #
-    # DIGAMBAR, bukan didaftar. Delapan baris angka desimal menuntut pembacanya
-    # membandingkan sendiri "0,79" dengan "0,49"; delapan batang menjawabnya
-    # sebelum angkanya sempat dibaca. Angkanya tetap ada di kolom kanan - yang
-    # ditambahkan cuma cara memindainya.
     isi += [Paragraph("2. Seberapa bagus lokasinya", g["h2"])]
     kuadran = (
         LABEL_KUADRAN.get(sc.kuadran, sc.kuadran) if sc and sc.kuadran else "belum ada data"
@@ -1296,12 +1156,7 @@ def _rakit_pdf(
 
 
 def _rakit_pdf_komparasi(baris, user) -> bytes:
-    """Perbandingan 2-4 lokasi berdampingan.
-
-    `baris` sudah berupa BarisKomparasi milik endpoint komparasi - jadi angka di
-    PDF dan angka di layar berasal dari satu perhitungan yang sama, bukan dari
-    dua kueri yang kebetulan mirip.
-    """
+    """Perbandingan 2-4 lokasi berdampingan."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
@@ -1466,18 +1321,6 @@ def _rakit_pdf_komparasi(baris, user) -> bytes:
     return penyangga.getvalue()
 
 
-# ===========================================================================
-# Gambar untuk laporan PDF
-# ===========================================================================
-#
-# DIGAMBAR, bukan ditulis. Dokumen yang dibawa ke pemberi modal dibaca dalam
-# hitungan menit, dan deret angka tidak bisa dipindai - satu batang yang lebih
-# panjang daripada batang di sebelahnya bisa. Ketiga gambar di bawah memakai
-# `reportlab.graphics` yang sudah ikut paket, bukan pustaka grafik tambahan:
-# yang digambar cuma persegi panjang dan garis.
-#
-# Nol angka DIKARANG di sini. Tiap gambar menerima nilai yang sudah dihitung
-# pipeline dan hanya memilih panjang batangnya.
 
 
 def _bar(nilai, maks, lebar, tinggi=9, warna=None, latar=None):
@@ -1501,12 +1344,7 @@ def _bar(nilai, maks, lebar, tinggi=9, warna=None, latar=None):
 
 
 def _kuadran_mini(kuadran, lebar=54, tinggi=54):
-    """Petak 2x2 dengan satu titik di kotak yang benar.
-
-    Kuadran adalah tesis produk ini, dan satu kata ("Hidden Gem") tidak
-    menyatakan DI MANA ia berdiri terhadap tiga kemungkinan lain. Petaknya
-    menyatakannya tanpa satu kalimat pun.
-    """
+    """Petak 2x2 dengan satu titik di kotak yang benar."""
     from reportlab.graphics.shapes import Circle, Drawing, Rect, String
     from reportlab.lib import colors as C
 
@@ -1532,10 +1370,6 @@ def _kuadran_mini(kuadran, lebar=54, tinggi=54):
                        strokeWidth=0.6))
     if kuadran in SEL:
         kx, ky = SEL[kuadran]
-        # Isian pucat dihitung sebagai CAMPURAN ke putih, bukan lewat alfa.
-        # `HexColor("#4C93F722")` tanpa `hasAlpha=True` diurai sebagai bilangan
-        # 32-bit dan menghasilkan warna yang sama sekali lain - petak Hidden Gem
-        # yang biru tampil hijau menyala. Terlihat begitu di potret.
         dasar = C.HexColor(WARNA[kuadran])
         pucat = C.Color(
             dasar.red * 0.18 + 0.82,
@@ -1553,13 +1387,7 @@ def _kuadran_mini(kuadran, lebar=54, tinggi=54):
 
 
 def _grafik_jam(jam, lebar, tinggi=42):
-    """Delapan belas batang: kapan uangnya berpindah.
-
-    Jam yang TIDAK punya transaksi digambar sebagai batang nol, bukan dilewati.
-    Melewatinya memampatkan sumbu waktu dan membuat toko yang ramai tiga jam
-    terlihat sama sibuknya dengan toko yang ramai dua belas jam - jebakan yang
-    sudah tercatat di repo ini.
-    """
+    """Delapan belas batang: kapan uangnya berpindah."""
     from reportlab.graphics.shapes import Drawing, Rect, String
     from reportlab.lib import colors as C
 
@@ -1580,18 +1408,7 @@ def _grafik_jam(jam, lebar, tinggi=42):
 
 
 def _profil_pengguna(user, hx, g, colors, lebar):
-    """Siapa yang menerbitkannya, dan apa yang sedang ia cari.
-
-    Ditambahkan 11 Sep 2026, permintaan pemilik repo. Bukan basa-basi: laporan
-    kelayakan dibaca bersama orang lain - pemberi modal, mitra, keluarga - dan
-    yang pertama ditanyakan pembaca kedua selalu "ini punya siapa, dan dia
-    sedang cari apa". Preferensinya SUDAH ada di basis data sejak onboarding;
-    yang belum ada cuma jalannya ke halaman pertama dokumen.
-
-    Anggaran dibandingkan LANGSUNG dengan sewa lokasi ini. Angka yang berdiri
-    sendirian menuntut pembacanya menghitung selisihnya sendiri, dan itu
-    pekerjaan yang bisa dilakukan dokumen ini untuknya.
-    """
+    """Siapa yang menerbitkannya, dan apa yang sedang ia cari."""
     from reportlab.platypus import Paragraph, Table, TableStyle
 
     pref: dict[str, Any] = {}
@@ -1649,12 +1466,7 @@ def _profil_pengguna(user, hx, g, colors, lebar):
 
 
 def _tabel_bar(baris, lebar, colors):
-    """Tabel label - batang - nilai. Tiga kolom, dan yang tengah yang bekerja.
-
-    `baris` = [(label, nilai, maks, teks, arah)] dengan arah 'tinggi' atau
-    'rendah'; yang 'rendah' diberi warna berbeda supaya batang panjang tidak
-    otomatis terbaca sebagai kabar baik.
-    """
+    """Tabel label - batang - nilai. Tiga kolom, dan yang tengah yang bekerja."""
     from reportlab.platypus import Table, TableStyle
     from reportlab.lib import colors as C
 

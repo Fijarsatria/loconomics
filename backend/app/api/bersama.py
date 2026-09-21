@@ -1,12 +1,4 @@
-"""Potongan yang dipakai lebih dari satu modul API.
-
-Sebelumnya `skor.py` mengimpor `badge()` dari `hex.py`. Begitu modul bertambah,
-pola itu berubah jadi impor melingkar. Semua yang dipakai bersama pindah ke sini;
-modul API hanya mengimpor dari bawah ke atas, tidak pernah menyamping.
-
-Tidak ada perhitungan skor di berkas ini. Yang ada hanya pembacaan basis data dan
-penerapan aturan tampilan dari app/core/aturan.py.
-"""
+"""Potongan yang dipakai lebih dari satu modul API."""
 
 from sqlalchemy import Float, func, select, text
 from sqlalchemy.orm import Session
@@ -64,19 +56,6 @@ assert len(SEMUA_VARIABEL) == 43, f"Kamus Data harus 43 variabel, ada {len(SEMUA
 # Aturan 2: nilai dari SATU baris survei bukan agregat
 # ---------------------------------------------------------------------------
 
-#: Variabel yang nilainya dirangkum LANGSUNG dari baris observasi misi MAPID,
-#: menurut tabel asalnya.
-#:
-#: Ditemukan audit keamanan 13 Sep 2026: di enam heksagon yang cuma punya satu
-#: titik Menu Go, "median harga per porsi" yang dikirim `/pricelens/layer`
-#: SAMA PERSIS dengan `harga_rata_porsi` baris survei itu - median dari satu
-#: angka adalah angka itu sendiri. Siapa pun tanpa akun jadi tahu harga satu
-#: pedagang yang disurvei. Aturan 2 melarang respons yang bisa merekonstruksi
-#: satu baris survei, dan "rata-rata" dari satu baris persis itu.
-#:
-#: Namanya TABEL, bukan kolom `n_titik_misi`: angka itu menjumlahkan ketiga
-#: jenis misi, jadi satu menu + satu struk berbunyi 2 padahal harga porsinya
-#: tetap satu baris.
 KOLOM_PER_TABEL_MISI: dict[str, tuple[str, ...]] = {
     "menu_observations": (
         "harga_median_porsi", "spread_harga", "skor_ramai_terkoreksi", "rasio_keliling",
@@ -88,12 +67,7 @@ MIN_BARIS_MISI = 2
 
 
 def kolom_sampel_tunggal(db: Session, h3_index: str | None = None) -> dict[str, set[str]]:
-    """h3 -> kolom yang WAJIB ditahan karena bahannya kurang dari `MIN_BARIS_MISI` baris.
-
-    Heksagon tanpa satu pun baris observasi tidak muncul di sini: nilainya (kalau
-    ada) bukan rangkuman survei, jadi tidak ada baris yang bisa direkonstruksi.
-    Nama tabel berasal dari konstanta di atas, tidak pernah dari masukan.
-    """
+    """h3 -> kolom yang WAJIB ditahan karena bahannya kurang dari `MIN_BARIS_MISI` baris."""
     hasil: dict[str, set[str]] = {}
     for tabel, kolom in KOLOM_PER_TABEL_MISI.items():
         saring = "WHERE h3_index = :h3 " if h3_index else ""
@@ -122,11 +96,7 @@ def tahan_sampel_tunggal(nilai: dict, ditahan: set[str] | None) -> dict:
 
 
 def badge(hx: HexFeature) -> BadgeKeyakinan:
-    """Satu-satunya cara membangun badge. Dipakai semua endpoint yang mengirim skor.
-
-    Skor 82 dari 40 titik survei dan skor 82 dari 3 titik survei adalah dua
-    pernyataan yang berbeda. Fungsi ini yang memastikan perbedaan itu selalu ikut.
-    """
+    """Satu-satunya cara membangun badge. Dipakai semua endpoint yang mengirim skor."""
     return BadgeKeyakinan(
         n_titik_misi=hx.n_titik_misi,
         tingkat=hx.tingkat_keyakinan,  # type: ignore[arg-type]
@@ -140,12 +110,7 @@ def badge(hx: HexFeature) -> BadgeKeyakinan:
 
 
 def zoneguard(hx: HexFeature, bahasa: Bahasa = BAHASA_BAWAAN) -> StatusZoneGuard:
-    """Status zonasi satu heksagon.
-
-    `filter_mutlak` benar hanya untuk DILARANG. TIDAK_DIKETAHUI tidak pernah
-    ikut disaring: kawasan yang RDTR-nya belum digital bukan kawasan terlarang,
-    dan menyamakan keduanya akan mematikan seluruh kawasan itu di peta.
-    """
+    """Status zonasi satu heksagon."""
     st = status_zona(hx.zona_izin_komersial)
     return StatusZoneGuard(
         status=st,
@@ -156,15 +121,7 @@ def zoneguard(hx: HexFeature, bahasa: Bahasa = BAHASA_BAWAAN) -> StatusZoneGuard
 
 
 def saring_zoneguard(stmt):
-    """Klausa WAJIB untuk setiap query yang MEREKOMENDASIKAN lokasi.
-
-    `is_not(False)` dan bukan `is_(True)`: yang dibuang hanya yang tegas dilarang.
-    Heksagon berzona NULL tetap lolos dan dibawa apa adanya beserta peringatannya.
-
-    Kriteria penerimaan fitur ZoneGuard menyebut "filter mutlak". Fungsi inilah
-    kemutlakannya - dipanggil di setiap jalur rekomendasi tanpa kecuali:
-    /skor/ranking, /skor/hidden-gems, dan fungsi cari_lokasi milik AI.
-    """
+    """Klausa WAJIB untuk setiap query yang MEREKOMENDASIKAN lokasi."""
     return stmt.where(HexFeature.zona_izin_komersial.is_not(False))
 
 
@@ -175,12 +132,7 @@ def saring_zoneguard(stmt):
 
 @ber_cache("churn")
 def persentil_churn(db: Session, kawasan: str) -> tuple[float | None, float | None]:
-    """Persentil 75 dan 90 indeks churn dalam satu kawasan.
-
-    Ambangnya relatif terhadap kawasan sendiri, bukan absolut nasional: churn 0,4
-    di Tanah Abang dan 0,4 di Harjamukti punya arti berbeda karena dasar
-    aktivitasnya berbeda.
-    """
+    """Persentil 75 dan 90 indeks churn dalam satu kawasan."""
     baris = db.execute(
         select(
             func.percentile_cont(CHURN_PERSENTIL_WASPADA)
@@ -243,12 +195,7 @@ def gabung_skor(versi: str):
 
 
 def periksa_kawasan(kawasan: str | None) -> str | None:
-    """Tolak nama kawasan yang tidak dikenal, jangan diam-diam mengembalikan kosong.
-
-    "Manggarai " dengan spasi di belakang, "manggarai" huruf kecil, atau
-    "Dukuh Atas" tanpa "BNI" semuanya menghasilkan nol baris. Tanpa pemeriksaan
-    ini, pemanggil membaca hasil kosong sebagai "tidak ada lokasi bagus di sana".
-    """
+    """Tolak nama kawasan yang tidak dikenal, jangan diam-diam mengembalikan kosong."""
     if kawasan is None:
         return None
     bersih = kawasan.strip()
@@ -264,18 +211,7 @@ def periksa_kawasan(kawasan: str | None) -> str | None:
 
 
 def periksa_kawasan_banyak(kawasan: str | None) -> list[str] | None:
-    """Terima satu nama kawasan ATAU beberapa yang dipisah koma.
-
-    Mengembalikan None untuk "jangan disaring", sama dengan `periksa_kawasan`.
-    Tiap nama tetap melewati pemeriksa yang sama satu per satu, jadi satu salah
-    ketik di tengah daftar tetap ditolak dengan pesan yang sama - bukan
-    diam-diam dibuang sehingga hasilnya menyempit tanpa ada yang tahu.
-
-    Duplikat dibuang, urutannya dipertahankan. Urutan dipertahankan karena ia
-    ikut jadi kunci cache: {"Bekasi","Depok Baru"} dan {"Depok Baru","Bekasi"}
-    adalah saringan yang sama, dan menormalkannya di sini membuat keduanya
-    berbagi satu entri cache alih-alih dua.
-    """
+    """Terima satu nama kawasan ATAU beberapa yang dipisah koma."""
     if kawasan is None or not kawasan.strip():
         return None
     keluar: list[str] = []

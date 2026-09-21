@@ -1,13 +1,4 @@
-"""Sambungan ke penyedia model bahasa.
-
-Dipisahkan dari app/api/ai.py supaya modul API tidak tahu-menahu soal SDK mana
-yang dipakai. Kalau penyedia diganti, hanya berkas ini yang berubah.
-
-Kunci API dibaca dari environment dan TIDAK PERNAH dikirim ke frontend. Ini bukan
-kehati-hatian berlebihan: seluruh variabel VITE_ ikut ter-bundel ke berkas yang
-bisa dibuka siapa saja, jadi satu kebocoran cukup untuk membuat tagihan berjalan
-atas nama orang lain.
-"""
+"""Sambungan ke penyedia model bahasa."""
 
 from __future__ import annotations
 
@@ -23,10 +14,6 @@ MODEL_DEFAULT = "claude-opus-5"
 # Bawaan saat LLM_PROVIDER=gemini. Bisa ditimpa LLM_MODEL, sama seperti di atas.
 MODEL_GEMINI = "gemini-flash-latest"
 
-# Batas keras putaran percakapan dengan alat. Delapan sudah lebih dari cukup untuk
-# pertanyaan paling rumit sekalipun (cari -> jelaskan -> bandingkan -> gerakkan peta);
-# batas ini ada supaya model yang tersesat tidak memanggil alat tanpa henti dan
-# menghabiskan biaya.
 MAKS_PUTARAN = 8
 
 # Cukup untuk narasi beberapa paragraf plus panggilan alat. Bukan angka besar:
@@ -35,12 +22,7 @@ MAKS_TOKEN = 4096
 
 
 class LLMBelumSiap(RuntimeError):
-    """Dilempar kalau penyedia belum dikonfigurasi.
-
-    Sengaja bukan jawaban palsu. Endpoint yang menangkapnya mengembalikan 501
-    dengan pesan yang menjelaskan apa yang kurang - itu lebih berguna bagi tim
-    daripada jawaban kosong yang terlihat berhasil.
-    """
+    """Dilempar kalau penyedia belum dikonfigurasi."""
 
 
 def model_aktif() -> str:
@@ -52,25 +34,11 @@ def model_aktif() -> str:
 #: Sampai kapan penyedia dianggap sedang menolak. Epoch detik; 0 = tidak.
 _penuh_sampai: float = 0.0
 
-#: Lima belas menit. Bukan sampai kuota harian benar-benar pulih (tengah malam
-#: Pasifik), karena kita tidak bisa membedakan "jatah harian habis" dari
-#: "sedang ramai sesaat" tanpa mencoba lagi - dan menyembunyikan Konsultan AI
-#: sampai besok karena satu ledakan lalu lintas lebih merugikan daripada
-#: menampilkannya. Sesudah jendela ini status kembali optimistis, dan
-#: percobaan berikutnya yang menguji ulang keadaannya.
 JENDELA_PENUH_DETIK = 15 * 60
 
 
-#: Sekat bawah. Penyedia yang menyuruh mencoba lagi "dalam 2 detik" tetap
-#: ditandai penuh setengah menit: dua pengunjung yang menekan kirim pada detik
-#: yang sama akan sama-sama membentur batas yang sama, dan yang kedua tidak
-#: perlu ikut menunggu balasan galat untuk mengetahuinya.
 JENDELA_PENUH_MINIMUM = 30
 
-#: Seberapa dekat dua kegagalan harus terjadi supaya dihitung BERUNTUN. Longgar
-#: dengan sengaja: sesudah jendela habis, orang berikutnya yang bertanya bisa
-#: datang beberapa menit kemudian, dan kegagalannya tetap kabar yang sama
-#: tentang penyedia yang sama.
 JENDELA_BERUNTUN = 20 * 60
 
 #: Jendela yang dipakai terakhir kali, dan kapan. Dasar pelipatgandaan.
@@ -79,54 +47,13 @@ _gagal_terakhir_pada: float = 0.0
 
 
 def tandai_penyedia_penuh(detik: float | None = None) -> None:
-    """Dipanggil klien saat SELURUH modelnya menolak (429/503).
-
-    Ada supaya `/ai/status` berhenti berbohong. Tanpa ini status cuma menjawab
-    "kuncinya terpasang?" - dan itu tetap `true` sepanjang jatah harian habis,
-    jadi panel Konsultan AI mengundang orang bertanya lalu gagal pada
-    pertanyaan pertama. Itu persis keadaan yang endpoint ini dibuat untuk
-    mencegah. Terjadi 13 Sep 2026: jatah Gemini habis dipakai OCR foto misi,
-    dan `/ai/status` di backend publik tetap menjawab `siap: true`.
-
-    `detik` DITAMBAHKAN 13 Sep 2026 sesudah diukur, dan ia memperbaiki
-    kesalahan yang arahnya berlawanan. Balasan 429 Google ternyata membawa
-    lamanya sendiri, dan yang benar-benar terjadi di terbitan hidup berbunyi:
-
-        Quota exceeded for metric: generate_content_free_tier_requests,
-        limit: 20, model: gemini-3-flash. Please retry in 1.93s
-
-    Dua puluh permintaan per MENIT, dan disuruh kembali dua detik lagi. Tanpa
-    parameter ini, hambatan dua detik itu mematikan Konsultan AI **lima belas
-    menit** dan membuat `/ai/status` mengabarkan "jatah hariannya habis" -
-    kalimat yang salah tentang keadaan yang sudah lewat. Di depan juri yang
-    mencoba fitur berbobot 20%, selisih antara dua detik dan lima belas menit
-    adalah selisih antara jeda dan kegagalan.
-
-    Kosong berarti penyedianya tidak memberi tahu, dan barulah 15 menit yang
-    lama dipakai: kalau kita tidak tahu berapa lama, menganggapnya lama lebih
-    aman daripada mengundang orang mencoba lagi setiap detik.
-    """
+    """Dipanggil klien saat SELURUH modelnya menolak (429/503)."""
     global _penuh_sampai
     import time
 
     global _jendela_terakhir, _gagal_terakhir_pada
     sekarang = time.time()
 
-    # Berlipat kalau gagal LAGI tak lama sesudah jendela sebelumnya habis.
-    #
-    # Ada karena balasan Google tidak bisa dipercaya untuk membedakan "ramai
-    # sesaat" dari "jatah harian habis". Diukur 13 Sep 2026: ketiga model
-    # menjawab 429 dengan `limit: 20` / `limit: 500` dan saran "retry in 1.93s"
-    # - saran yang sama persis untuk kedua keadaan, padahal yang satu pulih dua
-    # detik kemudian dan yang lain baru tengah malam waktu Pasifik.
-    #
-    # Jadi jangan menebak: COBA. Kegagalan pertama diperlakukan sebagai
-    # hambatan sesaat, dan tiap kegagalan berikutnya yang datang tak lama
-    # sesudah jendela sebelumnya habis melipatgandakan jendelanya sampai atap
-    # 15 menit. Hambatan sungguhan pulih di percobaan berikutnya dan tidak
-    # pernah naik; jatah harian yang habis naik ke atapnya dalam beberapa
-    # percobaan, dan kalimat yang dibaca pengunjung ikut berubah bersamanya -
-    # tanpa satu pun tebakan tentang metrik yang namanya bisa berubah.
     beruntun = _gagal_terakhir_pada > 0 and sekarang - _gagal_terakhir_pada < JENDELA_BERUNTUN
     if detik is None:
         jendela = float(JENDELA_PENUH_DETIK)
@@ -141,11 +68,7 @@ def tandai_penyedia_penuh(detik: float | None = None) -> None:
 
 
 def tandai_penyedia_pulih() -> None:
-    """Dipanggil klien pada panggilan yang BERHASIL.
-
-    Pelipatgandaan ikut disetel ulang: satu jawaban yang berhasil membuktikan
-    penyedianya sehat, dan kegagalan berikutnya berhak dianggap sesaat lagi.
-    """
+    """Dipanggil klien pada panggilan yang BERHASIL."""
     global _penuh_sampai, _jendela_terakhir, _gagal_terakhir_pada
     _penuh_sampai = 0.0
     _jendela_terakhir = 0.0
@@ -159,25 +82,14 @@ def penyedia_penuh() -> bool:
 
 
 def sisa_penuh_detik() -> int:
-    """Berapa detik lagi sebelum penyedianya dicoba lagi. 0 kalau tidak penuh.
-
-    Dipakai `/ai/status` supaya kalimat yang muncul di panel menyebut lamanya
-    yang SEBENARNYA. "Coba lagi sebentar lagi" untuk hambatan dua detik dan
-    untuk jatah harian yang habis adalah kalimat yang sama untuk dua keadaan
-    yang menuntut keputusan berbeda dari pembacanya.
-    """
+    """Berapa detik lagi sebelum penyedianya dicoba lagi. 0 kalau tidak penuh."""
     import time
 
     return max(0, int(round(_penuh_sampai - time.time())))
 
 
 def tersedia() -> bool:
-    """Apakah AI Consultant bisa dipakai sekarang. Dipakai endpoint /ai/status.
-
-    DUA syarat, bukan satu: kuncinya terpasang, DAN penyedianya tidak sedang
-    menolak seluruh modelnya. Yang kedua ditambahkan 13 Sep 2026 - lihat
-    `tandai_penyedia_penuh`.
-    """
+    """Apakah AI Consultant bisa dipakai sekarang. Dipakai endpoint /ai/status."""
     if penyedia_penuh():
         return False
     try:
@@ -191,22 +103,12 @@ _klien = None
 
 
 def klien():
-    """Klien Anthropic, dibuat sekali lalu dipakai ulang.
-
-    Pembuatan ditunda sampai panggilan pertama supaya aplikasi tetap bisa start
-    tanpa kunci API - seluruh endpoint lain tidak butuh LLM, dan backend yang
-    menolak start hanya karena AI Consultant belum dikonfigurasi akan mematikan
-    fitur yang sebenarnya sehat.
-    """
+    """Klien Anthropic, dibuat sekali lalu dipakai ulang."""
     global _klien
     if _klien is not None:
         return _klien
 
     if not settings.llm_api_key:
-        # Sebabnya ke LOG, kalimatnya ke pengguna. Pesan galat ini sampai apa
-        # adanya ke layar - ia salah satu dari sedikit galat yang memang
-        # disengaja diteruskan - jadi ia tidak boleh menyebut nama berkas,
-        # nama variabel lingkungan, maupun perintah yang harus dijalankan.
         log.warning("LLM_API_KEY belum diisi di backend/.env - Konsultan AI dimatikan")
         raise LLMBelumSiap("Konsultan AI belum tersambung ke penyedia modelnya. Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh.")
 
@@ -236,12 +138,7 @@ def klien():
 
 
 def biaya_usd(usage) -> float | None:
-    """Perkiraan biaya satu panggilan, untuk kolom ai_call_logs.biaya_usd.
-
-    Tarif Claude Opus 5 per Juni 2026: $5 per juta token masukan, $25 per juta
-    token keluaran. Ditulis sebagai perkiraan, bukan tagihan - token cache dan
-    diskon tidak ikut dihitung di sini.
-    """
+    """Perkiraan biaya satu panggilan, untuk kolom ai_call_logs.biaya_usd."""
     if usage is None:
         return None
     masuk = getattr(usage, "input_tokens", 0) or 0

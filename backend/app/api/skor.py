@@ -1,14 +1,4 @@
-"""Peringkat, GemFinder, RiskRadar, dan ZoneGuard.
-
-Skor tidak pernah dihitung di sini. Seluruh perhitungan indeks dilakukan offline
-oleh pipeline/s6_score.py dan hasilnya disimpan ke location_scores. Modul ini
-membaca, mengurutkan, menyaring, dan merangkai penjelasan dari angka yang sudah ada.
-
-Satu aturan berlaku di seluruh berkas: setiap endpoint yang MEREKOMENDASIKAN
-lokasi wajib melewati saring_zoneguard(). Yang tidak merekomendasikan - diagram
-kuadran, misalnya - justru harus menampilkan area terlarang supaya pengguna
-melihat area itu memang dikecualikan.
-"""
+"""Peringkat, GemFinder, RiskRadar, dan ZoneGuard."""
 
 from typing import Annotated
 
@@ -75,13 +65,6 @@ router = APIRouter(prefix="/skor", tags=["skor"])
 GEM_RESIDUAL_KUARTIL = 0.25
 GEM_IPTT_KUARTIL = 0.75
 
-#: Header jumlah baris sebelum limit/offset.
-#:
-#: Namanya hidup di sini sebagai konstanta, bukan sebagai string di dua tempat,
-#: karena ia HARUS ikut `expose_headers` di main.py. Peramban menyembunyikan
-#: setiap header respons yang tidak disebutkan di sana, jadi header yang lupa
-#: didaftarkan bukan header yang "belum dipakai" - ia header yang tidak pernah
-#: bisa dibaca frontend sama sekali, dan gagalnya diam.
 HEADER_TOTAL = "X-Total-Count"
 
 
@@ -95,12 +78,7 @@ def _baris_skor(rows) -> list[SkorHeksagon]:
 
 
 def _total(db: Session, stmt) -> int:
-    """Jumlah baris sebelum limit/offset, untuk header X-Total-Count.
-
-    Dihitung dari statement yang sama supaya filternya tidak pernah bisa berbeda
-    dari yang dipakai mengambil data - kesalahan klasik yang menghasilkan
-    paginasi yang menunjuk halaman kosong.
-    """
+    """Jumlah baris sebelum limit/offset, untuk header X-Total-Count."""
     inti = stmt.limit(None).offset(None).order_by(None).subquery()
     return db.execute(select(func.count()).select_from(inti)).scalar_one()
 
@@ -114,16 +92,7 @@ def ranking(
     offset: Annotated[int, Query(ge=0)] = 0,
     versi: str = "baseline",
 ) -> list[SkorHeksagon]:
-    """Peringkat lokasi terbaik.
-
-    ZoneGuard disaring di sini: ini endpoint rekomendasi, dan merekomendasikan
-    lokasi yang zonanya melarang usaha adalah kesalahan yang jauh lebih mahal
-    daripada melewatkan satu lokasi bagus.
-
-    Jumlah seluruh hasil dikirim di header `X-Total-Count`, bukan dibungkus ke
-    dalam badan respons - supaya bentuk baliknya tetap larik dan pemanggil yang
-    tidak peduli paginasi tidak perlu ikut berubah.
-    """
+    """Peringkat lokasi terbaik."""
     daftar_kawasan = periksa_kawasan_banyak(kawasan)
     dasar = saring_zoneguard(gabung_skor(versi))
     if daftar_kawasan:
@@ -145,12 +114,7 @@ def ranking(
 
 @router.get("/versi", summary="Versi skor yang tersedia")
 def daftar_versi(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
-    """Versi skor yang sudah dihitung pipeline dan tersimpan.
-
-    Backend tidak pernah MEMBUAT versi baru - itu berarti menghitung skor, dan
-    skor hanya dihitung di pipeline/s6_score.py. Yang bisa dilakukan di sini
-    hanya menyajikan dan membandingkan versi yang sudah ada.
-    """
+    """Versi skor yang sudah dihitung pipeline dan tersimpan."""
     baris = db.execute(
         select(
             LocationScore.versi,
@@ -181,17 +145,7 @@ def banding_versi(
     kawasan: Annotated[str | None, Query()] = None,
     limit_pindah: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> dict:
-    """Seberapa banyak peringkat berubah antara dua versi bobot.
-
-    Inilah bentuk yang bisa disajikan dari uji sensitivitas: bukan pembelaan atas
-    angka bobot, melainkan bukti bahwa hasilnya tidak sensitif terhadap angka itu.
-    Target yang dipakai proyek ini rho > 0,85 - lihat docs/skoring.md.
-
-    Korelasi dihitung SQL dengan `corr()` atas kolom `peringkat`. Karena peringkat
-    sudah berupa rank, korelasi Pearson atas keduanya SAMA DENGAN korelasi Spearman
-    atas skornya - jadi tidak perlu scipy di backend, dan tidak ada skor yang
-    dihitung ulang di sini.
-    """
+    """Seberapa banyak peringkat berubah antara dua versi bobot."""
     daftar_kawasan = periksa_kawasan_banyak(kawasan)
     A = aliased(LocationScore)
     B = aliased(LocationScore)
@@ -251,11 +205,7 @@ def banding_versi(
 
 
 def _ambang_gem(db: Session, kawasan: str) -> tuple[float | None, float | None]:
-    """Kuartil residual biaya dan IPTT dalam satu kawasan.
-
-    Dipakai untuk menyusun kalimat alasan, bukan untuk menentukan kelolosan -
-    kelolosan sudah diputuskan pipeline dan tersimpan di n_metode_lolos.
-    """
+    """Kuartil residual biaya dan IPTT dalam satu kawasan."""
     baris = db.execute(
         select(
             func.percentile_cont(GEM_RESIDUAL_KUARTIL)
@@ -279,12 +229,7 @@ def alasan_gem(
     iptt_p75: float | None,
     bahasa: Bahasa = BAHASA_BAWAAN,
 ) -> list[AlasanGem]:
-    """Rangkuman alasan sebuah heksagon terpilih - dirakit dari angka basis data.
-
-    Sengaja TIDAK dibuat LLM. Alasan yang dikarang model bahasa terdengar bagus
-    tetapi tidak bisa diaudit; kalimat di bawah selalu bisa ditelusuri ke kolom
-    yang menghasilkannya, dan itu yang ditanyakan juri.
-    """
+    """Rangkuman alasan sebuah heksagon terpilih - dirakit dari angka basis data."""
     alasan: list[AlasanGem] = []
 
     if (
@@ -329,15 +274,7 @@ def alasan_gem(
 def _ringkasan(
     hx: HexFeature, sc: LocationScore, alasan: list[AlasanGem], bahasa: Bahasa = BAHASA_BAWAAN
 ) -> str:
-    """Satu paragraf siap tampil di kartu.
-
-    Jumlah metode yang disebut diambil dari `n_metode_lolos` milik pipeline, bukan
-    dari panjang daftar alasan. Keduanya bisa berbeda: pipeline menghitung ambang
-    terhadap seluruh dataset, sedangkan alasan di sini direkonstruksi terhadap
-    kawasan. Kalau berbeda, yang benar adalah angka pipeline - itu yang menentukan
-    kelolosan - dan selisihnya dikatakan terus terang, bukan ditutup dengan angka
-    yang kebetulan cocok dengan kalimatnya.
-    """
+    """Satu paragraf siap tampil di kartu."""
     if sc.hidden_gem_score is None:
         return kalimat("gem_tanpa_skor", bahasa, kawasan=hx.kawasan)
 
@@ -383,15 +320,7 @@ def hidden_gems(
     versi: str = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> list[HiddenGem]:
-    """Heksagon berskor Hidden Gem tertinggi, beserta rangkuman alasan terpilihnya.
-
-    Sebuah heksagon hanya masuk kalau lolos lebih dari satu metode deteksi
-    (residual regresi, kuadran prestise, IPTT) - lihat docs/skoring.md. Penyaringan
-    itu sudah dilakukan pipeline; di sini tinggal mengurutkan dan menjelaskan.
-
-    Batas bawah `limit` dikunci di 10 supaya kriteria penerimaan "minimal 10
-    heksagon teratas" tidak bisa dilanggar dari sisi pemanggil.
-    """
+    """Heksagon berskor Hidden Gem tertinggi, beserta rangkuman alasan terpilihnya."""
     stmt = (
         saring_zoneguard(gabung_skor(versi))
         .where(LocationScore.hidden_gem_score.is_not(None))
@@ -439,15 +368,7 @@ def risk_radar(
     versi: str = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> list[TitikKuadran]:
-    """Kuadran kanan bawah: terlihat mewah, ekonominya tidak jalan.
-
-    Ditampilkan sebagai peringatan - platform tidak hanya merekomendasikan, tetapi
-    juga melindungi pengguna dari lokasi yang paling sering menjebak.
-
-    Peringatan hanya muncul kalau indeks churn (P06) melewati persentil 75 kawasan
-    DAN di atas lantai absolut. Lantai itu penting: tanpanya setiap kawasan otomatis
-    punya 25% area "berisiko", dan peringatan yang selalu muncul berhenti dibaca.
-    """
+    """Kuadran kanan bawah: terlihat mewah, ekonominya tidak jalan."""
     stmt = (
         gabung_skor(versi)
         .where(LocationScore.kuadran == "JEBAKAN_GENGSI")
@@ -485,25 +406,7 @@ def risk_radar(
 
 
 def batas_kuadran(db: Session, versi: str) -> tuple[float | None, float | None]:
-    """Garis pemisah kuadran, DITURUNKAN dari label - bukan dihitung ulang.
-
-    Versi sebelumnya menghitung `percentile_cont(0.5)` sendiri, dan salah dua
-    kali sekaligus. Pertama, ia menyaring per kawasan, padahal pipeline
-    menetapkan kuadran memakai median SELURUH heksagon: di Dukuh Atas BNI median
-    lokalnya 0,71 sementara global 0,41, jadi hanya 48% titiknya yang jatuh di
-    sel yang sesuai labelnya. Kedua, median yang dihitung ulang bisa bergeser
-    dari median yang dipakai pipeline begitu ada baris masuk atau keluar.
-
-    Yang di bawah ini tidak bisa salah dengan cara itu. `kuadran` sudah memuat
-    keputusannya; batasnya cukup dibaca sebagai nilai TERKECIL di sisi tinggi.
-    Karena pipeline memakai `>=` median, nilai itu memang persis tepi kolom
-    kanan (dan baris atas), berapa pun mediannya dan bagaimana pun pipeline
-    mengelompokkan datanya. Aturan 1 repo ini juga terpenuhi: ini membaca, bukan
-    menghitung skor.
-
-    Tanpa filter kawasan, jadi garisnya diam saat pengguna berpindah kawasan.
-    Garis yang ikut bergeser membuat dua kawasan tidak bisa dibandingkan.
-    """
+    """Garis pemisah kuadran, DITURUNKAN dari label - bukan dihitung ulang."""
     return db.execute(
         select(
             func.min(
@@ -534,17 +437,7 @@ def diagram_kuadran(
     versi: str = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> DiagramKuadran:
-    """Titik sebar untuk diagram kuadran yang bisa diklik.
-
-    Sengaja TIDAK menyaring ZoneGuard: diagram ini alat analisis, bukan
-    rekomendasi. Justru berguna melihat di mana area terlarang jatuh.
-
-    Sumbu datar prestise visual (bagaimana lokasi terlihat), sumbu tegak skor
-    peluang (apa kata datanya).
-
-    Garis pemisahnya DITURUNKAN DARI LABEL, bukan dihitung ulang - lihat
-    `batas_kuadran()`. Dengan begitu titik dan labelnya tidak bisa bertentangan.
-    """
+    """Titik sebar untuk diagram kuadran yang bisa diklik."""
     stmt = gabung_skor(versi).limit(limit)
     daftar_kawasan = periksa_kawasan_banyak(kawasan)
     if daftar_kawasan:
@@ -607,12 +500,7 @@ def risiko_heksagon(
 
 @router.get("/zoneguard/ringkasan", summary="Cakupan ZoneGuard per kawasan")
 def zoneguard_ringkasan(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
-    """Berapa heksagon yang dilarang, diizinkan, dan belum diketahui per kawasan.
-
-    Angka `tidak_diketahui` yang besar adalah kabar penting, bukan aib: ia
-    menunjukkan berapa banyak kawasan yang RDTR digitalnya belum ada. Menyembunyikannya
-    akan membuat ZoneGuard terlihat lebih meyakinkan daripada kenyataannya.
-    """
+    """Berapa heksagon yang dilarang, diizinkan, dan belum diketahui per kawasan."""
     baris = db.execute(
         select(
             HexFeature.kawasan,
@@ -650,26 +538,8 @@ def zoneguard_heksagon(
     return zoneguard(hx, bahasa)
 
 
-# ===========================================================================
-# Loconomics Premium
-# ===========================================================================
-#
-# Tiga endpoint di bawah memakai dependensi `PenggunaPremium`, bukan `if` di
-# dalam badan fungsinya. Alasannya sama dengan `saring_zoneguard()`: penjaga
-# yang harus diingat untuk dipanggil adalah penjaga yang suatu saat lupa
-# dipanggil. Sebagai dependensi ia ikut ke OpenAPI, terlihat di /docs, dan
-# tidak bisa terlewat karena seseorang menambahkan jalur `return` lebih awal.
-#
-# TIDAK SATU PUN dari ketiganya boleh dibungkus @ber_cache. Isinya memang tidak
-# bergantung pada siapa pemanggilnya, tetapi objek pengguna ikut masuk sebagai
-# argumen kata-kunci dan `repr()`-nya memuat alamat memori - kuncinya jadi unik
-# tiap permintaan. Lihat peringatan di app/core/cache.py.
 
 
-#: Metrik yang dibandingkan, dan arah mana yang lebih baik.
-#: True = makin tinggi makin baik. IKP dan IBR sengaja False - keduanya indeks
-#: BEBAN (kompetisi, biaya & risiko), dan aturan itu sudah hidup di backend.
-#: Menyalinnya ke frontend berarti dua tempat yang harus terus sepakat.
 ARAH_METRIK: dict[str, bool] = {
     "opportunity_score": True,
     "hidden_gem_score": True,
@@ -706,22 +576,7 @@ def komparasi(
     versi: Annotated[str, Query()] = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> Komparasi:
-    """Bandingkan 2-4 heksagon berdampingan.
-
-    Empat, bukan lebih. Bukan batas teknis: kolom kelima tidak lagi muat di
-    layar mana pun tanpa digulir menyamping, dan tabel perbandingan yang harus
-    digulir menyamping berhenti jadi perbandingan.
-
-    `menang` dihitung DI SINI, bukan di frontend. Untuk tiap metrik ia memuat
-    h3_index yang terbaik pada metrik itu, sudah memperhitungkan arah - IKP dan
-    IBR tinggi itu buruk. Frontend cukup menebalkan yang disebut, tanpa perlu
-    tahu metrik mana yang terbalik.
-
-    Heksagon berzona terlarang TIDAK disaring. Endpoint ini tidak
-    merekomendasikan apa pun; ia membandingkan yang sudah dipilih orangnya, dan
-    menyembunyikan salah satunya justru menghilangkan alasan terkuat untuk tidak
-    memilihnya. Statusnya ikut di tiap kolom.
-    """
+    """Bandingkan 2-4 heksagon berdampingan."""
     unik: list[str] = []
     for x in h3:
         bersih = x.strip()
@@ -804,17 +659,7 @@ def riwayat_skor(
     db: Annotated[Session, Depends(get_db)],
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> RiwayatSkor:
-    """Skor heksagon ini di setiap versi yang pernah diterbitkan pipeline.
-
-    Basis data ini baru memuat satu versi. Endpoint ini TIDAK mengarang sisanya,
-    dan tidak mengembalikan sederet titik berjarak sebulan yang seluruhnya
-    berasal dari angka yang sama. Yang dikembalikan satu titik, dengan
-    `cukup_untuk_tren: false` dan keterangan kenapa.
-
-    Itu keputusan yang sama dengan yang sudah diambil untuk isochrone di
-    docs/data.md: lingkaran palsu lebih buruk daripada tidak ada lingkaran.
-    Grafik tren dari satu titik data adalah versi grafis dari lingkaran palsu.
-    """
+    """Skor heksagon ini di setiap versi yang pernah diterbitkan pipeline."""
     ambil_hex(db, h3_index)
 
     baris = db.execute(
@@ -868,19 +713,7 @@ def dinamika_kawasan(
     versi: Annotated[str, Query()] = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> DinamikaKawasan:
-    """Sebaran churn dan komposisi kuadran satu kawasan.
-
-    Yang dijanjikan tabel fitur adalah "pemantauan pergerakan churn rate dan
-    dinamika kawasan sepanjang tahun". Sisi WAKTU-nya belum bisa dipenuhi -
-    datanya satu versi - dan itu dikatakan lewat `catatan`, bukan disamarkan
-    dengan sumbu bulan berisi angka yang sama diulang dua belas kali.
-
-    Yang BISA dipenuhi sekarang dan benar-benar berguna: sebaran churn kawasan
-    dengan ketiga persentilnya, berapa heksagon yang sudah melewati ambang
-    waspada dan bahaya, dan komposisi kuadrannya. Ini angka yang sama yang
-    dipakai RiskRadar untuk memutuskan peringatan per heksagon - di sini
-    diringkas ke tingkat kawasan, tempat keputusan sewa sebenarnya diambil.
-    """
+    """Sebaran churn dan komposisi kuadran satu kawasan."""
     nama = periksa_kawasan(kawasan)
     assert nama is not None  # periksa_kawasan hanya mengembalikan None untuk input None
 
@@ -957,26 +790,7 @@ def dinamika_kawasan(
     )
 
 
-# ===========================================================================
-# Rekomendasi personal
-# ===========================================================================
-#
-# BEDANYA DENGAN /skor/ranking, dan kenapa keduanya sama-sama ada.
-#
-# `/skor/ranking` memeringkat: semua orang melihat urutan yang sama, dan itu
-# memang yang dibutuhkan untuk membaca sebuah kawasan. Endpoint ini
-# MEREKOMENDASIKAN: ia menyaring menurut anggaran dan kawasan yang sudah
-# dinyatakan seseorang, lalu menjelaskan tiap barisnya dengan angka lokasi itu
-# sendiri.
-#
-# Yang TIDAK dilakukan di sini, dan tidak boleh: menghitung ulang skor. Urutan
-# dasarnya tetap `opportunity_score` milik pipeline. Yang ditambahkan cuma
-# saringan dan alasan - aturan 1 repo ini tetap utuh.
 
-#: Ambang untuk menyusun kalimat alasan. Semuanya AMBANG PENJELASAN, bukan
-#: ambang kelolosan: tidak satu pun dari angka ini yang membuang sebuah lokasi
-#: dari daftar. Yang membuang cuma ZoneGuard dan anggaran yang dinyatakan
-#: penggunanya sendiri.
 DEKAT_MENIT = 8.0
 SEPI_KOMPETITOR = 5.0
 CHURN_TENANG = 0.30
@@ -1021,18 +835,6 @@ def _alasan_untuk(
             )
         )
 
-    # `kepadatan_poi_total > 0` adalah SYARAT, bukan kerapian. C01 bersumber
-    # OpenStreetMap, dan nol di sana punya dua arti yang tidak bisa dibedakan
-    # dari kolomnya: "tidak ada pesaing" dan "belum ada yang memetakan apa pun
-    # di sini". Terukur 26 Agu 2026: 312 dari 708 heksagon ber-C01 nol, dan
-    # sebarannya mengikuti kerapatan pemetaan OSM, bukan kerapatan usaha -
-    # 97% heksagon Harjamukti versus 24% Dukuh Atas BNI.
-    #
-    # Kalau heksagonnya memuat SETIDAKNYA satu usaha terpetakan, peta tahu
-    # sesuatu tentang tempat itu dan "sedikit pesaing sejenis" jadi temuan yang
-    # sah. Kalau nol usaha sama sekali, yang kita punya bukan temuan melainkan
-    # lubang - dan menyodorkannya sebagai alasan memilih lokasi persis
-    # "Hidden Gem palsu" yang jadi alasan produk ini ada (aturan 4).
     if (
         hx.n_kompetitor_langsung is not None
         and hx.n_kompetitor_langsung <= SEPI_KOMPETITOR
@@ -1073,12 +875,6 @@ def _alasan_untuk(
                 jenis="catatan",
             )
         )
-    # Nol dan "beberapa" adalah dua pernyataan yang berbeda, dan menyamakannya
-    # merugikan dua arah sekaligus. "Baru 0 titik survei - angkanya masih bisa
-    # bergeser" terbaca seolah SELURUH angka heksagon ini belum bisa dipercaya,
-    # padahal POI OSM, rute OpenRouteService, penduduk WorldPop, dan zonasi RDTR
-    # di sana terukur seluruhnya. Yang belum ada cuma kunjungan surveyor - dan
-    # itu memang menentukan, tetapi untuk variabel yang lain.
     if hx.n_titik_misi is not None and hx.n_titik_misi == 0:
         keluar.append(
             AlasanRekomendasi(
@@ -1100,16 +896,6 @@ def _alasan_untuk(
     return keluar
 
 
-#: Berapa baris yang dilihat akun gratis. Bukan nol - rekomendasi adalah inti
-#: produk ini, dan produk yang intinya tidak bisa dicicipi tidak pernah
-#: meyakinkan siapa pun untuk membayar. SATU cukup untuk membuktikan daftarnya
-#: nyata dan beralasan, dan sengaja tidak cukup untuk dipakai memilih.
-#:
-#: Diturunkan dari tiga ke satu 19 Sep 2026 atas permintaan pemilik repo: akun
-#: gratis terbukti bisa membuka dua sampai tiga lokasi berturut-turut, dan itu
-#: terbaca sebagai kebocoran fitur berbayar - bukan sebagai cicipan. Jumlahnya
-#: tetap disebut apa adanya di antarmuka (`sisa_cocok`), jadi yang dikunci
-#: tidak pernah tersembunyi.
 CICIP_GRATIS = 1
 
 
@@ -1127,20 +913,7 @@ def rekomendasi(
     versi: Annotated[str, Query()] = "baseline",
     bahasa: Annotated[Bahasa, Query(description="Bahasa kalimat: id atau en")] = BAHASA_BAWAAN,
 ) -> HasilRekomendasi:
-    """Daftar lokasi yang menjawab keadaan SATU orang.
-
-    Butuh akun - tanpa preferensi tidak ada yang bisa dipersonalisasi, dan
-    daftar "personal" yang sama untuk semua orang cuma peringkat dengan nama
-    lain.
-
-    Akun gratis menerima tiga teratas beserta seluruh alasannya, dan diberi
-    tahu berapa banyak lagi yang cocok. Yang disembunyikan JUMLAHNYA, bukan
-    keberadaannya - `total_cocok` selalu angka sebenarnya.
-
-    ZoneGuard disaring, tanpa kecuali. Ini jalur rekomendasi paling langsung di
-    seluruh produk: kalau ada satu tempat yang tidak boleh menyarankan zona
-    terlarang, tempatnya di sini.
-    """
+    """Daftar lokasi yang menjawab keadaan SATU orang."""
     import json
 
     pref = {}

@@ -1,46 +1,9 @@
-/**
- * Bagian wajib 3 dari 3: Antarmuka AI.
- *
- * Yang membuat bagian ini memenuhi ketentuan C.2 bukan kotak percakapannya,
- * melainkan `jalankanAksi()` di bawah: jawaban AI tidak berhenti sebagai teks,
- * ia menggerakkan peta.
- *
- *   cari_lokasi, jelaskan_skor, cek_harga, pola_jam, cek_zona,
- *   cari_hidden_gem, cek_risiko, bandingkan  → dijalankan backend
- *   flyTo, highlight, setLayer, filter        → dijalankan DI SINI
- *
- * Kalau flyTo dieksekusi backend, tidak ada yang bergerak di layar pengguna.
- *
- * Satu keputusan tampilan yang layak disebut: setiap jawaban membawa jejak alat
- * yang benar-benar dipanggil, dan jejak itu DITAMPILKAN, tidak disembunyikan di
- * log. Asisten yang bisa ditanya "dari mana angkanya" dan menjawab dengan daftar
- * fungsi yang ia jalankan jauh lebih layak dipercaya daripada yang hanya
- * terdengar meyakinkan.
- *
- * TIGA PERUBAHAN BESAR, 11 Sep 2026, seluruhnya atas permintaan pemilik repo:
- *
- *   BILAH JUDUL DICABUT. Ia memuat nama panel yang sudah tertulis di tab tepat
- *   di atasnya, dan mengkliknya membawa orang kembali ke daftar lokasi - persis
- *   yang dilakukan tab "Daftar lokasi" di sebelahnya. Dua pintu ke satu tempat,
- *   dan yang satu tidak menyatakan ke mana ia pergi. Lencana "Siap / Memeriksa"
- *   ikut pergi bersamanya: ia memberi kabar tentang mesinnya, bukan tentang
- *   pertanyaan orang yang sedang mengetik, dan kalau mesinnya memang mati
- *   kalimat lengkapnya sudah muncul di layar pembuka panel ini.
- *
- *   RIWAYAT. Percakapan disimpan di peramban orang yang memakainya - bukan di
- *   server, dan itu disengaja: isi percakapan bisa memuat lokasi incaran
- *   seseorang, dan tidak ada alasan hal itu perlu meninggalkan mesinnya.
- *
- *   PINTASAN LOKASI. Tiap jawaban yang menyebut heksagon membawa tombolnya
- *   sendiri, dan menekannya menerbangkan peta ke sana. Sebelum ini, asisten
- *   bisa menyebut "tiga lokasi terbaik di Manggarai" dan orangnya tetap harus
- *   mencari sendiri yang mana - jawaban yang benar tetapi tidak bisa diikuti.
- */
 
-import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { KUADRAN, LAYER, kodeLokasi, type NamaLayer } from '../config'
 import { api, GalatAPI } from '../lib/api'
+import { JENIS_USAHA } from '../lib/jenis-usaha'
 import { useBahasa, useNamaZona, useTeks, type Bahasa } from '../lib/bahasa'
 import type { AksiPeta, JawabanAI, PesanRiwayat, SkorHeksagon, StatusAI } from '../types'
 import { useSesi } from './Akun'
@@ -275,14 +238,6 @@ function tulisArsip(d: Percakapan[]) {
 }
 
 /** "3 mnt", "2 jam", "5 hr" - cukup untuk membedakan, tanpa jam dinding. */
-/**
- * Percakapan dikelompokkan menurut UMUR, bukan diurut rata begitu saja.
- *
- * Daftar datar sepanjang tiga puluh baris menuntut pembacanya mengingat kapan
- * ia bertanya; kelompok "Hari ini / Kemarin / 7 hari terakhir" menjawabnya
- * sebelum ditanya. Pola yang sama dipakai setiap asisten yang pernah dipakai
- * pembacanya, jadi ia tidak perlu dipelajari.
- */
 type KunciKelompok = 'hariIni' | 'kemarin' | 'pekan' | 'bulan' | 'lama'
 
 const URUTAN_KELOMPOK: KunciKelompok[] = ['hariIni', 'kemarin', 'pekan', 'bulan', 'lama']
@@ -334,19 +289,6 @@ function usia(waktu: number, bahasa: Bahasa): string {
 
 const SINGGAH = new Map<string, SkorHeksagon>()
 
-/**
- * Id percakapan. Waktu DAN acak.
- *
- * Waktu saja tidak cukup: dua tab yang mengirim pertanyaan pertamanya pada
- * milidetik yang sama akan menimpa percakapan satu sama lain di localStorage
- * yang mereka bagi. Empat huruf acak membuat itu tidak mungkin.
- *
- * Di luar komponen, dan itu bukan kerapian: `Date.now()` dan `Math.random()`
- * di dalam badan komponen dilaporkan oxlint sebagai fungsi tak-murni yang
- * dipanggil saat render - benar sebagai aturan, keliru untuk penangan
- * peristiwa, dan cara membuatnya benar sekaligus tenang adalah dengan tidak
- * menaruhnya di sana sama sekali.
- */
 function idBaru() {
   return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
@@ -396,23 +338,6 @@ function PintasLokasi({
   const warna = q?.warna ?? 'var(--color-ink-3)'
   const terlarang = skor?.zona_izin_komersial === false
 
-  /**
-   * KARTU MINI, bukan pil satu baris (13 Sep 2026, permintaan pemilik repo:
-   * "jangan hanya hijau 100 Safe, kurang - buatkan mini card persegi").
-   *
-   * Yang dipertahankan dari pil lama: SKOR tetap yang paling besar. Jawaban AI
-   * hampir selalu menyebut beberapa heksagon di SATU kawasan, jadi nama
-   * kawasan adalah bagian yang paling sering sama dan skor yang paling sering
-   * berbeda. Yang ditambahkan seluruhnya sudah ada di respons GRATIS
-   * `/hex/{h3}` - tidak ada angka yang dikarang di sini:
-   *   - nomor urut penyebutan, supaya "lokasi kedua" di teks bisa ditemukan;
-   *   - batang skor 0-100 berwarna kuadran, supaya 100 dan 56 terbaca sebagai
-   *     jarak, bukan cuma dua angka;
-   *   - glif + nama kuadran (artinya di tooltip - kartu persegi tidak muat);
-   *   - kode lokasi yang sama dengan panel detail;
-   *   - peringatan kalau zonasinya melarang usaha.
-   * Warna tidak pernah berdiri sendiri: glif dan nama kuadrannya selalu ikut.
-   */
   return (
     <button
       onClick={() => onBuka(h3, skor?.kawasan)}
@@ -502,22 +427,7 @@ function PanelAI({
 }: {
   kendali: KendaliPeta
   hexTerpilih: string | null
-  /**
-   * Layer yang sedang tampil, diteruskan ke model sebagai konteks.
-   *
-   * Prompt sistem menyuruh asisten mengganti layer sesuai pertanyaan
-   * ("soal harga -> pricelens"). Tanpa tahu layer mana yang SEDANG aktif, ia
-   * memanggil setLayer untuk layer yang sudah terpasang - peta tidak bergerak,
-   * dan aksi peta yang dijanjikan ketentuan C.2 jadi tidak terlihat.
-   */
   layerAktif: NamaLayer
-  /**
-   * Pintasan lokasi ditekan.
-   *
-   * Pemilihan heksagon MILIK App, bukan panel ini: peta, daftar, baki
-   * komparasi, dan panel detail semuanya membacanya, dan panel yang memilih
-   * sendiri akan jadi pemilik kedua untuk satu keadaan yang sama.
-   */
   onKeLokasi: (h3: string, kawasan?: string) => void
 }) {
   const t = useTeks(K)
@@ -533,28 +443,10 @@ function PanelAI({
   /** Id percakapan yang judulnya sedang disunting, plus teks sementaranya. */
   const [suntingJudul, setSuntingJudul] = useState<{ id: string; teks: string } | null>(null)
   const akhir = useRef<HTMLDivElement>(null)
-  /**
-   * Gulir DAFTAR PESAN ke dasar - bukan `scrollIntoView`.
-   *
-   * `scrollIntoView` menggulir SETIAP leluhur yang bisa digulir. Terukur 13 Sep
-   * 2026 (uji QA): sesudah jawaban AI, seluruh aplikasi terdorong naik 598-800
-   * px dan separuh bawah layar kosong, pada 2 dari 5 pertanyaan. `scrollTo` pada
-   * induknya sendiri tidak menyentuh leluhur mana pun.
-   */
   const gulirKeAkhir = () => {
     const daftar = akhir.current?.parentElement
     if (daftar) daftar.scrollTo({ top: daftar.scrollHeight, behavior: 'smooth' })
   }
-  /**
-   * Id percakapan yang sedang dibuka.
-   *
-   * STATE, bukan ref, dan itu bukan selera: daftar riwayat menandai mana yang
-   * sedang dibuka, dan penanda yang dibaca dari `ref.current` saat render tidak
-   * pernah dijamin ikut berubah. Idnya dibuat di penangan `kirim` - bukan di
-   * dalam effect penyimpan - supaya tidak ada satu pun `setState` di dalam
-   * effect: keduanya dibatch dalam satu render, jadi effect penyimpan sudah
-   * melihat id yang baru pada giliran pertamanya.
-   */
   const [idSesi, setIdSesi] = useState<string | null>(null)
 
   // Kesiapan diperiksa saat memuat, bukan saat pertanyaan pertama gagal.
@@ -564,15 +456,6 @@ function PanelAI({
     api.statusAI().then(setStatus).catch(() => setStatus(null))
   }, [])
 
-  /**
-   * Status disegarkan lagi tiap dua menit SELAMA sedang dibatasi.
-   *
-   * Jatah penyedia pulih sendiri, dan pita "sedang dibatasi" yang hanya
-   * diambil sekali saat panel dipasang akan tetap terpampang sampai orangnya
-   * memuat ulang halaman - memberitahukan keadaan yang sudah tidak benar lagi.
-   * Tidak dijalankan saat sehat: memanggil /ai/status tiap dua menit untuk
-   * mendengar "masih sehat" adalah lalu lintas yang tidak membeli apa pun.
-   */
   useEffect(() => {
     if (status?.dibatasi !== true) return
     const id = setInterval(() => {
@@ -581,14 +464,6 @@ function PanelAI({
     return () => clearInterval(id)
   }, [status?.dibatasi])
 
-  /**
-   * Percakapan disimpan tiap kali isinya berubah, bukan saat panel ditutup.
-   *
-   * Tidak ada "saat panel ditutup" yang bisa diandalkan: tab bisa ditutup,
-   * peramban bisa mati, dan halaman ini juga dipakai dari ponsel. Menyimpan
-   * pada setiap perubahan berarti tidak ada satu pun jalan keluar yang
-   * kehilangan percakapan.
-   */
   useEffect(() => {
     if (!pesan.length || !idSesi) return
     const judul = pesan.find((m) => m.peran === 'pengguna')?.teks.slice(0, 96) ?? '…'
@@ -601,13 +476,6 @@ function PanelAI({
     )
   }, [pesan, idSesi])
 
-  /**
-   * Menerjemahkan `aksi_peta` dari LLM menjadi gerakan peta yang sebenarnya.
-   *
-   * Nama fungsi divalidasi lewat `switch`, bukan dipanggil dinamis. Setiap
-   * argumen juga diperiksa tipenya: keluaran model diperlakukan sebagai data
-   * yang belum tentu benar, bukan perintah yang tinggal dijalankan.
-   */
   function jalankanAksi(aksi: AksiPeta) {
     const arg = aksi.argumen
     switch (aksi.fungsi) {
@@ -634,14 +502,43 @@ function PanelAI({
     }
   }
 
-  /**
-   * Loconomics AI fitur PREMIUM sejak 14 Sep 2026. Backend yang menegakkannya
-   * (`/ai/tanya` menuntut `PenggunaPremium`); yang di sini cuma supaya orang
-   * tidak mengetik pertanyaan panjang untuk ditolak. Selama sesi masih
-   * divalidasi panelnya belum dikunci - pelanggan tidak melihat tirai berkedip.
-   */
   const { premium, akun, memuat: memuatSesi, mintaMasuk, mintaLangganan } = useSesi()
   const terkunci = !memuatSesi && !premium
+
+  const saran = useMemo(() => {
+    const p = akun?.preferensi
+    const jenis = JENIS_USAHA.find((j) => j.nilai === p?.jenis_usaha)
+    const namaJenis = jenis ? (bahasa === 'en' ? jenis.labelEn : jenis.label) : null
+    const kw = p?.kawasan ?? null
+    const anggaran = p?.budget_sewa_bulanan
+      ? `Rp${p.budget_sewa_bulanan.toLocaleString(bahasa === 'en' ? 'en-US' : 'id-ID')}`
+      : null
+    if (!namaJenis && !kw) return t.contoh
+    const keluar: string[] = []
+    if (namaJenis) {
+      keluar.push(
+        bahasa === 'en'
+          ? `${namaJenis}${anggaran ? ` under ${anggaran} a month` : ''}${kw ? ` near ${kw}` : ''}`
+          : `${namaJenis}${anggaran ? ` di bawah ${anggaran} per bulan` : ''}${kw ? ` dekat ${kw}` : ''}`,
+      )
+      keluar.push(
+        bahasa === 'en'
+          ? `Which ${namaJenis} spots${kw ? ` in ${kw}` : ''} are good but still overlooked?`
+          : `Mana ${namaJenis}${kw ? ` di ${kw}` : ''} yang bagus tapi belum dilirik?`,
+      )
+    } else if (kw) {
+      keluar.push(
+        bahasa === 'en'
+          ? `Where in ${kw} is the most promising place?`
+          : `Di ${kw}, mana yang paling menjanjikan?`,
+      )
+    }
+    for (const c of t.contoh) {
+      if (keluar.length >= 3) break
+      if (!keluar.includes(c)) keluar.push(c)
+    }
+    return keluar.slice(0, 3)
+  }, [akun, bahasa, t.contoh])
   const bukaKunci = () => (akun ? mintaLangganan(t.kunci.alasan) : mintaMasuk(t.kunci.alasan))
 
   /** Luncuran tombol kirim: nyala sesaat, lalu padam sendiri. */
@@ -724,14 +621,6 @@ function PanelAI({
     if (idSesi === id) percakapanBaru()
   }
 
-  /**
-   * Arsip dibaca ULANG tiap laci dibuka, bukan dijaga sinkron tiap giliran.
-   *
-   * Yang menulisnya effect penyimpan di atas, dan ia menulis ke localStorage
-   * saja - tanpa `setState`. Membacanya kembali di sini menjaga satu sumber
-   * kebenaran (berkas di peramban) alih-alih dua yang harus dijaga sepakat,
-   * dan sekaligus memunculkan percakapan dari TAB LAIN yang kebetulan terbuka.
-   */
   function bukaLaci() {
     setArsip(bacaArsip())
     // Pencarian lama dikosongkan. Laci yang dibuka kembali masih menyaring
@@ -742,17 +631,6 @@ function PanelAI({
     setLihatRiwayat(true)
   }
 
-  /**
-   * MATI hanya untuk yang strukturil.
-   *
-   * `siap: false` punya dua sebab yang menuntut antarmuka berbeda. Belum
-   * tersambung ke penyedia (tidak ada kunci) memang mematikan kotak ketik -
-   * pertanyaan apa pun tidak akan pernah sampai ke mana-mana. Tetapi "jatah
-   * hariannya habis" pulih sendiri, dan mematikan kotak ketik di sana membuat
-   * orangnya tidak bisa mencoba lagi walaupun jatahnya sudah pulih semenit
-   * kemudian. Terjadi 13 Sep 2026 dan langsung dilaporkan pemilik repo
-   * sebagai "Loconomics AI kok kayak gabisa ngetik".
-   */
   const dibatasi = status?.dibatasi === true
   const mati = terkunci || (status !== null && !status.siap && !dibatasi)
   /** Ada sesuatu yang perlu diberitahukan - entah mati, entah cuma dibatasi. */
@@ -1071,7 +949,7 @@ function PanelAI({
 
               {!terkunci && (
               <div className="mt-6 w-full space-y-1.5 max-lg:mt-3">
-                {t.contoh.map((c, i) => (
+                {saran.map((c, i) => (
                   <button
                     key={c}
                     onClick={() => kirim(c)}
@@ -1253,14 +1131,6 @@ function PanelAI({
               }`}
             >
               {memuat ? (
-                // Busur tiga-perempat yang berputar - spinner, bukan panah
-                // yang dibekukan. Sama animasinya (`ai-putar`) dengan cincin
-                // di belakangnya, cuma jauh lebih cepat, jadi keduanya terbaca
-                // sebagai SATU gerakan, bukan dua animasi yang kebetulan
-                // tumpang tindih.
-                // Jalur samar + busur yang memanjang-memendek sambil berputar -
-                // gerak spinner yang sudah dikenal mata, bukan busur kaku yang
-                // diputar dengan kecepatan tetap (yang dilaporkan "kurang alami").
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className="ai-spin">
                   <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.8" opacity="0.18" />
                   <circle
@@ -1318,3 +1188,4 @@ function PanelAI({
 // Dibungkus `memo`: pane ini tetap terpasang di balik tab lain, dan tidak perlu
 // dirender ulang tiap kali tab lain dibuka. Lihat prop pane yang stabil di App.tsx.
 export default memo(PanelAI)
+

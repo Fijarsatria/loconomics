@@ -1,11 +1,4 @@
-"""Uji mesin skoring dengan data sintetis.
-
-Dijalankan tanpa database dan tanpa data lapangan, jadi bisa dipakai kapan saja
-untuk memastikan rumus tidak rusak setelah diubah:
-
-    cd pipeline && python -m pytest test_s6_score.py -v
-    atau:  python test_s6_score.py
-"""
+"""Uji mesin skoring dengan data sintetis."""
 
 import numpy as np
 import pandas as pd
@@ -124,13 +117,7 @@ def test_sensitivitas_bobot():
 
 
 def test_faktor_menjumlah_jadi_indeksnya():
-    """Uji terpenting untuk score_factors: rincian harus MENJELASKAN skornya.
-
-    Kalau jumlah kontribusi sebuah indeks tidak sama dengan nilai indeks yang
-    tersimpan, panel "Kenapa skornya segitu" menampilkan angka yang tidak
-    menghasilkan skor di sebelahnya - dan itu jenis kesalahan yang langsung
-    terlihat begitu juri menjumlahkannya sendiri.
-    """
+    """Uji terpenting untuk score_factors: rincian harus MENJELASKAN skornya."""
     df = contoh_data(n=300)
     idx = hitung_indeks(df)
     jml = rincian_faktor(df).groupby(["h3_index", "indeks"])["kontribusi"].sum().unstack()

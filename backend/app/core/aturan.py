@@ -1,26 +1,7 @@
-"""Aturan produk yang berlaku saat menyusun respons.
-
-Semua yang ada di berkas ini adalah aturan TAMPILAN: kapan peringatan muncul,
-bagaimana sebuah angka dinarasikan, label apa yang dipakai. Tidak satu pun
-mengubah skor. Skor sudah selesai dihitung di pipeline/s6_score.py sebelum
-backend menyentuhnya - lihat CLAUDE.md aturan 1.
-
-Menggeser angka di sini mengubah kapan peringatan muncul, tidak pernah mengubah
-peringkat lokasi mana pun.
-"""
+"""Aturan produk yang berlaku saat menyusun respons."""
 
 from typing import Literal
 
-# ---------------------------------------------------------------------------
-# Ruang lingkup
-# ---------------------------------------------------------------------------
-# Enam kawasan pilot. Harus sama dengan KAWASAN_PILOT di pipeline/config.py dan
-# frontend/src/config.ts. Ketiganya proses terpisah yang tidak bisa saling impor,
-# jadi kesamaannya dijaga oleh uji, bukan oleh bahasa - lihat tests/test_aturan.py.
-#
-# Dipakai untuk MEMVALIDASI parameter kawasan. Sebelum ada daftar ini, salah
-# ketik nama kawasan menghasilkan daftar kosong dengan status 200, dan pemanggil
-# menyimpulkan "tidak ada lokasi bagus di sana" padahal yang terjadi salah eja.
 
 KAWASAN_PILOT = (
     "Manggarai",
@@ -32,17 +13,6 @@ KAWASAN_PILOT = (
 )
 
 
-# ---------------------------------------------------------------------------
-# RiskRadar - ambang indeks churn (P06)
-# ---------------------------------------------------------------------------
-# "Ambang batas wajar" ditetapkan relatif terhadap kawasan yang sama, bukan
-# absolut nasional: churn 0,4 di Tanah Abang dan 0,4 di Harjamukti punya arti
-# yang sangat berbeda karena dasar aktivitasnya berbeda.
-#
-# Lantai absolut ada supaya kawasan yang seluruhnya stabil tidak memunculkan
-# peringatan hanya karena satu heksagon kebetulan paling tinggi di antara yang
-# semuanya rendah. Tanpa lantai, setiap kawasan otomatis punya 25% area
-# "berisiko" - peringatan yang selalu muncul akan berhenti dibaca.
 
 CHURN_PERSENTIL_WASPADA = 0.75
 CHURN_PERSENTIL_BAHAYA = 0.90
@@ -54,22 +24,7 @@ TingkatRisiko = Literal["AMAN", "WASPADA", "BAHAYA", "TIDAK_DIKETAHUI"]
 def tingkat_risiko_churn(
     churn: float | None, p75: float | None, p90: float | None
 ) -> TingkatRisiko:
-    """Satu-satunya tempat aturan peringatan churn didefinisikan.
-
-    p75 dan p90 adalah persentil dalam kawasan yang sama, dihitung SQL.
-
-    Churn KOSONG menghasilkan `TIDAK_DIKETAHUI`, bukan `AMAN`. Sebelumnya ia
-    dipetakan ke AMAN dengan alasan "badge keyakinan yang menyertainya akan
-    menunjukkan datanya tipis" - alasan yang masih masuk akal selama churn
-    kadang-kadang ada. Sejak P06 dikosongkan (27 Agu 2026, tidak ada sumber
-    yang bisa menghasilkannya), churn kosong di SELURUH 708 heksagon, dan
-    pemetaan lama membuat platform menyatakan "Pergantian usaha di kawasan ini
-    wajar" untuk setiap lokasi tanpa satu pun data di belakangnya.
-
-    Ini kembaran persis dari jebakan ZoneGuard yang sudah diperbaiki: untuk
-    fitur yang menjanjikan sebuah STATUS, "tidak tahu" harus jadi salah satu
-    nilai statusnya - bukan dilebur ke nilai yang kedengaran menenangkan.
-    """
+    """Satu-satunya tempat aturan peringatan churn didefinisikan."""
     if churn is None:
         return "TIDAK_DIKETAHUI"
     if churn < CHURN_LANTAI_ABSOLUT:
@@ -88,31 +43,14 @@ LABEL_RISIKO: dict[str, str] = {
     "TIDAK_DIKETAHUI": "Data pergantian usaha belum ada untuk lokasi ini",
 }
 
-#: Tingkat yang benar-benar berarti "ada yang perlu diwaspadai". Ditulis
-#: sebagai daftar POSITIF, bukan sebagai `!= "AMAN"`, dan itu bukan gaya:
-#: bentuk negatif diam-diam ikut memasukkan `TIDAK_DIKETAHUI` begitu tingkat
-#: keempat itu ada, sehingga saringan "tampilkan yang berperingatan saja"
-#: berubah jadi "tampilkan yang datanya tidak ada" - persis kebalikan dari
-#: yang diminta, dan tanpa satu pun galat.
 TINGKAT_BERPERINGATAN = ("WASPADA", "BAHAYA")
 
 
-# ---------------------------------------------------------------------------
-# Commuter Clock
-# ---------------------------------------------------------------------------
-# Harus sama dengan JAM_MULAI / JAM_SELESAI di pipeline/config.py. Pipeline yang
-# mengisi tabelnya, backend yang menyajikan - keduanya harus sepakat rentangnya.
 
 JAM_MULAI, JAM_SELESAI = 5, 22
 JAM_OPERASIONAL = list(range(JAM_MULAI, JAM_SELESAI + 1))
 
 
-# ---------------------------------------------------------------------------
-# ZoneGuard
-# ---------------------------------------------------------------------------
-# Tiga status, tiga arti yang berbeda. NULL bukan FALSE: "belum ada RDTR digital"
-# bukan "dilarang". Menyamakan keduanya akan mematikan seluruh kawasan yang RDTR-nya
-# belum digital - kesalahan yang langsung terlihat di peta.
 
 StatusZona = Literal["DIIZINKAN", "DILARANG", "TIDAK_DIKETAHUI"]
 
@@ -140,25 +78,6 @@ PENJELASAN_ZONA: dict[str, str] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Bahasa untuk orang awam
-# ---------------------------------------------------------------------------
-# Yang membaca layar ini calon pemilik warung, bukan analis data. Ia tidak tahu
-# apa itu "rasio kompetitor per kapita", dan tidak seharusnya perlu tahu.
-#
-# Tiga aturan yang dipegang seluruh tabel di bawah:
-#   1. Nama benda, bukan nama kolom. "Pesaing sejenis", bukan
-#      "n_kompetitor_langsung".
-#   2. PENDEK. Satu frasa, bukan satu kalimat. Penjelasan panjang di sebelah
-#      angka membuat angkanya berhenti dibaca.
-#   3. Satuannya ikut. "8,5" tidak berarti apa-apa; "8,5 tempat" berarti.
-#
-# Kode variabel (D01, B07, ...) TETAP disimpan di kolom pertama - ia identitas
-# kanonik yang dipakai dokumen, score_factors, dan definisi bobot. Yang berubah
-# hanya apa yang sampai ke mata.
-#
-# Kembarannya di frontend: `config.ts::ARTI_VARIABEL`. Dijaga sama oleh
-# tests/test_aturan.py - kalau salah satunya bergeser, ujinya merah.
 
 #: kolom -> (kode, nama untuk orang awam, satuan)
 ARTI_VARIABEL: dict[str, tuple[str, str, str]] = {
@@ -233,43 +152,11 @@ ARTI_INDEKS: dict[str, str] = {
 
 LABEL_KUADRAN: dict[str, str] = {
     "HIDDEN_GEM": "Hidden Gem",
-    # Diganti 22 Agustus 2026: "Pemenang Jelas" tidak memberi tahu apa pun
-    # tentang APA yang menang, dan yang membacanya di layar adalah orang yang
-    # baru pertama kali melihat kuadran ini. Kuncinya tetap PEMENANG_JELAS -
-    # itu yang tersimpan di basis data dan dipakai pipeline.
-    # Dipendekkan lagi 3 September 2026 jadi "Aman". "Aman tapi Mahal" memuat
-    # dua pernyataan sekaligus, dan yang kedua sudah dikatakan ARTI_KUADRAN di
-    # bawah - jadi yang tersisa cuma nama panjang yang sulit dibaca di lencana
-    # peta dan di judul kartu. Kuncinya tetap PEMENANG_JELAS.
     "PEMENANG_JELAS": "Aman",
     "JEBAKAN_GENGSI": "Jebakan Gengsi",
     "HINDARI": "Hindari",
 }
 
-# ---------------------------------------------------------------------------
-# Nama heksagon yang bisa dibaca orang
-# ---------------------------------------------------------------------------
-# `898c107834bffff` adalah indeks H3 - alamat sel di grid global Uber H3
-# resolusi 9. Ia kunci utama basis data dan tidak akan pernah diganti, tetapi
-# ia juga tidak pernah pantas ditunjukkan ke pengguna: lima belas karakter
-# heksadesimal tidak bisa dibaca, tidak bisa diingat, dan tidak bisa disebutkan
-# lewat telepon.
-#
-# Yang di bawah menghasilkan nama seperti "Manggarai-40407". Tiga sifat yang
-# membuatnya bisa dipercaya:
-#
-#   TANPA KEADAAN  Diturunkan dari indeksnya sendiri, bukan dari nomor urut.
-#                  Nomor urut menuntut seluruh himpunan diketahui, dan setiap
-#                  heksagon baru akan menggeser nomor tetangganya - termasuk
-#                  yang sudah tercetak di Laporan Kelayakan orang.
-#   TIDAK BENTROK  Potongan h3[7:11] adalah bagian yang benar-benar membedakan
-#                  sel bertetangga; diuji terhadap seluruh 708 heksagon, nol
-#                  bentrok, bahkan tanpa nama kawasannya.
-#   BISA DIBALIK   Bukan sidik acak. Dua heksagon bersebelahan mendapat angka
-#                  berdekatan, jadi urutannya masih berarti sesuatu.
-#
-# Kembarannya di frontend: `config.ts::kodeLokasi`. Keduanya dijaga sama oleh
-# tests/test_aturan.py.
 
 PANJANG_KODE_LOKASI = 5
 
@@ -279,37 +166,13 @@ def kode_lokasi(h3_index: str, kawasan: str) -> str:
     return f"{kawasan}-{int(h3_index[7:11], 16):0{PANJANG_KODE_LOKASI}d}"
 
 
-# ---------------------------------------------------------------------------
-# Jarak ke simpul transit
-# ---------------------------------------------------------------------------
-# Kecepatan jalan kaki untuk mengubah jarak jadi menit di peta.
-#
-# 80 m/menit ≈ 4,8 km/jam, kecepatan pejalan kaki dewasa di trotoar kota. Ini
-# ATURAN TAMPILAN, bukan variabel: ia tidak pernah masuk skor, dan menggesernya
-# hanya mengubah angka menit yang tertulis di garis penghubung.
-#
-# Angkanya sengaja dipakai untuk GARIS LURUS saja, dan labelnya di layar
-# mengatakannya. Isochrone sungguhan mengikuti jaringan jalan dan tinggal di
-# tabel `catchment_areas` - yang masih kosong sampai routing OSMnx dikerjakan.
-# Menggambar lingkaran lalu menyebutnya isochrone adalah kesalahan yang
-# docs/data.md peringatkan secara khusus.
-#: Di atas angka ini, "dekat stasiun" menurut peta dan "dekat stasiun" menurut
-#: kaki sudah dua hal yang berbeda, dan antarmuka menyebutkannya. 1,4 dipilih
-#: karena rasio memutar jaringan jalan kota yang normal berkisar 1,2-1,3;
-#: yang di atas itu berarti ada sesuatu yang MENGHALANGI - rel, sungai, tembok
-#: kompleks - dan itu justru yang perlu diketahui orang sebelum menyewa.
 MEMUTAR_MENCOLOK = 1.4
 
 KECEPATAN_JALAN_M_PER_MENIT = 80.0
 
 
 def faktor_memutar(rute_m: float | None, lurus_m: float | None) -> float | None:
-    """Berapa kali lipat rute jalan kaki dibanding garis lurusnya.
-
-    Bukan skor, dan tidak pernah memeringkat apa pun - ia cuma menyatakan ulang
-    dua angka yang sudah ada supaya selisihnya terbaca. Tempatnya di sini
-    justru karena itu: aturan tampilan, bukan aritmetika skor.
-    """
+    """Berapa kali lipat rute jalan kaki dibanding garis lurusnya."""
     if not rute_m or not lurus_m or lurus_m <= 0:
         return None
     return round(rute_m / lurus_m, 2)
@@ -331,30 +194,6 @@ PENJELASAN_KUADRAN: dict[str, str] = {
 
 
 
-# ---------------------------------------------------------------------------
-# Dua bahasa
-# ---------------------------------------------------------------------------
-#
-# KENAPA DI SINI, dan bukan di frontend.
-#
-# Kalimat di bawah dirakit dari angka heksagon - "Sewa Rp2.250.000/bln, masih
-# Rp750.000 di bawah anggaran Anda". Yang dirakit dari data tidak boleh disalin
-# ke frontend sebagai kamus kedua: salinan itu akan berselisih dengan yang
-# dicetak Laporan PDF dan diucapkan Konsultan AI, dan selisihnya tidak akan
-# pernah memunculkan galat - cuma dua kalimat berbeda untuk lokasi yang sama di
-# dua layar yang berbeda. Sama persis dengan alasan `ARTI_VARIABEL` hidup di
-# satu tempat.
-#
-# BENTUKNYA: satu katalog berkunci, tiap kunci membawa PASANGAN (id, en).
-# Percabangan yang memilih kalimat tetap tinggal di tempatnya - ia logika, bukan
-# teks - dan yang pindah ke sini cuma kalimatnya. Akibatnya dua hal yang
-# keduanya disengaja: seluruh prosa produk ini bisa dibaca dalam satu layar, dan
-# `test_aturan.py` bisa menuntut tiap kunci punya kedua cabangnya DENGAN
-# placeholder yang sama persis.
-#
-# Yang TIDAK ikut: Laporan Kelayakan PDF dan jawaban Konsultan AI. Keduanya
-# masih Indonesia, dan itu keadaan yang dicatat di docs/status.md - bukan yang
-# terlupa.
 
 Bahasa = Literal["id", "en"]
 
@@ -365,13 +204,7 @@ BAHASA_BAWAAN: Bahasa = "id"
 
 
 def pilih(kamus_id: dict[str, str], kamus_en: dict[str, str], bahasa: Bahasa) -> dict[str, str]:
-    """Cabang kamus yang berlaku, dengan Indonesia sebagai jaring pengaman.
-
-    `or kamus_id[k]` di dalam pemahaman-dict bukan kerapian: kunci yang lupa
-    diterjemahkan lebih baik tampil dalam bahasa Indonesia daripada hilang
-    sebagai KeyError di tengah respons yang sudah separuh jadi. Kelengkapannya
-    dijaga uji, bukan oleh runtime.
-    """
+    """Cabang kamus yang berlaku, dengan Indonesia sebagai jaring pengaman."""
     if bahasa != "en":
         return kamus_id
     return {k: kamus_en.get(k) or v for k, v in kamus_id.items()}
@@ -420,11 +253,6 @@ ARTI_INDEKS_EN: dict[str, str] = {
 }
 
 
-#: Tiap kalimat yang KELUAR ke layar dan tidak muat di keempat kamus di atas.
-#:
-#: Nilainya `(indonesia, inggris)` dan keduanya template `str.format`. Angka
-#: sudah diformat oleh pemanggilnya - pemisah ribuan Indonesia dan Inggris
-#: berbeda, dan itu urusan `_rp()`, bukan urusan katalog ini.
 KALIMAT: dict[str, tuple[str, str]] = {
     # --- GemFinder ---------------------------------------------------------
     "gem_sewa": (
@@ -770,31 +598,17 @@ KALIMAT: dict[str, tuple[str, str]] = {
 
 
 def kalimat(kunci: str, bahasa: Bahasa = BAHASA_BAWAAN, **isi: object) -> str:
-    """Satu kalimat dari katalog, sudah diisi.
-
-    KeyError-nya sengaja tidak ditangkap: kunci yang salah ketik adalah bug yang
-    harus berteriak saat uji, bukan kalimat kosong yang lolos ke layar.
-    """
+    """Satu kalimat dari katalog, sudah diisi."""
     id_, en = KALIMAT[kunci]
     return (en if bahasa == "en" else id_).format(**isi)
 
 
 def rp(n: float, bahasa: Bahasa = BAHASA_BAWAAN) -> str:
-    """Rupiah, dengan pemisah ribuan yang benar untuk bahasanya.
-
-    "Rp1.827" dibaca pembaca Inggris sebagai satu koma delapan - selisih seribu
-    kali pada angka yang dipakai orang menimbang sewa. Kembarannya di frontend
-    `lib/format.ts`, dan keduanya harus sepakat.
-    """
+    """Rupiah, dengan pemisah ribuan yang benar untuk bahasanya."""
     utuh = f"{n:,.0f}"
     return "Rp" + (utuh if bahasa == "en" else utuh.replace(",", "."))
 
 
-# ---------------------------------------------------------------------------
-# Blok di dalam heksagon - aturan TAMPILAN
-# ---------------------------------------------------------------------------
-# Skornya dihitung `pipeline/s6_score.skor_blok`. Yang di sini hanya memilih
-# kalimat yang menyertainya - tidak satu pun mengubah urutan blok.
 
 #: Delapan kelas induk usaha, nama (id, en). Kembaran `pipeline/config.py::
 #: KELAS_INDUK` - kesamaannya dijaga `tests/test_aturan.py`.
@@ -838,10 +652,6 @@ NAMA_KONTRIBUSI_BLOK: dict[str, tuple[str, str]] = {
 }
 
 
-#: Bobot tiap sumbangan blok - KEMBARAN `pipeline/config.py::BOBOT_BLOK` plus
-#: `BOBOT_BLOK_BANJIR`, dijaga sama oleh `test_aturan.py`. Dipakai HANYA untuk
-#: menerjemahkan sumbangan jadi kekuatan 0-1 yang bisa dibaca awam; tidak ada
-#: satu pun skor yang dihitung ulang dari sini (aturan 1).
 BOBOT_KONTRIBUSI_BLOK: dict[str, float] = {
     "menit_jalan_inv": 0.30,
     "jarak_jalan_utama_m_inv": 0.20,
@@ -854,23 +664,7 @@ BOBOT_KONTRIBUSI_BLOK: dict[str, float] = {
 
 
 def kontribusi_blok(mentah: dict | None, bahasa: Bahasa) -> list[dict]:
-    """`blok_heksagon.kontribusi` -> daftar berlabel, urut dari yang terbesar.
-
-    TIDAK menghitung apa pun: pangsanya pembagian dua angka yang sudah jadi,
-    dan pembagian itu tidak memeringkat blok mana pun (aturan 1). Yang
-    menghitung sumbangannya `pipeline/s6_score.skor_blok`.
-
-    `kekuatan` ditambahkan 13 Sep 2026 atas laporan pemilik repo: "masa dekat
-    halte pake persentase". Pangsa menjawab "berapa bagian skor datang dari
-    sini" - pertanyaan yang tidak diajukan siapa pun. Yang diajukan orang:
-    "seberapa bagus blok ini soal halte?". Sumbangan dibagi bobotnya menjawab
-    persis itu, pada skala 0-1 atas seluruh blok wilayah studi, karena
-    pipeline menormalkannya begitu.
-
-    Yang NEGATIF ikut dikirim dan tidak diubah tandanya. Risiko banjir menekan
-    skor, dan menyembunyikannya berarti daftar sumbangan yang jumlahnya tidak
-    pernah cocok dengan skornya.
-    """
+    """`blok_heksagon.kontribusi` -> daftar berlabel, urut dari yang terbesar."""
     if not mentah:
         return []
     en = bahasa == "en"
@@ -899,12 +693,7 @@ def alasan_blok(
     kelas: str | None,
     bahasa: Bahasa = BAHASA_BAWAAN,
 ) -> tuple[list[str], list[str]]:
-    """Kalimat keunggulan dan peringatan untuk SATU blok, dibanding saudaranya.
-
-    Keunggulan disebut hanya kalau memang pembeda - "tercepat ke stasiun"
-    hanya untuk blok yang benar-benar tercepat, bukan untuk ketujuhnya. Kalimat
-    yang muncul di setiap baris berhenti dibaca sebagai alasan.
-    """
+    """Kalimat keunggulan dan peringatan untuk SATU blok, dibanding saudaranya."""
     alasan: list[str] = []
     peringatan: list[str] = []
     nama = nama_simpul or ("stasiun" if bahasa != "en" else "the station")
@@ -956,50 +745,14 @@ def alasan_blok(
         peringatan.append(kalimat("blok_banjir", bahasa))
     return alasan, peringatan
 
-# ---------------------------------------------------------------------------
-# Kejujuran keempat indeks
-# ---------------------------------------------------------------------------
-# Tiap indeks dirakit dari beberapa variabel. Variabel yang KOSONG tidak
-# dinolkan - ia dinetralkan ke 0,5, tengah skala (CLAUDE.md aturan 4). Itu
-# keputusan yang benar untuk PERHITUNGAN, dan berbahaya untuk TAMPILAN: indeks
-# yang seluruh bahannya kosong tetap keluar sebagai angka di sekitar 0,5, dan
-# di layar ia tidak bisa dibedakan dari hasil pengukuran sungguhan.
-#
-# Terukur 30 Agustus 2026 atas 708 heksagon:
-#
-#     IPT akses ke stasiun     65% bobotnya terukur
-#     IKP ketatnya persaingan  75% terukur
-#     IAE perputaran uang       1% terukur   <- praktis seluruhnya netral
-#     IBR biaya dan risiko      5% terukur   <- praktis seluruhnya netral
-#
-# Jadi dua dari empat angka yang selama ini tampil sebagai "0,49" dan "0,487"
-# sebenarnya berarti "belum diketahui". Ini keluarga kesalahan yang sama dengan
-# badge keyakinan yang dulu mengaku disurvei, RiskRadar yang menyebut AMAN untuk
-# lokasi tanpa data, dan ZoneGuard yang diam untuk zona yang diizinkan: nilai
-# netral yang menyamar jadi temuan.
-#
-# Yang dikembalikan di sini BUKAN skor dan tidak memeringkat apa pun - ia
-# menghitung berapa bahan sebuah indeks yang benar-benar punya nilai. Datanya
-# sudah tersimpan di `score_factors`: baris yang variabelnya kosong punya
-# `nilai_normalisasi = NULL` sementara `kontribusi`-nya tetap terisi (bobot x
-# 0,5). Jadi ini pembacaan, bukan perhitungan ulang.
 
-#: Di bawah pangsa ini, indeksnya TIDAK BOLEH ditampilkan sebagai angka.
-#: Sepertiga dipilih karena di bawah itu yang tersisa lebih banyak asumsi
-#: daripada pengukuran, dan angka yang isinya asumsi lebih buruk daripada
-#: kejujuran "belum terukur" - ia terlihat seperti jawaban.
 AMBANG_INDEKS_LAYAK_TAMPIL = 1 / 3
 
 
 def cakupan_indeks(
     faktor: "list",  # list[ScoreFactor]; tidak diimpor supaya modul ini bebas ORM
 ) -> dict[str, dict[str, object]]:
-    """Berapa bahan tiap indeks yang benar-benar terukur, bukan dinetralkan.
-
-    Mengembalikan, per kode indeks: jumlah bahan terukur, jumlah bahan
-    seluruhnya, daftar kode variabel yang kosong, dan apakah angkanya layak
-    ditampilkan sama sekali.
-    """
+    """Berapa bahan tiap indeks yang benar-benar terukur, bukan dinetralkan."""
     keluar: dict[str, dict[str, object]] = {}
     for f in faktor:
         d = keluar.setdefault(
@@ -1018,41 +771,7 @@ def cakupan_indeks(
     return keluar
 
 
-# ---------------------------------------------------------------------------
-# Cakupan sumbu prestise
-# ---------------------------------------------------------------------------
-#
-# Sumbu datar Kompas Kuadran adalah SETENGAH tesis produk ini: "apa kata mata"
-# yang diadu dengan "apa kata data". Ia dihitung
-# `pipeline/s6_score.py::hitung_prestise_visual()` sebagai rata-rata lima bahan
-# dengan `skipna=True` - jadi bahan yang kosong dilewati begitu saja dan
-# sumbunya tetap menghasilkan angka untuk setiap heksagon.
-#
-# Terukur 2 September 2026 atas 708 heksagon: DUA bahan kosong seluruhnya, dan
-# keduanya justru satu-satunya yang menilai TAMPILAN secara langsung - M03
-# (kesan mewah, dinilai dari foto) dan P02 (posisi NJOP). Yang menggerakkan
-# sumbunya tinggal porsi waralaba dan bentuk bangunan: proksi yang masuk akal,
-# tetapi proksi. 390 heksagon berdiri di atas tiga bahan, 309 di atas dua, dan
-# sembilan di atas SATU.
-#
-# Keluarga kesalahan yang sama dengan badge yang dulu mengaku disurvei dan
-# RiskRadar yang menyebut AMAN tanpa data: angkanya benar, kalimat di sebelahnya
-# yang menjanjikan lebih banyak daripada yang diukur.
-#
-# Yang dikembalikan di sini BUKAN skor. Ia tidak memindahkan satu pun titik,
-# tidak menggeser batas kuadran, dan tidak menyembunyikan sumbunya - ia cuma
-# menyebutkan sumbu itu berdiri di atas apa.
-#
-# AMBANG_INDEKS_LAYAK_TAMPIL sengaja TIDAK dipakai di sini, dan alasannya layak
-# dicatat: tiga dari lima bahan terisi = 60%, jadi ambang berbasis JUMLAH akan
-# lolos dengan mulus justru pada keadaan yang jadi masalahnya - dua bahan yang
-# mendefinisikan arti sumbunya yang hilang. Yang menentukan di sini bukan
-# BERAPA bahannya, melainkan bahan yang MANA, jadi yang dilaporkan daftarnya.
 
-#: Kelima bahan sumbu prestise, URUT PERSIS seperti
-#: `pipeline/s6_score.py::hitung_prestise_visual`. Urutan itu yang muncul di
-#: layar sebagai daftar, jadi ia bukan selera - dijaga
-#: `test_bahan_prestise_sama_dengan_pipeline`.
 BAHAN_PRESTISE: tuple[tuple[str, str], ...] = (
     ("P02", "njop_persentil"),
     ("C05", "pangsa_waralaba"),
@@ -1061,31 +780,11 @@ BAHAN_PRESTISE: tuple[tuple[str, str], ...] = (
     ("M01", "rasio_tutupan_bangunan"),
 )
 
-#: Dua bahan yang menilai tampilan SECARA LANGSUNG. Ketiga sisanya
-#: menyimpulkannya dari hal lain: berapa gerai waralaba di sekitarnya, seberapa
-#: besar dan rapat bangunannya. Selama kedua ini kosong, kata "visual" pada nama
-#: sumbunya adalah kesimpulan, bukan pengukuran - dan itulah yang wajib
-#: dinyatakan di layar.
 BAHAN_PRESTISE_LANGSUNG: frozenset[str] = frozenset({"M03", "P02"})
 
 
 def cakupan_prestise(fitur: "list") -> dict[str, object]:
-    """Bahan sumbu prestise mana yang benar-benar terukur.
-
-    Menerima SATU ATAU BANYAK baris `HexFeature`, dan artinya menyesuaikan: satu
-    baris menjawab "lokasi ini berdiri di atas apa", banyak baris menjawab
-    "sumbu ini, untuk titik yang sedang ditampilkan, berdiri di atas apa".
-
-    Sebuah bahan disebut terisi kalau SETIDAKNYA SATU baris punya nilainya. Untuk
-    satu baris itu makna biasa; untuk banyak baris ia pernyataan paling lemah
-    yang masih benar, dan itu memang yang dibutuhkan keterangan diagram. Yang
-    lebih halus - C05 terisi di 390 dari 708 - tempatnya di panel per-heksagon,
-    tempat ia muncul sendiri sebagai selisih antara "tiga bahan" dan "dua bahan".
-
-    Terisi berarti kolomnya tidak NULL, bukan tidak nol: `norm()` di s6
-    mengembalikan NaN HANYA untuk nilai yang memang hilang. Nol itu pengukuran -
-    jebakan yang sama dengan `nilai_normalisasi = 0,0` di `cakupan_indeks`.
-    """
+    """Bahan sumbu prestise mana yang benar-benar terukur."""
     terisi: list[str] = []
     kosong: list[str] = []
     for kode, kolom in BAHAN_PRESTISE:
@@ -1098,22 +797,6 @@ def cakupan_prestise(fitur: "list") -> dict[str, object]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Perkiraan
-# ---------------------------------------------------------------------------
-#
-# Kalimat yang menyertai angka PERKIRAAN. Tempatnya di sini dan bukan di
-# frontend karena ia dirakit DARI ANGKANYA - dan pemicu yang dihitung dari data
-# dengan kalimat yang ditulis tetap adalah jebakan yang sudah terjadi tiga kali
-# di repo ini (pita status, halaman gerbang, catatan_data).
-#
-# Yang paling menentukan di sini kalimat kedua. Tim AI melaporkan R2 0,62 untuk
-# D10 dan 0,57 untuk B07, dan angka itu benar - tetapi ia diukur terhadap label
-# yang 96,9%-nya sintetis, jadi yang diukurnya adalah seberapa baik model
-# menebak formula yang membuat labelnya. Pembanding yang sungguhan justru ada
-# di tangan kita: pengamatan misi MAPID di heksagon kita sendiri, yang tidak
-# pernah dilihat model itu. Menyebut R2 tanpa menyebut selisih terhadap ukuran
-# sungguhan berarti memamerkan nilai ujian dari soal yang dibuat sendiri.
 
 #: Nama awam variabel yang punya perkiraan. Sengaja hanya yang dipakai - daftar
 #: lengkap 43 variabel sudah hidup di `api/bersama.py::SEMUA_VARIABEL`.
@@ -1126,13 +809,6 @@ NAMA_PERKIRAAN: dict[str, tuple[str, str]] = {
     "D10": ("Tingkat keramaian terkoreksi", "Corrected busyness level"),
 }
 
-#: Kode variabel -> nama kolomnya di `hex_features`.
-#:
-#: Jembatan yang sama dengan `pipeline/config.py::KODE_KE_KOLOM`, tapi hanya
-#: untuk kode yang punya perkiraan. Antarmuka menamai angka lewat nama KOLOM
-#: (kamusnya sudah ada di `lib/bahasa.tsx`), jadi tanpa jembatan ini perkiraan
-#: akan tampil sebagai baris "B07" tanpa nama. Kesamaannya dijaga
-#: `tests/test_aturan.py`.
 KODE_PERKIRAAN: dict[str, str] = {
     "B01": "puncak_pagi",
     "B02": "puncak_siang",
@@ -1154,31 +830,15 @@ SATUAN_PERKIRAAN: dict[str, tuple[str, str]] = {
 
 
 def _ang(n: float, desimal: int = 0, bahasa: Bahasa = BAHASA_BAWAAN) -> str:
-    """Angka dengan pemisah yang benar untuk bahasanya.
-
-    Alasan yang sama persis dengan `rp()` di atas: "14,580" dibaca pembaca
-    Indonesia sebagai empat belas koma lima, dan "0.57" dibaca sebagai nol
-    lima puluh tujuh. Keduanya salah seribu kali lipat pada angka yang justru
-    sedang dipakai menimbang.
-    """
+    """Angka dengan pemisah yang benar untuk bahasanya."""
     utuh = f"{n:,.{desimal}f}"
     if bahasa == "en":
         return utuh
-    # `translate`, bukan tiga `replace` berantai: rantai itu menukar koma jadi
-    # titik lalu menukar titik-titik itu balik jadi koma, dan hasilnya "1.234,5"
-    # yang benar cuma kalau ada sentinel di tengahnya. `translate` menukar
-    # keduanya dalam satu lintasan, jadi tidak ada langkah antara yang bisa
-    # salah dibaca langkah berikutnya.
     return utuh.translate(str.maketrans(",.", ".,"))
 
 
 def kalimat_perkiraan(kode: str, metode: str, rincian: dict, bahasa: Bahasa) -> str:
-    """Satu kalimat: dari mana angkanya, dan seberapa jauh ia pernah meleset.
-
-    `rincian` isinya apa adanya dari `hex_perkiraan.rincian`; yang tidak ada
-    dilewati, bukan ditebak. Perkiraan yang keterangannya kosong lebih jujur
-    daripada perkiraan yang keterangannya dikarang.
-    """
+    """Satu kalimat: dari mana angkanya, dan seberapa jauh ia pernah meleset."""
     en = bahasa == "en"
     bagian: list[str] = []
 
@@ -1230,15 +890,7 @@ def kalimat_perkiraan(kode: str, metode: str, rincian: dict, bahasa: Bahasa) -> 
     mae = rincian.get("mae_vs_terukur")
     if n_uji and mae is not None:
         satuan = SATUAN_PERKIRAAN.get(kode, ("", ""))[1 if en else 0]
-        # Desimalnya mengikuti BESARAN, bukan disetel tetap. "Meleset rata-rata
-        # 14.580 rupiah" tidak butuh koma; "meleset rata-rata 2" pada skala 1-3
-        # justru kehilangan seluruh isinya - selisih 2,34 pada skala bermentok 3
-        # adalah salah total, dan "2" terbaca seperti angka yang wajar.
         desimal = 0 if abs(mae) >= 100 else 2
-        # "Bacalah sebagai kisaran, bukan sebagai harga" salah untuk D10, yang
-        # bukan harga melainkan tingkat keramaian. Kalimat penutup yang tidak
-        # cocok dengan angkanya terbaca sebagai kalimat yang disalin - dan
-        # kalimat yang terbaca disalin membuat seluruh keterangannya dicurigai.
         ekor_benda = (
             ("harga", "a price") if kode == "B07" else ("angka pasti", "a fixed number")
         )

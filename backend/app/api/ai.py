@@ -1,33 +1,4 @@
-"""AI Consultant - lapisan AI yang hadir di dalam antarmuka WebGIS.
-
-ATURAN KERAS (docs/ai.md): LLM tidak pernah menghitung angka.
-Ia hanya boleh memanggil alat di berkas ini, menerima angka dari basis data, lalu
-merangkainya menjadi kalimat. Satu halusinasi angka saat demo cukup untuk
-menghancurkan kredibilitas seluruh proyek.
-
-Penegakannya tiga lapis, bukan sekadar imbauan di prompt:
-
-  1. Model tidak punya jalan lain untuk mendapat angka. Prompt sistem tidak
-     memuat satu pun data; semuanya harus lewat alat.
-  2. Setiap hasil alat dicatat ke `jejak`, dan angka skor yang dikutip ikut ke
-     `sumber_angka`. Jawaban yang menyebut angka tanpa jejak langsung terlihat.
-  3. Nama alat divalidasi terhadap REGISTRI. Nama di luar itu ditolak, tidak
-     pernah dipanggil secara dinamis.
-
-Dua belas alat, terbagi dua kelompok yang jalannya berbeda:
-
-  Dieksekusi BACKEND (menyentuh basis data, mengembalikan angka)
-    cari_lokasi, bandingkan, jelaskan_skor,
-    cek_harga, pola_jam, cek_zona, cari_hidden_gem, cek_risiko
-
-  Dieksekusi FRONTEND (aksi peta, tidak menyentuh basis data)
-    flyTo, highlight, setLayer, filter
-    -> backend tidak menjalankannya, hanya meneruskan ke field `aksi_peta`
-
-Pembagian ini penting: kalau flyTo dieksekusi di backend, tidak ada yang bergerak
-di layar pengguna. Ketentuan C.2 meminta keluaran AI yang benar-benar mendarat di
-peta, bukan sekadar teks.
-"""
+"""AI Consultant - lapisan AI yang hadir di dalam antarmuka WebGIS."""
 
 from __future__ import annotations
 
@@ -83,12 +54,7 @@ PERINTAH_PENUTUP = (
 
 
 def _dengan_perintah_penutup(pesan: list[dict]) -> list[dict]:
-    """Riwayat + perintah menulis jawaban, DI DALAM giliran hasil alat terakhir.
-
-    Bukan giliran pengguna tersendiri: dua giliran pengguna berturut-turut
-    (hasil alat, lalu teks) dijawab Gemini dengan balasan kosong - terukur
-    13 Sep 2026, panggilan penutupnya berhasil dan tetap tidak berisi teks.
-    """
+    """Riwayat + perintah menulis jawaban, DI DALAM giliran hasil alat terakhir."""
     if pesan and pesan[-1]["role"] == "user" and isinstance(pesan[-1]["content"], list):
         akhir = {
             "role": "user",
@@ -121,10 +87,6 @@ def cari_lokasi(
     )
     if kawasan:
         stmt = stmt.where(HexFeature.kawasan == kawasan)
-    # Heksagon yang harga sewanya / waktu jalannya BELUM DIKETAHUI tidak
-    # dibuang (aturan 4: kosong bukan "melebihi anggaran"). Dulu `<=` atas NULL
-    # membuang seluruh kawasan tanpa data sewa, dan model menerima "0 hasil"
-    # tiga kali berturut-turut untuk pertanyaan yang jawabannya ada.
     if budget_sewa_bulanan is not None:
         stmt = stmt.where(
             or_(
@@ -182,10 +144,6 @@ def bandingkan(
         ),
     }
     if a.terkunci or b.terkunci:
-        # Tanpa baris ini model membaca blok `harga` yang seluruhnya null dan
-        # menyimpulkan datanya memang tidak ada - padahal ada, cuma ditahan.
-        # Mengatakan "belum ada data harga" kepada orang yang bisa membukanya
-        # dengan satu token adalah pernyataan yang salah, bukan sekadar kurang.
         hasil["catatan"] = (
             "Blok 'harga', 'indeks', dan 'kuadran_penjelasan' pada kedua lokasi "
             "ditahan karena pemanggilnya belum berlangganan. Nilai null di sana "
@@ -291,12 +249,7 @@ def cek_risiko(
 
 
 def _ringkas_detail(d) -> dict[str, Any]:
-    """Bentuk ringkas DetailHeksagon untuk konteks model.
-
-    43 variabel mentah tidak dikirim seluruhnya: sebagian besar tidak relevan
-    dengan pertanyaan yang sedang dijawab, dan mengirim semuanya hanya membuat
-    model kehilangan fokus sekaligus menaikkan biaya.
-    """
+    """Bentuk ringkas DetailHeksagon untuk konteks model."""
     return {
         "h3_index": d.skor.h3_index,
         "kawasan": d.skor.kawasan,
@@ -322,18 +275,7 @@ def _ringkas_detail(d) -> dict[str, Any]:
 def bedah_blok(
     db: Session, h3_index: str, kelas: str | None = None, bahasa: str = "id"
 ) -> dict[str, Any]:
-    """Tujuh blok res-10 di dalam satu heksagon, terurut dari yang terbaik.
-
-    Ada supaya Konsultan AI bisa menjawab pertanyaan yang paling sering
-    menyusul sesudah "lokasi mana": *di sisi mana*. Tanpa alat ini ia tahu
-    heksagon mana yang bagus tetapi tidak pernah bisa menyebut nama jalannya -
-    padahal itu yang dipakai orang mencari ruko.
-
-    Memanggil endpoint yang SAMA dengan yang dipakai panel, bukan kueri
-    sendiri: dua jalur yang membaca tabel yang sama dengan cara berbeda akan
-    berselisih peringkatnya, dan yang berselisih di sini nama jalan yang
-    diucapkan asisten.
-    """
+    """Tujuh blok res-10 di dalam satu heksagon, terurut dari yang terbaik."""
     from app.api.hex import blok_heksagon
 
     hasil = blok_heksagon(h3_index, db, kelas=kelas, bahasa=bahasa)  # type: ignore[arg-type]
@@ -380,16 +322,7 @@ NAMA_FRONTEND = {"flyTo", "highlight", "setLayer", "filter"}
 def panggil_fungsi(
     db: Session, nama: str, argumen: dict[str, Any], pengguna=None
 ) -> Any:
-    """Titik masuk tunggal untuk seluruh function call dari LLM.
-
-    Validasi di sini bukan formalitas: argumen datang dari keluaran model bahasa,
-    jadi tidak boleh dipercaya mentah-mentah. Nama fungsi di luar registri ditolak,
-    bukan dijalankan secara dinamis.
-
-    Argumen bernilai None dibuang lebih dulu. Mode strict mewajibkan setiap
-    parameter hadir, jadi model mengirim `null` untuk yang tidak dipakai -
-    meneruskannya apa adanya akan menimpa nilai bawaan fungsi dengan None.
-    """
+    """Titik masuk tunggal untuk seluruh function call dari LLM."""
     fungsi = REGISTRI.get(nama)
     if fungsi is None:
         raise KesalahanAPI(
@@ -405,13 +338,6 @@ def panggil_fungsi(
     return fungsi(db, **bersih)
 
 
-# ---------------------------------------------------------------------------
-# Definisi alat untuk LLM
-# ---------------------------------------------------------------------------
-# Mode strict dipakai supaya `input` yang diterima dijamin sesuai skema. Syaratnya
-# `additionalProperties: false` dan seluruh properti masuk `required`; parameter
-# opsional dinyatakan lewat tipe yang boleh null, bukan dengan mengeluarkannya
-# dari required.
 
 
 def _p(tipe: str, deskripsi: str, opsional: bool = False) -> dict[str, Any]:
@@ -662,26 +588,11 @@ Anda memberi informasi untuk pertimbangan, bukan nasihat investasi. Jangan perna
 menjanjikan keuntungan.\
 """
 
-#: Tanda literal yang diminta prompt di awal setiap penolakan cakupan/suntikan
-#: (aturan 8-9). Tanpa ini `perlu_review` di `AICallLog` (jawaban tanpa satu pun
-#: alat "layak ditinjau") akan menandai SETIAP penolakan yang justru benar sebagai
-#: kejanggalan - membanjiri log audit dengan hal yang tidak perlu ditinjau siapa
-#: pun, dan menenggelamkan kejadian yang sungguh perlu ditinjau (jawaban tanpa
-#: alat karena modelnya memang gagal, bukan karena sengaja menolak).
 TANDA_TOLAK_CAKUPAN = "[TOLAK_CAKUPAN]"
 
 
 def _konteks(permintaan: PermintaanAI, db: Session | None = None, bahasa: str = "id") -> str | None:
-    """Konteks peta yang sedang dilihat pengguna, kalau ada.
-
-    Dikirim sebagai bagian pesan pengguna, bukan prompt sistem, supaya prefiks
-    yang di-cache tetap sama di seluruh percakapan.
-
-    KAWASAN heksagon ikut disebut (13 Sep 2026). Tanpa itu model menebaknya dari
-    riwayat percakapan: uji QA mendapati "bandingkan dengan heksagon terbaik di
-    kawasan yang sama" untuk heksagon Manggarai dijawab dengan heksagon Dukuh
-    Atas BNI - kawasan yang disebut dua giliran sebelumnya.
-    """
+    """Konteks peta yang sedang dilihat pengguna, kalau ada."""
     bagian = []
     if bahasa == "en":
         bagian.append("Bahasa antarmuka pengguna: Inggris")
@@ -741,35 +652,13 @@ def status() -> dict[str, Any]:
     """Dipanggil frontend saat memuat, supaya panel AI bisa menampilkan keadaan
     sebenarnya alih-alih menunggu pertanyaan pertama gagal."""
     siap = tersedia()
-    # DUA sebab yang berbeda, dan kalimatnya harus berbeda juga. "Belum
-    # tersambung" untuk backend yang memang belum diberi kunci; "sedang
-    # dibatasi" untuk kunci yang terpasang tetapi jatahnya habis. Menyamakan
-    # keduanya membuat pemilik backend mencari kunci yang sebenarnya sudah ada,
-    # dan membuat pengunjung mengira fiturnya memang tidak pernah jadi.
     dibatasi = penyedia_penuh()
     return {
         "siap": siap,
-        # DUA keadaan "tidak siap" yang menuntut antarmuka BERBEDA, dan
-        # menyamakannya sempat mematikan kotak ketik Konsultan AI (13 Sep 2026).
-        #
-        #   belum tersambung  - strukturil. Tidak ada kunci; mengetik pertanyaan
-        #                       tidak akan pernah menghasilkan apa pun.
-        #   sedang dibatasi   - sementara. Kuncinya ada, jatahnya habis, dan ia
-        #                       pulih sendiri. Menonaktifkan kotak ketik di sini
-        #                       salah: orangnya tidak bisa mencoba lagi walaupun
-        #                       jatahnya sudah pulih semenit kemudian.
         "dibatasi": dibatasi,
         "model": model_aktif() if siap else None,
         "n_alat_backend": len(ALAT_BACKEND),
         "n_alat_peta": len(ALAT_FRONTEND),
-        # Kalimat untuk PENGGUNA, bukan untuk pengembang. Yang membaca field
-        # ini orang yang membuka panel Konsultan AI, dan "LLM_API_KEY belum
-        # diisi di backend/.env" adalah instruksi untuk orang yang punya
-        # backend-nya. Sebabnya tetap sampai ke yang perlu: core/llm.py
-        # mencatatnya ke log server pada percobaan pertama.
-        # Berapa detik lagi, kalau memang sedang dibatasi. Frontend memakainya
-        # untuk memberi tahu orangnya harus menunggu berapa lama - dan sepuluh
-        # detik adalah kabar yang sama sekali berbeda dari lima belas menit.
         "coba_lagi_detik": sisa_penuh_detik() if dibatasi else None,
         "pesan": (
             None
@@ -784,19 +673,7 @@ def status() -> dict[str, Any]:
 
 
 def _kalimat_dibatasi(detik: int) -> str:
-    """Kalimat yang menyebut lamanya yang SEBENARNYA.
-
-    Sampai 13 Sep 2026 kalimatnya selalu berbunyi "jatah hariannya habis", dan
-    itu keliru untuk sebab yang paling sering terjadi. Yang terukur di terbitan
-    hidup: Gemini menolak karena batas **20 permintaan per menit** dan menyuruh
-    kembali dua detik lagi - lalu panel memberi tahu pengunjungnya bahwa jatah
-    HARI ITU sudah habis. Yang membaca kalimat itu menutup panelnya dan tidak
-    kembali; padahal ia cuma perlu menunggu sebentar.
-
-    Dua ambang, dan keduanya dari sudut pandang orang yang sedang menunggu:
-    di bawah dua menit ia masih mau menunggu, di atas itu ia perlu tahu bahwa
-    menunggu bukan rencana yang baik.
-    """
+    """Kalimat yang menyebut lamanya yang SEBENARNYA."""
     sisa = "Bagian lain di peta - skor, kuadran, ZoneGuard, dan rekomendasi - tidak terpengaruh."
     if detik <= 0:
         return f"Konsultan AI sedang dibatasi penyedia modelnya. {sisa}"
@@ -814,12 +691,7 @@ def _kalimat_dibatasi(detik: int) -> str:
 
 
 def _pemanggil(request: Request | None) -> str:
-    """Identitas pemanggil untuk pembatas laju.
-
-    Alamat IP, bukan sesi: tidak ada autentikasi di API ini, jadi tidak ada
-    identitas lain yang bisa dipercaya. Di belakang proksi Render, alamat aslinya
-    ada di X-Forwarded-For.
-    """
+    """Identitas pemanggil untuk pembatas laju."""
     if request is None:
         return "internal"
     diteruskan = request.headers.get("x-forwarded-for")
@@ -833,25 +705,10 @@ def tanya(
     permintaan: PermintaanAI,
     db: Annotated[Session, Depends(get_db)],
     request: Request = None,  # type: ignore[assignment]
-    # Loconomics AI fitur PREMIUM sejak 14 Sep 2026 (keputusan pemilik repo).
-    # Dependensi, bukan `if`: ia menolak tamu (401) dan akun gratis (402)
-    # SEBELUM pembatas laju dan anggaran - yang belum membayar tidak pernah
-    # membelanjakan satu panggilan model pun. `= None` hanya untuk uji yang
-    # memanggil fungsi ini langsung; lewat HTTP dependensinya selalu berjalan.
     pengguna: PenggunaPremium = None,  # type: ignore[assignment]
     bahasa: Annotated[str, Query(description="Bahasa antarmuka: id atau en")] = "id",
 ) -> JawabanAI:
-    """Alur lengkap satu pertanyaan.
-
-    Loop ditulis tangan, bukan memakai tool runner SDK, karena backend perlu
-    memperlakukan dua kelompok alat secara berbeda: alat backend dijalankan dan
-    hasilnya dikembalikan ke model, sedangkan alat peta TIDAK dijalankan di sini -
-    ia dikumpulkan ke `aksi_peta` dan dieksekusi peta di layar pengguna. Tool
-    runner akan mencoba menjalankan keduanya.
-
-    Dua pembatas diperiksa SEBELUM model dipanggil - ini satu-satunya endpoint di
-    seluruh backend yang membelanjakan uang sungguhan.
-    """
+    """Alur lengkap satu pertanyaan."""
     periksa_laju(_pemanggil(request))
     periksa_anggaran(db, settings.llm_plafon_harian_usd)
 
@@ -860,11 +717,6 @@ def tanya(
     except LLMBelumSiap as e:
         raise LayananBelumSiap(str(e)) from e
 
-    # Riwayat diputar ulang sebagai giliran biasa. Hasil alat dari giliran lama
-    # sengaja TIDAK ikut: yang perlu diingat model hanyalah apa yang sudah
-    # dikatakan, bukan seluruh payload JSON yang pernah dibacanya. Kalau ia butuh
-    # angkanya lagi, ia memanggil alatnya lagi - dan itu justru yang benar, karena
-    # angka di basis data bisa saja berubah sejak giliran sebelumnya.
     pesan: list[dict[str, Any]] = [
         {"role": "user" if m.peran == "pengguna" else "assistant", "content": m.teks}
         for m in permintaan.riwayat
@@ -895,14 +747,6 @@ def tanya(
                 messages=pesan,
             )
         except RuntimeError as e:
-            # Penyedia model gagal - sibuk, tidak terjangkau, atau menolak.
-            # Itu BUKAN kesalahan server kita, dan menampilkannya sebagai
-            # "Terjadi kesalahan di server, sebutkan kode ..." menyuruh orang
-            # melaporkan sesuatu yang tidak bisa kita perbaiki sekaligus
-            # menyembunyikan satu-satunya tindakan yang berguna baginya.
-            #
-            # Kalimatnya sudah disiapkan adapter dan sudah bebas dari nama
-            # proyek maupun potongan permintaan (aturan 8).
             log.warning("Panggilan model gagal: %s", e)
             raise LayananBelumSiap(str(e)) from e
         total_biaya += biaya_usd(balasan.usage) or 0.0
@@ -991,11 +835,6 @@ def tanya(
     else:
         log.warning("Batas %d putaran alat tercapai", MAKS_PUTARAN)
 
-    # Putaran terakhir masih meminta alat: model belum pernah MENULIS
-    # jawabannya. Terukur di produksi 13 Sep 2026 - sepuluh alat berhasil
-    # dipanggil untuk "lokasi terbaik buka cafe di Manggarai", lalu yang tampil
-    # cuma "belum berhasil menyusun jawabannya". Satu panggilan lagi dengan alat
-    # DILARANG memaksanya menyusun jawaban dari hasil yang sudah terkumpul.
     if balasan is not None and balasan.stop_reason == "tool_use":
         try:
             akhir = c.messages.create(
@@ -1038,10 +877,6 @@ def tanya(
             model=model_aktif(),
             input_ref=permintaan.pertanyaan[:500],
             output_ringkas=teks[:1000],
-            # Tanpa alat DAN bukan penolakan cakupan/suntikan yang disengaja -
-            # itulah yang layak ditinjau. Penolakan yang benar (aturan 8-9)
-            # tidak boleh membanjiri log yang sama dengan kegagalan sungguhan
-            # (jawaban tanpa alat karena modelnya memang tersesat).
             perlu_review=not jejak and not ditolak_cakupan,
             biaya_usd=round(total_biaya, 6),
         )
@@ -1060,13 +895,7 @@ def tanya(
 
 
 def _argumen_peta(nama: str, argumen: dict[str, Any]) -> dict[str, Any]:
-    """Sesuaikan argumen alat peta dengan kontrak frontend.
-
-    `filter` dideklarasikan ke model sebagai dua parameter datar (min_score,
-    kuadran) supaya skemanya bisa strict, tetapi frontend menerimanya terbungkus
-    dalam satu objek `kriteria`. Pembungkusan itu terjadi di sini, bukan di
-    frontend, supaya kontrak yang dipegang peta tetap satu bentuk.
-    """
+    """Sesuaikan argumen alat peta dengan kontrak frontend."""
     if nama == "filter":
         kriteria = {k: v for k, v in argumen.items() if v is not None}
         return {"kriteria": kriteria}

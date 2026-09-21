@@ -1,9 +1,4 @@
-"""Endpoint simpul transportasi dan kawasan jangkau (isochrone).
-
-Isochrone TIDAK PERNAH dihitung di sini. Perhitungan routing jaringan jalan
-dilakukan offline oleh pipeline/s4_spatial.py dan hasilnya disimpan ke tabel
-catchment_areas. Endpoint ini hanya membacanya.
-"""
+"""Endpoint simpul transportasi dan kawasan jangkau (isochrone)."""
 
 import json
 
@@ -21,12 +16,6 @@ from app.schemas import SimpulTransit
 
 router = APIRouter(prefix="/transit", tags=["transit"])
 
-# Harus sama dengan ISOCHRONE_MENIT di pipeline/config.py - pipeline yang
-# menghitung poligonnya, backend yang menyajikan. Dijaga tests/test_aturan.py.
-#
-# Pita yang BELUM ada di basis data tetap disebut, dengan `tersedia: False`.
-# Itu disengaja: "belum ditarik" dan "tidak ada dalam produk" dua hal berbeda,
-# dan yang pertama harus bisa dibedakan dari yang kedua di layar.
 ISOCHRONE_MENIT = (5, 10, 15, 30, 60)
 
 
@@ -58,17 +47,7 @@ def daftar_simpul(
 
 @router.get("/simpul/{node_id}", summary="Detail satu simpul + heksagon yang dilayaninya")
 def detail_simpul(node_id: int, db: Annotated[Session, Depends(get_db)]) -> dict:
-    """Simpul beserta heksagon di dalam jangkauan jalan kakinya.
-
-    Menjawab pertanyaan yang tidak bisa dijawab layer heksagon: "kalau saya buka
-    usaha dekat stasiun ini, berapa banyak lokasi yang benar-benar terjangkau
-    pejalan kaki, dan seberapa bagus lokasi-lokasi itu?"
-
-    Perhatikan ST_Intersects terhadap isochrone, bukan jarak lurus. Lokasi yang
-    secara garis lurus 200 m dari stasiun bisa butuh jalan memutar 900 m karena
-    terhalang rel - dan perbedaan itu persis yang membuat sebagian lokasi terlihat
-    bagus di peta tetapi sepi di kenyataan.
-    """
+    """Simpul beserta heksagon di dalam jangkauan jalan kakinya."""
     simpul = db.get(TransportNode, node_id)
     if simpul is None:
         raise TidakDitemukan(f"Simpul transportasi {node_id} tidak ditemukan.")

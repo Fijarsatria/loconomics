@@ -1,34 +1,4 @@
-/**
- * Katalog jenis usaha - SATU daftar untuk seluruh antarmuka.
- *
- * Dipindah dari `Simulasi.tsx` 13 Sep 2026 karena daftar ini dipakai TIGA
- * tempat: simulasi usaha, pertanyaan preferensi sesudah mendaftar, dan
- * simulasi per blok. Sebelum dipindah, layar preferensi memegang salinannya
- * sendiri - EMPAT jenis, sisa sebelum daftar ini diperluas jadi enam belas -
- * dan pemilik repo melaporkannya sebagai "belum di-update". Dua salinan dari
- * daftar yang sama selalu berakhir seperti itu.
- *
- * Berkas `lib/`, bukan diekspor dari `Simulasi.tsx`: Simulasi dimuat malas,
- * dan satu impor statis darinya menyeret seluruh modul simulasi ke bundel
- * pertama.
- */
 
-/**
- * Enam belas jenis usaha, dikelompokkan.
- *
- * Diperluas 3 September 2026 dari empat. Dengan empat, pemilik bengkel,
- * apotek, atau bimbel harus memilih "Jasa" dan mewarisi margin barbershop -
- * dan bawaan yang salah lebih buruk daripada tidak ada bawaan, karena ia
- * terbaca sebagai perkiraan untuk usahanya padahal perkiraan untuk usaha
- * orang lain.
- *
- * `kelompok` hanya menyusun tampilannya. Ia tidak menyentuh satu pun angka.
- *
- * WAJIB sama dengan `JENIS_USAHA` di `backend/app/core/simulasi.py` - backend
- * MENOLAK jenis yang tidak dikenalnya, jadi satu baris yang tertinggal di sini
- * bukan sekadar pilihan yang hilang melainkan tombol yang menghasilkan galat.
- * Dijaga `backend/tests/test_aturan.py`.
- */
 export const JENIS_USAHA = [
   // --- Makanan & minuman ---------------------------------------------------
   {

@@ -1,19 +1,4 @@
-"""Uji GapFill (s5_impute) - tanpa basis data, tanpa data lapangan.
-
-Yang paling penting di berkas ini BUKAN "apakah modelnya akurat", melainkan dua
-hal yang gagalnya DIAM:
-
-  1. Penjaganya benar-benar menahan. Melatih Random Forest atas delapan baris
-     lalu menyebarkannya ke 700 heksagon menghasilkan peta yang terlihat persis
-     seperti data sungguhan. Tidak ada satu pun galat yang akan muncul.
-
-  2. Nilai TERUKUR tidak pernah ditimpa prediksi. Kalau ini bocor, satu-satunya
-     data survei yang benar-benar dimiliki tim akan tertutup oleh tebakan model
-     atas data survei itu sendiri.
-
-Data ujinya dibangkitkan, dan itu disengaja: yang diuji perilaku modul, bukan
-kualitas data lapangan yang memang belum ada.
-"""
+"""Uji GapFill (s5_impute) - tanpa basis data, tanpa data lapangan."""
 
 from __future__ import annotations
 
@@ -48,12 +33,7 @@ KAWASAN = ["Manggarai", "Tanah Abang", "Depok Baru", "Bekasi", "Dukuh Atas BNI",
 
 
 def contoh(n_per_kawasan: int = 20, kawasan: list[str] | None = None) -> pd.DataFrame:
-    """Ground truth buatan yang hubungannya SUNGGUHAN ada, plus derau.
-
-    Kalau hubungannya tidak ada, sebuah model yang benar HARUS gagal - dan uji
-    yang menuntut R2 tinggi atas data acak justru akan menghukum implementasi
-    yang jujur.
-    """
+    """Ground truth buatan yang hubungannya SUNGGUHAN ada, plus derau."""
     rng = np.random.default_rng(7)
     kawasan = kawasan or KAWASAN
     baris = []
@@ -140,12 +120,7 @@ def test_mutu_dilaporkan_apa_adanya():
 
 
 def test_validasi_per_kawasan_bukan_acak():
-    """Kalau pembagiannya acak, R2 melompat naik karena model menghafal kawasan.
-
-    Yang diuji di sini bukan angkanya melainkan bahwa lipatannya memang menahan
-    SATU KAWASAN PENUH: dengan efek kawasan yang disuntikkan di `contoh()`,
-    model yang diuji di kawasan tak dikenal tidak akan pernah sempurna.
-    """
+    """Kalau pembagiannya acak, R2 melompat naik karena model menghafal kawasan."""
     h = latih_model(contoh(), "skor_ramai_terkoreksi")
     cek("R2 tidak mustahil-sempurna", h.r2 < 0.999, f"- {h.r2}")
 
@@ -224,12 +199,6 @@ def test_laporan_kesiapan_terbaca():
     cek("menyebut ambangnya", "Ambang" in lap2)
 
 
-# ---------------------------------------------------------------------------
-# Ground truth dari LUAR grid
-#
-# Yang diuji di sini bukan "apakah modelnya bagus", melainkan tiga cara bahan
-# latihnya bisa tercemar tanpa memunculkan satu pun galat.
-# ---------------------------------------------------------------------------
 
 
 def _misi(baris):
@@ -251,12 +220,7 @@ def _titik(lat, lon, harga):
 
 
 def test_harga_di_luar_rentang_dibuang_bukan_dikalikan():
-    """Empat nilai Menu Go sungguhan ada di bawah Rp1.000 (5, 17, 20, 40).
-
-    Menebak bahwa penulisnya bermaksud ribuan lalu mengalikan seribu sama saja
-    dengan mengarang label - dan label karangan merusak model lebih dalam
-    daripada label yang hilang, karena ia ikut dipelajari.
-    """
+    """Empat nilai Menu Go sungguhan ada di bawah Rp1.000 (5, 17, 20, 40)."""
     from s1_ingest import sel_berlabel_luar_grid
 
     # Bandung: jauh di luar grid Jabodetabek mana pun.

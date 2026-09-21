@@ -1,24 +1,3 @@
-/**
- * Pemotret kartu peta — dijalankan SEKALI oleh skrip, bukan oleh pengguna.
- *
- * Berkas ini TIDAK pernah diimpor oleh kode aplikasi. Ia hanya diimpor secara
- * dinamis oleh `scripts/potret-kartu.mjs` lewat dev server, jadi ia tidak ikut
- * masuk bundel yang diunduh pengunjung — dan itulah seluruh gunanya: halaman
- * gerbang boleh menampilkan enam peta tanpa memuat MapLibre sama sekali.
- *
- * KENAPA BUKAN TANGKAPAN LAYAR BIASA
- * ==================================
- *
- * Gambar yang dipotret tangan lalu di-commit akan basi diam-diam. Ganti palet
- * kuadran, geser ambang, jalankan ulang `s7_publish` - keenam gambarnya tetap
- * memperlihatkan keadaan lama, dan tidak ada satu pun uji yang bisa menangkapnya.
- *
- * Yang di sini membangun peta MapLibre sungguhan, memakai ekspresi pewarnaan
- * yang SAMA dengan peta di dalam aplikasi (`lib/layer-peta.ts`), dan mengambil
- * heksagonnya dari `/hex/layer` yang sedang hidup. Jadi gambarnya tetap bisa
- * basi - tetapi menyegarkannya satu perintah, dan hasilnya dijamin sama dengan
- * apa yang akan dilihat orang begitu ia masuk ke aplikasinya.
- */
 
 import { Map as MapLibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -36,49 +15,15 @@ import {
   idLabelPertama,
 } from './layer-peta'
 
-/**
- * Geometri heksagon SUNGGUHAN untuk lapisan sorot kartu gerbang.
- *
- * Kenapa ada: kartu Solusi dulu memakai kisi heksagon karangan yang menutupi
- * seluruh kotak gambar - kisi yang tidak berdiri di tempat mana pun, tidak
- * membawa satu angka pun, dan tidak menjawab pertanyaan kartunya. Dilaporkan
- * apa adanya: "animasi layer heksagon yang jelek dan ga nyambung sama masing
- * masing konteks".
- *
- * Yang keluar dari sini heksagon yang BENAR-BENAR ada di petanya, pada posisi
- * piksel yang sama persis dengan posisinya di dalam WebP di sebelahnya - kamera
- * `fitBounds` yang dipakai `potretKartu()` di atas dipakai ulang apa adanya.
- * Warnanya pun tidak ditebak: heksagonnya digambar MapLibre memakai
- * `WARNA_LAYER` yang sama dengan aplikasinya, lalu piksel di titik pusatnya
- * DIBACA kembali dari kanvas. Tidak ada salinan kedua aturan pewarnaan yang
- * bisa berpisah diam-diam.
- *
- * Dan yang disorot bukan sembarang heksagon: tiap kartu memilih yang MENJAWAB
- * pertanyaannya sendiri - skor tertinggi untuk kartu memilih lokasi, sewa
- * termurah untuk kartu menakar sewa, zona terlarang untuk ZoneGuard.
- */
 export type PilihSorot = 'skor' | 'sewa-murah' | 'gem' | 'terlarang' | 'churn'
 
 /** Kotak [[barat, selatan], [timur, utara]]. */
 export type Bingkai = [[number, number], [number, number]]
 
-/**
- * Kamera yang DIPESAN, bukan yang diturunkan dari seluruh kawasan.
- *
- * Dipakai potret komparasi: yang harus terlihat di sana RUTE-nya, dan kamera
- * yang membingkai seluruh 127 heksagon membuat rute 900 m tinggal beberapa
- * piksel. Potret dan geometri sorotnya WAJIB menerima kamera yang sama persis,
- * kalau tidak heksagon di atas gambarnya meleset tanpa satu pun galat.
- */
 export interface Kamera {
   bingkai: Bingkai
   /** Jarak tepi, dalam PECAHAN lebar/tinggi kotak - bukan piksel. */
   tepi: { atas: number; bawah: number; kiri: number; kanan: number }
-  /**
-   * Zoom yang DIKUNCI. Tanpa ini tiap potret memilih zoom-nya sendiri dari
-   * rutenya, dan dua peta di kartu "satu ukuran yang sama" tampil dengan skala
-   * berbeda - heksagon kiri dua kali lebih besar daripada yang kanan.
-   */
   zoom?: number
 }
 
@@ -92,10 +37,6 @@ function tepiPiksel(kamera: Kamera, lebar: number, tinggi: number) {
   }
 }
 
-/**
- * Zoom yang dibutuhkan sebuah kamera supaya bingkainya muat. Dipakai skrip
- * untuk mencari satu zoom yang cukup untuk KEDUA peta komparasi.
- */
 export async function zoomKamera(p: { lebar: number; tinggi: number; kamera: Kamera }): Promise<number> {
   const wadah = document.createElement('div')
   wadah.style.cssText = `position:fixed;left:0;top:0;width:${p.lebar}px;height:${p.tinggi}px;z-index:-1;opacity:0;pointer-events:none`
@@ -135,32 +76,11 @@ export interface HasilSorot {
   /** Pusat kawasan dalam piksel - titik asal gelombang, sama dengan di peta. */
   cx: number
   cy: number
-  /**
-   * Simpangan enam simpul dari pusat selnya, dalam piksel.
-   *
-   * SATU bentuk untuk seluruh sel di satu kartu. Bukan penyederhanaan yang
-   * dikira-kira: simpangan terbesar antar sel pada kartu terbesar terukur
-   * 0,01 piksel - di bawah seperseratus piksel, karena satu kawasan cuma
-   * membentang dua kilometer dan distorsi Mercator sebesar itu tidak ada.
-   * Menyimpan 108 poligon lengkap akan melipatgandakan berkasnya untuk
-   * perbedaan yang tidak bisa dilihat alat ukur mana pun.
-   */
   bentuk: number[]
   /** Pusat SELURUH sel: [x0, y0, x1, y1, ...]. Kisi konteks. */
   sel: number[]
   /** Yang menjawab pertanyaan kartu, URUT sesuai jawabannya. */
   sorot: { x: number; y: number; c: string }[]
-  /**
-   * Rute jalan kaki SUNGGUHAN dari heksagon teratas ke simpul terdekatnya,
-   * dalam piksel kotak gambar yang sama.
-   *
-   * Datang dari `hex_routes` lewat `/hex/{h3}/simpul-terdekat` - geometri
-   * OpenRouteService yang sama yang digambar peta, bukan garis lurus. Itu
-   * bedanya: rute di sini memutar 1,6x dari jarak lurusnya rata-rata, dan garis
-   * lurus akan menggambarkan janji yang tidak ditepati produk ini.
-   *
-   * null kalau heksagon teratasnya memang belum punya rute.
-   */
   rute: { d: string; ax: number; ay: number; bx: number; by: number; menit: number; simpul: string } | null
 }
 
@@ -343,14 +263,6 @@ export interface PesananKartu {
   kamera?: Kamera
 }
 
-/**
- * Satu kamera untuk KEDUA jenis pemotretan - potret dan sorotnya.
- *
- * Dua salinan `fitBounds` pernah berdiri di sini, satu per fungsi, dengan angka
- * padding yang sama ditulis dua kali. Selama keduanya sama, heksagon sorot
- * duduk tepat di atas gambarnya; begitu salah satunya diubah, seluruh kisi
- * meleset beberapa piksel dan tidak ada yang memberi tahu.
- */
 function arahkanKamera(
   m: MapLibreMap,
   data: { features: unknown[] },
@@ -379,26 +291,6 @@ function arahkanKamera(
   }
 }
 
-/**
- * Heksagon yang rutenya PALING DEKAT ke panjang sasaran, di antara yang
- * menjawab kartunya.
- *
- * Ada karena laporan pemilik repo soal kartu komparasi: "rute nya keknya
- * kependekan, panjangin dong biar kelihatan jelas". Heksagon teratas di
- * Harjamukti kebetulan berdiri dekat simpulnya, jadi rutenya 11 menit dan
- * nyaris tertutup penanda A-nya sendiri.
- *
- * SASARAN, bukan batas atas. Percobaan pertama memilih "yang terpanjang di
- * bawah 1,9 km" - dan untuk kartu Manggarai tidak menemukan satu pun, karena
- * dua belas heksagon bersewa termurah di sana semuanya berdiri lebih jauh dari
- * itu (sewa murah memang cenderung jauh dari stasiun). Sasaran selalu punya
- * jawaban: rute yang cukup panjang untuk terbaca sebagai JALUR, dan tidak
- * sepanjang itu sampai kameranya harus mundur kembali ke seluruh kawasan.
- *
- * Yang dipilih TETAP salah satu heksagon yang disorot kartunya, dan rutenya
- * tetap rute ORS sungguhan. Yang berubah cuma heksagon MANA dari daftar
- * jawaban itu yang rutenya digambar.
- */
 export async function pilihRute(p: {
   kawasan: string
   pilih: PilihSorot
@@ -435,14 +327,6 @@ export async function pilihRute(p: {
   return terbaik
 }
 
-/**
- * Satu angka sorot per layer, dihitung dari data yang sama yang baru saja
- * digambar.
- *
- * Bukan angka hiasan: tiap satu menjawab pertanyaan yang memang dibawa layernya.
- * Yang tidak punya data TIDAK dipaksa jadi nol - ia mengaku "belum ada data",
- * persis aturan 4 repo ini.
- */
 function median(a: number[]) {
   if (!a.length) return null
   const b = [...a].sort((x, y) => x - y)
@@ -494,17 +378,6 @@ function ringkasKartu(data: { features: unknown[] }, layer: NamaLayer): RingkasK
   if (layer === 'zoneguard') {
     const boleh = f.filter((x) => x.properties?.zona_izin_komersial === true).length
     const dilarang = f.filter((x) => x.properties?.zona_izin_komersial === false).length
-    // NOL yang berarti "belum terbit" TIDAK boleh dicetak sebagai nol.
-    //
-    // L01 bertipe tiga-nilai: TRUE mengizinkan, FALSE melarang, NULL berarti
-    // kawasan itu belum punya RDTR digital sama sekali. Menghitung yang TRUE
-    // saja lalu mencetaknya sebagai "0 heksagon boleh usaha" membaca sebagai
-    // "usaha dilarang di seluruh kawasan ini" - dan untuk Depok, yang memang
-    // belum punya RDTR terbit, itu tuduhan yang salah sekaligus membantah
-    // bagian batasan halaman ini sendiri.
-    //
-    // Nol yang jujur hanya kalau ada yang DILARANG. Kalau tidak ada yang
-    // diizinkan DAN tidak ada yang dilarang, yang benar: datanya belum ada.
     if (boleh === 0 && dilarang === 0)
       return { n: f.length, kuadran, sorotan: { nilai: '—', label: 'zonasi RDTR belum terbit' } }
     return { n: f.length, kuadran, sorotan: { nilai: String(boleh), label: 'heksagon boleh usaha' } }
@@ -535,12 +408,6 @@ function bingkaiDari(data: { features: unknown[] }) {
   return x2 > x1 ? ([[x1, y1], [x2, y2]] as [[number, number], [number, number]]) : null
 }
 
-/**
- * Satu kartu, satu WebP.
- *
- * Mengembalikan data URL. Skrip pemanggilnya yang menuliskannya ke berkas —
- * modul ini tidak tahu apa-apa soal sistem berkas, dan memang tidak perlu.
- */
 export async function potretKartu(
   p: PesananKartu,
 ): Promise<{ gambar: string; ringkas: RingkasKartu }> {

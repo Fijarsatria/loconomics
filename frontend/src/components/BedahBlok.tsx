@@ -1,39 +1,3 @@
-/**
- * Bedah heksagon jadi tujuh blok res-10.
- *
- * Pertanyaan yang dijawab berkas ini cuma satu, dan ia pertanyaan pertama yang
- * diajukan hampir setiap orang yang melihat peta heksagon: heksagon res-9
- * bergaris tengah ±350 m, jadi satu petak memuat sisi yang menempel jalan
- * besar DAN gang buntu di belakangnya — dan keduanya mendapat satu skor yang
- * sama. "Lokasi ini bagus" jadi pernyataan yang benar untuk sepertujuh
- * heksagonnya saja.
- *
- * Jawabannya BUKAN memperhalus grid. Mengubah res-9 jadi res-10 membuang 708
- * heksagon, 1.587 rute ORS, dan tiap variabel yang sudah terkumpul — dan
- * menukar satu masalah dengan masalah yang sama pada skala yang lebih kecil,
- * karena res-10 pun masih memuat dua sisi jalan. Yang dilakukan di sini:
- * heksagon tetap unit analisisnya, dan blok dipanggil saat diminta sebagai
- * pembanding DI DALAM satu heksagon.
- *
- * DIROMBAK 13 Sep 2026 atas laporan pemilik repo: "informasinya terlalu susah
- * untuk dipahami, masa dekat halte pake persentase". Versi sebelumnya
- * menuliskan sumbangan tiap indikator sebagai PANGSA skor ("Dekat halte 9%") -
- * jawaban untuk pertanyaan yang tidak diajukan siapa pun. Sekarang tiap alasan
- * ditulis sebagai FAKTA yang bisa dicek di lapangan ("Halte 49 m") ditemani
- * meteran lima titik seberapa bagus blok ini pada hal itu, dan ketujuh blok
- * digambar sebagai peta mini yang bentuk dan warnanya sama dengan di peta.
- *
- * Tiga hal yang sengaja TIDAK dilakukan komponen ini:
- *
- *   Tidak menghitung skor. Ketujuh skor, peringkat, alasan, peringatan, dan
- *   kekuatan tiap indikator datang jadi dari `/hex/{h3}/blok` (aturan 1).
- *
- *   Tidak memakai peringkat sebagai warna. Lihat `WARNA_BLOK` di
- *   `lib/layer-peta.ts` — peta mini memakai rona yang sama persis.
- *
- *   Tidak mengganti heksagon terpilih. Mengklik blok memilih BLOK; panel di
- *   atasnya tetap membicarakan heksagon yang sama.
- */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
@@ -215,14 +179,6 @@ const GLIF: Record<string, string> = {
   risiko_banjir_inv: 'M2 10.2c1.2 0 1.2.8 2.4.8s1.2-.8 2.4-.8 1.2.8 2.4.8 1.2-.8 2.4-.8 1.2.8 2.4.8M2 13c1.2 0 1.2.8 2.4.8s1.2-.8 2.4-.8 1.2.8 2.4.8 1.2-.8 2.4-.8 1.2.8 2.4.8M8 1.8s-2.6 3-2.6 4.6a2.6 2.6 0 0 0 5.2 0C10.6 4.8 8 1.8 8 1.8Z',
 }
 
-/**
- * Pemilih kelas usaha, SELEBAR panel.
- *
- * `Menu` di `primitif.tsx` sengaja tidak dipakai di sini: ia dibuat untuk BILAH
- * ATAS - pil selebar isinya, berjangkar ke kanan. Di dalam panel ia berdiri
- * pendek dan bertepi kanan - "bar nya kayak ga rapih dengan bar utamanya",
- * dilaporkan pemilik repo 13 Sep 2026.
- */
 function PilihKelas({
   label,
   nilai,
@@ -330,14 +286,6 @@ export default function BedahBlok({
   const [kelas, setKelas] = useState<string>(UMUM)
   const [memuat, setMemuat] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
-  /**
-   * Permintaan terakhir menang.
-   *
-   * Mengganti kelas usaha dua kali dengan cepat mengirim dua permintaan, dan
-   * yang lebih dulu berangkat tidak selalu lebih dulu pulang. Tanpa penanda
-   * ini, peta bisa berakhir memegang peringkat untuk kelas yang TIDAK sedang
-   * tertulis di pemilihnya — salah tanpa satu pun galat.
-   */
   const permintaan = useRef(0)
 
   const ambil = async (k: string) => {
@@ -496,15 +444,6 @@ export default function BedahBlok({
   )
 }
 
-/**
- * Ketujuh blok digambar sebagai heksagon kecil pada POSISI SEBENARNYA.
- *
- * Diproyeksikan dari koordinat poligonnya sendiri, bukan diletakkan pada pola
- * "satu di tengah enam mengelilingi" yang dihafal: blok res-10 tidak pernah
- * tersusun serapi itu di dalam induk res-9, dan pola hafalan akan menaruh
- * "blok utara" di tempat yang bukan utara. Warnanya `warnaSkorBlok`, rona yang
- * sama dengan layer di peta, jadi yang terlihat di sini dan di peta satu hal.
- */
 function PetaMini({
   blok,
   terpilih,
@@ -713,13 +652,6 @@ function faktaIndikator(k: KontribusiBlok, b: BlokDalamHeksagon, t: Teks, simpul
   }
 }
 
-/**
- * Kenapa skor blok ini segitu - sebagai FAKTA dan meteran, bukan persentase.
- *
- * `kekuatan` dihitung backend dari sumbangan pipeline dibagi bobotnya (aturan
- * 1 tetap utuh). Lima titik dipilih karena lima adalah skala yang dibaca orang
- * tanpa berpikir - bintang ulasan, sinyal ponsel.
- */
 function RincianBlok({
   b,
   t,
@@ -858,12 +790,6 @@ function Ubin({ label, nilai, catatan }: { label: string; nilai: string; catatan
   )
 }
 
-/**
- * Tujuh baris, lima kolom - untuk yang ingin menaruh angka bersebelahan.
- *
- * `overflow-x-auto`: lima kolom angka tidak masuk di 390 px, dan tabel yang
- * melebar memaksa SELURUH panel menggulir ke samping.
- */
 function Tabel({ blok, t }: { blok: BlokDalamHeksagon[]; t: Teks }) {
   const kolom: { kepala: string; panjang: string; isi: (b: BlokDalamHeksagon) => string }[] = [
     { kepala: t.kMenit, panjang: t.kolMenit, isi: (b) => (b.menit_jalan == null ? t.kosong : `${Math.round(b.menit_jalan)}`) },

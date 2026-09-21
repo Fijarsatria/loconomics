@@ -1,25 +1,3 @@
-/**
- * Aturan pewarnaan peta tematik — satu tempat, dipakai dua tempat.
- *
- * Berkas ini lahir 23 Agustus 2026 dengan memindahkan tabel-tabelnya keluar dari
- * `PetaInteraktif.tsx`. Dua alasan, dan keduanya nyata:
- *
- *   DUA PEMAKAI. Halaman gerbang menampilkan enam kartu peta dengan lima layer
- *   berbeda. Selama tabel ini tinggal di dalam komponen peta, satu-satunya cara
- *   memakainya dari gerbang adalah menyalinnya - dan dua salinan aturan
- *   pewarnaan akan berpisah tanpa ada yang menyadarinya, karena tidak ada satu
- *   pun uji yang membandingkan keduanya.
- *
- *   FAST REFRESH. Mengekspornya langsung dari `PetaInteraktif.tsx` memang
- *   berhasil, tapi berkas yang mengekspor komponen SEKALIGUS nilai lain
- *   kehilangan hot reload: tiap kali `PetaInteraktif.tsx` disunting, seluruh
- *   halaman dimuat ulang, peta dibangun dari nol, dan posisi gulir hilang. Di
- *   komponen yang paling sering disunting di repo ini, itu ongkos harian.
- *
- * Yang ada di sini hanya TABEL dan satu fungsi pembaca gaya - tidak ada yang
- * menyentuh state peta, tidak ada yang bisa dipanggil untuk mengubah apa pun.
- * Pemakainya membangun petanya sendiri; yang dipinjam cuma cara mewarnainya.
- */
 
 import type { ExpressionSpecification, Map as MapLibreMap } from 'maplibre-gl'
 
@@ -28,49 +6,12 @@ import { ABU_HINDARI, KUADRAN, type NamaGaya, type NamaLayer } from '../config'
 /** Warna kuadran untuk kanvas peta - harfiah, bukan var(). Lihat config.ts. */
 const q = (k: string) => KUADRAN[k].warnaPeta
 
-/**
- * Basemap yang gelap. Bukan sekadar soal selera tema: hampir semua keputusan
- * warna di bawah punya dua jawaban, dan yang menentukan jawabannya adalah
- * terang-gelapnya basemap, bukan tema sistem.
- */
-/*
- * Sembilan nilai di bawah DIEKSPOR, dan itu keputusan yang diambil 23 Agustus
- * 2026 sesudah menolaknya sekali.
- *
- * Penolakan pertama benar untuk keadaannya waktu itu: halaman gerbang cuma
- * butuh satu layer, dan menyalin satu ekspresi ke sana lebih murah daripada
- * membuka isi perut komponen ini. Sekarang gerbang menampilkan ENAM kartu peta
- * dengan LIMA layer berbeda, dan menyalin berarti dua salinan lengkap dari
- * seluruh aturan pewarnaan - yang cepat atau lambat berpisah tanpa ada yang
- * menyadarinya, karena tidak ada satu pun uji yang membandingkan keduanya.
- *
- * Yang diekspor sengaja hanya TABEL, bukan perilaku: tidak ada fungsi yang
- * menyentuh state peta, tidak ada yang bisa dipanggil untuk mengubah apa pun.
- * Pemakainya membangun petanya sendiri; yang dipinjam cuma cara mewarnainya.
- */
 // Satelit ikut GELAP: citra kota tropis didominasi atap, pohon, dan aspal yang
 // gelap, jadi garis, angka, dan rute harus terang untuk terbaca di atasnya -
 // jawaban yang sama dengan basemap gelap, bukan dengan basemap terang.
 export const BASEMAP_GELAP: NamaGaya[] = ['gelap', 'satelit']
 
-/**
- * Selubung penenang basemap, per gaya.
- *
- * Versi pertama memakai satu nilai untuk semua: putih 58%. Di basemap terang itu
- * benar. Di basemap GELAP hasilnya bencana - latar MAPID rgba(13,13,13) berubah
- * jadi abu-abu medium, dan label gelap gaya itu (rgb(101,101,101), halo hitam)
- * berakhir sebagai teks abu di atas abu. Persis keluhan "gelapnya jelek".
- *
- * Selubung harus SEARAH dengan basemapnya: memutihkan yang terang, menghitamkan
- * yang gelap.
- */
 export const SELUBUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
-  // Gaya terang MAPID (OSM Liberty) SUDAH pucat dengan sendirinya: latar
-  // rgb(242,243,240), jalan putih di atasnya - kontrasnya memang rendah, itu
-  // pilihan gaya itu. Selubung putih 0,48 di atasnya (nilai lama) mendorongnya
-  // ke ambang tak terlihat: dilaporkan pemilik repo sebagai "basemap light-nya
-  // aneh, kenapa ga responsif". Diturunkan ke 0,12 - cukup meredam keramaian,
-  // tidak menghapus jalannya.
   terang: { warna: '#ffffff', opasitas: 0.1 },
   dasar: { warna: '#ffffff', opasitas: 0.15 },
   jalan: { warna: '#ffffff', opasitas: 0.15 },
@@ -81,13 +22,6 @@ export const SELUBUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
   satelit: { warna: '#000000', opasitas: 0.14 },
 }
 
-/**
- * Warna gedung 3D, per gaya. Harfiah - `var()` di ekspresi cat mematikan layer.
- *
- * Gedung harus TERBACA sebagai massa tanpa menutupi warna heksagon di kakinya,
- * jadi warnanya selalu senada dengan kertas basemap-nya, bukan warna tersendiri.
- * `dasar` tidak ada di sini: gaya itu membawa layer gedung 3D-nya sendiri.
- */
 export const WARNA_GEDUNG: Record<NamaGaya, { warna: string; opasitas: number }> = {
   terang: { warna: '#e3e8e4', opasitas: 0.88 },
   dasar: { warna: '#dcd6cc', opasitas: 0.85 },
@@ -96,25 +30,9 @@ export const WARNA_GEDUNG: Record<NamaGaya, { warna: string; opasitas: number }>
   satelit: { warna: '#ece9e2', opasitas: 0.78 },
 }
 
-/**
- * Bidang yang MEWARNAI tiap layer, dan nama bendanya untuk kalimat pengguna.
- *
- * Dipakai menghitung cakupan layer dari GeoJSON yang benar-benar termuat -
- * bukan dari daftar tulis tangan yang akan basi begitu satu sumber masuk.
- * `opportunity` tidak ada di sini dengan sengaja: ia diwarnai `kuadran`, dan
- * kuadran terisi untuk seluruh heksagon yang punya skor. Layer yang tidak
- * pernah bisa kosong tidak perlu dijaga terhadap kekosongan.
- */
 export const BIDANG_LAYER: Partial<
   Record<NamaLayer, { kunci: string; benda: string; bendaEn: string }>
 > = {
-  // `hidden_gem` SENGAJA tidak ada di sini, dan itu bukan kelalaian.
-  //
-  // Kekosongan di keempat layer lain berarti "belum diukur". Kekosongan di
-  // Hidden Gem berarti "diukur, dan heksagon ini tidak memenuhi syarat" -
-  // GemFinder adalah SARINGAN, bukan pengukuran. Memberitahu "101 dari 708
-  // punya skor Hidden Gem" akan membacakannya sebagai kekurangan data, padahal
-  // 101 itu justru JAWABANNYA. Legendanya sudah menerangkan yang abu.
   risk_radar: {
     kunci: 'indeks_churn',
     benda: 'data pergantian usaha',
@@ -128,19 +46,6 @@ export const BIDANG_LAYER: Partial<
   },
 }
 
-/**
- * Berapa heksagon yang benar-benar punya nilai untuk layer yang sedang tampil.
- *
- * Ada karena tiga dari lima layer nyaris kosong di basis data - PriceLens 0/708,
- * RiskRadar 0/708, Hidden Gem 38/708 - dan sampai 3 September 2026 tidak ada
- * satu pun yang MENGATAKANNYA di peta. Yang terlihat cuma 708 heksagon abu
- * pucat, dan itu terbaca sebagai aplikasi yang rusak alih-alih tabel yang belum
- * terisi. Pemilik repo sendiri membacanya begitu, dan itu bukti yang cukup.
- *
- * Dihitung dari fitur yang termuat, jadi ia ikut berubah sendiri begitu
- * sumbernya masuk - tidak ada angka yang perlu diingat siapa pun untuk
- * diperbarui.
- */
 export function cakupanLayer(
   layer: NamaLayer,
   fitur: { properties?: Record<string, unknown> | null }[] | null,
@@ -159,89 +64,24 @@ export function cakupanLayer(
 export const GARIS_HEX = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya) ? '#eef3f0' : '#16211c'
 
-/**
- * Angka di dalam heksagon: teks gelap berhalo terang, atau kebalikannya.
- *
- * Halo bukan hiasan. Isian heksagon separuh tembus pandang, jadi di belakang
- * angka bisa ada jalan putih, atap gelap, atau air - dan teks tanpa halo akan
- * hilang di salah satunya. Halo membuat angkanya terbaca di atas apa pun.
- */
 export const TEKS_HEX = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya)
     ? { warna: '#f2f6f4', halo: 'rgba(12,18,15,0.85)' }
     : { warna: '#16211c', halo: 'rgba(255,255,255,0.9)' }
 
-/**
- * Warna lapisan fokus: garis ke stasiun dan nomor heksagon pembanding.
- *
- * Harus melawan basemap, bukan menyatu dengannya — dan basemap gelap menuntut
- * jawaban yang berlawanan dari basemap terang. Sama alasannya dengan
- * `GARIS_HEX` dan `TEKS_HEX` di atas.
- */
 export const WARNA_FOKUS = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya)
     ? { garis: '#f2f6f4', isi: '#f2f6f4', teks: '#12211f', halo: 'rgba(12,18,15,0.9)' }
     : { garis: '#16211c', isi: '#16211c', teks: '#ffffff', halo: 'rgba(255,255,255,0.92)' }
 
-/**
- * Warna rute jalan kaki, satu per nomor pembanding.
- *
- * Empat warna karena baki komparasi menampung empat. Urutannya MENGIKAT: warna
- * ke-i dipakai lencana nomor i+1 di peta, kolom ke-i di bar komparasi, dan rute
- * heksagon itu. Kalau ketiganya tidak sepakat, nomor di peta berhenti berarti.
- *
- * Dipilih supaya terbaca di atas keempat basemap MAPID sekaligus - jadi bukan
- * warna kuadran, yang sengaja lembut supaya heksagon tidak berteriak. Rute
- * justru harus berteriak: ia cuma muncul saat diminta, dan cuma sebentar.
- *
- * URUTANNYA ditentukan pemilik repo 9 Sep 2026: teal - biru - jingga - merah.
- * Yang pertama sengaja warna Loconomics sendiri, jadi rute yang paling sering
- * dilihat orang memakai warna produknya. Ketiga sisanya menjauh berurutan di
- * roda warna, dan tidak satu pun berdekatan dengan tetangganya.
- */
 export const WARNA_RUTE = ['#2DE8C0', '#3B82F6', '#F59E0B', '#EF4444'] as const
 
-/**
- * Warna rute saat TIDAK sedang membandingkan - satu heksagon terpilih saja.
- *
- * Dibedakan dari WARNA_RUTE[0] dengan sengaja: kalau warnanya sama, orang yang
- * baru mengklik satu heksagon akan mengira dirinya sudah membandingkan sesuatu.
- *
- * UNGU, dan itu perbaikan 3 September 2026 atas keluhan "rutenya abu-abu, tidak
- * kelihatan". Yang lama `#0d5c53` - teal sangat gelap dan nyaris tanpa chroma -
- * memang terbaca sebagai garis hitam keabuan begitu ia melintas di atas
- * heksagon berwarna dan jalan basemap yang juga keabuan.
- *
- * Ungu dipilih karena ia SATU-SATUNYA rona yang belum terpakai: keempat warna
- * kuadran biru/hijau/jingga/merah, isochrone biru, dan basemap didominasi abu
- * dan krem. Rute cuma muncul saat diminta dan cuma sebentar - ia memang harus
- * berteriak, dan tidak boleh bisa disalahartikan sebagai salah satu kuadran.
- */
 export const WARNA_RUTE_TUNGGAL = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya) ? '#2DE8C0' : '#0EA88C'
 
-/**
- * Warna jalur alternatif. Selalu lebih redup dari yang utama, di gaya mana pun.
- *
- * RONA YANG SAMA dengan rute utamanya, bukan abu-abu netral. Versi sebelumnya
- * memakai `rgba(28,52,45,0.42)` - dan abu-abu transparan di atas basemap terang
- * yang juga keabuan menghasilkan garis yang praktis tidak ada. Ia juga tidak
- * menyatakan apa pun: pembacanya tidak bisa tahu garis pucat itu jalur
- * alternatif atau sekadar jalan di basemap.
- *
- * Serumpun tapi lebih redup menyatakan kekerabatannya sekaligus urutannya.
- */
 export const WARNA_RUTE_ALT = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya) ? 'rgba(233,168,255,0.55)' : 'rgba(147,51,234,0.5)'
 
-/**
- * Kawasan jangkau jalan kaki. Sengaja BUKAN warna kuadran maupun warna rute.
- *
- * Isochrone menjawab pertanyaan yang berbeda dari keduanya - bukan "seberapa
- * bagus lokasi ini" dan bukan "lewat mana ke stasiun", melainkan "sejauh mana
- * orang mau berjalan". Memberinya warna yang sudah punya arti lain akan membuat
- * ketiganya terbaca sebagai satu skala.
- */
 export const WARNA_ISO = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya) ? '#93c5fd' : '#1d4ed8'
 
@@ -252,13 +92,6 @@ export const WARNA_RUTE_BAYANG = (gaya: NamaGaya) =>
 /** Font yang PASTI ada di gaya MAPID - diverifikasi ke style.json-nya. */
 export const FONT_ANGKA = ['Metropolis Regular', 'Noto Sans Regular']
 
-/**
- * Apa yang dicetak di dalam heksagon, per layer.
- *
- * Bukan selalu skor peluang: di PriceLens yang dicari orang harga, dan angka
- * skor di sana justru menjawab pertanyaan yang tidak sedang ditanyakan. Yang
- * kosong dicetak sebagai string kosong - TIDAK sebagai 0.
- */
 export const ANGKA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
   opportunity: [
     'case',
@@ -296,16 +129,6 @@ export const ANGKA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
 
 
 
-/**
- * Perhentian gradasi RiskRadar - satu-satunya tempat angkanya ditulis.
- *
- * Diekspor karena legendanya harus menerangkan warna yang BENAR-BENAR dipakai
- * peta. Sebelum ini legenda RiskRadar tidak ada sama sekali: layer itu
- * dikeluarkan dari Kompas Kuadran saat pewarnaannya pindah ke indeks churn,
- * tetapi tidak ada yang menggantikannya - jadi peta memakai gradasi yang tidak
- * dijelaskan apa pun. Legenda yang menyalin angkanya sendiri akan berpisah dari
- * petanya cepat atau lambat, dan tidak ada uji yang bisa menangkapnya.
- */
 export const CHURN_STOP = [
   { nilai: 0.1, warna: '#dcece4', label: 'jarang berganti' },
   { nilai: 0.35, warna: KUADRAN.JEBAKAN_GENGSI.warnaPeta, label: 'mulai sering' },
@@ -329,32 +152,12 @@ export const WARNA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
     ABU_HINDARI,
   ],
 
-  // Hanya yang punya skor gem yang berwarna. Sisanya diabukan supaya jawabannya
-  // berupa daftar pendek yang tegas, bukan peta penuh warna yang harus ditafsirkan.
-  //
-  // Ujung pucatnya `lembutPeta`, BUKAN `lembut`. `lembut` bernilai
-  // `var(--q-gem-lembut)`, dan satu `var()` di dalam ekspresi cat membuat
-  // SELURUH layer isian gagal dipasang tanpa satu pun galat - layer ini
-  // benar-benar tampil tanpa warna sampai 10 Sep 2026.
   hidden_gem: [
     'case',
     ['==', ['get', 'hidden_gem_score'], null], ABU_HINDARI,
     ['interpolate', ['linear'], ['get', 'hidden_gem_score'], 0, KUADRAN.HIDDEN_GEM.lembutPeta, 1, q('HIDDEN_GEM')],
   ],
 
-  // RiskRadar diwarnai oleh INDEKS CHURN, bukan oleh kuadran.
-  //
-  // Versi sebelumnya cuma menyorot kuadran JEBAKAN_GENGSI, dan itulah sebabnya
-  // layer ini terlihat "sama saja" dengan Skor Peluang: keduanya membaca kolom
-  // yang sama. Padahal RiskRadar punya datanya sendiri - `indeks_churn`,
-  // seberapa sering usaha berganti di heksagon itu - dan itu variabel yang
-  // sepenuhnya lain dari skor peluang maupun prestise visual.
-  //
-  // Gradasi, bukan kategori: ambang WASPADA/BAHAYA dihitung per kawasan
-  // (persentil 75 dan 90), dan satu ekspresi peta tidak bisa membawa enam
-  // ambang berbeda sekaligus. Gradasi menampilkan angkanya apa adanya dan
-  // membiarkan penilaian ambangnya dilakukan di panel detail, tempat kawasannya
-  // sudah diketahui.
   risk_radar: [
     'case',
     ['==', ['get', 'indeks_churn'], null], ABU_HINDARI,
@@ -377,14 +180,6 @@ export const WARNA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
     ],
   ],
 
-  // Tiga status, tiga perlakuan. NULL TIDAK disamakan dengan FALSE.
-  // Tiga status, tiga perlakuan. NULL TIDAK disamakan dengan FALSE.
-  //
-  // Hijau dijenuhkan 3 Sep 2026: `#8fbfb2` adalah sage yang sangat pucat, dan
-  // di opasitas isian 0,28 ia praktis tidak bisa dibedakan dari abu "belum ada
-  // RDTR". Layer yang menjawab "boleh atau tidak" lalu menggambar BOLEH dan
-  // TIDAK TAHU dengan warna yang sama tidak menjawab apa pun - dan justru di
-  // layer inilah bedanya paling mahal.
   zoneguard: [
     'case',
     ['==', ['get', 'zona_izin_komersial'], true], '#1f9d5f',
@@ -393,63 +188,7 @@ export const WARNA_LAYER: Record<NamaLayer, ExpressionSpecification> = {
   ],
 }
 
-/**
- * Opasitas isian per layer.
- *
- * Hanya layer `opportunity` yang memudarkan HINDARI, karena "hindari" adalah
- * gagasan kuadran. Di layer ZoneGuard, heksagon berkuadran HINDARI yang zonanya
- * terlarang justru HARUS terlihat penuh - memudarkannya berarti menyembunyikan
- * peringatan yang paling penting di layar hanya karena skor ekonominya rendah.
- */
-/**
- * Opasitas isian per layer.
- *
- * Dinaikkan 21 Agustus 2026 atas permintaan pemilik repo: pada nilai lama
- * (0,56 untuk isian utama) heksagon terbaca sebagai kabut berwarna di atas
- * basemap, bukan sebagai lapisan data. Yang RENDAH sengaja tetap rendah -
- * jaraknya dengan yang tinggi itulah yang membuat "ada apa-apa di sini" dan
- * "tidak ada apa-apa di sini" terbaca tanpa membaca legenda.
- */
 export const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification> = {
-  // HINDARI diberi opasitas lebih rendah dari tiga lainnya walau kini berwarna.
-  // 241 dari 708 heksagon jatuh di sana; disamakan, peta berubah jadi lautan
-  // merah dan tiga kuadran yang justru berisi keputusan ikut tenggelam.
-  //
-  // Seluruh angka diturunkan ~20% pada 24 Agustus 2026, permintaan pemilik
-  // repo: pada 0,78-0,82 isian heksagon menelan jalan dan blok bangunan di
-  // bawahnya, dan peta berhenti terbaca sebagai peta. Batas bawahnya nyata -
-  // di bawah ~0,55 warna kuadran mulai tercampur warna basemap dan Kompas
-  // Kuadran menerangkan warna yang tidak lagi ada di layar. 0,60-0,66 adalah
-  // rentang tempat keduanya masih benar. Yang kosong (0,11) tidak disentuh.
-  //
-  // Diturunkan ~25% lagi pada 3 September 2026, permintaan ketiga pemilik repo
-  // dengan alasan yang sama seperti dua kali sebelumnya: jalan dan blok
-  // bangunan masih tertelan isian.
-  //
-  // Turunan ketiga ini AMAN justru karena dua turunan sebelumnya sudah membayar
-  // ongkosnya di muka. Yang menahan bentuk heksagon sejak 24 Agustus bukan lagi
-  // isiannya melainkan garis batasnya (1,4 px / 0,85) - jadi peringatan lama
-  // "di bawah 0,55 warna kuadran melebur ke basemap" tidak berlaku di sini: ia
-  // ditulis untuk isian yang berdiri sendirian.
-  //
-  // Yang TIDAK ikut turun: heksagon kosong (0,08). Jarak antara "terukur" dan
-  // "belum ada data" harus tetap terbaca tanpa membuka legenda, dan menurunkan
-  // keduanya bersama-sama justru memampatkan jarak itu.
-  //
-  // Turun lagi ~25% pada 3 September 2026, permintaan KEEMPAT: jalan masih
-  // tertelan. Ini titik terendah yang masih aman, dan syaratnya dibayar di
-  // baris berikutnya - `TEBAL_GARIS` dinaikkan 1,4 -> 1,6 bersamaan dengan ini.
-  //
-  // Tukarannya disengaja: garis batas menutupi PINGGIR heksagon saja, isian
-  // menutupi SELURUH luasnya. Memindahkan beban dari isian ke garis membuat
-  // bentuk heksagon tetap terbaca sementara jalan di dalamnya kembali terlihat.
-  // Menurunkan isian TANPA menaikkan garis akan memberi peta petak-petak yang
-  // melebur - itu yang diperingatkan catatan lama, dan peringatannya benar.
-  //
-  // Turun lagi ~25% pada 11 September 2026, permintaan KELIMA, sebabnya masih
-  // sama: jalan dan blok bangunan tertelan isian. Kali ini garisnya IKUT naik
-  // lagi (1,6 -> 1,7 px, 0,85 -> 0,9) - tukaran yang sama dengan turunan
-  // keempat, dan satu-satunya alasan isian setipis ini masih membentuk petak.
   opportunity: ['case', ['==', ['get', 'kuadran'], 'HINDARI'], 0.11, 0.19],
   hidden_gem: ['case', ['==', ['get', 'hidden_gem_score'], null], 0.05, 0.21],
   risk_radar: ['case', ['==', ['get', 'indeks_churn'], null], 0.05, 0.2],
@@ -459,26 +198,9 @@ export const OPASITAS_LAYER: Record<NamaLayer, number | ExpressionSpecification>
   zoneguard: 0.23,
 }
 
-/**
- * Diturunkan lagi ~30% pada 24 Agustus 2026, permintaan kedua pemilik repo:
- * pada 0,62 isian heksagon masih menelan jalan dan blok bangunan, dan peta
- * berhenti terbaca sebagai peta.
- *
- * Catatan lama di CLAUDE.md memperingatkan bahwa di bawah ~0,55 warna kuadran
- * mulai tercampur warna basemap. Peringatan itu benar untuk isian yang berdiri
- * SENDIRIAN - dan itulah yang diubah bersamaan di sini: garis batas heksagon
- * dinaikkan dari 1px/0,55 jadi 1,4px/0,85 (lihat `TEBAL_GARIS` dan
- * `OPASITAS_GARIS`). Yang menahan bentuk heksagon sekarang garisnya, bukan
- * isiannya, jadi isian boleh jauh lebih tipis tanpa membuat petak-petaknya
- * melebur.
- */
 export const TEBAL_GARIS = 1.7
 export const OPASITAS_GARIS = 0.9
 
-/**
- * Cari layer tempat heksagon harus disisipkan: tepat setelah isian dan garis
- * basemap terakhir, sebelum labelnya.
- */
 export function idLabelPertama(m: MapLibreMap): string | undefined {
   const layers = m.getStyle().layers ?? []
   let terakhirBukanSymbol = -1
@@ -489,29 +211,6 @@ export function idLabelPertama(m: MapLibreMap): string | undefined {
 }
 
 
-/**
- * Warna tujuh blok res-10 di dalam satu heksagon.
- *
- * SKALA MUTLAK 0–100, bukan peringkat 1–7. Dua-duanya menggambar tujuh petak
- * yang berbeda warna; bedanya muncul justru pada heksagon yang blok-bloknya
- * hampir sama bagus. Diwarnai menurut peringkat, tujuh blok yang skornya
- * 71–73 tampil seperti jurang dari gelap ke pucat, dan orang memilih blok #1
- * karena petanya berteriak — padahal selisihnya dua poin. Diwarnai menurut
- * skornya sendiri, ketujuhnya tampil hampir sewarna, dan itu memang
- * jawabannya: di heksagon ini letak persisnya tidak banyak berpengaruh.
- * Keluarga jebakan yang sama dengan "angka kosong tidak boleh tampil seperti
- * angka terukur".
- *
- * Satu rona, bukan palet kuadran. Blok bukan kuadran - ia satu sumbu saja
- * (bagus → tidak bagus), dan sumbu tunggal dibaca paling cepat dari terang ke
- * gelap. Warna kuadran di sini justru akan menyesatkan: petak oranye di dalam
- * heksagon biru terbaca sebagai "blok ini Jebakan Gengsi", yang tidak pernah
- * dihitung untuk blok.
- *
- * Zona yang MELARANG usaha dipisahkan lebih dulu. Skornya 0, jadi tanpa cabang
- * ini ia mendapat ujung terpucat dari rona yang sama - terbaca sebagai "paling
- * lemah" padahal artinya "tidak boleh". Larangan itu temuan, bukan kelemahan.
- */
 const STOP_BLOK: [number, string][] = [
   [0, '#eef3f1'],
   [40, '#a8cfc3'],
@@ -527,11 +226,6 @@ export const WARNA_BLOK: ExpressionSpecification = [
   ['interpolate', ['linear'], ['get', 'skor'], ...STOP_BLOK.flat()] as ExpressionSpecification,
 ]
 
-/**
- * Warna blok yang SAMA dengan `WARNA_BLOK`, untuk dipakai di luar peta (peta
- * mini dan daftar di panel). Stop-nya dibaca dari larik yang sama, jadi warna
- * di panel dan warna di peta tidak bisa berselisih.
- */
 export function warnaSkorBlok(skor: number | null, dilarang: boolean): string {
   if (dilarang) return KUADRAN.HINDARI.warnaPeta
   if (skor == null) return ABU_HINDARI
@@ -549,13 +243,5 @@ export function warnaSkorBlok(skor: number | null, dilarang: boolean): string {
   return STOP_BLOK[STOP_BLOK.length - 1][1]
 }
 
-/**
- * Garis blok: lebih tipis dan lebih pucat daripada garis heksagon.
- *
- * Blok hidup DI DALAM heksagon yang garisnya sudah tergambar. Kalau kedua
- * garis setebal, batas heksagon hilang di antara batas-batas bloknya dan
- * orangnya kehilangan satu-satunya petunjuk bahwa ketujuh petak itu satu
- * keluarga.
- */
 export const WARNA_GARIS_BLOK = (gaya: NamaGaya) =>
   BASEMAP_GELAP.includes(gaya) ? 'rgba(238,243,240,0.55)' : 'rgba(22,33,28,0.5)'

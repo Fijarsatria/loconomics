@@ -1,30 +1,3 @@
-/**
- * Dua pilihan yang MILIK PEMBACA, bukan milik data: bahasa dan tema.
- *
- * Keduanya tinggal di berkas yang sama karena bentuknya sama persis - satu
- * nilai kecil, disimpan di peramban, dibaca dari mana saja lewat konteks - dan
- * memisahnya cuma menggandakan pola yang sama di dua tempat. Nama berkasnya
- * tetap `bahasa.tsx`: mengganti nama berkas yang diimpor sembilan komponen
- * demi kerapian bukan penghematan.
- *
- * Bahasa antarmuka: Indonesia atau Inggris.
- *
- * BENTUKNYA: tiap komponen memegang kamusnya SENDIRI sebagai objek bertipe,
- * lalu memanggil `useTeks(KAMUS)` dan menerima cabang bahasa yang sedang
- * berlaku. Bukan satu berkas kamus raksasa berkunci string.
- *
- * Alasannya dua, dan yang kedua yang menentukan. Pertama, teks hidup di
- * sebelah komponen yang memakainya - komponen yang dihapus membawa serta
- * teksnya, tidak meninggalkan kunci yatim. Kedua, TIDAK ADA kunci yang bisa
- * salah ketik: `K.id` dan `K.en` bertipe sama, jadi kalimat yang belum
- * diterjemahkan gagal di `tsc`, bukan tampil sebagai "gerbang.hero.judul" di
- * layar juri.
- *
- * Yang TIDAK diterjemahkan di sini: kalimat yang datang dari backend (catatan
- * per heksagon, temuan, pesan galat) dan nama produk (Loconomics, PriceLens,
- * ZoneGuard, RiskRadar, Commuter Clock). Nama produk sama di kedua bahasa
- * dengan sengaja - ia nama, bukan kata.
- */
 
 import {
   createContext,
@@ -55,14 +28,6 @@ export type Bahasa = 'id' | 'en'
 
 const KUNCI = 'loconomics:bahasa'
 
-/**
- * Bahasa yang tersimpan; kalau belum pernah memilih, INDONESIA.
- *
- * Bukan bahasa peramban. Produk ini dibuat untuk Jabodetabek dan dinilai juri
- * berbahasa Indonesia; laptop yang kebetulan disetel Inggris tidak boleh
- * mengubah bahasa halaman pertamanya. Yang mau Inggris tinggal menggeser
- * sakelarnya, dan pilihannya diingat.
- */
 function bacaAwal(): Bahasa {
   try {
     const t = localStorage.getItem(KUNCI)
@@ -79,21 +44,6 @@ const Konteks = createContext<{ bahasa: Bahasa; ganti: (b: Bahasa) => void }>({
 })
 
 export function BahasaProvider({ children }: { children: ReactNode }) {
-  // `lang` di <html> ikut berganti. Bukan kosmetik: pembaca layar memilih suara
-  // dari atribut ini, pemenggalan kata peramban ikut membacanya, dan - yang
-  // paling menentukan - `ambil()` di lib/api.ts dan `lib/format.ts` MEMBACANYA
-  // untuk memilih bahasa kalimat backend dan pemisah angka.
-  //
-  // DITULIS SEBELUM RENDER, bukan di efek. Sampai 11 Sep 2026 ia ditulis di
-  // `useEffect` provider ini - dan React menjalankan efek ANAK lebih dulu
-  // daripada efek leluhurnya. Jadi setiap komponen yang meminta ulang karena
-  // bahasanya berganti berangkat dengan `lang` yang LAMA. Terukur lewat jaringan:
-  // sesudah menekan EN, `/skor/hidden-gems` dan kelima permintaan detail
-  // heksagon terkirim tanpa `bahasa=en`, dan kalimat backendnya tetap Indonesia
-  // di layar Inggris. Membuka web dengan bahasa tersimpan EN kena juga:
-  // gelombang pertama permintaannya membaca `lang="id"` dari index.html. Di dev
-  // tertutup - StrictMode menjalankan efek dua kali, dan putaran kedua sudah
-  // membaca `lang` yang benar - jadi yang kena justru build produksi.
   const [bahasa, setBahasa] = useState<Bahasa>(() => {
     const b = bacaAwal()
     document.documentElement.lang = b
@@ -118,13 +68,6 @@ export function useBahasa() {
   return useContext(Konteks)
 }
 
-/**
- * Nama zona (kuadran) dalam bahasa yang sedang berlaku.
- *
- * Satu tempat untuk keempatnya, dipakai peta, panel, Kompas, dan gerbang -
- * supaya "Aman" dan "Safe" tidak pernah bisa tampil di dua sudut layar
- * yang sama pada saat yang sama.
- */
 export function useNamaZona(): (kunci: string) => string {
   const { bahasa } = useContext(Konteks)
   return (kunci) => {
@@ -140,19 +83,6 @@ export function useTeks<T>(kamus: Record<Bahasa, T>): T {
   return kamus[bahasa]
 }
 
-/**
- * Kosakata BERSAMA - 43 nama variabel, keempat indeks, dan kata-kata yang
- * menerjemahkan angka 0-1 - dalam bahasa yang sedang berlaku.
- *
- * Kenapa satu kait, bukan enam: yang memakainya cuma panel detail, simulasi,
- * dan komparasi, dan ketiganya memakai SELURUHNYA sekaligus. Enam kait berarti
- * enam baris `useX()` di kepala tiap komponen dan enam kesempatan salah satu
- * lupa ditulis - dan yang lupa itu tidak gagal, ia menampilkan bahasa
- * Indonesia di layar berbahasa Inggris.
- *
- * Yang TIDAK ada di sini: `TINGGI_BAIK`. Ia menentukan warna bilah, bukan kata
- * - dan arah "tinggi itu kabar baik" sama di kedua bahasa.
- */
 export function useIstilah() {
   const { bahasa } = useContext(Konteks)
   return useMemo(() => {
@@ -182,15 +112,6 @@ export function useIstilah() {
   }, [bahasa])
 }
 
-/**
- * Sakelar dua posisi ID / EN.
- *
- * Tinggal di SATU tempat: menu pengaturan - yang sama di bilah gerbang dan di
- * bilah peta. Sampai 11 Sep 2026 gerbang memasangnya langsung di bilah atas,
- * lengkap dengan varian `gelap` untuk bilah yang turun ke jurang; varian itu
- * ikut dicabut begitu sakelarnya pindah ke dalam menu, yang membawa tokennya
- * sendiri lewat `.app-sakelar-bahasa`.
- */
 export function SakelarBahasa({ kelas = '' }: { kelas?: string }) {
   const { bahasa, ganti } = useBahasa()
   return (
@@ -292,41 +213,6 @@ export function TemaProvider({ children }: { children: ReactNode }) {
     }
   }, [tema])
 
-  /**
-   * SILANG-PUDAR HALAMANNYA SENDIRI - isinya tidak pernah hilang dari layar.
-   *
-   * Ini bentuk KEEMPAT transisi ini. Tiga yang pertama - lingkaran yang mekar,
-   * sapuan mendatar, lalu selembar warna tema tujuan yang menutup layar - punya
-   * satu kesamaan yang baru terlihat sesudah yang ketiga ditolak: ketiganya
-   * MENYEMBUNYIKAN pergantiannya di balik sesuatu. Selama beberapa ratus
-   * milidetik layarnya putih polos atau hitam polos, dan pemilik repo
-   * menyebutnya persis begitu: "gausah sampe kayak memutihkan semuanya /
-   * gelapkan semuanya sampai ga kelihatan semuanya".
-   *
-   * Yang dilakukan sekarang: peramban MEMOTRET halaman lama, tema ditukar, lalu
-   * potret lama memudar di atas halaman baru yang sudah hidup. Pada setiap
-   * bingkai, judul, peta, dan tombol tetap di tempatnya - yang berubah cuma
-   * warnanya, dari yang satu ke yang lain. Tidak ada satu bingkai pun yang
-   * kosong.
-   *
-   * View Transitions API. Kekhawatiran lama soal kanvas WebGL diperiksa lewat
-   * bingkai yang DIBEKUKAN di tengah pudar (animasinya dijeda lewat Web
-   * Animations API, lalu dipotret): kanvas peta tetap tergambar di setiap
-   * bingkai, dan yang dipotret peramban cuma satu tekstur seukuran layar,
-   * sekali, bukan per bingkai. Di titik tengah (260 ms) judul dan tombol
-   * gerbang masih terbaca jelas - simpangan luminansinya 18,5, sementara
-   * selembar warna polos mendekati nol.
-   *
-   * SAKELARNYA TIDAK IKUT DIPUDARKAN. Tombol yang ditekan diberi
-   * `view-transition-name` sendiri sepanjang transisi, dan index.css
-   * menyembunyikan potret LAMA-nya - jadi yang terlihat cuma kenop yang
-   * meluncur dengan transisinya sendiri, bukan dua kenop yang saling menembus.
-   *
-   * Tanpa API itu (peramban lama), warna halaman ditransisikan CSS selama
-   * pergantian saja - lihat `[data-alih-tema]` di index.css. Kurang rapi
-   * (gradien dan gambar tidak bisa ditransisikan), tetapi tetap tidak pernah
-   * menutup layar.
-   */
   const gantiTema = useCallback(
     (sakelar?: HTMLElement | null) => {
       const tujuan: Tema = tema === 'gelap' ? 'terang' : 'gelap'
@@ -347,10 +233,6 @@ export function TemaProvider({ children }: { children: ReactNode }) {
       if (sakelar) sakelar.style.setProperty('view-transition-name', 'sakelar-tema')
       akar.dataset.alihTema = 'vt'
       const transisi = dok.startViewTransition(() => {
-        // `flushSync`: potret BARU diambil begitu fungsi ini selesai, jadi
-        // tema baru harus sudah tertulis ke DOM saat itu - bukan dijadwalkan
-        // untuk render berikutnya. `data-tema` di <html> ikut ditulis di sini
-        // karena efek yang biasanya menulisnya belum tentu sudah berjalan.
         flushSync(() => setTema(tujuan))
         akar.dataset.tema = tujuan
       })
@@ -375,22 +257,6 @@ const K_TEMA = {
   en: { label: 'Light', gelap: 'Dark', ganti: 'Switch between light and dark appearance' },
 }
 
-/**
- * Sakelar tema. Tinggal di menu pengaturan, dan menu itu SATU komponen untuk
- * bilah gerbang dan bilah peta - supaya keduanya tidak pernah berbeda bentuk
- * maupun arti. Sampai 11 Sep 2026 gerbang memasangnya di tengah bawah hero.
- *
- * BENTUKNYA pil, bukan tombol bundar, dan itu permintaan pemilik repo dengan
- * dua gambar rujukan: kenop meluncur di dalam pil beku, matahari di kiri saat
- * terang dan bulan di kanan saat gelap, dengan katanya di sisi yang tersisa.
- *
- * IKONNYA MENYATAKAN KEADAAN, bukan tujuan. Versi bundar sebelumnya memasang
- * matahari saat halaman GELAP dengan alasan "tekan untuk terang" - dan dibaca
- * pemilik repo sebagai terbalik. Ia benar, dan bentuk barunya yang
- * menyelesaikan perdebatannya: begitu ada KATA di sebelah ikonnya, keduanya
- * harus berbicara tentang hal yang sama. "Dark" di sebelah matahari adalah
- * kalimat yang bertengkar dengan dirinya sendiri.
- */
 export function SakelarTema({ kelas = '' }: { kelas?: string }) {
   const { tema, gantiTema } = useTema()
   const t = useTeks(K_TEMA)

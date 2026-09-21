@@ -1,29 +1,3 @@
-/**
- * Rekomendasi personal — tab "Untuk Anda".
- *
- * BEDANYA DENGAN DAFTAR LOKASI, dan kenapa keduanya sama-sama ada:
- *
- *   Daftar lokasi  MEMERINGKAT. Semua orang melihat urutan yang sama, dan itu
- *                  memang yang dibutuhkan untuk MEMBACA sebuah kawasan.
- *   Untuk Anda     MEREKOMENDASIKAN. Disaring menurut anggaran dan kawasan yang
- *                  sudah dinyatakan orangnya, dan tiap barisnya membawa ALASAN
- *                  berupa angka lokasi itu sendiri.
- *
- * Perbedaan itu pernah nyata di data tetapi tidak terasa di layar — keduanya
- * tampil sebagai daftar kartu abu-abu yang mirip, dan pemilik repo melaporkannya
- * apa adanya: "sama aja aku lihat". Yang diperbaiki di sini bukan datanya,
- * melainkan cara tab ini menyatakan dirinya:
- *
- *   1. Kriteria yang dipakai ditulis besar di kepala, bukan sebagai catatan.
- *   2. Peringkat satu diberi kartu tersendiri — "yang paling cocok untuk Anda"
- *      adalah satu jawaban, bukan baris pertama dari dua belas.
- *   3. Tiap alasan membawa angkanya. "Lokasinya strategis" kalimat pemasaran;
- *      "2 menit jalan kaki ke stasiun" bisa diperiksa dan dibantah.
- *
- * Catatan (churn tinggi, RDTR kosong, data tipis) ikut ditampilkan, TIDAK
- * disembunyikan demi membuat rekomendasinya terlihat lebih meyakinkan. Daftar
- * rekomendasi yang menyembunyikan alasan untuk ragu bukan rekomendasi, itu iklan.
- */
 
 import { memo, useCallback, useEffect, useState } from 'react'
 
@@ -35,16 +9,6 @@ import { useSesi } from './Akun'
 import { Ajakan, Badge, Glif, MemuatNama } from './primitif'
 import { useNamaZona, useTeks } from '../lib/bahasa'
 
-/**
- * Kalimat komponen ini, dua bahasa.
- *
- * YANG TIDAK ADA DI SINI dan tidak akan pernah ada: `alasan[].teks` dan
- * `kriteria.ringkas`. Keduanya dirakit backend dari angka heksagon itu sendiri
- * ("2 menit jalan kaki ke Stasiun Manggarai"), dan menerjemahkannya di sini
- * berarti membuat salinan kedua yang cepat atau lambat berselisih dengan yang
- * dipakai Laporan PDF dan jawaban AI. Kalimat backend diterjemahkan di backend
- * atau tidak sama sekali.
- */
 const K = {
   id: {
     palingCocok: 'Paling cocok untuk Anda',

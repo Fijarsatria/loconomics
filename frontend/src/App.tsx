@@ -1,31 +1,3 @@
-/**
- * Kerangka aplikasi.
- *
- * Tiga bagian yang WAJIB ada menurut ketentuan lomba, semuanya terlihat sekaligus
- * tanpa berpindah halaman:
- *
- *   1. Peta Interaktif    — PetaInteraktif.tsx   (latar penuh)
- *   2. Insight / Analisis — PanelInsight.tsx     (panel kanan, bisa dilipat)
- *   3. Antarmuka AI       — PanelAI.tsx          (tab kedua di panel kanan)
- *
- * Menaruh ketiganya dalam satu layar bukan sekadar tata letak. Rantainya:
- * AI menggerakkan peta, peta memilih heksagon, heksagon mengisi panel insight.
- * Kalau ketiganya terpisah halaman, rantai itu putus dan demo kehilangan alurnya.
- *
- * TATA LETAK: peta mengisi seluruh layar, chrome melayang di atasnya.
- *
- * Seluruh chrome duduk di satu lapisan `pointer-events-none` — hanya panelnya
- * sendiri yang menerima klik, jadi peta tetap bisa digeser di sela-selanya.
- *
- * Tiga keputusan yang diambil setelah melihat versi pertama dipakai:
- *
- *   - Panel kanan BISA DILIPAT. Ia 25rem dan tidak pernah pergi; di layar 1280
- *     itu memakan sepertiga peta untuk daftar yang kadang cuma dilihat sekali.
- *   - Konsultan AI keluar dari kaki panel kanan jadi tombol melayang sendiri.
- *     Sebagai laci, ia berebut tinggi dengan daftar lokasi dan dua-duanya kalah.
- *   - Pencarian ada di bilah atas. Sebelumnya satu-satunya cara berpindah tempat
- *     adalah dropdown kawasan, padahal yang dicari orang biasanya nama stasiun.
- */
 
 import {
   Suspense,
@@ -47,6 +19,7 @@ import {
   KAWASAN_PILOT,
   KUADRAN,
   SEMUA_KAWASAN,
+  URUTAN_KUADRAN,
   LAYER,
   frasaKawasan,
   frasaPrestise,
@@ -60,6 +33,7 @@ import { BASEMAP_GELAP } from './lib/layer-peta'
 import { api } from './lib/api'
 import type {
   BedahBlok,
+  ButirPantauan,
   DiagramKuadran,
   Kuadran as NamaKuadran,
   ProfilRute,
@@ -70,14 +44,10 @@ import KompasKuadran from './components/KompasKuadran'
 import Legenda from './components/Legenda'
 import PanelAI from './components/PanelAI'
 import PanelInsight from './components/PanelInsight'
-// Gerbang dan Simulasi dimuat MALAS, dan itu penghematan yang nyata, bukan
-// hiasan: Gerbang menyeret GSAP + ScrollTrigger + 2.000 baris scrollytelling
-// yang TIDAK PERNAH dirender untuk orang yang kembali (refresh langsung ke
-// peta), dan Simulasi hanya hidup saat lembarnya dibuka. Keduanya keluar dari
-// bundel awal; peta mendapat utas utamanya lebih cepat.
 const Gerbang = lazy(() => import('./components/Gerbang'))
 import { PERISTIWA_BUKA_PETA, TombolAkun, useSesi, type DetailBukaPeta } from './components/Akun'
-import { useBahasa, useTema, useTeks, type Bahasa } from './lib/bahasa'
+import { JENIS_USAHA } from './lib/jenis-usaha'
+import { useBahasa, useNamaZona, useTema, useTeks, type Bahasa } from './lib/bahasa'
 import { KabarPin, MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
 // Kedua dialog ini besar dan jarang dibuka. MenuKawasan tetap statis - ia
@@ -95,18 +65,6 @@ const Pembuka = lazy(() => import('./components/Pembuka'))
 // berkas yang tumbuh tiap kali pipeline menemukan sesuatu.
 const SumberData = lazy(() => import('./components/SumberData'))
 import type { AksiPetaRef, KendaliPeta } from './components/PetaInteraktif'
-/**
- * Peta dimuat MALAS, dan ini penghematan terbesar di seluruh berkas.
- *
- * MapLibre GL sendirian hampir satu megabyte, dan halaman perkenalan SENGAJA
- * tidak memakainya sama sekali (lihat CLAUDE.md: "Halaman gerbang tidak memuat
- * MapLibre"). Selama impornya statis, janji itu benar untuk RENDER tetapi bohong
- * untuk UNDUHAN: berkasnya tetap ikut di bundel pertama, dan orang yang baru
- * membuka landing page membayar ongkosnya sebelum melihat satu pun heksagon.
- *
- * Tipenya diimpor terpisah dengan `import type` - itu dihapus saat kompilasi,
- * jadi ia tidak menyeret modulnya kembali ke bundel utama.
- */
 const PetaInteraktif = lazy(() => import('./components/PetaInteraktif'))
 import {
   Glif,
@@ -119,36 +77,8 @@ import {
 } from './components/primitif'
 
 /** Layer yang diwarnai menurut kuadran — hanya di sini Kompas benar. */
-/**
- * Layer yang isian petanya benar-benar diwarnai menurut kuadran.
- *
- * `risk_radar` dikeluarkan 22 Agustus 2026: sejak ia diwarnai oleh indeks churn,
- * Kompas di sampingnya menerangkan warna yang sudah tidak ada di layar. Itu
- * persis keluhan "RiskRadar kelihatan sama saja dengan Opportunity Score" - keduanya
- * memang menampilkan legenda yang sama.
- *
- * `hidden_gem` tetap di sini: gradasinya berjalan dari warna lembut ke warna
- * penuh kuadran HIDDEN_GEM, jadi Kompas masih menjelaskan warnanya.
- */
 const LAYER_KUADRAN: NamaLayer[] = ['opportunity', 'hidden_gem']
 
-/*
- * `GAYA_GELAP` DICABUT 11 Sep 2026, dan ini kali kedua ia dicabut - jadi
- * alasannya layak ditulis lengkap supaya tidak dikembalikan untuk ketiga kali.
- *
- * Ia dulu menurunkan terangnya chrome dari gaya basemap: memilih basemap Gelap
- * menggelapkan seluruh panel. Pencabutan PERTAMA (9 Sep) dibatalkan karena
- * penggantinya "gelap tanpa syarat", dan itu memang salah - kaca gelap di atas
- * basemap terang membuat chrome dan petanya terbaca sebagai dua produk yang
- * ditempel.
- *
- * Yang berbeda kali ini: penggantinya bukan "tanpa syarat" melainkan SAKELAR
- * yang dipegang pembacanya (`useTema`). Keberatan lama tetap benar dan tetap
- * bisa dijawab - orang yang memilih basemap gelap tinggal menekan sakelarnya -
- * dan sekarang orang yang menginginkan kebalikannya juga punya jalan. Yang
- * dulu tidak punya jalan sama sekali: halaman gerbang, yang tidak punya
- * basemap untuk diikuti.
- */
 
 /** Indeks H3 resolusi 9: 15 digit heksadesimal. Dipakai pencarian. */
 const POLA_H3 = /^[0-9a-f]{15}$/i
@@ -157,37 +87,6 @@ const POLA_H3 = /^[0-9a-f]{15}$/i
 // Keadaan tampilan yang bertahan melewati refresh
 // ---------------------------------------------------------------------------
 
-/**
- * Menekan F5 di peta harus kembali ke PETA, bukan ke halaman perkenalan.
- *
- * Sebelumnya `gerbang` selalu lahir `true`, jadi setiap refresh melempar
- * orangnya kembali ke awal - dan bersama gerbangnya ikut hilang kawasan yang
- * sedang dilihat, layer yang sedang dipilih, dan heksagon yang sedang dibaca.
- * Untuk halaman yang dipakai sambil membandingkan beberapa lokasi, itu bukan
- * gangguan kecil; itu kehilangan pekerjaan.
- *
- * DUA penyimpanan, dan pembagiannya yang penting:
- *
- *   sessionStorage  `masuk` - sudahkah orang ini melewati gerbang DI SESI INI
- *   localStorage    kawasan, layer, gaya - latar kerjanya
- *
- * Sebabnya dua permintaan yang terdengar berlawanan tetapi sebenarnya tidak:
- * "refresh jangan kembali ke landing" dan "pertama kali masuk harus selalu
- * lewat landing". Keduanya bisa dipenuhi sekaligus karena MENEKAN F5 dan
- * MEMBUKA WEB adalah dua hal berbeda - dan sessionStorage persis membedakannya:
- * ia bertahan menembus refresh di tab yang sama, dan kosong di tab baru,
- * jendela baru, atau esok hari.
- *
- * Latar kerjanya tetap di localStorage. Yang diminta bukan melupakan kawasan
- * yang sedang dilihat, melainkan tidak melewati perkenalannya - jadi orang yang
- * kembali besok mendapat gerbang dulu, lalu petanya terbuka di kawasan dan
- * layer yang ia tinggalkan.
- *
- * Yang TIDAK disimpan: apa pun tentang akun. Tiket punya kuncinya sendiri di
- * `lib/api.ts`, dan tingkat langganan tidak pernah disimpan di peramban sama
- * sekali - ia dibaca ulang dari backend tiap kali memuat. Tingkat yang bisa
- * disunting dari devtools bukan tingkat.
- */
 const KUNCI_TAMPILAN = 'loconomics.tampilan.v2'
 
 /** Hanya menandai "sudah lewat gerbang di sesi ini". Sengaja di sessionStorage. */
@@ -205,19 +104,6 @@ interface TampilanTersimpan {
   tigaDimensi?: boolean
 }
 
-/**
- * Nilai kawasan tersimpan boleh berisi BEBERAPA nama dipisah koma — itu bentuk
- * yang dipakai filter multi-kawasan.
- *
- * Versi sebelumnya hanya menerima satu nama pilot atau string kosong, jadi
- * setiap saringan gabungan dibuang diam-diam saat refresh dan petanya melompat
- * balik ke seluruh kawasan. Yang hilang bukan kenyamanan: multi-kawasan itu
- * baris pertama tabel fitur berbayar, dan fitur berbayar yang tidak selamat
- * dari F5 terbaca sebagai fitur yang rusak.
- *
- * Tiap potongan tetap diperiksa satu per satu — nama tak dikenal (misalnya dari
- * versi lama aplikasi ini) dibuang, sisanya dipertahankan.
- */
 function bersihkanKawasan(nilai: string | undefined): string | undefined {
   if (nilai === undefined) return undefined
   if (nilai === SEMUA_KAWASAN) return SEMUA_KAWASAN
@@ -254,19 +140,9 @@ function bacaTampilan(): TampilanTersimpan {
     // lama aplikasi ini - layer yang sudah dihapus akan membuat peta meminta
     // sesuatu yang tidak ada dan gagal tanpa keterangan.
     return {
-      // Dibaca dari sessionStorage, BUKAN dari `t`. Nilai `masuk` yang lama
-      // mungkin masih tertinggal di localStorage dari versi sebelum pembagian
-      // ini; membacanya akan diam-diam melewati gerbang untuk orang yang justru
-      // baru membuka webnya.
       masuk: bacaSesiMasuk(),
       kawasan: bersihkanKawasan(t.kawasan),
       layer: t.layer && t.layer in LAYER ? t.layer : undefined,
-      // DITULIS sejak layer tematik bisa dimatikan, tetapi baru DIBACA 9 Sep
-      // 2026. Sebelumnya `layerNyala` ikut disimpan tiap perubahan dan tidak
-      // pernah dipulihkan: layer yang dinyalakan orang mati lagi sesudah
-      // refresh, tanpa satu pun galat - dan audit menangkapnya sebagai
-      // "PriceLens tidak dipanggil untuk pelanggan", gejala yang menunjuk ke
-      // tempat yang salah sama sekali.
       layerNyala: typeof t.layerNyala === 'boolean' ? t.layerNyala : undefined,
       namaTempat: t.namaTempat && t.namaTempat in KERAPATAN_NAMA ? t.namaTempat : undefined,
       gaya: t.gaya && t.gaya in GAYA_BASEMAP ? t.gaya : undefined,
@@ -282,34 +158,11 @@ function bacaTampilan(): TampilanTersimpan {
 
 const AWAL = bacaTampilan()
 
-/**
- * Tiga tab panel kanan, URUT dari kiri ke kanan.
- *
- * Urutan ini bukan cuma urutan tombol: ia juga yang menentukan dari sisi mana
- * isi tab masuk. Tab di sebelah kanan tab yang aktif menunggu di kanan, yang di
- * kiri menunggu di kiri - jadi isinya selalu datang dari arah yang sama dengan
- * geseran penunjuknya. Satu larik untuk keduanya supaya tidak bisa berselisih.
- */
 const URUTAN_TAB = ['rekomendasi', 'daftar', 'ai'] as const
 type NamaTab = (typeof URUTAN_TAB)[number]
 
-/**
- * Urutan butir di BILAH BAWAH ponsel - sengaja BEDA dari `URUTAN_TAB`.
- *
- * Permintaan pemilik repo 19 Sep 2026: Loconomics AI pindah ke tombol besar di
- * tengah, dan Daftar lokasi menempati slot yang tadi dipakai AI. Urutan tab
- * panel TIDAK ikut berubah: `URUTAN_TAB` juga yang menentukan dari sisi mana
- * isi tab masuk, dan menukarnya akan membalik arah animasi tabnya.
- */
 const URUTAN_NAV: readonly NamaTab[] = ['rekomendasi', 'ai', 'daftar']
 
-/**
- * Ikon bilah bawah, satu tempat untuk ketiganya.
- *
- * Sebelumnya "Daftar lokasi" dan "Loconomics AI" memakai gambar yang SAMA
- * (gelembung obrolan) - dua butir berbeda dengan ikon identik, dan itu terbaca
- * sebagai salah tempel. Sekarang tiap tab punya gambarnya sendiri.
- */
 function IkonNav({ k, ukuran }: { k: NamaTab; ukuran: number }) {
   const p = {
     width: ukuran,
@@ -357,21 +210,6 @@ type Hasil =
   | { jenis: 'simpul'; simpul: SimpulTransit }
   | { jenis: 'heksagon'; h3: string }
 
-/**
- * Pencarian atas data sendiri, bukan geocoder.
- *
- * Yang bisa dicari: enam kawasan pilot, seluruh simpul transit yang dikenal
- * backend, dan indeks H3 kalau seseorang menempelkannya dari laporan. TIDAK ada
- * pencarian alamat bebas — itu butuh layanan geocoding pihak ketiga, dan
- * ketentuan lomba mengunci peta ini pada MAPID saja. Kotak yang menjanjikan
- * "cari alamat apa pun" lalu tidak menemukan apa-apa lebih buruk daripada kotak
- * yang jujur mencari tiga hal dan menemukan ketiganya.
- */
-/**
- * Kalimat chrome aplikasi, dua bahasa. Kalimat yang datang dari backend -
- * catatan per heksagon, temuan, galat - TIDAK ada di sini; yang diterjemahkan
- * cuma bingkainya.
- */
 const K_APP: Record<
   Bahasa,
   {
@@ -390,6 +228,9 @@ const K_APP: Record<
     lipat: string
     bukaPanel: string
     bukaPanelDaftar: string
+    bukaDaftar: string
+    pintasanJudul: string
+    pintasanBuka: (s: string) => string
     kembaliDaftar: string
     klikLain: string
     kosongkanBaki: string
@@ -416,6 +257,9 @@ const K_APP: Record<
     caraBaca: string
     caraBaca1: ReactNode
     caraBaca2: string
+    sebarKuadran: string
+    kuadranJumlah: (n: number, p: string) => string
+    diagramBatas: (x: string, y: string) => string
     sumbuDatarApa: string
     diagramKaki: (n: string) => string
     memuatTitik: string
@@ -447,6 +291,9 @@ const K_APP: Record<
     lipat: 'Lipat panel',
     bukaPanel: 'Buka panel',
     bukaPanelDaftar: 'Buka panel daftar lokasi',
+    bukaDaftar: 'Buka daftar lokasi',
+    pintasanJudul: 'Pintasan preferensi',
+    pintasanBuka: (s: string) => `Buka rekomendasi untuk ${s}`,
     kembaliDaftar: 'Kembali ke daftar lokasi',
     klikLain: 'Klik heksagon lain di peta untuk membandingkan',
     kosongkanBaki: 'Kosongkan baki',
@@ -476,14 +323,14 @@ const K_APP: Record<
     caraBaca: 'Cara membacanya',
     caraBaca1: (
       <>
-        Kuadran <strong className="font-semibold text-ink">tidak</strong> ditentukan oleh
-        Opportunity Score saja. Sumbu tegak Opportunity Score, sumbu datar prestise visual,
-        dan batas keduanya adalah <strong className="font-semibold text-ink">median</strong>{' '}
-        seluruh heksagon — bukan angka bulat.
+        Sumbu tegak Opportunity Score, sumbu datar prestise visual. Batas keduanya{' '}
+        <strong className="font-semibold text-ink">median</strong> — bukan angka bulat.
       </>
     ),
-    caraBaca2:
-      'Karena itu skor 58 bisa jatuh di Hidden Gem sementara 50 jatuh di Aman tapi Mahal: keduanya di atas median, dan yang membedakan prestise visualnya.',
+    caraBaca2: '',
+    sebarKuadran: 'Sebaran kuadran',
+    kuadranJumlah: (n: number, p: string) => `${n} heksagon · ${p}%`,
+    diagramBatas: (x: string, y: string) => `Median prestise ${x} · median skor ${y}`,
     sumbuDatarApa: 'Sumbu datar berdiri di atas apa',
     diagramKaki: (n: string) =>
       `${n} heksagon. Klik satu titik untuk membukanya. Area berzona terlarang sengaja ikut ditampilkan — ini alat analisis, bukan rekomendasi.`,
@@ -516,6 +363,9 @@ const K_APP: Record<
     lipat: 'Collapse panel',
     bukaPanel: 'Open panel',
     bukaPanelDaftar: 'Open the locations panel',
+    bukaDaftar: 'Open the location list',
+    pintasanJudul: 'Preference shortcuts',
+    pintasanBuka: (s: string) => `Open recommendations for ${s}`,
     kembaliDaftar: 'Back to the list',
     klikLain: 'Click another hexagon on the map to compare',
     kosongkanBaki: 'Clear tray',
@@ -545,15 +395,15 @@ const K_APP: Record<
     caraBaca: 'How to read it',
     caraBaca1: (
       <>
-        The quadrant is <strong className="font-semibold text-ink">not</strong> decided by the
-        Opportunity Score alone. The vertical axis is the Opportunity Score, the horizontal axis
-        is visual prestige, and the boundary on both is the{' '}
-        <strong className="font-semibold text-ink">median</strong> across every hexagon —
+        The vertical axis is the Opportunity Score, the horizontal axis visual prestige. The
+        boundary on both is the <strong className="font-semibold text-ink">median</strong> —
         not a round number.
       </>
     ),
-    caraBaca2:
-      'That is why a score of 58 can land in Hidden Gem while 50 lands in Prestige Trap: both are above the median, and what separates them is visual prestige.',
+    caraBaca2: '',
+    sebarKuadran: 'Quadrant spread',
+    kuadranJumlah: (n: number, p: string) => `${n} hexagons · ${p}%`,
+    diagramBatas: (x: string, y: string) => `Prestige median ${x} · score median ${y}`,
     sumbuDatarApa: 'What the horizontal axis stands on',
     diagramKaki: (n: string) =>
       `${n} hexagons. Click a point to open it. Locations in prohibited zones are shown on purpose — this is an analysis tool, not a recommendation.`,
@@ -713,19 +563,6 @@ function Cari({
 /** Empat kolom sudah tidak muat di layar mana pun tanpa digulir menyamping. */
 const MAKS_BANDING = 4
 
-/**
- * Bar komparasi — menggantikan ajakan simulasi di tengah bawah.
- *
- * KENAPA MENGGANTIKAN, bukan menumpuk. Keduanya menjawab pertanyaan yang
- * berbeda tentang hal yang berbeda: simulasi bertanya "kalau saya buka DI SINI",
- * komparasi bertanya "yang MANA dari beberapa ini". Menampilkan keduanya
- * sekaligus memaksa orang memilih dulu sebelum mengerjakan apa pun.
- *
- * Bar dibagi RATA sebanyak heksagon yang dipilih: dua jadi kiri-kanan, tiga jadi
- * kiri-tengah-kanan. Nomor kolomnya sama dengan nomor lencana di peta, dan itu
- * satu-satunya hal yang menghubungkan keduanya - kalau urutannya bergeser,
- * seluruh bar berhenti berarti.
- */
 function BarKomparasi({
   baki,
   skor,
@@ -827,55 +664,13 @@ function BarKomparasi({
 export default function App() {
   const t = useTeks(K_APP)
   const { bahasa } = useBahasa()
-  /**
-   * Kawasan yang sedang disaring. SEMUA_KAWASAN ('') = tidak disaring.
-   *
-   * Bawaannya `KAWASAN_AWAL` (Manggarai), permintaan pemilik repo 19 Sep 2026:
-   * peta harus terbuka langsung di sebuah kawasan yang benar-benar punya isi,
-   * bukan di zoom 9 yang seluruh Jabodetabek-nya hanya menyisakan jalan besar -
-   * di basemap terang, layar pertama nyaris putih. Pilihan pengguna tetap
-   * menang; yang berganti cuma keadaan WARISAN-nya.
-   */
+  const namaZona = useNamaZona()
   const [kawasan, setKawasan] = useState<string>(AWAL.kawasan ?? KAWASAN_AWAL.nama)
   const [layer, setLayer] = useState<NamaLayer>(AWAL.layer ?? 'opportunity')
-  /**
-   * Apakah layer tematik menyala. Bawaannya NYALA (19 Sep 2026, permintaan
-   * pemilik repo): Opportunity Score langsung tergambar supaya layar pertama
-   * menjawab "di sini mahal atau murah", bukan menunggu orang menemukan
-   * filternya. Sebelumnya mati, dengan alasan "membaca kesimpulan sebelum tahu
-   * sedang melihat apa" - pemilik repo menilai sebaliknya, dan itu wewenangnya.
-   *
-   * Terpisah dari `layer` dan bukan `NamaLayer | null` dengan sengaja:
-   * mematikan layer tidak boleh MELUPAKAN layer mana yang tadi dilihat.
-   */
   const [layerNyala, setLayerNyala] = useState(AWAL.layerNyala ?? true)
-  /**
-   * Serapat apa nama tempat basemap ditampilkan.
-   *
-   * Bawaannya `normal` - yaitu persis seperti sebelum setelan ini ada, jadi
-   * yang tidak pernah membukanya tidak melihat satu pun perubahan.
-   */
   const [namaTempat, setNamaTempat] = useState<string>(AWAL.namaTempat ?? 'normal')
   const { tema, gantiTema } = useTema()
-  /**
-   * Apakah rute & kawasan jangkau digambar untuk heksagon yang dipilih.
-   *
-   * Bawaannya MATI, dan ia SENGAJA tidak disimpan ke localStorage: ini pilihan
-   * per-lokasi, bukan latar kerja. Menyimpannya berarti membuka aplikasi besok
-   * dengan rute yang tergambar untuk heksagon yang tidak sedang ditanyakan
-   * siapa pun.
-   */
   const [rutaTampil, setRutaTampil] = useState(false)
-  // Yang tersimpan di localStorage tetap menang. Tanpa pilihan tersimpan,
-  // basemap pertama DITURUNKAN DARI TEMA - gelap untuk gelap, `dasar` untuk
-  // terang, pasangan yang sama dengan yang dipilih sakelar tema di bawah.
-  //
-  // Dulu bawaannya selalu 'gelap', dan di DEV SERVER itu tidak pernah terlihat
-  // salah: StrictMode menjalankan efek penyelaras tema di bawah DUA kali saat
-  // dipasang, jadi lintasan keduanya lolos dari penjaga "lewati yang pertama"
-  // dan menukar basemapnya ke terang. Build produksi menjalankannya sekali -
-  // orang yang kembali dengan tema terang membuka peta hitam di bawah panel
-  // putih. Terlihat 11 Sep 2026 di `vite preview`, bukan di dev.
   const [gaya, setGaya] = useState<NamaGaya>(
     // `gayaSah` MEMETAKAN gaya yang sudah dipensiunkan, tidak membuangnya:
     // orang yang terakhir memakai "Jalan 2D" harus mendarat di "Jalan",
@@ -886,29 +681,11 @@ export default function App() {
   const [tigaDimensi, setTigaDimensi] = useState<boolean>(AWAL.tigaDimensi ?? false)
   const [hexTerpilih, setHexTerpilih] = useState<string | null>(null)
 
-  /**
-   * Bedah blok: tujuh petak res-10 di dalam heksagon terpilih, dan yang disorot.
-   *
-   * Hidup di App, bukan di panel, karena PETA yang menggambarnya sementara
-   * TOMBOLNYA ada di panel. Dua pemakai, satu nilai - dan nilai yang disalin ke
-   * dua tempat adalah nilai yang suatu saat berselisih. Alasan yang sama persis
-   * dengan `profilRute` di bawah.
-   *
-   * Tidak disimpan ke localStorage, alasan yang sama dengan `rutaTampil`: ini
-   * pilihan per-lokasi, bukan latar kerja.
-   */
   const [blok, setBlok] = useState<BedahBlok | null>(null)
   const [blokTerpilih, setBlokTerpilih] = useState<string | null>(null)
   /** Blok yang sedang disimulasikan. Kosong = simulasi seluruh heksagon. */
   const [blokSimulasi, setBlokSimulasi] = useState<string | null>(null)
 
-  // Pilihan menampilkan rute berlaku untuk SATU heksagon. Berpindah heksagon
-  // mengembalikannya ke mati - kalau tidak, heksagon berikutnya langsung
-  // menggambar rutenya, dan gerbangnya jadi tidak ada gunanya.
-  //
-  // Blok ikut di sini, dan untuk blok ini bukan sekadar soal selera: petaknya
-  // digambar dari koordinat heksagon LAMA. Dibiarkan hidup, tujuh petak
-  // menggantung di tempat yang tidak sedang dibicarakan panel mana pun.
   useEffect(() => {
     setRutaTampil(false)
     setBlok(null)
@@ -916,19 +693,6 @@ export default function App() {
     setBlokSimulasi(null)
   }, [hexTerpilih])
 
-  /**
-   * Memilih basemap ikut menyetel TEMA - arah kebalikan dari efek di atas, dan
-   * dengan filosofi yang sama persis: titik berangkat, bukan kunci.
-   *
-   * Tanpa ini keduanya terasa tidak nyambung (dilaporkan pemilik repo): peta
-   * gelap di bawah chrome terang terbaca sebagai dua produk yang ditempel, dan
-   * satu-satunya cara menyelaraskannya adalah menemukan sakelar tema yang
-   * tersembunyi di menu lain.
-   *
-   * Tidak bisa berputar: menyetel tema menjalankan efek di atas, dan efek itu
-   * mengembalikan gaya yang SAMA untuk setiap kombinasi yang dihasilkan di
-   * sini - satelit dibiarkan, gelap sudah gelap, terang bukan gelap.
-   */
   const gantiGaya = useCallback(
     (g: NamaGaya) => {
       setGaya(g)
@@ -938,12 +702,6 @@ export default function App() {
     [tema, gantiTema],
   )
 
-  /**
-   * Gaya vektor terakhir yang benar-benar terpasang, untuk dikembalikan kalau
-   * gaya berikutnya gagal (satelit, yang berkasnya dari basemap.mapid.io).
-   * Diperbarui HANYA oleh gaya vektor, jadi memilih satelit lalu gagal
-   * mengembalikan orangnya ke peta yang tadi ia lihat - bukan ke gaya bawaan.
-   */
   const gayaTerakhir = useRef<NamaGaya | null>(null)
   useEffect(() => {
     if (gaya !== 'satelit') gayaTerakhir.current = gaya
@@ -966,92 +724,17 @@ export default function App() {
   // Daftar dulu, detail belakangan. Pertanyaan pertama pengguna adalah "yang mana
   // yang harus saya lihat", bukan "bagaimana lokasi ini" - dan layar kosong yang
   // menyuruh mengklik heksagon menjawab pertanyaan yang belum diajukan.
-  /**
-   * Dua tab, bukan tiga - dan "detail" BUKAN salah satunya.
-   *
-   * Detail heksagon dulu jadi tab sendiri, dan itu memaksa dua hal yang
-   * canggung: tab yang mati sampai ada yang dipilih, dan label "Detail
-   * heksagon" yang harus dibaca padahal orang sudah tahu apa yang baru saja
-   * ia klik. Sekarang detail adalah LAPISAN DI DALAM daftar, dengan tombol
-   * kembali - persis pola yang sudah dikenal dari daftar-ke-rincian di mana
-   * pun. Slot yang dibebaskannya dipakai Konsultan AI, yang sebelumnya
-   * menggantung sebagai kolom terpisah.
-   */
-  /**
-   * Tab awal: DAFTAR, bukan rekomendasi — walau rekomendasi inti produknya.
-   *
-   * Untuk tamu, "Untuk Anda" hanya bisa menawarkan formulir pendaftaran, dan
-   * layar pertama yang isinya formulir adalah layar yang ditutup. Daftar lokasi
-   * langsung berguna tanpa akun, dan tab rekomendasinya duduk di sebelah kiri
-   * daftar - terlihat sejak detik pertama.
-   *
-   * Yang SUDAH punya akun dipindahkan ke rekomendasi sekali oleh efek di bawah:
-   * bagi mereka daftar itu memang sudah tersedia isinya.
-   */
   const [tab, setTab] = useState<NamaTab>('daftar')
-  /**
-   * Tab yang PERNAH dibuka. Isinya dipasang saat pertama kali dibuka, lalu
-   * TETAP terpasang - disembunyikan, bukan dicabut.
-   *
-   * Sebelum 11 Sep 2026 "Untuk Anda" dan "Daftar lokasi" dicabut dari DOM tiap
-   * kali ditinggalkan. Dua akibatnya, dan keduanya melawan perpindahan yang
-   * rapi: yang pergi tidak bisa dianimasikan keluar karena elemennya sudah
-   * tidak ada, dan yang kembali MEMINTA ULANG datanya - `ambil()` tidak punya
-   * cache - jadi tiap kembali ke daftar berarti layar tunggu lagi dan posisi
-   * gulirnya hilang. Loconomics AI sudah lama tetap terpasang karena alasan
-   * yang sama (riwayat percakapannya); sekarang ketiganya sama.
-   *
-   * Tidak semua dipasang sejak awal: "Untuk Anda" meminta rekomendasi ke
-   * backend begitu dipasang, dan tamu yang tidak pernah membukanya tidak perlu
-   * membayar permintaan itu. Disesuaikan saat render, bukan lewat efek - lewat
-   * efek, bingkai pertama tab barunya kosong.
-   */
   const [tabDikunjungi, setTabDikunjungi] = useState<ReadonlySet<NamaTab>>(() => new Set([tab]))
   if (!tabDikunjungi.has(tab)) setTabDikunjungi(new Set([...tabDikunjungi, tab]))
-  /**
-   * Panel kanan: TERBUKA di layar lebar, TERTUTUP di ponsel.
-   *
-   * Sejak tata letak ponsel memakai bilah bawah (MapID-style), lembar yang
-   * langsung terbuka setinggi separuh layar justru menyembunyikan peta -
-   * keluhan yang persis memicunya. Di ponsel peta dulu tampil penuh, dan
-   * lembar dibuka lewat bilah bawah. Syaratnya dibaca dari viewport, bukan
-   * lebar 0: SSR tidak dipakai di sini, jadi `window` selalu ada.
-   */
   const [panelTerbuka, setPanelTerbuka] = useState(
     () => typeof window === 'undefined' || window.matchMedia('(min-width: 1024px)').matches,
   )
-  /**
-   * TIGA tinggi tetap lembar bawah ponsel, dan seretan mendarat di salah
-   * satunya - bukan lagi dua keadaan (ringkas/penuh).
-   *
-   * Permintaan pemilik repo 19 Sep 2026: "bisa seperempat, bisa setengah, dan
-   * bisa full 1 layar", dan berhenti di tengah. Sebelumnya cuma ada 26svh dan
-   * 45svh, dan seretannya hanya memilih salah satu dari dua itu.
-   *
-   * Yang jadi tinggi AWAL pun mengikuti isinya: detail satu heksagon dibuka
-   * RINGKAS (kepalanya sudah memuat nama, skor, dan kuadran - yang perlu
-   * terlihat justru petanya), daftar dibuka SETENGAH. Sesudah itu orangnya
-   * bebas menyeretnya ke mana saja, dan pilihannya bertahan sampai ia memilih
-   * heksagon lain.
-   */
   const [tingkat, setTingkat] = useState<'ringkas' | 'setengah' | 'penuh'>('setengah')
   /* Titik sentuh awal + penanda "barusan digeser", supaya klik setelah seretan
      tidak ikut membalik keadaan. Lihat penangan di kepala lembar. */
   const mulaiLembar = useRef(0)
   const geserLembar = useRef(false)
-  /**
-   * Seretan yang MENGIKUTI jari (19 Sep 2026).
-   *
-   * Sebelumnya kepala lembar cuma menanggapi TAP: tinggi berubah sesudah jari
-   * lepas, tidak ada satu pun bingkai di antaranya. Dilaporkan pemilik repo apa
-   * adanya: "cuma bisa diklik... ga bisa ditarik, ga ada animasi slidernya".
-   * Sekarang tinggi lembar ditulis langsung dari `clientY` selama jari turun,
-   * lalu di-`snap` ke keadaan terdekat saat dilepas - pola yang sama dengan
-   * lembar Simulasi.
-   *
-   * `tinggiSeret` non-null = sedang menyeret, dan tinggi diambil dari inline
-   * style (transisi dimatikan) supaya lembar benar-benar menempel di jari.
-   */
   const [tinggiSeret, setTinggiSeret] = useState<number | null>(null)
   const [seretLembar, setSeretLembar] = useState(false)
   const lembarRef = useRef<HTMLElement>(null)
@@ -1080,11 +763,6 @@ export default function App() {
     [tinggiPenuhLembar],
   )
 
-  /**
-   * Tinggi AWAL mengikuti apa yang baru dibuka: detail satu heksagon dibuka
-   * RINGKAS (seperempat), daftar dibuka SETENGAH. Sesudah itu pilihan orangnya
-   * yang berlaku sampai isinya berganti.
-   */
   const isiLembar = useRef('')
   useEffect(() => {
     if (!panelTerbuka) {
@@ -1154,120 +832,24 @@ export default function App() {
     setTingkat(terdekat)
     setTinggiSeret(null)
   }
-  /**
-   * Kompas Kuadran / Legenda: sekarang dibuka lewat tombol, tidak berdiri terus.
-   *
-   * Bawaannya TERBUKA. Kompas adalah tesis produk ini - orang yang baru masuk
-   * harus melihatnya tanpa mencari - tapi ia juga menutupi sepetak peta, dan
-   * sekarang bisa disingkirkan.
-   */
   // Bawaannya TERTUTUP sejak 24 Agustus 2026 - keputusan pemilik repo: layar
   // pertama harus milik petanya. Kompas tetap satu klik jauhnya, dan tombolnya
   // duduk persis di tempat kartunya akan muncul.
-  /**
-   * Panel mana yang sedang terbuka di tumpukan kiri - PALING BANYAK SATU.
-   *
-   * Dulu masing-masing tombol memegang keadaannya sendiri, dan akibatnya
-   * terlihat langsung: membuka pemilih basemap mendorong isi ke kanan, lalu
-   * membuka Kompas Kuadran mendorongnya LAGI ke kanan alih-alih menutup yang
-   * pertama. Dua benda mengaku menempati ruang yang sama.
-   *
-   * Satu nilai untuk seluruh tumpukan membuat keadaan itu mustahil dinyatakan,
-   * bukan sekadar dihindari.
-   */
   const [panelKiri, setPanelKiri] = useState<'tidak' | 'kartu' | 'basemap'>('tidak')
   const panelKiriTerbuka = panelKiri === 'kartu'
-  /**
-   * Pil filter kiri-bawah di ponsel (kawasan + layer), meniru "Community
-   * Filter" MAPID. Desktop tidak memakainya: kedua dropdown itu sudah duduk di
-   * bilah atas. Ditutup oleh ketukan di luar, sama seperti menu lain.
-   */
   const [filterTerbuka, setFilterTerbuka] = useState(false)
   const filterRef = useRef<HTMLDivElement>(null)
-  /**
-   * Animasi TUTUP pil filter, sama seperti pemilih basemap.
-   *
-   * Sebelumnya popovernya dipasang `pop-kanan` saja - dan kelas itu cuma
-   * menyetel titik tumpu, ia TIDAK membawa satu pun animasi (yang membawa
-   * `pop`). Jadi pil filter muncul dan hilang begitu saja sementara pemilih
-   * basemap tumbuh dan menyusut; dilaporkan pemilik repo 19 Sep 2026.
-   */
   const { tampil: filterTampil, menutup: filterMenutup } = useTutupHalus(filterTerbuka)
   const [diagram, setDiagram] = useState<DiagramKuadran | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
-  /**
-   * Layar pembuka. Bawaannya MATI - ia bukan lagi layar pertama.
-   *
-   * Urutan lama: pembuka -> gerbang -> peta. Tiga layar berturut-turut sebelum
-   * satu heksagon pun terlihat, dan yang pertama dari ketiganya memuat sesuatu
-   * yang belum tentu jadi dilihat orangnya.
-   *
-   * Urutan sekarang: gerbang -> pembuka -> peta. Yang berubah cuma nilai awal
-   * dua state di bawah ini; sisanya - termasuk `tampil` pada PetaInteraktif -
-   * sudah menuliskan syaratnya sebagai "bukan pembuka DAN bukan gerbang", jadi
-   * ia tetap benar tanpa disentuh.
-   *
-   * Layar pembuka menahan chrome, TIDAK menahan peta. Peta tetap dipasang di
-   * belakang keduanya sejak render pertama, supaya MapLibre sudah selesai
-   * mengunduh gaya dan tile pertama jauh sebelum ada yang menekan "Masuk".
-   */
   const [pembuka, setPembuka] = useState(false)
-  /**
-   * Gerbang: halaman perkenalan, dan sekarang halaman pertama.
-   *
-   * Ditutup lewat tombol, dan sekali ditutup tidak pernah kembali selama sesi
-   * ini - halaman perkenalan yang muncul lagi setiap kali orang menutup panel
-   * berhenti jadi perkenalan dan mulai jadi penghalang.
-   */
   const [gerbang, setGerbang] = useState(!AWAL.masuk)
 
-  /**
-   * Kelas tema dipasang di <body>, bukan cuma di wadah aplikasi.
-   *
-   * Ketiga dialog dirender lewat `createPortal` ke <body> - secara DOM mereka
-   * di LUAR wadah aplikasi. Tanpa kelas di akar, dialognya tidak pernah ikut
-   * gelap, dan yang terlihat panel putih mengambang di atas aplikasi gelap.
-   *
-   * DARI SAKELAR TEMA, bukan lagi dari gaya basemap (11 Sep 2026).
-   *
-   * Sampai hari ini terangnya chrome mengikuti basemap yang kebetulan dipilih:
-   * memilih basemap Gelap menggelapkan seluruh panel. Itu pintar dan salah -
-   * orang yang ingin basemap gelap dengan panel terang tidak punya cara
-   * menyatakannya, dan gerbang tidak ikut sama sekali. Sekarang temanya berdiri
-   * sendiri, bawaannya gelap, dan basemap cuma soal peta.
-   *
-   * Ini sekaligus memperbaiki bug yang dilaporkan pemilik repo dengan potret:
-   * kolom nama pengguna dan sandi di dialog Masuk tampil sebagai BILAH PUTIH di
-   * atas halaman yang hitam pekat. Sebabnya tempat dialognya berdiri - gerbang
-   * membawa paletnya sendiri lewat kelas `.gerbang`, sementara dialognya
-   * dirender `createPortal` ke <body>, di luar simpul itu. Dengan tema yang
-   * berdiri sendiri, <body> dan gerbang selalu menyatakan hal yang sama.
-   */
   useEffect(() => {
     document.body.classList.toggle('peta-gelap', tema === 'gelap')
     return () => document.body.classList.remove('peta-gelap')
   }, [tema])
 
-  /**
-   * Basemap IKUT saat temanya diganti - tapi hanya saat DIGANTI, bukan saat
-   * dimuat.
-   *
-   * Keberatan lama masih berlaku dan masih benar: kaca gelap di atas basemap
-   * terang membuat chrome dan petanya terbaca sebagai dua produk yang ditempel.
-   * Yang salah dulu bukan menyelaraskan keduanya, melainkan MENGUNCI-nya - orang
-   * yang ingin kombinasi lain tidak punya jalan.
-   *
-   * Jadi: sakelar tema menyelaraskan keduanya sebagai TITIK BERANGKAT, lalu
-   * menu Basemap tetap berkuasa penuh sesudahnya. Efek ini hanya bekerja saat
-   * temanya BENAR-BENAR berubah, jadi basemap yang dipulihkan dari localStorage
-   * tidak pernah ditimpa hanya karena aplikasinya baru dimuat.
-   *
-   * Dibandingkan dengan tema SEBELUMNYA, bukan dengan bendera "jalan pertama".
-   * Bendera itu cuma benar di produksi: StrictMode di dev menjalankan efeknya
-   * dua kali saat dipasang, lintasan kedua lolos dari benderanya, dan dev
-   * diam-diam menimpa basemap tersimpan sementara produksi tidak - dua perilaku
-   * untuk kode yang sama. Tema sebelumnya sama di kedua lintasan itu.
-   */
   const temaSebelum = useRef(tema)
   useEffect(() => {
     if (temaSebelum.current === tema) return
@@ -1288,14 +870,6 @@ export default function App() {
   /** Heksagon pembanding di simulasi, dipilih dengan mengklik peta. */
   const [hexBanding, setHexBanding] = useState<string | null>(null)
 
-  /**
-   * Profil rute yang sedang digambar: jalan kaki atau mobil.
-   *
-   * Tinggal di App, bukan di panel maupun di peta, karena KEDUANYA memakainya:
-   * panel memilih dan menyebut angkanya, peta menggambar garisnya. Dua salinan
-   * dari nilai yang sama adalah dua salinan yang suatu saat berselisih - dan
-   * yang terlihat waktu itu garis mobil dengan keterangan jalan kaki.
-   */
   // Tiap moda di layar persis satu profil tersimpan sejak sepeda menggantikan
   // motor - lihat `ProfilRute` di types.ts.
   const [profilRute, setProfilRute] = useState<ProfilRute>('foot-walking')
@@ -1311,39 +885,97 @@ export default function App() {
     tersimpan,
   } = useSesi()
 
-  /**
-   * Titik favorit: klik sekali di dalam heksagon yang sedang terbuka.
-   *
-   * Hanya PELANGGAN yang mendapat penangan ini (lihat `onTaruhPin` di bawah) -
-   * untuk tamu dan akun gratis klik di dalam heksagon tetap tidak berbuat apa
-   * pun, alih-alih memunculkan dialog langganan tiap kali orang mengklik peta.
-   * Tombol "Simpan lokasi" di panel tetap jadi pintu yang menjelaskan fitur ini.
-   *
-   * `catatSimpan()` yang membuat pinnya langsung muncul.
-   */
+  const pintasan = useMemo(() => {
+    const p = akun?.preferensi
+    const keluar: { kunci: string; teks: string; glif?: string }[] = []
+    const jenis = JENIS_USAHA.find((j) => j.nilai === p?.jenis_usaha)
+    if (jenis) {
+      keluar.push({
+        kunci: 'jenis',
+        teks: bahasa === 'en' ? jenis.labelEn : jenis.label,
+        glif: jenis.glif,
+      })
+    }
+    if (p?.kawasan) keluar.push({ kunci: 'kawasan', teks: p.kawasan })
+    if (p?.budget_sewa_bulanan) {
+      const n = p.budget_sewa_bulanan.toLocaleString(bahasa === 'en' ? 'en-US' : 'id-ID')
+      keluar.push({ kunci: 'anggaran', teks: `≤ Rp${n}` })
+    }
+    if (keluar.length) return keluar
+    JENIS_USAHA.slice(0, 2).forEach((j) =>
+      keluar.push({
+        kunci: j.nilai,
+        teks: bahasa === 'en' ? j.labelEn : j.label,
+        glif: j.glif,
+      }),
+    )
+    keluar.push({ kunci: 'kawasan-bawaan', teks: KAWASAN_AWAL.nama })
+    return keluar
+  }, [akun, bahasa])
+
   const [kabarPin, setKabarPin] = useState<{ h3: string; baru: boolean; kunci: number } | null>(null)
+
+  /** Daftar pin yang sedang tergambar - sumber kebenaran di sisi layar. */
+  const pinKini = useRef<
+    { lat: number; lon: number; h3: string; label: string; sendiri: boolean }[]
+  >([])
+
+  const pasangPin = useCallback((b: ButirPantauan[]) => {
+    const daftar = b
+      .filter(
+        (x): x is typeof x & { lat: number; lon: number } => x.lat !== null && x.lon !== null,
+      )
+      .map((x) => ({
+        lat: x.lat,
+        lon: x.lon,
+        h3: x.h3_index,
+        label: x.nama ?? kodeLokasi(x.h3_index, x.kawasan ?? ''),
+        sendiri: x.titik_sendiri,
+      }))
+    pinKini.current = daftar
+    peta.current?.setPin(daftar)
+  }, [])
+
   const taruhPin = useCallback(
     async (h3: string, lat: number, lon: number) => {
       const baru = !tersimpan.has(h3)
+      // Pin digambar SEKETIKA, dari titik yang baru saja diklik. Versi
+      // sebelumnya menunggu POST selesai lalu dua penyegaran daftar, jadi
+      // tombolnya terasa mati beberapa detik di jaringan lambat.
+      const lain = pinKini.current.filter((p) => p.h3 !== h3)
+      pinKini.current = [
+        ...lain,
+        { lat, lon, h3, label: kodeLokasi(h3, kawasan), sendiri: true },
+      ]
+      peta.current?.setPin(pinKini.current)
       try {
-        await api.pantau(h3, { lat, lon })
+        const item = await api.pantau(h3, { lat, lon })
+        // Jawaban server yang berwenang soal nama dan titiknya; di sini cuma
+        // labelnya yang mungkin berubah.
+        pinKini.current = pinKini.current.map((p) =>
+          p.h3 === item.h3_index
+            ? {
+                ...p,
+                label: item.nama ?? kodeLokasi(item.h3_index, item.kawasan ?? ''),
+                sendiri: item.titik_sendiri,
+              }
+            : p,
+        )
+        peta.current?.setPin(pinKini.current)
         catatSimpan()
         setKabarPin({ h3, baru, kunci: Date.now() })
       } catch {
-        // Satu-satunya sebab yang wajar di sini titik yang jatuh tepat di tepi
-        // heksagon; tidak ada tempat yang pantas untuk melaporkannya sebagai galat.
+        // Satu-satunya sebab yang wajar: titik jatuh tepat di tepi heksagon.
+        // Daftarnya dikembalikan ke keadaan server supaya pin hantu tidak
+        // tertinggal di peta.
+        api
+          .pantauan()
+          .then(pasangPin)
+          .catch(() => {})
       }
     },
-    [tersimpan, catatSimpan],
+    [tersimpan, catatSimpan, pasangPin, kawasan],
   )
-  /**
-   * Baki komparasi: heksagon yang dikumpulkan untuk dibandingkan berdampingan.
-   *
-   * Baki, bukan langsung buka dialog. Membandingkan menuntut MINIMAL DUA, dan
-   * yang kedua dipilih dengan mengklik peta - jadi harus ada tempat yang
-   * menampung yang pertama sementara orangnya mencari yang kedua, dan yang
-   * mengingatkan bahwa ia sedang di tengah tindakan itu.
-   */
   const [baki, setBaki] = useState<string[]>([])
   const [komparasiTerbuka, setKomparasiTerbuka] = useState(false)
   const [pantauanTerbuka, setPantauanTerbuka] = useState(false)
@@ -1352,25 +984,11 @@ export default function App() {
     setBaki((b) => {
       if (b.includes(h3)) return b.filter((x) => x !== h3)
       if (b.length >= MAKS_BANDING) return b
-      // Heksagon PERTAMA yang masuk baki menutup panel kanan. Yang kedua harus
-      // dipilih dari peta, dan panel selebar 25rem menutupi tepat bagian peta
-      // tempat tetangga heksagon pertama berada - yaitu justru yang paling
-      // masuk akal jadi pembandingnya.
       if (b.length === 0) setPanelTerbuka(false)
       return [...b, h3]
     })
   }, [])
 
-  /**
-   * Membuka simulasi = masuk mode fokus.
-   *
-   * Panel kanan ditutup, chip pertanyaan dan kartu Kompas disembunyikan. Bukan
-   * demi kerapian: lembar simulasi menutupi separuh bawah layar, dan sisa
-   * setengahnya harus berisi PETA - heksagon yang sedang disimulasikan beserta
-   * tetangganya, karena membandingkannya bagian dari pekerjaannya. Chrome yang
-   * tetap berdiri di situ cuma menyisakan sepetak peta yang terlalu sempit
-   * untuk itu.
-   */
   const bukaSimulasi = useCallback(() => {
     // Simulasi usaha BERBAYAR sejak 24 Agustus 2026. Penjaga backend-nya di
     // /hex/{h3}/simulasi; yang di sini cuma pintunya - non-pelanggan diarahkan
@@ -1420,24 +1038,8 @@ export default function App() {
     }
   }, [])
 
-  /**
-   * Pintasan lokasi di jawaban AI ditekan.
-   *
-   * Petanya terbang, heksagonnya TERPILIH, dan panel pindah ke detailnya.
-   *
-   * Sampai 14 Sep 2026 tabnya sengaja TIDAK diganti. Pemilik repo memintanya
-   * dibalik: kartu yang ditekan harus langsung membuka detail heksagon, bukan
-   * menyisakan satu ketukan tab lagi. Percakapannya tidak hilang - PanelAI
-   * tetap terpasang di tabnya sendiri.
-   */
   const keLokasiAI = useCallback(
     (h3: string, kawasanLokasi?: string) => {
-      // Lokasi di KAWASAN LAIN dari yang sedang dimuat peta: pindahkan saringan
-      // kawasannya dulu. Tanpa ini heksagonnya tidak ada di data peta, fokus
-      // tidak menemukan geometrinya, dan kartu yang diklik tidak menggerakkan
-      // apa pun - dilaporkan pemilik repo 13 Sep 2026 ("card rekomendasi
-      // lokasinya gabisa diarahkan"). `fokusHeksagon` menunggu data kawasan
-      // barunya masuk sebelum membingkai.
       if (
         kawasanLokasi &&
         kawasan !== SEMUA_KAWASAN &&
@@ -1457,44 +1059,6 @@ export default function App() {
     [kawasan],
   )
 
-  /**
-   * Kembali ke halaman perkenalan, atas permintaan eksplisit penggunanya.
-   *
-   * Penanda sesi ikut DIHAPUS. Tanpa itu, refresh berikutnya membacanya dan
-   * melempar orangnya kembali ke peta - persis kebalikan dari yang baru saja
-   * ia minta.
-   *
-   * LEWAT TIRAI, bukan pertukaran seketika (11 Sep 2026, permintaan pemilik
-   * repo). Jalan MASUK sudah punya layar pembukanya sendiri - empat langkah,
-   * kota heksagon yang dibangun - sementara jalan PULANG mengganti seluruh
-   * layar dalam satu bingkai. Yang terbaca bukan "kembali", melainkan aplikasi
-   * yang mendadak hilang.
-   *
-   * Tirainya heksagon yang MEKAR dari tengah sampai menutupi layar, lalu
-   * memudar di atas halaman perkenalan yang animasi masuknya sudah berjalan di
-   * baliknya. Dua fase, dua jam, dan keduanya dibersihkan saat komponen dilepas
-   * supaya tidak ada `setState` yang mendarat di komponen yang sudah pergi.
-   *
-   * TIRAINYA MENUNGGU CHUNK-NYA. Fase kedua dulu dipatok ke 430 ms, dan itu
-   * benar selama chunk gerbang sudah pernah diunduh - yaitu selama orang
-   * datang ke peta LEWAT gerbang. Sesi yang dimulai di peta (refresh di peta)
-   * belum pernah memuatnya: tirainya memudar tepat di atas fallback Suspense
-   * yang masih menunggu, dan halaman perkenalannya baru muncul ~420 ms sesudah
-   * tirainya MULAI memudar - di tema terang bahkan sesudah tirainya hilang
-   * sama sekali. Terukur lewat pencatat per bingkai. Sekarang unduhannya
-   * dimulai saat tombolnya ditekan, dan fase kedua menunggu KEDUANYA - tirai
-   * sudah menutup dan chunk sudah tiba. `import()` yang sama dengan `lazy` di
-   * kepala berkas, jadi Vite memberinya chunk yang sama; tidak ada yang pindah
-   * ke bundel pertama.
-   *
-   * Yang TIDAK bisa dihapus dari sini: `lazy` yang belum pernah dirender tetap
-   * menangguhkan satu kali walau modulnya sudah terunduh (React 19.2 membaca
-   * hasil `import()` lewat `.then`, yang asinkron), jadi isi gerbang di jalur
-   * dingin masih menyusul ±470 ms sesudah tirai mulai memudar - terukur di
-   * build produksi. Yang membuatnya tidak terlihat: fallback-nya kini latar
-   * `.gerbang` yang sama persis, jadi yang tersingkap halaman kosong berwarna
-   * benar, lalu isi hero masuk dengan animasinya sendiri.
-   */
   const keLanding = useCallback(() => {
     const selesaikan = () => {
       setGerbang(true)
@@ -1526,21 +1090,6 @@ export default function App() {
     })
   }, [])
 
-  /**
-   * Menekan "Masuk" di gerbang: gerbang pergi, layar pembuka mengambil alih.
-   *
-   * Keduanya disetel dalam satu penangan, jadi tidak pernah ada satu bingkai
-   * pun di mana keduanya mati bersamaan - dan satu bingkai saja sudah cukup
-   * untuk memperlihatkan peta secara kilat sebelum tirainya turun.
-   *
-   * `pilihan` datang dari dek kartu peta di gerbang: mengklik kartu Bekasi
-   * RiskRadar harus membuka Bekasi dengan RiskRadar, bukan membuka keadaan
-   * bawaan lalu meninggalkan orangnya mencari sendiri apa yang barusan ia lihat.
-   * Petanya TIDAK diperintahkan terbang di sini - `gantiKawasan` yang biasanya
-   * melakukannya butuh instance peta yang sudah hidup, sementara di sini
-   * petanya masih di balik dua lapis tirai. Yang disetel cuma state-nya; peta
-   * membaca `kawasan` sebagai prop dan memasang bingkainya sendiri saat muat.
-   */
   const masukKePeta = useCallback((pilihan?: { kawasan: string; layer: NamaLayer }) => {
     if (pilihan) {
       setKawasan(pilihan.kawasan)
@@ -1572,13 +1121,6 @@ export default function App() {
     }
   }, [gerbang, kawasan, layer, layerNyala, gaya, namaTempat, tigaDimensi])
 
-  /**
-   * Pin lokasi tersimpan di peta - hanya untuk pelanggan.
-   *
-   * `sinyalSimpan` naik satu setiap kali ada yang disimpan atau dilepas, dari
-   * mana pun (panel detail, dialog Tersimpan). Tanpa sinyal itu, pin baru
-   * muncul setelah refresh - dan pin yang menunggu refresh bukan fitur.
-   */
   useEffect(() => {
     if (gerbang) return
     if (!premium) {
@@ -1589,20 +1131,7 @@ export default function App() {
     api
       .pantauan()
       .then((b) => {
-        if (batal) return
-        peta.current?.setPin(
-          b
-            .filter((x): x is typeof x & { lat: number; lon: number } =>
-              x.lat !== null && x.lon !== null,
-            )
-            .map((x) => ({
-              lat: x.lat,
-              lon: x.lon,
-              h3: x.h3_index,
-              label: x.nama ?? kodeLokasi(x.h3_index, x.kawasan ?? ''),
-              sendiri: x.titik_sendiri,
-            })),
-        )
+        if (!batal) pasangPin(b)
       })
       .catch(() => {})
     return () => {
@@ -1610,21 +1139,6 @@ export default function App() {
     }
   }, [premium, sinyalSimpan, gerbang])
 
-  /**
-   * Preferensi onboarding diterapkan SEKALI per perubahan, bukan tiap muat.
-   *
-   * Menyetel kawasan setiap kali halaman dibuka akan menyeret orang kembali ke
-   * kawasan preferensinya justru saat ia sengaja sedang melihat kawasan lain.
-   * Yang diinginkan cuma: begitu onboarding selesai (nilainya BERUBAH),
-   * petanya pindah ke sana.
-   */
-  /**
-   * Pemilik akun mendarat di rekomendasinya, SEKALI per sesi.
-   *
-   * `sekali` menjaganya tetap sekali: tanpa itu, setiap kali `akun` berubah -
-   * termasuk sesudah menyimpan preferensi - tab orangnya
-   * dilempar kembali ke rekomendasi di tengah ia mengerjakan hal lain.
-   */
   const sudahKeRekomendasi = useRef(false)
   useEffect(() => {
     if (!akun || sudahKeRekomendasi.current) return
@@ -1634,14 +1148,6 @@ export default function App() {
 
   const prefSebelum = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    // MENUNGGU akunnya benar-benar ada sebelum mulai mencatat.
-    //
-    // Versi pertama memakai `undefined` sebagai penanda "belum pernah lihat",
-    // tetapi render pertama sudah menjalankan efek ini dengan `akun === null`
-    // (tiketnya masih divalidasi). Penandanya habis di situ, lalu begitu akun
-    // mendarat, kawasan preferensi terbaca sebagai PERUBAHAN - dan heksagon
-    // yang baru saja dipulihkan dari refresh ikut dibersihkan. Terukur: panel
-    // detail selalu kembali ke daftar sesudah refresh.
     if (!akun) return
     const kw = akun.preferensi?.kawasan ?? null
     if (prefSebelum.current === undefined) {
@@ -1679,16 +1185,7 @@ export default function App() {
 
   const pilihHeksagon = useCallback(
     (h3: string | null) => {
-      // Selagi simulasi terbuka, klik di peta berarti "bandingkan dengan yang
-      // ini" - BUKAN "ganti subjeknya". Mengganti subjek di tengah simulasi
-      // akan membuang seluruh asumsi yang baru saja disetel, dan itu justru
-      // kebalikan dari yang diinginkan orang yang sedang membanding-bandingkan.
       if (simulasiTerbuka) {
-        // Heksagon LAIN jadi pembanding; heksagon yang sama tidak melakukan
-        // apa-apa. Yang penting: selagi mode fokus, klik di peta TIDAK PERNAH
-        // menutup lembar simulasi. Versi pertama membiarkannya jatuh ke cabang
-        // bawah, jadi mengklik heksagon yang sedang disimulasikan justru
-        // membatalkan simulasinya - kebalikan dari yang dimaksud.
         if (h3 && h3 !== hexTerpilih) {
           setHexBanding(h3)
           peta.current?.highlight([hexTerpilih, h3].filter(Boolean) as string[])
@@ -1696,24 +1193,7 @@ export default function App() {
         return
       }
 
-      // Selagi BAKI KOMPARASI terisi, klik di peta berarti "masukkan yang ini
-      // juga". Tanpa cabang ini fiturnya buntu total, dan buntunya diam-diam:
-      // menambahkan heksagon pertama menutup panel kanan (supaya petanya
-      // terlihat), tetapi tombol "Bandingkan lokasi ini" HANYA hidup di dalam
-      // panel itu. Jadi tidak ada satu pun jalan menambahkan yang kedua -
-      // bakinya mentok di satu heksagon dan tombol "Bandingkan 1" mati
-      // selamanya, sementara bakinya sendiri tertulis "Klik heksagon lain di
-      // peta untuk membandingkan".
-      //
-      // Janji itu yang sekarang ditepati. Bakinya sendiri yang mengubah arti
-      // klik, jadi tidak ada mode tersembunyi: selama ada yang di baki,
-      // petanya memang sedang dipakai memilih pembanding.
       if (baki.length > 0 && h3) {
-        // Yang SUDAH di baki cuma disorot, tidak dikeluarkan. `tambahBaki`
-        // memang mengungkit, dan itu benar untuk tombol - tapi di peta, klik
-        // pada heksagon yang sedang dibandingkan jauh lebih sering berarti
-        // "lihat yang ini" daripada "batalkan yang ini". Yang mengeluarkan
-        // tetap ada dan terlihat: tanda x di kolomnya sendiri.
         if (!baki.includes(h3)) tambahBaki(h3)
         setHexTerpilih(h3)
         peta.current?.fokusHeksagon(h3)
@@ -1725,12 +1205,6 @@ export default function App() {
       setHexBanding(null)
       if (h3) {
         setTab('daftar')
-        // LEMBARNYA DIBUKA di sini. Di ponsel panelnya memang mulai tertutup
-        // (peta dulu tampil penuh), jadi tanpa baris ini mengklik heksagon
-        // hanya mengubah tab di balik layar - tidak ada satu pun yang terlihat
-        // berubah, dan itu dilaporkan pemilik repo 19 Sep 2026: "kok pas saya
-        // klik heksagonnya ga kebuka". Di desktop panelnya sudah terbuka, jadi
-        // baris ini tidak mengubah apa pun di sana.
         setPanelTerbuka(true)
         peta.current?.fokusHeksagon(h3)
       }
@@ -1738,17 +1212,6 @@ export default function App() {
     [simulasiTerbuka, hexTerpilih, baki, tambahBaki],
   )
 
-  /**
-   * Lepas pilihan heksagon. Satu tempat, dipakai tombol X dan tombol Esc.
-   *
-   * Dipisah jadi fungsi sendiri karena ia dipanggil dari tiga tempat, dan
-   * versi sebelumnya menuliskan isinya sebaris di dalam onClick panel kanan -
-   * jadi tombol X di peta akan jadi salinan keempat yang harus diingat untuk
-   * ikut berubah.
-   *
-   * Ia TIDAK menyentuh baki komparasi: melepas heksagon yang sedang dilihat
-   * tidak sama dengan membatalkan perbandingan yang sedang disusun.
-   */
   const lepasPilihan = useCallback(() => {
     setHexTerpilih(null)
     setHexBanding(null)
@@ -1756,13 +1219,6 @@ export default function App() {
     peta.current?.highlight([])
   }, [])
 
-  /**
-   * Esc melepas apa pun yang sedang terbuka, dari yang paling dalam ke luar.
-   *
-   * Urutannya penting: kalau simulasi terbuka, Esc menutup simulasi dan
-   * MEMBIARKAN heksagonnya terpilih. Menutup keduanya sekaligus membuat satu
-   * ketukan membatalkan dua keputusan, dan yang kedua tidak diminta.
-   */
   useEffect(() => {
     const tekan = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -1778,16 +1234,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', tekan)
   }, [simulasiTerbuka, hexTerpilih, lepasPilihan])
 
-  /**
-   * Bawa kamera ke kawasan `v`. Dipisah dari `gantiKawasan` dengan sengaja.
-   *
-   * Kalau ia tinggal di dalam `gantiKawasan`, satu-satunya cara kamera pindah
-   * adalah lewat seseorang MENGKLIK pemilih kawasan - dan kawasan yang
-   * dipulihkan dari localStorage tidak pernah lewat situ. Akibatnya persis
-   * jebakan basemap gelap yang sudah pernah kena: chip di bilah atas menulis
-   * "Bekasi", petanya diam di Jakarta, dan layarnya kosong melompong tanpa satu
-   * pun galat, karena heksagon Bekasi memang dua puluh kilometer di luar layar.
-   */
   const arahkanKamera = useCallback((v: string) => {
     if (v === SEMUA_KAWASAN) {
       // Terbang ke bingkai yang memuat keenamnya. Terbang ke salah satu pusat
@@ -1804,10 +1250,6 @@ export default function App() {
       peta.current?.flyTo(dipilih[0].pusat[1], dipilih[0].pusat[0], 14)
       return
     }
-    // Beberapa kawasan sekaligus: bingkai yang memuat SEMUANYA. Tanpa ini peta
-    // diam di tempat saat kawasan kedua ditambahkan - dan Bekasi ke Depok Baru
-    // berjarak dua puluh kilometer, jadi separuh yang baru saja diminta berada
-    // di luar layar tanpa ada yang memberi tahu.
     const lon = dipilih.map((k) => k.pusat[0])
     const lat = dipilih.map((k) => k.pusat[1])
     const bantal = 0.02 // ±2 km, supaya heksagon tepi tidak menempel bingkai
@@ -1819,14 +1261,6 @@ export default function App() {
     ])
   }, [])
 
-  /**
-   * Muatan heksagon PERTAMA sekaligus jadi tanda petanya sudah bisa diperintah.
-   *
-   * Tidak ada prop `onSiap`, dan menambahnya cuma untuk ini berarti satu jalur
-   * lagi yang harus dijaga tetap benar. Datangnya heksagon sudah membuktikan
-   * hal yang sama - peta ada, gayanya termuat, sumbernya terpasang - dan ia
-   * datang tepat sekali per kawasan.
-   */
   const kameraAwal = useRef(false)
   const catatMuat = useCallback(
     (n: number) => {
@@ -1851,14 +1285,6 @@ export default function App() {
     [arahkanKamera],
   )
 
-  /**
-   * "Simpan & buka peta" dari langkah preferensi usaha.
-   *
-   * Didengarkan di sini karena App yang memiliki peta dan gerbang; dialognya
-   * tinggal di SesiProvider, di atas App. Dari gerbang: masuk ke peta di
-   * kawasan pilihannya. Dari peta yang sudah hidup: terbang ke sana. Tanpa
-   * kawasan: tetap dibuka - orangnya menekan "buka peta", bukan "tutup".
-   */
   useEffect(() => {
     const dengar = (e: Event) => {
       const kw = (e as CustomEvent<DetailBukaPeta>).detail?.kawasan ?? null
@@ -1890,12 +1316,6 @@ export default function App() {
     }
   }, [])
 
-  // Titik kuadran diminta sekali per kawasan, bukan saat diagram penuh dibuka.
-  //
-  // Percobaan pertama menundanya sampai modal dibuka, dan itu salah: Kompas kecil
-  // memakai data yang sama untuk menaruh titik heksagon terpilih, jadi titiknya
-  // tidak pernah muncul sampai seseorang kebetulan membuka diagram penuh dulu.
-  // Satu permintaan per kawasan, dipakai dua tempat, dan backend sudah men-cache-nya.
   useEffect(() => {
     let batal = false
     setDiagram(null)
@@ -1916,24 +1336,20 @@ export default function App() {
 
   const pakaiKompas = LAYER_KUADRAN.includes(layer)
 
-  /**
-   * Sumbu datar diagram ini berdiri di atas bahan apa.
-   *
-   * Ikut TERSARING KAWASAN, karena backend menghitungnya dari titik yang
-   * dikembalikan - keterangan sumbu harus menerangkan diagram yang sedang
-   * dilihat orangnya, bukan basis data seluruhnya. Larik kosong = kelima
-   * bahannya terukur dan tidak ada yang perlu dinyatakan.
-   */
   const frasaSumbuX = useMemo(
     () => frasaPrestise(diagram?.cakupan_prestise, 'wilayah', bahasa),
     [diagram, bahasa],
   )
 
-  /**
-   * Skor ringkas untuk bar komparasi, diambil dari titik kuadran yang SUDAH
-   * dimuat. Tidak ada permintaan tambahan: bar cuma perlu angka dan kuadran,
-   * dan keduanya sudah ada di tangan sejak Kompas dimuat.
-   */
+  const sebarKuadran = useMemo(() => {
+    const titik = diagram?.titik ?? []
+    const hitung = titik.filter((x) => x.kuadran !== null).length
+    return URUTAN_KUADRAN.map((kunci) => {
+      const n = titik.filter((x) => x.kuadran === kunci).length
+      return { kunci, n, pct: hitung ? (n / hitung) * 100 : 0 }
+    })
+  }, [diagram])
+
   const ringkasBaki = useMemo(() => {
     const m = new Map<
       string,
@@ -1945,20 +1361,6 @@ export default function App() {
     return m
   }, [diagram])
 
-  /**
-   * Prop pane tab yang STABIL - fungsi dan objek yang tidak dibuat ulang tiap
-   * render.
-   *
-   * Ada karena ketiga pane kini tetap terpasang. Tiap `setTab` merender ulang
-   * App, dan tanpa ini React ikut merender ulang seluruh isi pane yang sedang
-   * tidak terlihat - 200 baris daftar lokasi, panel AI, rekomendasi - karena
-   * fungsi sebaris seperti `onPilih={(h3) => ...}` selalu fungsi yang BARU.
-   * Terukur di dev: bingkai pertama sesudah klik tab 350 ms (tugas panjang
-   * ~300 ms), sementara kode sebelum pane dipertahankan 33 ms. Transisinya baru
-   * mulai sesudah tugas itu selesai, jadi yang terasa bukan elegan melainkan
-   * berat. Keempat komponennya dibungkus `memo` di berkasnya masing-masing;
-   * yang di sini memastikan bungkus itu punya sesuatu yang bisa disamakan.
-   */
   const pilihDariDaftar = useCallback((h3: string) => {
     setHexTerpilih(h3)
     setSimulasiTerbuka(false)
@@ -1983,11 +1385,6 @@ export default function App() {
     return selisih === 0 ? 'aktif' : selisih < 0 ? 'kiri' : 'kanan'
   }
 
-  /**
-   * Satu ketukan bilah bawah: pindah tab dan buka lembarnya. Mengetuk tab yang
-   * SEDANG aktif menutup lembar - pola yang sudah dikenal dari aplikasi peta,
-   * dan satu-satunya jalan menutup yang tidak menuntut tombol tersembunyi.
-   */
   const pilihTabBawah = useCallback(
     (k: NamaTab) => {
       if (tab === k && panelTerbuka) {
@@ -2016,16 +1413,6 @@ export default function App() {
     }
   }, [filterTerbuka])
 
-  /**
-   * Kendali peta dirakit SEKALI lalu dipakai ulang, supaya sumbernya tidak
-   * digandakan. 19 Sep 2026, permintaan pemilik repo:
-   *
-   *   `kendaliFilter` (kawasan + layer) - di desktop menyatu di bilah atas; di
-   *   ponsel pindah ke PIL FILTER di kiri bawah, meniru "Community Filter"
-   *   MAPID. Karena itu dropdownnya dibuka KE ATAS (`naik`) di sana.
-   *
-   *   `pengaturanEl` (gerigi) - tetap di bilah atas pada kedua lebar.
-   */
   const kendaliFilter = (arah: 'turun' | 'naik') => (
     <>
       <MenuKawasan nilai={kawasan} onUbah={gantiKawasan} arah={arah} />
@@ -2071,19 +1458,6 @@ export default function App() {
   return (
     <>
       {gerbang && (
-        // Fallback berwarna latar gerbang, bukan putih: kedipan putih satu
-        // bingkai saat chunk-nya diunduh terbaca sebagai kerusakan.
-        //
-        // Warnanya DIPINJAM dari `.gerbang` itu sendiri, bukan ditulis. Dulu
-        // `bg-[#eaf6f1]` - mint pucat dari masa gerbang cuma punya wajah
-        // terang - dan sejak gerbang gelap jadi bawaan, fallback yang
-        // dimaksudkan menyamarkan pemuatan justru jadi kilatan putih penuh:
-        // terukur luminansi 218 dari 255 di tengah tirai pulang yang gelap,
-        // dilaporkan pemilik repo sebagai "sekilas layarnya memutih". Kelas
-        // `.gerbang` + `data-tema` membuat latarnya `--g-latar` yang sama
-        // persis di kedua tema, jadi tidak ada salinan warna yang bisa
-        // tertinggal lagi. `data-tema` dari React, bukan dari <html>:
-        // atribut akar baru ditulis efek SESUDAH render pertama.
         <Suspense fallback={<div className="gerbang fixed inset-0 z-40" data-tema={tema} aria-hidden />}>
           <Gerbang onMasuk={masukKePeta} />
         </Suspense>
@@ -2105,29 +1479,6 @@ export default function App() {
         </div>
       )}
       {pembuka && (
-        // Fallback WAJIB legap, dan alasannya sama persis dengan alasan gerbang
-        // di atas - tetapi akibatnya lebih buruk, jadi sempat luput.
-        //
-        // `fallback={null}` berarti: selama chunk Pembuka diunduh, TIDAK ADA
-        // yang menutupi layar. Gerbang sudah pergi (gerbang=false) dan chrome
-        // aplikasi sudah dirender, jadi yang terlihat aplikasinya sendiri -
-        // lalu layar pembuka datang belakangan dan menutupinya, lalu pergi
-        // lagi. Urutan yang terbaca "peta muncul - loading - peta lagi".
-        //
-        // Gejalanya cuma muncul di KUNJUNGAN PERTAMA: sesudah chunk-nya
-        // ter-cache, Pembuka terpasang di commit yang sama dan tidak ada
-        // jendela kosong sama sekali. Itu sebabnya ia terlihat seperti
-        // keanehan acak, bukan bug - dan tidak ada uji yang menangkapnya.
-        //
-        // Terukur pada cache dingin: jendela kosongnya 315 ms.
-        //
-        // Legap SAJA belum cukup - warnanya harus warna layar pembuka itu
-        // sendiri. Dulu `bg-[#dff6f0]`, mint dari masa layar pembuka masih
-        // "langit mint". Sejak ia jadi kota malam (`bg-[#06090a]` di
-        // Pembuka.tsx), jendela kosong itu jadi satu kilatan putih penuh di
-        // antara gerbang gelap dan kota malam: terukur luminansi 241 dari 255,
-        // 100% piksel terang, tiap kali "Masuk ke peta" ditekan pertama kali.
-        // Layar pembuka gelap di KEDUA tema, jadi warnanya tidak ikut tema.
         <Suspense fallback={<div className="fixed inset-0 z-[100] bg-[#06090a]" />}>
           <Pembuka onSelesai={tutupPembuka} />
         </Suspense>
@@ -2174,10 +1525,6 @@ export default function App() {
             onTaruhPin={premium ? taruhPin : undefined}
             profilRute={profilRute}
             onMuat={catatMuat}
-            // Gelombang heksagon menunggu GERBANG juga, bukan cuma layar
-            // pembuka. Kalau tidak, ia habis diputar di balik halaman
-            // perkenalan dan penonton tidak pernah melihatnya - persis jebakan
-            // yang sama yang dulu terjadi dengan layar pembuka.
             tampil={!pembuka && !gerbang}
             onGayaGagal={kembalikanGaya}
             onArah={(a) =>
@@ -2315,10 +1662,6 @@ export default function App() {
                 <div
                   className="kolom-kartu order-2 overflow-hidden"
                   onClick={(e) => {
-                    // Di ponsel kartunya MODAL (lihat `.kolom-kartu` di
-                    // index.css); ketukan di latar gelap menutupnya. Di desktop
-                    // pembungkus ini persis seukuran kartunya, jadi tidak ada
-                    // latar yang bisa diketuk dan aturan ini tidak terpakai.
                     if (e.target === e.currentTarget) setPanelKiri('tidak')
                   }}
                   data-buka={panelKiriTerbuka && !simulasiTerbuka}
@@ -2430,16 +1773,21 @@ export default function App() {
                     </button>
                     </div>
                   ) : (
-                  <div className="kaca pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-full px-4 py-2 max-lg:hidden">
+                  <button
+                    onClick={() => {
+                      setTab('daftar')
+                      setPanelTerbuka(true)
+                    }}
+                    title={t.bukaDaftar}
+                    className="kaca pointer-events-auto flex w-fit max-w-full cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-left transition-colors duration-200 hover:bg-surface-2 max-lg:hidden"
+                  >
                     <span className="truncate text-[13.5px] text-ink-2">
                       {bahasa === 'en' ? LAYER[layer].pertanyaanEn : LAYER[layer].pertanyaan}
                     </span>
-                    {nHeksagon !== null && (
-                      <span className="tabular shrink-0 border-l border-line pl-3 text-[12.5px] text-ink-3">
-                        {t.heksagon(nHeksagon.toLocaleString(t.locale))}
-                      </span>
-                    )}
-                  </div>
+                    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className="shrink-0 text-ink-3">
+                      <path d="M4 1.5 8.5 6 4 10.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                   )}
                 </div>
 
@@ -2566,7 +1914,7 @@ export default function App() {
                     }}
                     title={t.tersimpanPanjang}
                     aria-label={t.tersimpan}
-                    className="grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.06] max-lg:fixed max-lg:bottom-[9.5rem] max-lg:right-2.5"
+                    className="grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)] transition-transform duration-200 ease-jelly hover:scale-[1.06] max-lg:fixed max-lg:bottom-[10.75rem] max-lg:right-2.5"
                   >
                     <svg width="19" height="19" viewBox="0 0 20 20" aria-hidden>
                       <path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor" />
@@ -2579,7 +1927,7 @@ export default function App() {
                       bulat itu tidak pernah segaris (permintaan 19 Sep 2026).
                       Ia masih memanjang ke KIRI (`arahSempit`), jadi tombolnya
                       tidak bergeser. */}
-                  <div className="max-lg:fixed max-lg:bottom-[13rem] max-lg:right-2.5 max-lg:z-30">
+                  <div className="max-lg:fixed max-lg:bottom-[14.25rem] max-lg:right-2.5 max-lg:z-30">
                     <PilihBasemap
                       arah="kanan"
                       arahSempit="kiri"
@@ -2603,7 +1951,7 @@ export default function App() {
                     aria-expanded={panelKiriTerbuka}
                     aria-label={`${panelKiriTerbuka ? 'Tutup' : 'Buka'} ${pakaiKompas ? 'Kompas Kuadran' : 'legenda'}`}
                     title={pakaiKompas ? 'Kompas Kuadran' : 'Legenda layer'}
-                    className={`grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full transition-transform duration-200 ease-jelly hover:scale-[1.06] max-lg:fixed max-lg:bottom-[6rem] max-lg:right-2.5 ${
+                    className={`grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full transition-transform duration-200 ease-jelly hover:scale-[1.06] max-lg:fixed max-lg:bottom-[7.25rem] max-lg:right-2.5 ${
                       panelKiriTerbuka
                         ? 'kaca text-ink'
                         : 'bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)]'
@@ -2815,16 +2163,6 @@ export default function App() {
                     inert={tab !== 'daftar'}
                   >
                   {tabDikunjungi.has('daftar') && (
-                    // Detail adalah LAPISAN DI ATAS daftar, bukan penggantinya.
-                    //
-                    // Percobaan pertama mengganti isinya, dan daftar jadi
-                    // dicabut tiap kali detail dibuka - kembali dari detail lalu
-                    // berarti meminta ulang seluruh 112 baris dan kehilangan
-                    // posisi gulir. Ditumpuk, daftarnya tetap hidup di
-                    // belakangnya dan kembali terasa seketika.
-                    //
-                    // Lapisan detailnya ikut tetap terpasang saat tab lain yang
-                    // aktif.
                     <div className="relative h-full min-h-0">
                       <div className="h-full min-h-0">
                         <DaftarLokasi
@@ -2915,30 +2253,36 @@ export default function App() {
               </div>
             </aside>
 
-            {/* Pintu buka panel DI DESKTOP saja. Di ponsel pintu itu sudah jadi
-                bilah navigasi bawah - tombol kecil di pojok kanan bawah inilah
-                yang dilaporkan "kayak dipojok kanan bawah banget, dan kayak
-                jelek". `hidden lg:flex`: desktop persis seperti semula. */}
+            {/* Panel terlipat (desktop): kolom tiga pintasan, versi minimize
+                bilah bawah ponsel. Menggantikan satu batang berteks vertikal
+                yang terbaca sebagai benda miring dan tipis. */}
             {!panelTerbuka && (
-              <button
-                onClick={() => setPanelTerbuka(true)}
-                className="kaca pop pointer-events-auto absolute bottom-0 right-0 hidden cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold transition-transform duration-200 ease-jelly hover:scale-105 lg:static lg:flex lg:h-full lg:flex-col lg:justify-center lg:rounded-lg lg:px-2.5 lg:py-4 lg:hover:scale-100"
-                aria-label={t.bukaPanelDaftar}
-                title={t.bukaPanel}
+              <div
+                className="kaca pop pointer-events-auto absolute bottom-0 right-0 hidden flex-col gap-1 rounded-lg p-1.5 lg:static lg:flex lg:justify-center"
+                role="group"
+                aria-label={t.bukaPanel}
               >
-                <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden className="shrink-0">
-                  <path
-                    d="M8 1.5 3.5 6 8 10.5"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span className="lg:[writing-mode:vertical-rl] lg:rotate-180 lg:tracking-[0.08em]">
-                  Daftar lokasi
-                </span>
-              </button>
+                {URUTAN_NAV.map((k) => {
+                  const label = k === 'rekomendasi' ? t.navUntuk : k === 'daftar' ? t.navLokasi : t.navAI
+                  const nama =
+                    k === 'rekomendasi' ? t.tabRekomendasi : k === 'daftar' ? t.tabDaftar : t.tabAI
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => {
+                        setTab(k)
+                        setPanelTerbuka(true)
+                      }}
+                      aria-label={`${t.bukaPanel}: ${nama}`}
+                      title={nama}
+                      className="flex w-16 cursor-pointer flex-col items-center gap-1 rounded-md px-1 py-2 text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+                    >
+                      <IkonNav k={k} ukuran={22} />
+                      <span className="text-[10px] font-semibold leading-none">{label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
 
@@ -2984,6 +2328,37 @@ export default function App() {
                 {kendaliFilter('turun')}
               </div>
             )}
+          </div>
+
+          {/* --- Pintasan preferensi ------------------------------------------
+              Ponsel: baris pil di ATAS bilah bawah, berhenti sebelum kolom
+              kendali kanan, digeser mendatar kalau tidak muat. Desktop: deret
+              yang sama di kiri-atas, di bawah bilah. Keduanya disembunyikan
+              saat lembar terbuka - sama seperti pil filter dan atribusi. */}
+          <div
+            className="pintasan-pil pointer-events-none absolute left-2.5 z-30 flex max-lg:right-[4.5rem] flex-row gap-1.5 overflow-x-auto lg:left-4 lg:top-[4.75rem]"
+            role="list"
+            aria-label={t.pintasanJudul}
+          >
+            {pintasan.map((p) => (
+              <button
+                key={p.kunci}
+                role="listitem"
+                onClick={() => {
+                  setTab('rekomendasi')
+                  setPanelTerbuka(true)
+                }}
+                title={t.pintasanBuka(p.teks)}
+                className="kaca pointer-events-auto flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[11.5px] font-medium text-ink-2 transition-colors duration-200 hover:text-ink lg:px-2.5 lg:py-1 lg:text-[11px]"
+              >
+                {p.glif && (
+                  <svg width="13" height="13" viewBox="0 0 20 20" aria-hidden className="shrink-0 opacity-70">
+                    <path d={p.glif} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+                {p.teks}
+              </button>
+            ))}
           </div>
 
           {/* --- Lembar simulasi ------------------------------------------
@@ -3083,12 +2458,6 @@ export default function App() {
                     className={
                       pusat
                         ? // SLOT-nya selebar tombolnya sendiri (`w-[6.75rem]`,
-                          // bukan `flex-1`). Dengan slot 1fr yang cuma ~72px, dua
-                          // butir di kiri-kanannya duduk DI BAWAH tepi bulatan
-                          // 96px itu dan terbaca berdesakan; melebarkannya
-                          // menggeser "Untuk Anda" ke kiri dan "Daftar lokasi"
-                          // ke kanan sampai keduanya sejajar tepi tombolnya
-                          // (permintaan 19 Sep 2026).
                           'relative flex w-[6.75rem] shrink-0 cursor-pointer items-center justify-center'
                         : `flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-1.5 transition-colors ${
                             // TANPA `bg-surface-2`: yang menandai butir aktif
@@ -3115,14 +2484,14 @@ export default function App() {
                       <span className="absolute bottom-[-0.375rem] left-1/2 grid -translate-x-1/2 place-items-center">
                         <span
                           aria-hidden
-                          className="kaca absolute h-[7.5rem] w-[7.5rem] rounded-full"
+                          className="kaca absolute h-[7rem] w-[7rem] rounded-full"
                         />
                         <span
-                          className={`relative grid h-24 w-24 place-items-center rounded-full bg-ink text-surface shadow-[0_18px_36px_-12px_rgb(22_33_28/0.95)] ring-1 ring-line transition-transform duration-300 ease-jelly ${
+                          className={`ai-pendar relative grid h-[5.5rem] w-[5.5rem] place-items-center rounded-full bg-ink text-surface transition-transform duration-300 ease-jelly ${
                             aktif ? 'scale-105' : ''
                           }`}
                         >
-                          <IkonNav k={k} ukuran={34} />
+                          <IkonNav k={k} ukuran={32} />
                         </span>
                       </span>
                     ) : (
@@ -3179,22 +2548,17 @@ export default function App() {
         {/* --- Diagram kuadran penuh --------------------------------------- */}
         {kuadranPenuh && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-6 backdrop-blur-[3px]"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-3 backdrop-blur-[3px] sm:items-center sm:p-6"
             onClick={() => setKuadranPenuh(false)}
             role="dialog"
             aria-modal="true"
             aria-label={t.diagramKuadran}
           >
-            {/* `overflow-auto` DICABUT. Diagram yang harus digulir untuk
-                dilihat utuh sudah berhenti jadi diagram - separuh gunanya
-                justru melihat keempat kuadran sekaligus. Yang mengalah sekarang
-                ukuran diagramnya (min(430px, 44vh) di KompasKuadran), bukan
-                keutuhannya. */}
             <div
-              className="kaca-tebal melayang flex max-h-full w-[52rem] max-w-full flex-col overflow-hidden rounded-xl"
+              className="kaca-tebal melayang my-auto flex w-[52rem] max-w-full flex-col overflow-hidden rounded-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-baseline justify-between gap-6 border-b border-line/70 px-6 py-5">
+              <div className="flex items-baseline justify-between gap-4 border-b border-line/70 px-4 py-4 sm:gap-6 sm:px-6 sm:py-5">
                 <div>
                   <h2 className="papan text-[19px]">{t.diagramJudul(kawasan)}</h2>
                   <p className="mt-1 max-w-[42ch] text-[13.5px] leading-snug text-ink-2">
@@ -3228,14 +2592,40 @@ export default function App() {
                   <div className="rounded-md border border-line/70 bg-surface-2/60 p-4">
                     <h3 className="eyebrow mb-2">{t.caraBaca}</h3>
                     <p className="text-[13px] leading-relaxed text-ink-2">{t.caraBaca1}</p>
-                    <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">{t.caraBaca2}</p>
+                    {t.caraBaca2 && (
+                      <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">{t.caraBaca2}</p>
+                    )}
+                    {diagram && (
+                      <p className="mt-2 text-[12px] leading-snug text-ink-3">
+                        {t.diagramBatas(
+                          diagram.batas_x === null ? '—' : diagram.batas_x.toFixed(2),
+                          diagram.batas_y === null ? '—' : diagram.batas_y.toFixed(2),
+                        )}
+                      </p>
+                    )}
+
+                    <div className="mt-3 space-y-1.5 border-t border-line/60 pt-3">
+                      <p className="eyebrow">{t.sebarKuadran}</p>
+                      {sebarKuadran.map((b) => (
+                        <div key={b.kunci} className="flex items-center gap-2 text-[12.5px]">
+                          <span
+                            aria-hidden
+                            className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                            style={{ background: KUADRAN[b.kunci].warna }}
+                          />
+                          <span className="min-w-0 flex-1 truncate font-medium text-ink-2">
+                            {namaZona(b.kunci)}
+                          </span>
+                          <span className="tabular shrink-0 text-ink-3">
+                            {t.kuadranJumlah(b.n, b.pct.toFixed(1))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
                     {/* Sumbu datar itu SETENGAH tesis produk ini, dan sampai hari
                         ini dua dari lima bahannya kosong — termasuk keduanya yang
-                        menilai tampilan secara langsung. Panel ini satu-satunya
-                        tempat sumbu itu DIJELASKAN, jadi ia tempat yang benar
-                        untuk menyatakannya; label sumbu di kompas tidak punya
-                        ruang, dan menempelkan keterangan di sana akan mengubah
-                        legenda jadi paragraf. */}
+                        menilai tampilan secara langsung. */}
                     {frasaSumbuX.length > 0 && (
                       <div className="mt-3 space-y-1.5 border-t border-line/60 pt-2.5">
                         <p className="eyebrow">{t.sumbuDatarApa}</p>
@@ -3308,14 +2698,6 @@ export default function App() {
   )
 }
 
-/**
- * Yang dilihat non-pelanggan saat menekan "Pantauan".
- *
- * Dialog tersendiri, bukan DialogPantauan yang isinya ditutup tirai: panel itu
- * memanggil /akun/pantauan dan /skor/dinamika saat dipasang, dan keduanya akan
- * dijawab 401/402. Memasangnya cuma untuk memburamkan hasilnya berarti dua
- * permintaan yang sudah pasti gagal di setiap pembukaan.
- */
 function AjakanPantauan({ onTutup }: { onTutup: () => void }) {
   const t = useTeks(K_APP)
   const { akun, mintaLangganan, mintaMasuk } = useSesi()
@@ -3363,3 +2745,5 @@ function AjakanPantauan({ onTutup }: { onTutup: () => void }) {
     </div>
   )
 }
+
+

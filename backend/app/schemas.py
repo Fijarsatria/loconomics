@@ -1,13 +1,4 @@
-"""Bentuk respons API.
-
-Dua aturan yang ditegakkan di lapisan ini:
-
-1. Tidak ada skema yang membawa data misi MAPID mentah. Yang keluar dari API
-   hanya hasil agregat per heksagon. (Ketentuan lomba B.7 - melanggar ini
-   berisiko diskualifikasi.)
-2. Setiap skema yang membawa skor WAJIB membawa `keyakinan`. Skema dibuat
-   sedemikian rupa sehingga tidak mungkin mengirim skor tanpa badge-nya.
-"""
+"""Bentuk respons API."""
 
 from datetime import datetime
 from typing import Any, Literal
@@ -28,14 +19,7 @@ class BadgeKeyakinan(BaseModel):
 
 
 class CakupanIndeks(BaseModel):
-    """Berapa bahan sebuah indeks yang benar-benar terukur.
-
-    Ada karena variabel kosong DINETRALKAN ke 0,5, bukan dinolkan - benar untuk
-    perhitungan, berbahaya untuk tampilan. Indeks yang seluruh bahannya kosong
-    tetap keluar sebagai angka di sekitar 0,5, dan di layar ia tidak bisa
-    dibedakan dari hasil pengukuran. Antarmuka memakai `layak_tampil` untuk
-    memutuskan menampilkan angkanya atau menuliskan "belum terukur".
-    """
+    """Berapa bahan sebuah indeks yang benar-benar terukur."""
 
     terukur: int = Field(description="Jumlah bahan yang punya nilai sungguhan")
     total: int = Field(description="Jumlah bahan seluruhnya")
@@ -46,18 +30,7 @@ class CakupanIndeks(BaseModel):
 
 
 class CakupanPrestise(BaseModel):
-    """Bahan sumbu DATAR kuadran mana yang benar-benar terukur.
-
-    Sekeluarga dengan `CakupanIndeks`, dengan satu perbedaan yang disengaja: di
-    sini tidak ada `layak_tampil`. Sumbu prestise tidak pernah disembunyikan - ia
-    yang menentukan kuadran, dan kuadrannya sudah tergambar di peta;
-    menyembunyikan penjelasannya cuma membuat penempatan yang sama jadi tidak
-    bisa ditanyakan. Yang dilaporkan DAFTAR bahannya, karena yang menentukan arti
-    sumbu ini bukan berapa bahan yang terisi melainkan bahan yang mana.
-
-    Gratis untuk semua tingkat, alasannya sama dengan `CakupanIndeks`: ia
-    keterangan mutu, dan ia tidak menyebut satu pun nilai.
-    """
+    """Bahan sumbu DATAR kuadran mana yang benar-benar terukur."""
 
     terisi: list[str] = Field(
         default_factory=list, description="Kode variabel yang punya nilai, urut seperti pipeline"
@@ -110,11 +83,7 @@ StatusZona = Literal["DIIZINKAN", "DILARANG", "TIDAK_DIKETAHUI"]
 
 
 class StatusZoneGuard(BaseModel):
-    """Hasil pemeriksaan zonasi. Selalu ikut di setiap respons yang membawa skor.
-
-    `filter_mutlak` adalah janji API: kalau TRUE, heksagon ini tidak pernah muncul
-    di endpoint rekomendasi mana pun dan skornya nol.
-    """
+    """Hasil pemeriksaan zonasi. Selalu ikut di setiap respons yang membawa skor."""
 
     status: StatusZona
     kelas_zona: str | None = None
@@ -142,11 +111,7 @@ class TitikJam(BaseModel):
 
 
 class CommuterClock(BaseModel):
-    """Pola jam operasional 05:00-22:00, memisahkan captive dan choice rider.
-
-    `ember` mempertahankan B01-B04 supaya angka yang masuk perhitungan skor tetap
-    bisa dilihat berdampingan dengan pola per jam yang lebih rinci.
-    """
+    """Pola jam operasional 05:00-22:00, memisahkan captive dan choice rider."""
 
     h3_index: str
     jam: list[TitikJam]
@@ -166,11 +131,7 @@ class CommuterClock(BaseModel):
 
 
 class RentangWajar(BaseModel):
-    """Rentang harga wajar dalam satu kawasan, dari persentil 25-75.
-
-    Dipakai untuk menjawab "mahal atau murah?" - pertanyaan yang tidak bisa
-    dijawab angka tunggal tanpa pembanding.
-    """
+    """Rentang harga wajar dalam satu kawasan, dari persentil 25-75."""
 
     p25: float | None = None
     p50: float | None = None
@@ -179,11 +140,7 @@ class RentangWajar(BaseModel):
 
 
 class PriceLensHeksagon(BaseModel):
-    """Kartu harga satu heksagon.
-
-    Dua angka utamanya - harga sewa per m² dan belanja per jam - keduanya lahir
-    dari OCR: rupiah tidak ada di satu pun kolom teks dataset misi.
-    """
+    """Kartu harga satu heksagon."""
 
     h3_index: str
     kawasan: str
@@ -219,12 +176,7 @@ class PeringatanRisiko(BaseModel):
 
 
 class TitikKuadran(BaseModel):
-    """Satu titik di diagram kuadran interaktif.
-
-    x = prestise visual (bagaimana lokasi terlihat), y = Opportunity Score (apa kata
-    datanya). Keduanya sengaja diukur dari sumber yang berbeda; kalau keduanya
-    berkorelasi kuat, diagramnya kehilangan arti.
-    """
+    """Satu titik di diagram kuadran interaktif."""
 
     h3_index: str
     kawasan: str
@@ -253,11 +205,7 @@ class DiagramKuadran(BaseModel):
 
 
 class AlasanGem(BaseModel):
-    """Satu alasan sebuah heksagon terpilih sebagai Hidden Gem.
-
-    Dirakit dari angka yang sudah ada di basis data, bukan dikarang LLM.
-    `bukti` adalah kalimatnya; `kode_variabel` menunjuk asal angkanya.
-    """
+    """Satu alasan sebuah heksagon terpilih sebagai Hidden Gem."""
 
     metode: Literal["residual_biaya", "kuadran", "iptt"]
     bukti: str
@@ -296,13 +244,7 @@ class MasukanSimulasi(BaseModel):
 
 
 class SumberSimulasi(BaseModel):
-    """Asal tiap angka yang bisa datang dari dua arah: `pengguna` atau `data`.
-
-    Ada supaya antarmuka bisa menuliskannya di sebelah angkanya. Tanpa ini,
-    angka yang diketik orang dan angka yang diukur pipeline terlihat sama persis
-    di layar - dan itu kekaburan yang persis dilarang docstring `core/simulasi.py`.
-    `None` berarti belum ada dari mana pun.
-    """
+    """Asal tiap angka yang bisa datang dari dua arah: `pengguna` atau `data`."""
 
     sewa: Literal["pengguna", "data"] | None = None
     harga_rata_rata: Literal["pengguna", "data"] | None = None
@@ -349,14 +291,7 @@ class TitikSensitivitas(BaseModel):
 
 
 class BlokSimulasi(BaseModel):
-    """Simulasi yang dipersempit ke SATU blok res-10 di dalam heksagonnya.
-
-    Uang yang berputar diukur per HEKSAGON, bukan per blok - tidak ada data
-    belanja setajam 130 m. Jadi simulasi blok memakai angka heksagon yang sama
-    lalu menyesuaikannya dengan `faktor_permintaan`: seberapa kuat blok ini
-    dibanding rata-rata ketujuh saudaranya. Faktor itu ASUMSI dan dinyatakan
-    sebagai asumsi; rumusnya ikut dikirim di `Simulasi.rumus`.
-    """
+    """Simulasi yang dipersempit ke SATU blok res-10 di dalam heksagonnya."""
 
     h3_blok: str
     peringkat: int | None = None
@@ -373,14 +308,7 @@ class BlokSimulasi(BaseModel):
 
 
 class LingkunganSimulasi(BaseModel):
-    """Keadaan sekitar heksagon, dalam satuan yang bisa dibaca orang awam.
-
-    Seluruhnya TERUKUR - tidak satu pun boleh ditebak. Yang tidak ada di basis
-    data tidak muncul di sini, dan antarmuka menuliskannya sebagai "belum ada"
-    alih-alih mengarang. Dua hal yang sering diminta tetapi memang TIDAK ADA:
-    UMR (data SK gubernur, di luar 43 variabel) dan jumlah jalan akses (butuh
-    agregasi jaringan jalan yang belum dikerjakan s4).
-    """
+    """Keadaan sekitar heksagon, dalam satuan yang bisa dibaca orang awam."""
 
     populasi_100m: float | None = None
     populasi_usia_produktif: float | None = None
@@ -412,12 +340,7 @@ class PeringatanSimulasi(BaseModel):
 
 
 class Simulasi(BaseModel):
-    """Satu skenario usaha atas satu heksagon.
-
-    Membawa `keyakinan` seperti setiap skema lain yang menyentuh skor - lihat
-    aturan 3 repo ini. Simulasi yang berdiri di atas tiga titik survei dan yang
-    berdiri di atas empat puluh titik tidak boleh terbaca sama.
-    """
+    """Satu skenario usaha atas satu heksagon."""
 
     h3_index: str
     kawasan: str
@@ -448,18 +371,7 @@ class Simulasi(BaseModel):
 
 
 class PerkiraanHeksagon(BaseModel):
-    """Satu angka PERKIRAAN untuk sebuah heksagon, berikut mutunya.
-
-    Dipisahkan dari `variabel` dengan sengaja, dan pemisahan itu bukan soal
-    kerapian. `variabel` memuat pengukuran DI heksagon itu; yang di sini
-    diturunkan dari tempat lain - model yang dilatih di seluruh wilayah, atau
-    median pengamatan di sekitarnya. Duduk di kolom yang sama, keduanya tidak
-    bisa dibedakan oleh siapa pun yang membaca responsnya.
-
-    `mutu` selalu ikut, dan itu syarat masuknya: angka perkiraan yang dikirim
-    tanpa keterangan seberapa jauh ia pernah meleset adalah angka yang akan
-    dibaca sebagai pengukuran.
-    """
+    """Satu angka PERKIRAAN untuk sebuah heksagon, berikut mutunya."""
 
     kode: str = Field(description="Kode variabel yang diperkirakan, mis. B07")
     kolom: str = Field(description="Nama kolomnya, supaya antarmuka bisa menamainya")
@@ -473,18 +385,10 @@ class PerkiraanHeksagon(BaseModel):
 
 
 class DetailHeksagon(BaseModel):
-    """Respons lengkap saat pengguna mengklik satu heksagon.
-
-    Memuat 43 variabel dalam bentuk agregat + rincian kontribusi skor.
-    Tidak memuat satu pun record misi mentah.
-    """
+    """Respons lengkap saat pengguna mengklik satu heksagon."""
 
     skor: SkorHeksagon
     indeks: IndeksKomposit
-    # KOSONG untuk tamu dan akun gratis. Bukan diblur di frontend - benar-benar
-    # tidak dikirim. Blur adalah lapisan CSS, dan lapisan CSS bisa dilepas siapa
-    # pun yang membuka panel pengembang; yang tidak pernah meninggalkan server
-    # tidak bisa dilepas.
     variabel: dict[str, Any] = Field(
         default_factory=dict, description="43 variabel analisis, sudah teragregasi. Premium."
     )
@@ -527,26 +431,12 @@ class SimpulTransit(BaseModel):
 
 
 class RuteJalan(BaseModel):
-    """Satu jalur jalan kaki dari pusat heksagon ke simpul terdekat.
-
-    Geometrinya rute SUNGGUHAN dari OpenRouteService, mengikuti jalan yang
-    benar-benar ada - bukan garis lurus, bukan lingkaran. Dihitung offline oleh
-    `pipeline/rute_ors.py` dan disimpan di `hex_routes`; backend hanya membaca.
-
-    `urutan` 0 adalah yang tercepat menurut ORS. Sisanya alternatif, dan
-    alternatif di sini bukan basa-basi: ORS diminta hanya mengembalikan jalur
-    yang berbagi paling banyak 60% ruas dengan yang utama, jadi yang muncul
-    memang jalan yang berbeda - bukan rute sama dengan satu belokan bergeser.
-    """
+    """Satu jalur jalan kaki dari pusat heksagon ke simpul terdekat."""
 
     urutan: int
     jarak_m: float
     menit: float
     utama: bool
-    #: "foot-walking", "driving-car", atau "cycling-regular". IKUT DIKIRIM, bukan disimpulkan dari
-    #: parameter permintaan: antarmuka menggambar dua profil dengan gaya garis
-    #: yang berbeda, dan gaya yang ditebak dari parameter akan salah begitu ada
-    #: respons yang memuat keduanya sekaligus.
     profil: str = "foot-walking"
     #: [lon, lat] berurutan, siap dipakai sebagai GeoJSON LineString.
     koordinat: list[list[float]]
@@ -571,12 +461,7 @@ class KontribusiBlok(BaseModel):
 
 
 class BlokDalamHeksagon(BaseModel):
-    """Satu blok (anak H3 res-10) di dalam heksagon yang sedang dilihat.
-
-    Seluruh isinya dari data TERBUKA - tidak satu pun dari misi MAPID, jadi
-    tidak ada yang bisa merekonstruksi baris survei (aturan 2). Skornya
-    dihitung `pipeline/s6_score.skor_blok`; backend hanya membaca.
-    """
+    """Satu blok (anak H3 res-10) di dalam heksagon yang sedang dilihat."""
 
     h3_blok: str
     #: 1 = blok terbaik di heksagon ini, menurut kelas usaha yang diminta
@@ -607,12 +492,6 @@ class BlokDalamHeksagon(BaseModel):
     risiko_banjir: float | None = None
     alasan: list[str] = Field(default_factory=list)
     peringatan: list[str] = Field(default_factory=list)
-    #: Sumbangan tiap indikator ke skor blok ini, sudah berlabel bahasa orang.
-    #:
-    #: DIHITUNG PIPELINE, dibaca apa adanya di sini (aturan 1). Tanpa ini panel
-    #: blok cuma bisa menyebut angka akhirnya, dan pertanyaan yang sebenarnya
-    #: diajukan - "kenapa blok ini 96 dan yang sebelah 84" - tidak punya
-    #: jawaban selain membandingkan enam kolom mentah sendiri.
     kontribusi: list[KontribusiBlok] = Field(default_factory=list)
 
 
@@ -633,23 +512,7 @@ class BedahBlok(BaseModel):
 
 
 class KonteksSimpul(BaseModel):
-    """Hubungan satu heksagon dengan stasiun terdekatnya, untuk digambar di peta.
-
-    TETAP BUKAN ISOCHRONE, dan bedanya tetap harus terlihat. Isochrone adalah
-    BIDANG - "sejauh mana orang sampai dalam 10 menit" - dan tinggal di
-    `catchment_areas`, yang masih kosong. Yang di sini GARIS: satu jalur menuju
-    satu titik. Bentuk yang tidak bisa disalahartikan sebagai kawasan jangkauan.
-
-    Sejak rute ORS masuk, garisnya mengikuti jalan yang sebenarnya. `rute` yang
-    kosong berarti heksagon ini memang belum pernah dirutekan - dan waktu itu
-    `jarak_m` jatuh kembali ke garis lurus, dengan `garis_lurus` menyatakannya
-    supaya antarmuka tidak bisa diam-diam menampilkannya seolah rute.
-
-    `jarak_lurus_m` selalu ikut walaupun rutenya ada, karena selisih keduanya
-    justru informasi: 830 m garis lurus yang ternyata 1.418 m berjalan kaki
-    adalah lokasi yang TERLIHAT dekat stasiun tanpa benar-benar dekat - persis
-    jenis jebakan yang produk ini ada untuk menunjukkannya.
-    """
+    """Hubungan satu heksagon dengan stasiun terdekatnya, untuk digambar di peta."""
 
     h3_index: str
     lat: float
@@ -664,12 +527,6 @@ class KonteksSimpul(BaseModel):
     rute: list[RuteJalan] = Field(default_factory=list)
     #: Profil yang benar-benar dipakai menyusun `rute` di respons ini.
     profil: str = "foot-walking"
-    #: Profil apa saja yang PUNYA baris untuk heksagon ini.
-    #:
-    #: Dikirim supaya antarmuka bisa menonaktifkan pilihan yang datanya belum
-    #: ada, alih-alih menawarkannya lalu menampilkan panel kosong. Rute mobil
-    #: ditarik terpisah dan mungkin belum pernah dijalankan - itu keadaan yang
-    #: harus terbaca sebelum diklik, bukan sesudah.
     profil_tersedia: list[str] = Field(default_factory=list)
     garis_lurus: bool = True
     catatan: str
@@ -697,11 +554,7 @@ NamaFungsi = Literal[
 
 
 class AksiPeta(BaseModel):
-    """Instruksi untuk frontend. LLM memintanya, peta yang mengeksekusi.
-
-    Inilah bentuk konkret 'spatial output' yang diminta ketentuan C.2:
-    jawaban AI tidak berhenti sebagai teks, tapi menggerakkan peta.
-    """
+    """Instruksi untuk frontend. LLM memintanya, peta yang mengeksekusi."""
 
     fungsi: NamaFungsi
     argumen: dict[str, Any] = Field(default_factory=dict)
@@ -717,13 +570,6 @@ class PesanRiwayat(BaseModel):
 class PermintaanAI(BaseModel):
     pertanyaan: str = Field(min_length=1, max_length=2000)
 
-    # Riwayat dikirim ulang oleh frontend tiap giliran, bukan disimpan di server.
-    # Backend jadi tanpa-status: tidak ada sesi yang perlu dibersihkan, tidak ada
-    # kebocoran percakapan antarpengguna, dan proses Render yang tidur lalu bangun
-    # tidak kehilangan apa pun.
-    #
-    # Dibatasi 20 pesan karena seluruh riwayat ikut dikirim ke model setiap
-    # giliran - biayanya tumbuh kuadratik terhadap panjang percakapan.
     riwayat: list[PesanRiwayat] = Field(
         default_factory=list, max_length=20, description="Giliran sebelumnya, terlama dulu"
     )
@@ -734,12 +580,7 @@ class PermintaanAI(BaseModel):
 
 
 class JejakFungsi(BaseModel):
-    """Satu langkah yang benar-benar dijalankan backend saat menjawab.
-
-    Ada untuk ketentuan C.1: proses AI harus bisa dijelaskan. Pengguna dan juri
-    bisa melihat fungsi apa yang dipanggil dan dengan argumen apa - bukan hanya
-    hasil akhirnya.
-    """
+    """Satu langkah yang benar-benar dijalankan backend saat menjawab."""
 
     fungsi: NamaFungsi
     argumen: dict[str, Any] = Field(default_factory=dict)
@@ -747,12 +588,7 @@ class JejakFungsi(BaseModel):
 
 
 class JawabanAI(BaseModel):
-    """Jawaban asisten.
-
-    `sumber_angka` memaksa setiap angka dalam `teks` bisa ditelusuri ke variabel
-    di basis data. Kalau kosong, artinya jawaban tidak mengutip angka sama sekali -
-    bukan artinya angka boleh dikarang.
-    """
+    """Jawaban asisten."""
 
     teks: str
     aksi_peta: list[AksiPeta] = Field(default_factory=list)
@@ -765,16 +601,6 @@ class JawabanAI(BaseModel):
     )
 
 
-# --- Akun, langganan, token ------------------------------------------------
-#
-# Tiga aturan yang ditegakkan di bagian ini:
-#
-#   1. Tidak ada skema yang membawa `sidik_sandi`. Bukan "jangan lupa hapus" -
-#      tidak ada field-nya sama sekali, jadi tidak ada yang bisa lupa.
-#   2. Kata sandi masuk lewat skema TERPISAH dari yang keluar. Satu model yang
-#      dipakai dua arah cepat atau lambat mengembalikan apa yang diterimanya.
-#   3. Yang keluar selalu membawa `tingkat`. Frontend tidak pernah menyimpulkan
-#      tingkat dari ada-tidaknya langganan; ia membaca satu field.
 
 
 class PermintaanDaftar(BaseModel):
@@ -786,12 +612,7 @@ class PermintaanDaftar(BaseModel):
     @field_validator("nama_pengguna")
     @classmethod
     def _bersih(cls, v: str) -> str:
-        """Huruf, angka, titik, garis bawah, garis pisah. Tidak lebih.
-
-        Nama pengguna ikut tampil di antarmuka dan ikut jadi bagian sapaan.
-        Membatasinya di sini lebih murah daripada meloloskan spasi ganda dan
-        karakter tak terlihat lalu memburunya di setiap tempat yang menampilkannya.
-        """
+        """Huruf, angka, titik, garis bawah, garis pisah. Tidak lebih."""
         v = v.strip()
         if not v.replace(".", "").replace("_", "").replace("-", "").isalnum():
             raise ValueError("Nama pengguna hanya boleh huruf, angka, titik, _ dan -")
@@ -813,12 +634,7 @@ class RingkasLangganan(BaseModel):
 
 
 class PreferensiUsaha(BaseModel):
-    """Preferensi yang diisi saat onboarding premium. Seluruhnya opsional.
-
-    Ini preferensi TAMPILAN, bukan masukan skor: kawasan yang dipilih menyetel
-    saringan peta, jenis usaha menyetel bawaan simulasi. Tidak ada satu angka
-    peringkat pun yang berubah karenanya - peringkat tetap milik pipeline.
-    """
+    """Preferensi yang diisi saat onboarding premium. Seluruhnya opsional."""
 
     jenis_usaha: str | None = None
     kawasan: str | None = None
@@ -840,12 +656,7 @@ class Akun(BaseModel):
 
 
 class SesiAkun(BaseModel):
-    """Balasan daftar dan masuk: tiket + akunnya sekaligus.
-
-    Digabung supaya frontend tidak perlu memanggil /akun/saya persis sesudah
-    masuk. Satu perjalanan bolak-balik lebih sedikit, dan tidak ada jendela di
-    mana antarmuka sudah punya tiket tetapi belum tahu tingkatnya.
-    """
+    """Balasan daftar dan masuk: tiket + akunnya sekaligus."""
 
     tiket: str
     akun: Akun
@@ -858,10 +669,6 @@ class PermintaanLangganan(BaseModel):
 class ButirPantauan(BaseModel):
     h3_index: str
     kawasan: str | None = None
-    # Titik tengah heksagon, untuk menggambar pin lokasi tersimpan di peta.
-    # Centroid, BUKAN geometri penuh: pin cuma butuh satu titik, dan geometri
-    # enam-simpul untuk daftar yang bisa berisi puluhan baris cuma menggemukkan
-    # respons.
     lat: float | None = None
     lon: float | None = None
     #: True kalau `lat`/`lon` titik yang ditaruh orangnya, bukan titik tengah.
@@ -902,13 +709,7 @@ class TitikRiwayat(BaseModel):
 
 
 class RiwayatSkor(BaseModel):
-    """Riwayat skor satu heksagon lintas versi penerbitan.
-
-    `cukup_untuk_tren` jujur, bukan sopan: dengan satu versi saja tidak ada tren
-    apa pun untuk digambar, dan grafik garis dari satu titik adalah kebohongan
-    berbentuk grafik. Frontend membaca field ini dan menuliskan keadaannya apa
-    adanya alih-alih menggambar garis datar yang tampak meyakinkan.
-    """
+    """Riwayat skor satu heksagon lintas versi penerbitan."""
 
     h3_index: str
     titik: list[TitikRiwayat] = Field(default_factory=list)
@@ -932,15 +733,6 @@ class BarisKomparasi(BaseModel):
     belanja_per_jam: float | None = None
     waktu_jalan_menit: float | None = None
     n_kompetitor_langsung: float | None = None
-    # Enam aspek berikut ditambahkan 11 Sep 2026, permintaan pemilik repo
-    # ("aspek aspek yang dibandingkan, kayak keramaian gitu"). Kesamaannya:
-    # semuanya sudah ada di `hex_features` dan sudah dipakai menghitung skor -
-    # yang belum ada cuma jalannya ke tabel komparasi.
-    #
-    # KERAMAIAN dipilih sebagai puncak sore (B03), bukan jumlah keempat ember.
-    # Menjumlahkan empat ember menghasilkan angka yang tidak bisa dibandingkan
-    # antar-lokasi kalau salah satu embernya kosong di satu lokasi dan terisi di
-    # lokasi lain - dan itu keadaan sebagian besar heksagon.
     puncak_sore: float | None = None
     kepadatan_poi_total: float | None = None
     keragaman_usaha: float | None = None
@@ -951,26 +743,14 @@ class BarisKomparasi(BaseModel):
 
 
 class Komparasi(BaseModel):
-    """Komparasi berdampingan 2-4 heksagon.
-
-    `menang` memuat, untuk tiap metrik, h3_index yang terbaik pada metrik itu -
-    dihitung di sini supaya frontend tidak perlu tahu metrik mana yang "tinggi
-    lebih baik" dan mana yang sebaliknya. IKP dan IBR tinggi itu BURUK, dan
-    aturan itu sudah hidup di backend; menyalinnya ke frontend berarti dua
-    tempat yang harus sepakat.
-    """
+    """Komparasi berdampingan 2-4 heksagon."""
 
     baris: list[BarisKomparasi]
     menang: dict[str, str | None] = Field(default_factory=dict)
 
 
 class AlasanRekomendasi(BaseModel):
-    """Satu alasan, dan ANGKA yang mendasarinya.
-
-    `nilai` selalu ikut. Alasan tanpa angka ("lokasinya strategis") adalah
-    kalimat pemasaran; alasan dengan angka bisa diperiksa, dibantah, dan
-    dibandingkan dengan lokasi lain.
-    """
+    """Satu alasan, dan ANGKA yang mendasarinya."""
 
     kode: str
     teks: str
@@ -990,13 +770,6 @@ class Rekomendasi(BaseModel):
     harga_sewa_per_m2: float | None = None
     belanja_per_jam: float | None = None
     waktu_jalan_menit: float | None = None
-    #: D03 - jarak MENGIKUTI JALAN ke simpul terdekat, meter.
-    #:
-    #: Ikut dikirim sejak 3 Sep 2026. Sebelumnya rekomendasi cuma menyebut
-    #: menitnya, dan menit sendirian menyembunyikan hal yang justru jadi pokok
-    #: produk ini: 35 menit bisa berarti 2,9 km yang memutar 3,7x dari jarak
-    #: lurusnya. Orang yang membaca "35 menit" mengira lokasinya jauh; yang
-    #: membaca "35 menit - 2,9 km lewat jalan" tahu bahwa yang jauh JALANNYA.
     jarak_simpul_m: float | None = None
     n_kompetitor_langsung: float | None = None
     indeks_churn: float | None = None
@@ -1007,17 +780,7 @@ class Rekomendasi(BaseModel):
 
 
 class HasilRekomendasi(BaseModel):
-    """Balasan /skor/rekomendasi.
-
-    `kriteria` dikembalikan apa adanya supaya antarmuka bisa menuliskan
-    "berdasarkan: warung makan, Manggarai, di bawah Rp15 jt" - orang berhak
-    tahu atas dasar apa daftar ini disusun, dan bisa langsung melihat kalau
-    salah satu kriterianya ternyata tidak ia maksud.
-
-    `dipotong` benar kalau daftarnya dipendekkan karena tingkat akun. Angka
-    `total_cocok` tetap jujur: yang disembunyikan jumlahnya, bukan
-    keberadaannya.
-    """
+    """Balasan /skor/rekomendasi."""
 
     hasil: list[Rekomendasi] = Field(default_factory=list)
     total_cocok: int = 0
@@ -1027,15 +790,7 @@ class HasilRekomendasi(BaseModel):
 
 
 class DinamikaKawasan(BaseModel):
-    """Sebaran churn dan aktivitas satu kawasan - fitur Pemantauan.
-
-    Ini BUKAN deret waktu. Basis data baru memuat satu versi skor, dan
-    memperlihatkan dua belas bulan dari satu titik data berarti mengarang
-    sebelas di antaranya. Yang ditampilkan adalah sebaran yang benar-benar ada:
-    persentil churn kawasan, jumlah heksagon per kuadran, dan berapa yang
-    melewati ambang waspada. Begitu pipeline menerbitkan versi kedua, endpoint
-    riwayat yang mengisi sisi waktunya.
-    """
+    """Sebaran churn dan aktivitas satu kawasan - fitur Pemantauan."""
 
     kawasan: str
     n_heksagon: int

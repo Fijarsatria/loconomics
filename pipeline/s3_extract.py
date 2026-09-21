@@ -1,34 +1,4 @@
-"""Tahap 3 - AI Lapisan 1: mengubah foto menjadi angka.
-
-Inilah lapisan yang paling bisa dipertahankan saat ditanya juri "kenapa pakai AI?",
-karena keberadaannya bukan pilihan melainkan keharusan:
-
-  Properti Go  punya 8 kolom, TIDAK SATU PUN berisi harga
-  Struk Go     punya 8 kolom, TIDAK SATU PUN berisi nominal transaksi
-  Menu Go      satu-satunya yang punya angka rupiah native
-
-Tanpa lapisan ini, proyek ini secara harfiah tidak punya satu pun angka rupiah
-untuk dianalisis.
-
-Empat fitur (docs/ai.md):
-  A1  Ekstraktor harga sewa dari foto spanduk   WAJIB, prioritas tertinggi -> P05
-  A2  Ekstraktor nominal dari foto struk        WAJIB                      -> B09
-  A3  Penilai prestise visual                   KUAT                       -> M03
-  A4  Klasifikator menu dan taksonomi kuliner   SEDANG               -> C04, B08
-
-Aturan yang berlaku untuk keempatnya:
-  - Prompt disimpan sebagai berkas di prompts/, bukan ditempel di kode. Berkas itu
-    sekaligus bukti untuk ketentuan C.1 tentang penjelasan proses AI.
-  - Keluaran WAJIB JSON terstruktur yang divalidasi Pydantic, bukan prosa bebas.
-    JSON tidak valid -> ulang maksimal 2x dengan pesan kesalahan dikembalikan ke model.
-  - confidence < 0.7 -> masuk antrean verifikasi manusia, TIDAK dipakai langsung.
-  - Seluruh hasil di-cache ke CACHE_AI. JANGAN PERNAH memanggil ulang API saat demo.
-  - Setiap panggilan dicatat ke tabel ai_call_logs (input, output, confidence,
-    biaya) - tetapi PENCATATANNYA dilakukan `s7_publish.py --ocr` dari cache,
-    bukan oleh modul ini saat memanggil. Satu berkas cache = satu panggilan
-    yang pernah dibayar, jadi hitungannya sama, dan memisahkannya membuat
-    modul ini tidak perlu tahu soal basis data sama sekali.
-"""
+"""Tahap 3 - AI Lapisan 1: mengubah foto menjadi angka."""
 
 import argparse
 import base64
@@ -120,10 +90,7 @@ class ItemMenu(BaseModel):
 
 
 class HasilMenu(BaseModel):
-    """A4 - keluaran dari satu foto daftar menu.
-
-    Dua pekerjaan sekaligus: harga (B07, B08) dan kelas kuliner (C04).
-    """
+    """A4 - keluaran dari satu foto daftar menu."""
 
     item: list[ItemMenu] = Field(default_factory=list)
     kelas_kuliner: str = "Lainnya"  # harus salah satu dari KELAS_KULINER
@@ -144,27 +111,10 @@ def perlu_review_manusia(confidence: float) -> bool:
 
 
 def periode_sewa_aman(hasil: HasilSpanduk) -> bool:
-    """Jebakan periode sewa - kesalahan dua belas kali lipat.
-
-    "45jt" bisa berarti per bulan atau per tahun. Salah asumsi menggeser seluruh
-    peta biaya di satu kawasan, dan itu tipe kesalahan yang langsung terlihat
-    kalau juri membandingkannya dengan NJOP.
-
-    Aturan tim: JANGAN PERNAH MENEBAK. Record dengan periode tidak jelas
-    dikeluarkan dari perhitungan harga sewa median (P05).
-    """
+    """Jebakan periode sewa - kesalahan dua belas kali lipat."""
     return hasil.periode != "tidak_disebut"
 
 
-# --- Pemanggil vision -------------------------------------------------------
-#
-# Penyedianya Gemini, lewat REST langsung - kunci dan modelnya SAMA dengan yang
-# dipakai Konsultan AI di backend (`LLM_API_KEY`, `LLM_MODEL`), dibaca dari
-# backend/.env. Satu kunci, satu tempat, dan tidak pernah dicetak.
-#
-# Kenapa REST mentah dan bukan adapter backend: adapter itu meniru kontrak
-# `messages.create()` untuk loop alat, dan gambar tidak lewat kontrak itu.
-# Pipeline tidak butuh loop - satu foto, satu jawaban JSON.
 
 URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -200,13 +150,7 @@ def _baca_env_backend() -> dict[str, str]:
 
 
 def _baca_prompt(nama: str) -> tuple[str, str]:
-    """Berkas prompt -> (instruksi sistem, templat pesan pengguna).
-
-    Sistem = bagian "System" + "Aturan"; pengguna = bagian "User". Bagian
-    "Validasi" dan "Catatan" dibaca MANUSIA, bukan model - mengirimnya cuma
-    menambah token tanpa mengubah jawaban. Karena kodenya membaca berkas ini
-    apa adanya, mengubah prompt tidak pernah menuntut mengubah kode (aturan 7).
-    """
+    """Berkas prompt -> (instruksi sistem, templat pesan pengguna)."""
     teks = (PROMPTS / nama).read_text(encoding="utf-8")
     bagian: dict[str, str] = {}
     judul = None
@@ -233,13 +177,7 @@ class _Bawaan(dict):
 
 
 def _unduh_foto(url: str, percobaan: int = 4) -> tuple[bytes, str]:
-    """Unduh satu foto, dengan percobaan ulang.
-
-    Diulang karena terukur 12 Sep 2026: dari satu mesin yang sama, sebagian
-    besar unduhan dijawab `WinError 10054` (sambungan diputus paksa) pada
-    menit-menit tertentu lalu pulih sendiri. Tanpa ulangan, satu jendela jaringan
-    yang buruk menandai ratusan foto "gagal" padahal fotonya baik-baik saja.
-    """
+    """Unduh satu foto, dengan percobaan ulang."""
     galat: Exception | None = None
     for i in range(percobaan):
         try:
@@ -317,12 +255,7 @@ def _panggil_vision(kunci: str, model_utama: str, sistem: str, pesan: str,
 
 def _ekstrak(fitur_kode: str, prompt: str, skema: type[BaseModel], foto_url: str,
              konteks: dict, kunci: str, model: str) -> dict:
-    """Satu foto -> hasil tervalidasi, SELALU lewat cache lebih dulu.
-
-    Cache berkunci SHA-1 URL foto. Foto yang sudah pernah dibaca tidak pernah
-    dikirim lagi - membayar dua kali untuk jawaban yang sama, dan
-    mempertaruhkan demo pada koneksi, sama-sama dilarang docs/ai.md.
-    """
+    """Satu foto -> hasil tervalidasi, SELALU lewat cache lebih dulu."""
     sidik = hashlib.sha1(foto_url.encode()).hexdigest()
     berkas = CACHE_AI / fitur_kode.lower() / f"{sidik}.json"
     if berkas.exists():
@@ -371,32 +304,17 @@ def _ekstrak(fitur_kode: str, prompt: str, skema: type[BaseModel], foto_url: str
 
 
 def ekstrak_spanduk(foto_url: str, konteks: dict, kunci: str = "", model: str = "") -> dict:
-    """A1. Prompt: prompts/a1_spanduk.md
-
-    Validasi: (1) skema Pydantic, (2) confidence >= 0.7, (3) uji akurasi pada
-    50 foto berlabel tangan dengan target MAPE < 15%, (4) pemeriksaan kewajaran
-    rentang - sewa ruko < Rp1 juta atau > Rp500 juta per bulan ditandai anomali.
-    """
+    """A1. Prompt: prompts/a1_spanduk.md"""
     return _ekstrak("A1", "a1_spanduk.md", HasilSpanduk, foto_url, konteks, kunci, model)
 
 
 def ekstrak_struk(foto_url: str, konteks: dict, kunci: str = "", model: str = "") -> dict:
-    """A2. Prompt: prompts/a2_struk.md
-
-    Validasi yang layak disebut khusus saat presentasi: struk memuat tanggal,
-    waktu, dan nama merchant yang JUGA diisi manual oleh surveyor di kolom
-    terpisah. Artinya ada mekanisme pengecekan otomatis tanpa pelabelan manual
-    sama sekali - kemewahan yang jarang dimiliki dataset lain.
-    """
+    """A2. Prompt: prompts/a2_struk.md"""
     return _ekstrak("A2", "a2_struk.md", HasilStruk, foto_url, konteks, kunci, model)
 
 
 def perlu_review(rekam: dict) -> bool:
-    """Satu tempat yang memutuskan apakah sebuah hasil BOLEH dipakai.
-
-    Tidak dipakai (tetap disimpan untuk audit) kalau: skemanya tidak pernah
-    lolos, keyakinannya di bawah ambang, atau angkanya di luar rentang wajar.
-    """
+    """Satu tempat yang memutuskan apakah sebuah hasil BOLEH dipakai."""
     h = rekam.get("hasil")
     if not h:
         return True
@@ -415,14 +333,7 @@ def perlu_review(rekam: dict) -> bool:
 
 
 def jalankan(fitur_kode: str, batas: int | None = None, pekerja: int = 3) -> Path:
-    """Baca seluruh foto satu jenis misi se-Jabodetabek, lalu simpan ringkasannya.
-
-    SE-JABODETABEK, bukan hanya yang jatuh di 708 heksagon: yang di dalam grid
-    cuma 18 struk dan 2 properti, terlalu tipis untuk apa pun. Yang di luar
-    grid tetap berguna sebagai bahan PERKIRAAN tingkat kawasan - pola jam
-    transaksi dan kisaran sewa di sekitar simpul transit - dan tidak pernah
-    masuk skor (lihat s7_publish.muat_perkiraan).
-    """
+    """Baca seluruh foto satu jenis misi se-Jabodetabek, lalu simpan ringkasannya."""
     env = _baca_env_backend()
     kunci = env.get("LLM_API_KEY", "")
     if not kunci or env.get("LLM_PROVIDER", "").lower() != "gemini":
@@ -494,21 +405,12 @@ def jalankan(fitur_kode: str, batas: int | None = None, pekerja: int = 3) -> Pat
 
 
 def nilai_prestise(foto_url: str) -> HasilPrestise:
-    """A3. Prompt: prompts/a3_prestise.md
-
-    Validasi: Cohen kappa AI vs 3 penilai manusia pada 30 foto, target > 0.6.
-    Lalu korelasi silang terhadap persentil NJOP - seharusnya positif r 0.5-0.7.
-    Titik yang MENYIMPANG dari garis korelasi itu justru kandidat hidden gem.
-    """
+    """A3. Prompt: prompts/a3_prestise.md"""
     raise NotImplementedError
 
 
 def ekstrak_menu(foto_url: str, konteks: dict) -> HasilMenu:
-    """A4. Prompt: prompts/a4_menu.md
-
-    Kalau kategori "Lainnya" melebihi 20%, itu tanda taksonomi perlu diperbaiki,
-    bukan tanda modelnya buruk.
-    """
+    """A4. Prompt: prompts/a4_menu.md"""
     raise NotImplementedError
 
 

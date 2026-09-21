@@ -1,34 +1,4 @@
-"""Akun, sesi, dan tingkat langganan.
-
-Satu berkas untuk seluruh urusan "siapa yang memanggil dan boleh apa". Rutenya
-ada di `app/api/akun.py`; yang di sini adalah mesinnya, supaya modul API mana
-pun bisa menuntut tingkat tertentu tanpa mengimpor modul API lain.
-
-TIGA TINGKAT, dan perbedaan kedua dan ketiga yang paling sering salah dipahami:
-
-    tamu     belum masuk sama sekali
-    gratis   sudah masuk, TIDAK berlangganan
-    premium  langganan aktif, atau akun bertanda `selamanya`
-
-`gratis` TIDAK mendapat apa pun yang tidak didapat `tamu`. Masuk bukan cara
-membuka fitur; berlangganan yang membukanya. Ini keputusan produk, bukan
-kelalaian - pemiliknya menyatakannya eksplisit.
-
-KENAPA TANPA PUSTAKA PIHAK KETIGA. Kata sandi disidik `hashlib.scrypt` dan
-tiket sesi ditandatangani `hmac`, keduanya dari pustaka standar. Bukan karena
-pustaka auth itu buruk, tetapi karena yang dibutuhkan di sini persis dua hal
-itu, keduanya ada di stdlib, dan seluruhnya muat di satu layar yang bisa dibaca
-juri. Tiket yang dihasilkan berbentuk sama dengan JWT HS256 - tiga bagian
-base64url dipisah titik - hanya saja tanpa satu pun dependensi baru.
-
-Yang TIDAK dilakukan di sini, sengaja:
-  - tidak ada refresh token. Tiketnya berumur 30 hari dan diperiksa ke basis
-    data setiap kali dipakai, jadi akun yang dicabut langsung kehilangan akses
-    tanpa perlu daftar pencabutan tersendiri.
-  - tidak ada penyimpanan sesi di server. Tiket menandatangani id akun saja;
-    seluruh keadaan lain - tingkat, langganan - dibaca segar dari basis data
-    tiap permintaan. Tingkat yang basi adalah tingkat yang salah.
-"""
+"""Akun, sesi, dan tingkat langganan."""
 
 from __future__ import annotations
 
@@ -71,17 +41,6 @@ _SCRYPT_P = 1
 _PANJANG_SIDIK = 32
 
 
-# ---------------------------------------------------------------------------
-# Katalog paket
-# ---------------------------------------------------------------------------
-#
-# Harganya duduk di sini, bukan di `aturan.py`. Aturan.py memuat aturan TAMPILAN
-# untuk skor; harga tidak menyentuh skor sama sekali. Dan tidak di frontend:
-# harga yang bisa disunting dari peramban adalah harga yang bisa disunting oleh
-# pembeli.
-#
-# Satu produk, satu harga. Token satuan pernah dijual di samping langganan dan
-# dihapus 13 Sep 2026 atas permintaan pemilik repo - lihat `akses_penuh`.
 
 HARGA_BULANAN_RP = 25_000
 
@@ -109,30 +68,8 @@ PAKET_LANGGANAN: list[dict[str, Any]] = [
 
 
 def _kunci() -> bytes:
-    """Kunci HMAC untuk tiket sesi.
-
-    Di produksi WAJIB dari environment: tanpa itu, siapa pun yang tahu cara
-    turunannya dibuat bisa menempa tiket. Di pengembangan, ketiadaannya tidak
-    boleh menghentikan `npm run dev`, jadi diturunkan dari connection string -
-    stabil antar-restart (tiket tidak hangus tiap reload) dan tidak pernah sama
-    antar-mesin.
-    """
+    """Kunci HMAC untuk tiket sesi."""
     if settings.auth_secret:
-        # Panjang MINIMUM ditegakkan, bukan cuma keberadaannya. Tiket ini
-        # ditandatangani HMAC-SHA256, yang berarti kunci pendek bisa dicari
-        # secara OFFLINE: penyerang cuma butuh satu tiket sah - dan setiap
-        # pengguna memegang satu di localStorage-nya - lalu menebak kunci di
-        # mesinnya sendiri tanpa sekali pun menyentuh server kita. Tidak ada
-        # pembatas laju yang bisa melihat pencarian itu, dan tidak ada log yang
-        # mencatatnya. Yang menemukannya bisa menempa tiket untuk akun MANA PUN,
-        # termasuk akun pemilik.
-        #
-        # 32 karakter adalah lantai, bukan anjuran; yang dianjurkan pesan galat
-        # di bawah, 48 byte acak. Kenapa memeriksanya di sini alih-alih saat
-        # impor: yang mengisi kolom ini mengetiknya di dasbor Azure, dan galat
-        # saat impor di sana muncul sebagai "aplikasi gagal start" tanpa sebab
-        # yang terbaca. Di sini sebabnya masuk ke log permintaan pertama yang
-        # menyentuh tiket.
         if settings.produksi and len(settings.auth_secret) < PANJANG_MIN_KUNCI:
             raise RuntimeError(
                 f"AUTH_SECRET terlalu pendek ({len(settings.auth_secret)} karakter, "
@@ -154,11 +91,7 @@ def _kunci() -> bytes:
 
 
 def sidik_sandi(sandi: str) -> str:
-    """`scrypt$garam$sidik`, keduanya base64url.
-
-    Garam acak per akun. Dua orang dengan kata sandi sama menghasilkan dua sidik
-    berbeda, jadi satu tabel pelangi tidak pernah membuka lebih dari satu akun.
-    """
+    """`scrypt$garam$sidik`, keduanya base64url."""
     garam = secrets.token_bytes(16)
     sidik = hashlib.scrypt(
         sandi.encode(), salt=garam, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=_PANJANG_SIDIK
@@ -219,27 +152,12 @@ def buat_tiket(user_id: int) -> str:
 
 
 def baca_tiket(tiket: str) -> int | None:
-    """Id akun dari tiket yang sah, atau None.
-
-    Mengembalikan None untuk SEMUA kegagalan - tanda tangan salah, kedaluwarsa,
-    bentuk rusak. Pemanggil tidak perlu tahu bedanya, dan membedakannya di
-    respons hanya memberi tahu penyerang seberapa dekat tebakannya.
-    """
+    """Id akun dari tiket yang sah, atau None."""
     try:
         kepala, isi, tanda = tiket.split(".")
     except ValueError:
         return None
     harapan = hmac.new(_kunci(), f"{kepala}.{isi}".encode(), hashlib.sha256).digest()
-    # `_nyah_b64` MELEDAK untuk base64 yang bentuknya rusak - `binascii.Error`,
-    # bukan nilai yang salah. Sebelum ini ia tidak ditangkap, jadi satu header
-    # `Authorization: Bearer a.b.c` menjawab **500**, bukan 401: docstring di
-    # atas menjanjikan None untuk "bentuk rusak" dan kodenya tidak menepatinya.
-    #
-    # Bukan cuma soal kerapian. Amplop galat memberi setiap 500 sebuah
-    # `request_id` dan mencatatnya sebagai galat tak terduga di log server -
-    # jadi tiket usang di localStorage seseorang, atau satu pemindai yang lewat,
-    # menyamar jadi kerusakan backend di tempat yang justru dibaca saat ada
-    # kerusakan sungguhan.
     try:
         diterima = _nyah_b64(tanda)
     except (ValueError, binascii.Error):
@@ -261,12 +179,7 @@ def baca_tiket(tiket: str) -> int | None:
 
 
 def langganan_aktif(db: Session, user: User) -> Subscription | None:
-    """Langganan yang masih berlaku, kalau ada.
-
-    `selamanya` dipisahkan dari tanggal supaya akun pemilik tidak pernah bisa
-    kedaluwarsa karena jam server meleset atau karena lupa diperpanjang saat
-    demo berlangsung.
-    """
+    """Langganan yang masih berlaku, kalau ada."""
     baris = db.execute(
         select(Subscription)
         .where(Subscription.user_id == user.id, Subscription.status == "aktif")
@@ -288,32 +201,14 @@ def tingkat(db: Session, user: User | None) -> Tingkat:
 
 
 def akses_penuh(db: Session, user: User | None, h3: str) -> bool:
-    """Boleh melihat kedalaman penuh SATU heksagon ini?
-
-    Satu jalan masuk: langganan aktif. Sampai 13 Sep 2026 ada jalan kedua -
-    token satuan untuk membuka satu heksagon - dan pemilik repo memintanya
-    dihapus. Saat dihapus, basis data mencatat NOL heksagon yang pernah dibuka
-    dengan token dan nol saldo di seluruh akun, jadi tidak ada pembelian yang
-    hangus. Tabel `token_ledger` dan `premium_unlocks` sengaja dibiarkan:
-    menghapus tabel tidak bisa dibatalkan, dan membiarkannya kosong tidak
-    merugikan apa pun.
-
-    `h3` tetap diterima supaya keempat pintunya - detail, kartu harga, Commuter
-    Clock, simulasi - tetap memanggil satu fungsi yang sama. Kalau suatu saat
-    akses per lokasi kembali, ia kembali di sini, di satu tempat.
-    """
+    """Boleh melihat kedalaman penuh SATU heksagon ini?"""
     if user is None:
         return False
     return langganan_aktif(db, user) is not None
 
 
 def wajib_akses_penuh(db: Session, user: User | None, h3: str, fitur: str) -> None:
-    """Lempar galat ber-kode kalau pemanggil belum boleh melihat `fitur`.
-
-    Dua kode yang berbeda dan itu penting: 401 membuat frontend membuka dialog
-    MASUK, 402 membuka dialog LANGGANAN. Menyatukannya memaksa frontend menebak
-    dari teks pesan.
-    """
+    """Lempar galat ber-kode kalau pemanggil belum boleh melihat `fitur`."""
     if user is None:
         raise TidakTerautentikasi(
             f"{fitur} bagian dari Loconomics Premium. Masuk dulu untuk membukanya."
@@ -340,11 +235,7 @@ def _tiket_dari(request: Request) -> str | None:
 def pengguna_opsional(
     request: Request, db: Annotated[Session, Depends(get_db)]
 ) -> User | None:
-    """Pengguna kalau ada tiket sah, None kalau tidak. TIDAK pernah menolak.
-
-    Ini bentuk yang dipakai endpoint yang melayani tamu maupun pelanggan dengan
-    isi yang berbeda - dan itu sebagian besar endpoint di produk ini.
-    """
+    """Pengguna kalau ada tiket sah, None kalau tidak. TIDAK pernah menolak."""
     tiket = _tiket_dari(request)
     if not tiket:
         return None
@@ -369,13 +260,7 @@ def wajib_premium(
     user: Annotated[User, Depends(wajib_pengguna)],
     db: Annotated[Session, Depends(get_db)],
 ) -> User:
-    """Penjaga untuk endpoint yang isinya memang berbayar.
-
-    Ditaruh sebagai dependensi, bukan sebagai `if` di dalam badan fungsi. Alasan
-    yang sama dengan `saring_zoneguard()`: penjaga yang harus diingat untuk
-    dipanggil adalah penjaga yang suatu saat lupa dipanggil. Sebagai dependensi
-    ia ikut ke OpenAPI dan terlihat di /docs.
-    """
+    """Penjaga untuk endpoint yang isinya memang berbayar."""
     if not langganan_aktif(db, user):
         raise ButuhPremium(
             "Fitur ini bagian dari Loconomics Premium.",

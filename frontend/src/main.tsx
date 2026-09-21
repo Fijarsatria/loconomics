@@ -7,31 +7,11 @@ import { bangunkan } from './lib/api.ts'
 import { siapkanKunciBasemap } from './config.ts'
 import { BahasaProvider, TemaProvider } from './lib/bahasa.tsx'
 
-// Dipanggil SEBELUM render, bukan di dalam sebuah useEffect.
-//
-// Backend duduk di Render free tier dan tidur sesudah 15 menit menganggur.
-// Yang menanggung puluhan detik cold start selalu permintaan pertama, jadi
-// yang berharga di sini bukan hasilnya melainkan JAMNYA: makin awal diketuk,
-// makin besar peluang ia sudah bangun saat layar pembuka benar-benar butuh.
-// Sebuah efek di dalam komponen menunggu React selesai memasang pohonnya
-// lebih dulu, dan itu waktu yang diberikan cuma-cuma kepada backend yang
-// masih tidur.
 bangunkan()
 // Kunci basemap untuk terbitan yang dibangun tanpa kunci - diminta sedini
 // mungkin, peta menunggunya sebelum ubin pertama (lihat PetaInteraktif).
 void siapkanKunciBasemap()
 
-// SesiProvider membungkus SELURUH aplikasi, termasuk halaman gerbang.
-//
-// Tombol akun berdiri di dua tempat - bilah atas gerbang dan bilah atas peta -
-// dan keduanya harus membaca sesi yang sama. Kalau providernya duduk di dalam
-// App di bawah gerbang, tombol di gerbang tidak punya konteks apa pun untuk
-// dibaca, dan masuk dari halaman perkenalan tidak akan terbawa ke peta.
-// BahasaProvider di LUAR SesiProvider: pilihan bahasa tidak bergantung pada
-// siapa yang masuk, dan dialog masuk itu sendiri butuh membaca bahasanya.
-// TemaProvider di luar keduanya, dengan alasan yang sama: tema tidak
-// bergantung pada bahasa maupun sesi, dan dialog yang di-portal ke <body> ikut
-// membacanya.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <TemaProvider>

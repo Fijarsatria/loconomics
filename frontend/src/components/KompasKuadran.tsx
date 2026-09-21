@@ -1,32 +1,3 @@
-/**
- * Kompas Kuadran — objek tanda tangan antarmuka ini.
- *
- * Ia merangkap tiga pekerjaan yang biasanya dipecah jadi tiga komponen terpisah:
- *
- *   1. LEGENDA  — empat sel, empat warna, empat glif
- *   2. FILTER   — klik satu sel, peta menyaring ke kuadran itu
- *   3. POSISI   — heksagon terpilih muncul sebagai titik pada koordinat aslinya
- *
- * Menggabungkannya bukan penghematan tempat. Kuadran ADALAH tesis produk ini:
- * sumbu datar "bagaimana lokasi terlihat", sumbu tegak "apa kata datanya", dan
- * seluruh gunanya produk ini terletak pada dua sudut tempat keduanya tidak
- * sejalan. Legenda yang terpisah dari peta menjadikan tesis itu keterangan kaki;
- * disatukan, ia jadi alat.
- *
- * Komponen yang sama dipakai pada dua ukuran. Kecil, melayang di atas peta.
- * Besar, ia menjadi diagram sebar RiskRadar dengan seluruh heksagon sebagai
- * titik — sumbu yang sama, warna yang sama, glif yang sama. Pengguna yang sudah
- * paham yang kecil tidak perlu belajar ulang yang besar.
- *
- * BISA DIRINGKAS. Yang kecil pun memakan sudut kiri bawah peta, dan kadang yang
- * ditutupinya justru heksagon yang sedang dilihat. Tombol di kanan atas kartu
- * menyusutkannya jadi satu baris glif.
- *
- * Ringkas TIDAK sama dengan sembunyi, dan bedanya disengaja: keempat glif tetap
- * bisa diklik dalam keadaan ringkas. Kalau meringkasnya sekalian mematikan
- * filter, orang jadi harus memilih antara melihat peta dan menyaringnya —
- * padahal keduanya adalah satu pekerjaan yang sama.
- */
 
 import { KUADRAN, URUTAN_KUADRAN } from '../config'
 import type { Kuadran as NamaKuadran, TitikKuadran } from '../types'
@@ -53,12 +24,6 @@ const SEL: Record<string, { kolom: 0 | 1; baris: 0 | 1 }> = Object.fromEntries(
   Object.values(KUADRAN).map((q) => [q.kunci, { kolom: q.sel[0], baris: q.sel[1] }]),
 )
 
-/**
- * Bantalan tepi kotak, dalam persen.
- *
- * Titik berskor 0 atau 100 tepat di tepi akan tergunting separuh oleh
- * overflow-hidden, dan justru titik-titik ekstrem itu yang paling ingin dilihat.
- */
 const BANTAL = 3
 
 /** Prestise 0..1 -> persen dari kiri. */
@@ -67,16 +32,6 @@ const keX = (x: number) => BANTAL + x * (100 - 2 * BANTAL)
 /** Opportunity Score 0..100 -> persen dari bawah. */
 const keY = (y: number) => BANTAL + (y / 100) * (100 - 2 * BANTAL)
 
-/**
- * Batas bawaan kalau backend belum menjawab: tengah kotak.
- *
- * Ini SATU-SATUNYA tempat 0,5/50 masih boleh muncul. Dulu ia dipakai sebagai
- * batas sungguhan - grid 2x2 kaku - dan itu bugnya: pipeline membelah di MEDIAN
- * (x 0,413 · y 40,7), bukan di tengah kotak, jadi 40% titik digambar di sel
- * yang bertentangan dengan labelnya sendiri. Sebuah heksagon JEBAKAN_GENGSI
- * berskor 36 muncul di petak HINDARI, dan itu bukan salah baca: petaknya memang
- * salah gambar.
- */
 const BATAS_BAWAAN = { x: 0.5, y: 50 }
 
 const K = {
@@ -117,27 +72,7 @@ export default function KompasKuadran({
   const namaZona = useNamaZona()
   const tk = useTeks(K)
   const { bahasa } = useBahasa()
-  // Yang KECIL tidak lagi punya lebar sama sekali - ia mengambil sisa ruang.
-  //
-  // Dulu angkanya 232px, dihitung tangan sebagai "17rem dikurangi bantalan
-  // kartu dan label sumbu tegak". Hitungannya meleset 10px: bantalan kartu 2 x
-  // 14px dan label tegak + jarak 22px menyisakan 222px, bukan 232px. Karena
-  // kotaknya `shrink-0`, kelebihan itu tidak dikembalikan - ia menembus
-  // bantalan kanan kartu, lalu terpotong `overflow-hidden` milik kolomnya.
-  // Diukur di 1440px: tepi kanan kotak dan tepi kanan kartu sama-sama di 362px,
-  // jadi bantalan kanan kartu hilang sepenuhnya dan kata "mahal" terpenggal
-  // jadi "maha".
-  //
-  // `flex-1 min-w-0` + `aspect-square` menghapus seluruh kelas kesalahan itu:
-  // tidak ada lagi angka yang harus dijaga tetap cocok dengan lebar kartu,
-  // berapa pun kartunya nanti diubah.
-  //
-  // Yang besar tetap punya ukuran, tetapi TIDAK 430px tetap. Angka tetap
-  // memaksa dialognya lebih tinggi dari layar pendek, dan satu-satunya jalan
-  // keluar waktu itu `overflow-auto` - diagram sebar yang harus di-scroll untuk
-  // dilihat utuh sudah berhenti jadi diagram. `min()` membuatnya mengalah pada
-  // layar, bukan sebaliknya.
-  const sisi = 'min(430px, 44vh)'
+  const sisi = 'min(430px, 44vh, 78vw)'
 
   // Garis pemisah sungguhan. Sel, titik sebar, dan penanda posisi WAJIB memakai
   // angka yang sama - kalau tidak, label dan tempatnya kembali bertentangan.

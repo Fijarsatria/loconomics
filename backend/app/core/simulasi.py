@@ -1,68 +1,4 @@
-"""Simulasi kelayakan usaha per heksagon.
-
-APA INI, DAN APA YANG BUKAN
-===========================
-
-Ini **bukan skor**. Ia tidak pernah ditulis ke `location_scores`, tidak pernah
-ikut menentukan peringkat, dan tidak mengubah satu pun kuadran. Aturan 1 repo ini
-- "skor hanya dihitung di `pipeline/s6_score.py`" - tetap utuh: yang dihitung di
-sini adalah SKENARIO milik satu pengguna atas satu heksagon, bukan penilaian
-platform atas lokasi itu.
-
-Ia juga bukan ramalan. Tidak ada model, tidak ada pelatihan, tidak ada
-probabilitas. Yang ada cuma aritmetika yang bisa dibaca ulang oleh siapa pun.
-
-PEMBAGIAN YANG MENJAGANYA TETAP JUJUR
-=====================================
-
-Setiap angka di keluaran punya tepat satu asal, dan asalnya selalu dinyatakan:
-
-    TERUKUR    berasal dari basis data - hasil survei misi MAPID, OCR, atau
-               pipeline. Pengguna tidak bisa mengubahnya.
-    ASUMSI     berasal dari pengguna. Punya nilai bawaan, tetapi bawaannya
-               adalah angka bulat yang diakui sebagai tebakan awal - BUKAN
-               nilai yang kami klaim terhitung dari data.
-    TURUNAN    hasil aritmetika dari keduanya. Rumusnya ikut dikirim ke
-               antarmuka sebagai teks, supaya bisa diperiksa tanpa membuka kode.
-
-Yang paling menggoda untuk dilanggar adalah `pangsa`: berapa persen dari uang
-yang berputar di heksagon itu yang bisa ditangkap satu warung baru. Kami TIDAK
-menurunkannya dari data. Menurunkannya berarti mengarang - tidak ada satu pun
-variabel di 43 kolom itu yang mengukur "berapa bagian yang akan didapat pendatang
-baru". Yang bisa kami lakukan cuma menaruh indeks kompetisi di sebelahnya sebagai
-bahan pertimbangan, lalu membiarkan pengguna yang memutuskan.
-
-Bedanya besar. Angka yang dikarang lalu ditampilkan sebagai hasil hitungan akan
-dipercaya. Angka yang diakui sebagai asumsi akan diuji.
-
-DUA ASUMSI YANG PENGGUNANYA TAHU LEBIH BAIK DARIPADA KITA
-=========================================================
-
-Sewa dan harga rata-rata per pembeli boleh DIISI SENDIRI, dan kalau diisi ia
-menang atas angka basis data. Itu bukan kelonggaran, melainkan pengakuan atas
-siapa yang memegang angka yang lebih benar:
-
-  sewa           orang yang sedang menimbang sebuah ruko sudah memegang
-                 penawaran dari pemiliknya. Median satu heksagon tidak akan
-                 pernah lebih benar daripada angka yang tertulis di penawaran
-                 itu - ia rata-rata atas ruko yang BUKAN ruko yang ia tawar.
-  harga rata-rata  itu rencana usahanya sendiri, bukan pengamatan atas orang
-                 lain. Median struk heksagon menjawab "berapa yang dibelanjakan
-                 orang di sini", bukan "berapa harga jual saya".
-
-Akibatnya satu angka jadi bisa dihitung DI MANA PUN, tanpa satu baris survei:
-
-    pembeli impas = sewa bulanan / (hari x harga rata-rata x margin)
-
-Ketiga bahannya milik pengguna. Itulah sebabnya angka ini yang ditaruh paling
-depan sekarang - ia tidak pernah kosong, dan ia tidak memuat satu pun tebakan
-kami. Yang tetap menuntut data justru omzet: berapa uang yang berputar di
-heksagon itu bukan sesuatu yang bisa dijawab siapa pun dari kursinya.
-
-Yang TIDAK berubah: keduanya tetap ASUMSI, dan asalnya ikut dikirim di
-`sumber` supaya antarmuka - dan juri - bisa membedakan angka yang diisi orang
-dari angka yang diukur.
-"""
+"""Simulasi kelayakan usaha per heksagon."""
 
 from __future__ import annotations
 
@@ -79,25 +15,6 @@ JAM_BUKA_BAWAAN = 10
 LUAS_BAWAAN_M2 = 20
 HARI_PER_BULAN = 26  # enam hari kerja per minggu
 
-#: Jenis usaha hanya mengubah BAWAAN, bukan rumusnya. Nilainya tetap bisa
-#: ditimpa pengguna - ini titik awal yang masuk akal, bukan kebenaran.
-#:
-#: Diperluas 3 September 2026 dari empat jadi enam belas, permintaan pemilik
-#: repo: empat jenis memaksa pemilik bengkel, apotek, atau bimbel memilih
-#: "Jasa" dan mewarisi margin barbershop. Bawaan yang salah lebih buruk
-#: daripada tidak ada bawaan - ia terbaca sebagai perkiraan untuk usahanya,
-#: padahal perkiraan untuk usaha orang lain.
-#:
-#: Ketiga angkanya tetap ASUMSI dan tetap bulat, karena alasan yang sama seperti
-#: sejak awal: bulat mengumumkan dirinya sebagai titik awal yang harus diganti.
-#: Yang membedakan jenis satu dengan yang lain cuma titik awalnya; rumusnya
-#: satu untuk semua, dan `sumber` tetap menandai mana yang diisi orang.
-#:
-#: `kelompok` HANYA untuk menyusun tampilan pilihannya. Ia tidak menyentuh satu
-#: pun perhitungan.
-#:
-#: Kembarannya di frontend: `Simulasi.tsx::JENIS` dan `BAWAAN`. Dijaga sama oleh
-#: tests/test_aturan.py - kalau salah satunya bergeser, ujinya merah.
 JENIS_USAHA: dict[str, dict[str, float | int | str]] = {
     # --- Makanan & minuman -------------------------------------------------
     "kuliner_ringan": {"kelompok": "Makanan & minuman", "label": "Kuliner ringan (kopi, jajanan)", "margin": 35.0, "luas": 12, "jam": 12},
@@ -129,11 +46,7 @@ class Peringatan:
 
 
 def _aman(nilai: float | None) -> float | None:
-    """NaN dan None sama-sama berarti 'belum ada', dan keduanya TETAP kosong.
-
-    Menggantinya dengan nol akan membuat simulasi menghasilkan omzet Rp0 yang
-    terbaca sebagai temuan, padahal artinya cuma belum ada yang mensurvei.
-    """
+    """NaN dan None sama-sama berarti 'belum ada', dan keduanya TETAP kosong."""
     if nilai is None:
         return None
     try:
@@ -159,12 +72,7 @@ def hitung_simulasi(
     harga_rata_rata: float | None = None,
     bahasa: Bahasa = BAHASA_BAWAAN,
 ) -> dict:
-    """Satu skenario, seluruh langkahnya terbuka.
-
-    Mengembalikan dict yang siap divalidasi Pydantic di `schemas.py`. Setiap
-    besaran turunan dikirim bersama rumusnya sebagai string - antarmuka
-    menampilkan rumus itu apa adanya, jadi tidak ada langkah yang tersembunyi.
-    """
+    """Satu skenario, seluruh langkahnya terbuka."""
     belanja_per_jam = _aman(variabel.get("belanja_per_jam"))
     sewa_per_m2 = _aman(variabel.get("harga_sewa_per_m2"))
     struk = _aman(variabel.get("nominal_median_struk"))
@@ -173,16 +81,6 @@ def hitung_simulasi(
     pangsa = pangsa_persen / 100
     margin = margin_persen / 100
 
-    # --- Dua angka yang penggunanya boleh menimpa -------------------------
-    # Yang diisi pengguna MENANG. Bukan karena lebih presisi, melainkan karena
-    # ia menjawab pertanyaan yang berbeda: median heksagon menggambarkan ruko
-    # lain di sekitarnya, sedangkan penawaran yang ia pegang menggambarkan ruko
-    # yang sedang ia timbang. Untuk skenario milik satu orang, yang kedua yang
-    # benar.
-    #
-    # `sumber_*` ikut dikirim ke antarmuka. Tanpa itu, angka yang diketik orang
-    # dan angka yang diukur pipeline akan terlihat sama persis di layar - dan
-    # itu persis jenis kekaburan yang dilarang docstring di kepala berkas ini.
     sewa_pengguna = _aman(sewa_bulanan_diminta)
     if sewa_pengguna is not None and sewa_pengguna > 0:
         sewa_bulanan: float | None = sewa_pengguna
@@ -230,10 +128,6 @@ def hitung_simulasi(
         or margin <= 0
         else sewa_bulanan / (HARI_PER_BULAN * struk_dipakai * margin)
     )
-    # Pangsa yang membuat laba tepat nol: laba = belanja x jam x pangsa x hari x
-    # margin - sewa = 0. Dibalik, pangsanya = sewa / (belanja x jam x hari x
-    # margin). Ini angka yang paling layak dipercaya di sini, karena ia tidak
-    # memuat satu pun asumsi pangsa - cuma harga sewa dan uang yang terukur.
     dasar_omzet = (
         None
         if belanja_per_jam is None or belanja_per_jam <= 0 or margin <= 0
@@ -270,12 +164,6 @@ def hitung_simulasi(
         )
         sensitivitas.append({"pangsa_persen": p_uji, "laba_kotor_bulanan": laba_uji})
 
-    # --- Peringatan: fakta, bukan patokan ---------------------------------
-    #
-    # Tidak ada ambang "sewa sehat maksimal 30% omzet" di sini. Angka semacam itu
-    # beredar luas tetapi tidak berasal dari data mana pun yang kami punya, dan
-    # menuliskannya akan menyamarkan tebakan jadi temuan. Yang diperingatkan
-    # hanya hal yang benar secara aritmetika atau tercatat di basis data.
     peringatan: list[Peringatan] = []
     if zona_izin is False:
         peringatan.append(

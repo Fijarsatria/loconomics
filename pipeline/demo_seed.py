@@ -1,40 +1,4 @@
-"""Data demo sintetis untuk keenam kawasan pilot.
-
-KENAPA INI ADA. Data survei lapangan belum masuk, sementara antarmuka perlu
-diuji dan didemokan sekarang. Tanpa isi, seluruh layar hanya menampilkan keadaan
-kosong, dan tidak ada yang bisa menilai apakah petanya terbaca.
-
-KENAPA BUKAN DATA PALSU YANG DITEMPEL. Angka di sini tidak ditulis tangan lalu
-dimasukkan ke basis data. Ia dibangkitkan sebagai VARIABEL MENTAH, lalu melewati
-mesin skoring yang sama persis dengan yang akan memproses data sungguhan:
-
-    variabel sintetis -> s4_spatial.profil_jam / harga_sewa_per_m2
-                      -> s6_score.skor_lengkap
-                      -> s7_publish.muat_*
-
-Artinya yang diuji bukan cuma tampilannya, melainkan seluruh rantai pipeline ke
-basis data. Kalau rumusnya salah, itu akan terlihat di peta.
-
-    cd pipeline && python demo_seed.py --isi
-    cd pipeline && python demo_seed.py --hapus
-
-SELURUH BARIS DITANDAI `predicted`, KEYAKINAN RENDAH, `n_titik_misi = 0`.
-
-Ini diperketat 24 Agustus 2026, dan alasannya layak dibaca sebelum ada yang
-tergoda melonggarkannya lagi. Versi sebelumnya membagikan `n_titik_misi` acak
-(4-45) lalu menandai yang >= 10 sebagai `observed`, sehingga 474 dari 708
-heksagon mengaku disurvei - lengkap dengan badge "Didukung survei secukupnya"
-di layar. Tidak ada satu pun titik survei di basis data: `menu_observations`,
-`receipt_observations`, dan `property_observations` ketiganya nol baris.
-
-Badge keyakinan ADA justru supaya orang tahu seberapa tipis datanya (aturan
-emas 2). Badge yang menyatakan kebalikannya lebih buruk daripada tidak ada
-badge sama sekali - dan pertanyaan "28 titik misi itu dari mana?" tidak punya
-jawaban yang bisa diberikan di depan juri.
-
-Konsekuensinya disengaja: seluruh peta digambar berarsir, dan setiap simulasi
-memunculkan peringatan DATA_TIPIS. Itu memang keadaan yang sebenarnya.
-"""
+"""Data demo sintetis untuk keenam kawasan pilot."""
 
 from __future__ import annotations
 
@@ -61,11 +25,6 @@ from s7_publish import _mesin, muat_faktor, muat_profil_jam, muat_skor
 
 # Pusat kawasan diimpor dari config - lihat catatan di sana.
 
-# Simpul transit sungguhan: nama, moda, dan koordinatnya BUKAN karangan.
-# Isochrone-nya sengaja TIDAK dibangkitkan - poligon jangkauan jalan kaki menuntut
-# routing atas jaringan jalan, dan menggambar lingkaran lalu menyebutnya isochrone
-# akan persis melakukan kesalahan yang docs/data.md peringatkan: mengasumsikan
-# orang bisa berjalan menembus tembok, sungai, dan rel.
 SIMPUL = {
     "Manggarai": ("Stasiun Manggarai", "KRL", 8, 130_000),
     "Tanah Abang": ("Stasiun Tanah Abang", "KRL", 6, 95_000),
@@ -78,11 +37,6 @@ SIMPUL = {
 # Cincin ke-6 dari pusat: sekitar 127 heksagon per kawasan, radius ±2 km.
 # Cukup untuk peta yang terasa berisi, cukup kecil untuk dimuat seketika.
 
-# Karakter tiap kawasan. Angka-angka ini yang membuat keenamnya tidak terlihat
-# sama, dan dipilih supaya kuadrannya jatuh sesuai dugaan di PRD: Dukuh Atas
-# semestinya penuh Jebakan Gengsi, Harjamukti semestinya penuh Hidden Gem.
-# Kalau setelah dijalankan hasilnya TIDAK begitu, itu temuan tentang rumusnya,
-# bukan tentang datanya.
 KARAKTER = {
     "Manggarai": dict(prestise=0.45, sewa=170_000, ramai=0.80, churn=0.30, rdtr=0.9),
     "Tanah Abang": dict(prestise=0.50, sewa=220_000, ramai=0.95, churn=0.55, rdtr=0.9),
@@ -94,16 +48,7 @@ KARAKTER = {
 
 
 def _sel_per_kawasan() -> dict[str, list[str]]:
-    """Bagi heksagon ke kawasan, satu heksagon tepat satu kawasan.
-
-    Cincin Manggarai dan Dukuh Atas BNI bertumpang tindih - keduanya hanya
-    berjarak sekitar 2,5 km, sedangkan radius cincin ini ±2 km. Membiarkannya
-    berarti ada heksagon yang muncul dua kali dengan kawasan berbeda, dan tabel
-    hex_features berkunci utama h3_index tidak akan menerimanya.
-
-    Yang menang adalah pusat terdekat. Itu juga definisi yang benar di luar data
-    demo: sebuah lokasi melayani stasiun yang paling dekat dengannya.
-    """
+    """Bagi heksagon ke kawasan, satu heksagon tepat satu kawasan."""
     klaim: dict[str, tuple[str, float]] = {}
     for kawasan, (lat0, lon0) in PUSAT.items():
         pusat = h3.latlng_to_cell(lat0, lon0, H3_RESOLUSI)
@@ -129,13 +74,7 @@ def _wkt(sel: str) -> str:
 
 
 def bangkitkan(seed: int = 2026) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Bangkitkan variabel mentah, struk, dan properti untuk keenam kawasan.
-
-    Satu gagasan mengatur hampir seluruh angkanya: jarak ke pusat. Makin dekat
-    simpul transit, makin tinggi potensi dan makin mahal biayanya. Itu memberi
-    peta gradien yang terbaca alih-alih taburan acak, dan gradien itulah yang
-    membuat mata bisa menilai apakah pewarnaannya bekerja.
-    """
+    """Bangkitkan variabel mentah, struk, dan properti untuk keenam kawasan."""
     rng = np.random.default_rng(seed)
     baris, struk, properti = [], [], []
     per_kawasan = _sel_per_kawasan()
@@ -162,10 +101,6 @@ def bangkitkan(seed: int = 2026) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
                 else True
             )
 
-            # `berisi` menentukan heksagon mana yang dibangkitkan aktivitasnya
-            # (struk dan properti), supaya keadaan "belum ada data" ikut teruji.
-            # Ia BUKAN penanda kualitas dan tidak pernah menyentuh badge -
-            # lihat catatan di kepala berkas.
             berisi = int(max(0, rng.normal(26 * dekat + 4, 9))) >= 10
 
             baris.append(
@@ -215,10 +150,6 @@ def bangkitkan(seed: int = 2026) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
                     "zona_izin_komersial": zona,
                     "kelas_zona": None if zona is None else ("K-1" if zona else "R-3"),
                     "risiko_banjir": np.clip(rng.normal(0.34, 0.2), 0, 1),
-                    # Morfologi
-                    # PERSEN (0-100), sama dengan yang ditulis `s7_publish --bangunan` dari
-                    # OSM. Kalau di sini tetap pecahan, satu kali menjalankan
-                    # demo_seed membalik skala kolomnya tanpa satu pun galat.
                     "rasio_tutupan_bangunan": np.clip(rng.normal(42 + 30 * dekat, 11), 3, 95),
                     "luas_bangunan_median": max(24, rng.normal(70 + 260 * prestise, 45)),
                     "skor_prestise_visual": float(np.clip(1 + prestise * 4 + rng.normal(0, 0.4), 1, 5)),
@@ -339,19 +270,7 @@ def isi(seed: int = 2026, paksa: bool = False) -> dict[str, int]:
 
 
 def _data_nyata(db) -> list[str]:
-    """Apa saja di basis data ini yang TIDAK bisa dibangkitkan ulang oleh skrip.
-
-    Daftarnya bukan hiasan. `isi()` dan `hapus()` sama-sama menjalankan
-    `DELETE FROM transport_nodes`, dan `hex_routes` maupun `catchment_areas`
-    menggantung di situ lewat `ON DELETE CASCADE` - jadi satu perintah demo
-    menghapus 1.587 rute OpenRouteService yang butuh berjam-jam kuota untuk
-    dibuat, tanpa menyebutnya sama sekali. `DELETE FROM hex_features` melakukan
-    hal yang sama pada D04 nyata dan seluruh variabel Kompetisi dari OSM.
-
-    Yang membuatnya berbahaya bukan penghapusannya melainkan DIAMNYA: skripnya
-    selesai dengan sukses, angkanya kembali masuk akal, dan satu-satunya cara
-    mengetahui ada yang hilang adalah mengingat bahwa dulu ada.
-    """
+    """Apa saja di basis data ini yang TIDAK bisa dibangkitkan ulang oleh skrip."""
     berisi = []
     for tabel, sebut in (
         ("hex_routes", "rute jalan kaki OpenRouteService"),

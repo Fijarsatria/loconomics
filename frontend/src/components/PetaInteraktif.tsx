@@ -1,22 +1,3 @@
-/**
- * Bagian wajib 1 dari 3: Peta Interaktif.
- *
- * Dua keputusan visual yang perlu dipahami sebelum mengubah berkas ini.
- *
- * PERTAMA — arsir berarti "kami belum tahu". Heksagon yang nilainya hasil
- * imputasi model digambar dengan pola arsir di atas isiannya, bukan sekadar
- * dibuat lebih pudar. Pudar terbaca sebagai "kurang penting"; arsir terbaca
- * sebagai "jenisnya berbeda", dan itu yang benar. Aturan proyek menuntut
- * pengguna bisa membedakan yang disurvei dari yang ditebak model tanpa mengklik.
- *
- * KEDUA — HINDARI tidak punya warna. Validator palet membuktikan abu-abu tidak
- * bisa jadi warna kategorikal, dan itu justru petunjuk: kuadran itu memang
- * berarti tidak ada apa-apa di sini. Ia digambar hanya sebagai garis.
- *
- * Aksi peta (flyTo, highlight, filter) dieksekusi DI SINI, bukan di backend.
- * Kalau flyTo jalan di server, tidak ada yang bergerak di layar pengguna — dan
- * ketentuan C.2 justru meminta keluaran AI yang benar-benar mendarat di peta.
- */
 
 import {
   forwardRef,
@@ -96,14 +77,6 @@ const L_PILIH = 'hex-pilih'
 const L_ANGKA = 'hex-angka'
 const L_SELUBUNG = 'selubung-basemap'
 const POLA = 'arsir-ketidakpastian'
-/**
- * Tujuh blok res-10 di dalam heksagon terpilih.
- *
- * Sumber TERPISAH dari heksagon, alasan yang sama dengan `SUMBER_FOKUS`:
- * isinya berganti tiap kali seseorang membedah sebuah heksagon, sedangkan
- * sumber heksagon hanya berganti saat kawasannya berganti. Menyatukannya
- * berarti mengirim ulang 708 poligon untuk menggambar tujuh.
- */
 const SUMBER_BLOK = 'blok'
 const L_BLOK_ISI = 'blok-isi'
 const L_BLOK_GARIS = 'blok-garis'
@@ -114,22 +87,6 @@ const SUMBER_FOKUS = 'fokus'
 const L_NOMOR = 'fokus-nomor'
 const L_NOMOR_TEKS = 'fokus-nomor-teks'
 
-/**
- * Rute jalan kaki. Sumber SENDIRI, terpisah dari lencana nomor.
- *
- * Alasannya bukan kerapian: geometri rute ditulis ulang TIAP BINGKAI selama
- * animasi menggambarnya. Kalau lencana ikut di sumber yang sama, ia ikut
- * dikirim ulang enam puluh kali sedetik tanpa satu pun alasan.
- */
-/**
- * Kawasan jangkau jalan kaki dari simpul - isochrone 5/10/15 menit.
- *
- * GARIS SAJA, tanpa isian pekat. Isian di sini akan bertumpuk dengan warna
- * heksagon dan mengubah keduanya jadi bubur; yang dibutuhkan cuma BATASNYA -
- * "sejauh mana orang sampai dalam sepuluh menit". Bentuknya sendiri sudah
- * bercerita: kawasan jangkau Manggarai separuh luas kawasan jangkau stasiun
- * lain, karena emplasemen relnya memotong jalan ke segala arah.
- */
 const SUMBER_ISO = 'catchment'
 const L_ISO_ISI = 'catchment-isi'
 const L_ISO_GARIS = 'catchment-garis'
@@ -142,27 +99,11 @@ const L_RUTE = 'rute-utama'
 const L_RUTE_TEKS = 'rute-teks'
 /** Kepala bercahaya di ujung rute yang sedang tumbuh. Hanya ada selama animasi. */
 const L_RUTE_KEPALA = 'rute-kepala'
-/**
- * Aliran rute yang TERUS berjalan sesudah rutenya selesai digambar.
- *
- * Sumber TERPISAH, dan itu yang penting: sumbernya cuma memuat beberapa TITIK
- * (<= 4 - satu per rute utama), jadi menulis ulang tiap bingkai harganya tetap
- * kecil. Versi lama menulis ulang SELURUH GeoJSON rute tiap bingkai, dan itu
- * yang membuatnya dibuang dulu (lihat catatan "Arus" di efek rute).
- */
 const SUMBER_ALIR = 'rute-alir'
 const L_ALIR = 'rute-alir-titik'
 /** Pin titik awal (pusat heksagon) dan tujuan (simpul). */
 const L_UJUNG = 'rute-ujung'
 
-/** Lama animasi rute menggambar dirinya, milidetik.
- *
- *  1.700, bukan 950 (13 Sep 2026). Pemilik repo melaporkan "kenapa ga ada
- *  animasi kemunculan rutenya" - dan diukur, animasinya memang ADA, tetapi
- *  selesai di luar layar: kamera sedang terlalu dekat ke heksagon, rute 2,5 km
- *  hampir seluruhnya di luar bingkai, dan 950 ms habis sebelum mata sempat
- *  menemukannya. Sekarang kamera MUNDUR membingkai rutenya dulu, dan garisnya
- *  tumbuh cukup lama untuk diikuti. */
 const GAMBAR_MS = 1700
 /** Jeda tiap rute berikutnya berangkat. Berundak, bukan serempak. */
 const UNDAK_MS = 240
@@ -175,15 +116,6 @@ const ALIR_MS = 2400
  *  ongkos untuk gerak yang sama. */
 const ALIR_LANGKAH_MS = 62
 
-/**
- * Panjang kumulatif tiap simpul sebuah polyline, dalam derajat.
- *
- * Derajat, bukan meter: yang dibutuhkan cuma PERBANDINGAN antar-ruas di satu
- * garis yang sama, dan pada rentang beberapa kilometer di lintang yang sama
- * perbandingan itu tidak berubah kalau satuannya diganti. Menghitung jarak
- * geodetik betulan di sini berarti membayar trigonometri untuk seratus titik
- * setiap bingkai demi angka yang dibagi habis lagi setelahnya.
- */
 function panjangKumulatif(k: [number, number][]): number[] {
   const kum = [0]
   for (let i = 1; i < k.length; i++) {
@@ -206,14 +138,6 @@ function titikPada(k: [number, number][], kum: number[], t: number): [number, nu
   return [k[i - 1][0] + (k[i][0] - k[i - 1][0]) * f, k[i - 1][1] + (k[i][1] - k[i - 1][1]) * f]
 }
 
-/**
- * Polyline yang dipotong pada pecahan panjang `t`, dengan ujung diinterpolasi.
- *
- * Diinterpolasi, bukan dipotong di simpul terdekat: rute ORS punya ruas panjang
- * dan ruas pendek berselang-seling, jadi memotong di simpul membuat garisnya
- * tumbuh tersendat - cepat di sepanjang jalan lurus, lalu berhenti lama di
- * tikungan yang simpulnya rapat.
- */
 function potongJalur(
   k: [number, number][],
   kum: number[],
@@ -233,11 +157,6 @@ function potongJalur(
   return keluar.length >= 2 ? keluar : [k[0], keluar[0]]
 }
 
-/**
- * Pola arsir dibuat di kanvas, bukan dimuat sebagai berkas.
- * Satu berkas gambar berarti satu permintaan jaringan lagi yang bisa gagal saat
- * demo, untuk sesuatu yang isinya hanya empat garis miring.
- */
 function buatPolaArsir(): ImageData {
   const s = 16 // digambar 2x lalu dipasang dengan pixelRatio 2
   const c = document.createElement('canvas')
@@ -254,91 +173,16 @@ function buatPolaArsir(): ImageData {
   return g.getImageData(0, 0, s, s)
 }
 
-/**
- * Sejak zoom berapa tiap tingkat penanda tempat mulai digambar.
- *
- * Gaya MAPID menyalakan POI di z14/15/16. Itu PILIHAN TAMPILAN, bukan batas
- * data: `mapidtiles.json` menyatakan lapisan vektor `poi` tersedia sejak
- * **zoom 10**. Jadi menurunkannya tidak mengarang apa pun - ia cuma meminta
- * ubin menggambar yang memang sudah ada di dalamnya.
- *
- * Bertingkat, bukan seragam. Ketiga layer aslinya dibedakan `rank`:
- * poi_z14 memuat rank 1-6 (stasiun, rumah sakit, pasar - yang benar-benar
- * menandai sebuah tempat), poi_z15 rank 7-19, poi_z16 sisanya. Menurunkan
- * ketiganya ke angka yang sama akan menumpahkan ratusan warung dan ATM ke
- * layar yang di-zoom keluar; menurunkannya bertingkat memberi yang penting
- * lebih dulu.
- */
 const ZOOM_POI: Record<string, number> = {
-  // Rank 1-6 saja yang diturunkan, dan cuma satu setengah tingkat. Percobaan
-  // pertama menurunkan ketiganya (12 / 14 / 15,5) dan hasilnya persis yang
-  // ditakutkan: di zoom 14 dua tingkat menyala bersamaan, ratusan label
-  // memenuhi layar, dan angka heksagon tergusur habis oleh tabrakan simbol.
-  // Peta biasa pun tidak menampilkan setiap puskesmas di zoom segitu.
   poi_z14: 12.5,
   // Kedua ini dibiarkan seperti gaya aslinya. Yang diminta "penanda terlihat
   // saat di-zoom keluar", dan yang menandai sebuah tempat adalah rank 1-6 -
   // sisanya justru yang membuat layar penuh.
   poi_z15: 15,
   poi_z16: 16,
-  // Penanda transit gaya MAPID tidak punya `minzoom` sama sekali - ia tampil
-  // dari zoom nol. Diberi ambang di sini supaya ia ikut bergeser bersama yang
-  // lain saat pengguna memilih "Jarang" atau "Rapat"; tanpa entri ini, satu-
-  // satunya lapisan penanda yang TIDAK menurut pada setelan justru yang paling
-  // banyak muncul di kawasan transit. Ambangnya rendah dengan sengaja: stasiun
-  // memang pantas terlihat lebih awal daripada toko.
   poi_transit: 11,
 }
 
-/**
- * Tenangkan basemap sebelum data digambar di atasnya.
- *
- * Gaya MAPID menggambar setiap footprint bangunan dan setiap ikon POI. Untuk
- * peta navigasi itu benar; untuk peta analitik ia berebut perhatian dengan hal
- * yang justru ingin dibaca. Yang dilakukan di sini:
- *
- *   1. Selubung putih tipis di atas isian basemap, di bawah heksagon. Jalan dan
- *      bangunan tetap ada sebagai konteks, tetapi berhenti bersaing.
- *   2. Penanda tempat DINYALAKAN dan diturunkan zoomnya. Sempat disembunyikan
- *      seluruhnya dengan alasan "ikon klinik tidak menolong orang mengenali
- *      lokasi" - dan alasan itu keliru. Tanpa penanda, peta berhenti terasa
- *      seperti peta: yang tersisa cuma jalan tanpa nama tempat, dan orang
- *      kehilangan satu-satunya cara mencocokkan heksagon dengan dunia yang ia
- *      kenal. Yang dibutuhkan bukan menghapusnya, melainkan menaruhnya di ATAS
- *      heksagon supaya keduanya bisa dibaca sekaligus.
- */
-/**
- * Terapkan pilihan kerapatan nama tempat ke SELURUH layer penanda basemap.
- *
- * Dipanggil dari dua tempat, dan keduanya wajib: sekali saat gayanya baru
- * selesai dimuat (di dalam `siapkanBasemap`), dan sekali lagi tiap pilihannya
- * berubah. Yang pertama saja tidak cukup - pilihannya bisa berganti kapan pun;
- * yang kedua saja juga tidak - `setStyle` mengembalikan seluruh layer ke
- * setelan bawaan gayanya tanpa memberi tahu siapa pun.
- */
-/**
- * Layer simbol MANA yang dianggap "nama tempat".
- *
- * Bukan cuma `poi*`, dan itu perbaikan 11 Sep 2026. Setelan ini bernama "Nama
- * tempat" dan dijelaskan sebagai "stasiun, gedung, taman" - tetapi hanya
- * mematikan keluarga `poi*`. Nama kelurahan dan kawasan hidup di keluarga
- * `place*` (`place_other`, `place_suburb`, `place_village`, `place_town`,
- * `place_city`), dan nama perairan di `water_name*`. Jadi mematikan setelannya
- * meninggalkan KEBON MELATI, PETAMBURAN, SLIPI, MENTENG tetap di layar -
- * dilaporkan pemilik repo apa adanya: "kok masih ada tuh ikon ikon lokasi yang
- * lain".
- *
- * NAMA JALAN SENGAJA TIDAK IKUT (`road_label`, `highway_name_*`). Ia satu-
- * satunya hal yang memberitahu pengguna heksagon yang dilihatnya ada di jalan
- * apa, dan permintaan yang sama yang meminta label dimatikan juga meminta
- * "jalanan dan detail detail jangan ketutupan". Mematikan nama jalan bekerja
- * melawan permintaan itu.
- */
-// Gaya SATELIT memakai skema penamaan MapTiler, bukan OpenMapTiles-nya MAPID:
-// "Place labels", "City labels", "Country labels" - berspasi dan berhuruf
-// besar. Tanpa cabang kedua, setelan "Nama tempat: Mati" diam-diam tidak
-// berlaku sama sekali di satelit. "Road labels" sengaja tidak ikut, dengan
-// alasan yang sama seperti nama jalan di gaya vektor.
 const RE_NAMA_TEMPAT = /^(poi|place|water_name)|^(place|city|capital city|state|country|continent) labels$/i
 
 /** Layer ekstrusi gedung milik kita, untuk gaya yang tidak membawanya sendiri. */
@@ -346,25 +190,6 @@ const L_GEDUNG = 'loc-gedung-3d'
 /** Sumber ubin vektor MAPID yang ditambahkan ke gaya satelit untuk gedung 3D. */
 const SUMBER_GEDUNG = 'loc-mapidtiles'
 
-/**
- * Buka bungkus "fungsi lama" peninggalan Mapbox GL JS v0.
- *
- * Gaya satelit MAPID adalah hasil konversi yang tidak selesai: `text-size`
- * beberapa layer simbol masih berbentuk `{"value": ["zoom"], "Count": 1}`
- * alih-alih `["zoom"]`, dan ada pula `{"stops": [[0, 12], [2, 13]]}`.
- * MapLibre v5 menolak SELURUH gaya karena satu ekspresi begitu - "zoom
- * expression may only be used as input to a top-level step or interpolate
- * expression" - dan penolakannya persis terlihat sebagai keluhan pemilik
- * repo 19 Sep 2026, "ganti ke peta satelit selalu error": gaya lama tetap
- * terpasang, citra tidak pernah muncul, pita "Basemap gagal dimuat" naik,
- * dan NOL galat jaringan (ditemukan dari `console.warn`-nya, bukan dari satu
- * pun asersi).
- *
- * Yang dilakukan hanya MEMBUKA bungkusnya - `{value, Count}` menjadi
- * nilainya sendiri, `{stops}` menjadi interpolate linear atas zoom. Tidak
- * ada sumber ubin, kunci, atau gaya baru yang ditambahkan; apa pun yang sudah
- * berbentuk ekspresi sah dibiarkan apa adanya.
- */
 function bukaFungsiLama(v: unknown): unknown {
   if (Array.isArray(v)) {
     // Bentuk lama `["linear", x1, y1, x2, y2]` adalah "linear ber-easing" milik
@@ -393,17 +218,6 @@ function bukaFungsiLama(v: unknown): unknown {
   return v
 }
 
-/**
- * Ukuran teks label satelit dijadikan ANGKA tetap.
- *
- * Ekspresi `text-size` bawaan gaya itu tetap ditolak MapLibre 6 walau sudah
- * dibuka dari bungkus lamanya - dan yang ditolak bukan cuma bentuknya, tapi
- * SELURUH gaya, jadi peta citra tidak pernah terpasang. Angka tidak bisa
- * ditafsirkan salah. Nilainya diambil dari ukuran terakhir yang disebut
- * gayanya (ukuran di zoom terjauh), lalu dibatasi 10-14 px: label basemap di
- * layar ponsel tidak perlu lebih besar dari itu, dan di peta citra labelnya
- * memang pelengkap, bukan isi.
- */
 function rapiLapis(l: unknown): unknown {
   const lapis = l as { layout?: Record<string, unknown> }
   const ts = lapis.layout?.['text-size']
@@ -422,26 +236,6 @@ function rapiLapis(l: unknown): unknown {
   return { ...lapis, layout: { ...lapis.layout, 'text-size': Math.min(14, Math.max(10, n)) } }
 }
 
-/**
- * Siapkan gaya satelit SEBELUM dipasang - lewat `transformStyle` MapLibre.
- *
- * Tiga hal, semuanya tidak bisa dikerjakan sesudah gayanya terpasang tanpa
- * membongkarnya lagi:
- *
- *   FUNGSI LAMA. Lihat `bukaFungsiLama` di atas - tanpa ini gayanya ditolak
- *   MapLibre seluruhnya.
- *
- *   ATRIBUSI. Sumber citra di gaya satelit MAPID tidak membawa satu pun teks
- *   atribusi, jadi kontrol atribusi akan diam tentang siapa pemilik gambarnya.
- *
- *   GLYPH. Label gaya satelit meminta font ke api.maptiler.com, sementara
- *   angka heksagon kita memakai tumpukan "Metropolis Regular,Noto Sans
- *   Regular" yang tidak ada di sana - satu tumpukan yang tidak dikenal
- *   membuat SELURUH angka heksagon gagal digambar tanpa galat. Server font
- *   MAPID melayani keduanya (diuji 200), jadi label satelit ikut memakainya.
- *
- * Gaya vektor lain dikembalikan apa adanya.
- */
 function tataGaya(gaya: NamaGaya) {
   return (_lama: StyleSpecification | undefined, baru: StyleSpecification): StyleSpecification => {
     if (!GAYA_BASEMAP[gaya]?.langsung) return baru
@@ -462,19 +256,6 @@ function labelBasemapPertama(m: MapLibreMap, kecuali: string): string | undefine
   )?.id
 }
 
-/**
- * Gedung 3D menyala atau mati, dan URUTANNYA terhadap heksagon.
- *
- * Urutannya yang menentukan apakah 3D ini berguna. Gedung harus berdiri DI
- * ATAS isian dan garis heksagon - kalau sebaliknya, warna heksagon dicat di
- * atas dinding dan atap, dan yang terlihat kotak berwarna yang melayang, bukan
- * kawasan yang diwarnai. Tetapi angka heksagon dan label tempat tetap di atas
- * gedung, supaya keduanya masih terbaca saat peta dimiringkan.
- *
- * Dipanggil ulang sesudah heksagon selesai dipasang, karena `setStyle`
- * membongkar seluruh layer dan heksagon dipasang ulang secara asinkron - urutan
- * yang benar sebelum itu tidak bertahan.
- */
 function aturGedung3D(m: MapLibreMap, gaya: NamaGaya, nyala: boolean) {
   if (!m.isStyleLoaded() && !m.getStyle()?.layers?.length) return
   const bawaan = GAYA_BASEMAP[gaya]?.gedung3d
@@ -505,10 +286,6 @@ function aturGedung3D(m: MapLibreMap, gaya: NamaGaya, nyala: boolean) {
       paint: {
         'fill-extrusion-color': w.warna,
         'fill-extrusion-opacity': w.opasitas,
-        // `render_height` diisi OpenMapTiles untuk seluruh bangunan (bawaan
-        // 5 m kalau OSM tidak menyebut tingkat). Coalesce tetap dipasang: ubin
-        // lama tanpa kolom itu akan menggambar tinggi nol - tapak rata yang
-        // terbaca sebagai layer yang rusak.
         'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
         'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
       },
@@ -525,18 +302,6 @@ function aturGedung3D(m: MapLibreMap, gaya: NamaGaya, nyala: boolean) {
 }
 
 function terapkanNamaTempat(m: MapLibreMap, kerapatan: string) {
-  // `?? 0` DI SINI adalah bug yang bertahan sejak setelan ini dipasang, dan
-  // ia memakan justru satu-satunya nilai yang punya arti khusus.
-  //
-  // `KERAPATAN_NAMA.mati.geser` memang `null`, dan `null` di situ berarti
-  // "sembunyikan seluruh lapisannya" - bukan "tidak ada geseran". Bentuk
-  // lamanya `KERAPATAN_NAMA[k]?.geser ?? 0` menyamakan dua hal yang berbeda:
-  // kunci yang TIDAK DIKENAL (yang memang pantas jatuh ke 0) dan kunci yang
-  // nilainya SENGAJA null. Akibatnya "Mati" berperilaku persis seperti
-  // "Normal", tanpa satu pun galat - setelannya bergerak, tulisannya berganti,
-  // dan labelnya tetap di layar. Dilaporkan pemilik repo dua kali.
-  //
-  // Yang benar: jatuhkan KUNCI-nya, bukan nilainya.
   const aturan = KERAPATAN_NAMA[kerapatan] ?? KERAPATAN_NAMA.normal
   const geser = aturan.geser
   for (const l of m.getStyle().layers ?? []) {
@@ -559,10 +324,6 @@ function terapkanNamaTempat(m: MapLibreMap, kerapatan: string) {
 function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
   const layers = m.getStyle().layers ?? []
   const gelap = BASEMAP_GELAP.includes(gaya)
-  // Nama tempat dikecilkan di ponsel (permintaan 19 Sep 2026). Ukuran aslinya
-  // dirancang untuk layar lebar; di 390px labelnya memakan peta. Dikalikan
-  // ekspresi `text-size` yang sudah ada - termasuk yang ber-`interpolate`
-  // zoom - supaya tangga zoomnya tetap, cuma skalanya turun.
   const kecilkanNama = window.matchMedia('(max-width: 1023.98px)').matches
 
   // Kerapatan penandanya diurus `terapkanNamaTempat` di bawah - satu tempat,
@@ -574,13 +335,6 @@ function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
       m.setPaintProperty(l.id, 'text-halo-width', 1.6)
       m.setPaintProperty(l.id, 'text-halo-blur', 0.3)
       if (kecilkanNama) {
-        // HANYA angka atau ekspresi-array yang boleh dikalikan. Sebagian layer
-        // gaya MAPID menyimpan `text-size` sebagai OBJEK (format lama gaya
-        // `{ stops: [...] }`); `['*', objek, 0.8]` ditolak MapLibre sebagai
-        // "Bare objects invalid", dan penolakan itu terjadi saat VALIDASI GAYA
-        // - bukan sebagai lemparan di sini - sehingga SELURUH basemap gagal
-        // dimuat dan peta putih dengan pita "Basemap gagal dimuat". Jadi
-        // diperiksa jenisnya lebih dulu, bukan dibungkus try/catch.
         const ts = m.getLayoutProperty(l.id, 'text-size')
         if (typeof ts === 'number') {
           m.setLayoutProperty(l.id, 'text-size', ['*', ts, 0.8])
@@ -590,14 +344,6 @@ function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
       }
     }
 
-    // Label gaya gelap MAPID ditulis untuk latar hitam pekat: rgb(101,101,101)
-    // dengan halo hitam. Begitu ada selubung apa pun di atasnya, kontrasnya
-    // habis. Di satelit lebih parah - tidak ada halo yang cukup melawan citra.
-    //
-    // Menulis ulang warna label BUKAN pelanggaran "basemap hanya MAPID": ubin
-    // vektornya tetap milik MAPID, yang diganti cuma cara menggambarnya. Kalau
-    // dibiarkan, nama jalan dan nama tempat hilang - dan itulah satu-satunya
-    // cara pengguna tahu heksagon yang dilihatnya ada di mana.
     if (gelap && l.type === 'symbol') {
       m.setPaintProperty(l.id, 'text-color', '#e6edea')
       m.setPaintProperty(l.id, 'text-halo-color', 'rgba(4, 10, 8, 0.92)')
@@ -627,41 +373,6 @@ function siapkanBasemap(m: MapLibreMap, gaya: NamaGaya, kerapatan: string) {
 // Animasi kemunculan heksagon
 // ---------------------------------------------------------------------------
 
-/**
- * Heksagon mekar dari tengah kawasan ke tepi, bukan muncul serentak.
- *
- * Caranya bukan animasi CSS - heksagon digambar di kanvas WebGL, jadi tidak ada
- * elemen DOM yang bisa dianimasikan. Yang dipakai: setiap fitur diberi properti
- * `_u`, jaraknya dari pusat kawasan yang dinormalkan ke 0..1, lalu opasitas
- * seluruh layer dinyatakan sebagai ekspresi yang membandingkan `_u` dengan satu
- * angka `t` yang dinaikkan per bingkai.
- *
- *   gerbang(t) = 1 kalau _u <= t - 0,22 ; 0 kalau _u >= t ; landai di antaranya
- *
- * Jadi t yang bergerak 0 → 1,22 adalah gelombang yang menyapu dari pusat ke
- * tepi. Membalik arahnya memberi animasi keluar tanpa kode kedua.
- *
- * Opasitas dasar tiap layer TIDAK ditulis ulang - ia dikalikan. Dengan begitu
- * ekspresi per-kuadran yang sudah ada (HINDARI lebih pudar, tanpa data lebih
- * pudar) tetap berlaku selama animasi.
- */
-/**
- * Menunggu peta berhenti sibuk sebelum gelombang diberangkatkan.
- *
- * Inilah sebab keluhan "heksagonnya tiba-tiba muncul, tanpa animasi". Gelombang
- * digerakkan requestAnimationFrame, dan tiap bingkainya memanggil
- * setPaintProperty - keduanya berebut main thread dengan MapLibre yang sedang
- * membangun gaya baru dan mengunduh ubin. Yang menang MapLibre. Gelombangnya
- * tetap berjalan, tapi hanya dapat dua atau tiga bingkai, jadi yang terlihat
- * cuma heksagon yang berkedip jadi ada.
- *
- * Menundanya sampai peta tenang membuatnya terlambat beberapa ratus milidetik
- * dan MULUS - jauh lebih baik daripada tepat waktu dan tidak terlihat.
- *
- * Batas waktunya wajib: `idle` tidak pernah menyala kalau ada satu ubin yang
- * gagal diunduh, dan animasi yang menunggu selamanya sama saja dengan animasi
- * yang tidak ada.
- */
 function tungguTenang(m: MapLibreMap, batasMs = 1500): Promise<void> {
   return new Promise((selesai) => {
     if (m.loaded() && m.areTilesLoaded()) return selesai()
@@ -699,19 +410,6 @@ function gerbang(t: number) {
   ] as unknown as ExpressionSpecification
 }
 
-/**
- * Opasitas isian = dasar × gerbang gelombang × saklar fokus.
- *
- * Faktor ketiga itulah MODE FOKUS: heksagon yang sedang dibuka atau sedang
- * dibandingkan dikalikan NOL, jadi isiannya hilang sama sekali dan jalan serta
- * bangunan di bawahnya terlihat utuh. Yang menandainya garis tebal di layer
- * terpisah — bentuk yang tetap terbaca tanpa menutupi apa pun di bawahnya.
- *
- * Lewat ekspresi, bukan lewat `filter`: filter pada layer isian sudah dipakai
- * saringan kuadran DAN saringan AI, dan menumpuk yang ketiga berarti tiga
- * pemilik untuk satu properti yang sama — persis pola yang sudah pernah
- * menghasilkan bug hantu di berkas ini.
- */
 const kali = (
   dasar: number | ExpressionSpecification,
   g: ExpressionSpecification,
@@ -724,22 +422,6 @@ const kali = (
     ['case', ['in', ['get', 'h3_index'], ['literal', fokus]], 0, 1],
   ] as unknown as ExpressionSpecification
 
-/**
- * SATU setPaintProperty per bingkai, bukan tiga.
- *
- * Diukur bingkai demi bingkai: versi tiga-panggilan hanya sempat menghasilkan
- * enam nilai berbeda sepanjang 1,3 detik - sekitar 4,6 fps - padahal
- * requestAnimationFrame di halaman yang sama berjalan di 28 fps. Jadi yang
- * menghambat bukan peta yang sibuk mengunduh, melainkan biaya panggilannya
- * sendiri: tiap setPaintProperty memaksa MapLibre mengurai ulang ekspresi dan
- * menilainya ulang untuk setiap fitur di setiap ubin, lalu mengunggah ulang
- * bufernya.
- *
- * Arsir dan garis karena itu dikeluarkan dari lingkaran per-bingkai. Keduanya
- * memudar lewat `-transition` bawaan MapLibre, yang dijalankan di dalam mesin
- * dan tidak menyentuh main thread tiap bingkai. Yang tinggal digerakkan tangan
- * cuma isian - dan justru isian itulah satu-satunya yang gelombangnya terbaca.
- */
 function terapkanGelombang(
   m: MapLibreMap,
   layer: NamaLayer,
@@ -767,12 +449,6 @@ function iringiGelombang(m: MapLibreMap, tampak: boolean, durasi: number) {
   }
 }
 
-/**
- * Jarak tiap fitur dari pusat kawasan, dinormalkan. Dihitung sekali per muat.
- *
- * Titik pertama cincin luar sudah cukup mewakili posisi heksagon: sisinya cuma
- * ratusan meter, sementara kawasan yang disapu gelombang ini berkilometer.
- */
 function bubuhiUrutan(data: { features: unknown[] }) {
   type F = { geometry?: { coordinates?: number[][][] }; properties?: Record<string, unknown> }
   const fitur = data.features as F[]
@@ -856,14 +532,6 @@ function gambarPin(warna: string, dpr: number): ImageData | null {
   return c.getImageData(0, 0, k.width, k.height)
 }
 
-/**
- * Gelembung label yang bisa MELAR. Nine-patch: bagian tengahnya diregangkan
- * mengikuti panjang teks, sudut dan ekornya tidak.
- *
- * Tanpa ini, label rute cuma teks bergaris-halo di atas peta - terbaca, tetapi
- * ia melayang tanpa pijakan. Gelembung memberinya permukaan, dan ekor kecil di
- * bawahnya menyatakan garis mana yang sedang dibicarakannya.
- */
 function gambarGelembung(dpr: number): {
   data: ImageData
   opsi: { pixelRatio: number; stretchX: [number, number][]; stretchY: [number, number][]; content: [number, number, number, number] }
@@ -918,12 +586,6 @@ function gambarGelembung(dpr: number): {
 const PIN_AWAL = '#3B82F6'
 const PIN_TUJUAN = '#E5484D'
 
-/**
- * Daftarkan pin dan gelembung ke gaya yang sedang hidup.
- *
- * Idempoten: dipanggil ulang tiap `styledata`, dan `hasImage` menjaganya supaya
- * pendaftaran kedua tidak melempar.
- */
 function pasangGambarRute(m: MapLibreMap) {
   const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)))
   const daftar: [string, string][] = [
@@ -947,13 +609,6 @@ type FiturHex = {
   properties?: Record<string, unknown> & { h3_index?: string }
 }
 
-/**
- * Titik tengah heksagon dari cincin luarnya.
- *
- * Rata-rata sederhana, bukan centroid poligon yang benar. Untuk heksagon
- * beraturan keduanya berimpit, dan yang ditaruh di situ cuma lencana nomor -
- * meleset beberapa meter tidak pernah terlihat pada heksagon selebar 350 m.
- */
 function titikTengah(f: FiturHex): [number, number] | null {
   const cincin = f.geometry?.coordinates?.[0]
   if (!cincin?.length) return null
@@ -980,21 +635,9 @@ export interface AksiPetaRef {
   zoomOut: () => void
   /** Bingkai [barat, selatan, timur, utara]. Dipakai saat kawasan tak disaring. */
   fitBounds: (kotak: [number, number, number, number]) => void
-  /**
-   * Terbang ke satu heksagon dan membingkainya.
-   *
-   * Bukan flyTo ke titik tengahnya dengan zoom tebakan: heksagon res-9 berbeda
-   * lebar di layar tergantung lintangnya, dan zoom tetap kadang memotongnya.
-   * fitBounds atas geometri fitur itu sendiri selalu pas.
-   */
   fokusHeksagon: (h3: string) => void
   /** Kembalikan arah & kemiringan ke utara-datar. */
   resetArah: () => void
-  /**
-   * Gambar pin lokasi tersimpan. Mengganti SELURUH himpunan pin - pemanggil
-   * mengirim daftar lengkap, bukan delta, jadi tidak ada pin yatim yang
-   * tertinggal saat sebuah lokasi dilepas dari simpanan.
-   */
   setPin: (daftar: { lat: number; lon: number; h3: string; label: string; sendiri: boolean }[]) => void
   /** Arah kompas & kemiringan saat ini, untuk memunculkan tombol reset. */
   arah: () => { bearing: number; pitch: number }
@@ -1017,82 +660,19 @@ interface Props {
   gaya: NamaGaya
   terpilih: string | null
   saringKuadran: string | null
-  /**
-   * Heksagon yang sedang ada di baki komparasi, berurutan.
-   *
-   * Bersama `terpilih` ia membentuk HIMPUNAN FOKUS: isian dihilangkan, garis
-   * ditebalkan, dan yang dibandingkan diberi nomor. Urutannya penting - nomor
-   * di peta harus sama dengan nomor kolom di bar dan di tabel komparasi.
-   */
   dibandingkan: string[]
-  /**
-   * Hasil bedah blok yang sedang tergambar, dan blok yang disorot.
-   *
-   * Milik App, bukan state di sini, karena TOMBOLNYA duduk di panel detail dan
-   * PETA yang menggambarnya - dua pemakai, satu nilai. Alasan yang sama persis
-   * dengan `profilRute` di bawah.
-   *
-   * `null` = tidak ada yang dibedah, dan itu keadaan bawaannya. Blok tidak
-   * pernah muncul tanpa diminta: tujuh petak berwarna di dalam satu heksagon
-   * adalah jawaban untuk pertanyaan yang belum tentu sedang diajukan.
-   */
   blok?: BedahBlok | null
   blokTerpilih?: string | null
   /** Mengklik satu blok di peta. TIDAK mengubah heksagon terpilih. */
   onPilihBlok?: (h3Blok: string | null) => void
   onPilihHeksagon: (h3: string | null) => void
-  /**
-   * Klik SEKALI di dalam heksagon yang sedang terbuka = taruh titik favorit.
-   *
-   * Menggantikan "klik dua kali = simpan heksagon" (13 Sep 2026). Yang lama
-   * dilaporkan pemilik repo sebagai bug: klik dua kali yang dimaksudkan untuk
-   * memperbesar peta ikut menyimpan lokasi, dan yang disimpan selalu TITIK
-   * TENGAH heksagon - bukan ruko yang ia maksud. Sekarang yang ditandai titik
-   * persis yang diklik, dan hanya di heksagon yang detailnya sedang dibuka,
-   * jadi mengklik peta untuk menjelajah tidak pernah menyimpan apa pun.
-   *
-   * Penjagaannya TIDAK ada di sini. Pemanggil yang memutuskan (dan hanya
-   * memberikan penangan ini kepada pelanggan).
-   */
   onTaruhPin?: (h3: string, lat: number, lon: number) => void
-  /**
-   * Profil rute yang digambar: jalan kaki atau mobil.
-   *
-   * Milik App, bukan state di sini, karena pemilihnya duduk di panel detail
-   * dan petanya yang menggambar. Dua tempat, satu nilai - dan nilai yang
-   * disalin ke dua tempat adalah nilai yang suatu saat berselisih.
-   */
   profilRute?: ProfilRute
   onMuat: (n: number) => void
-  /**
-   * Layar pembuka sudah menyingkir?
-   *
-   * Peta sengaja dipasang di BELAKANG layar pembuka supaya gaya dan ubin
-   * pertama sudah selesai diunduh saat pembuka memudar. Efek sampingnya:
-   * gelombang kemunculan heksagon ikut berjalan di balik pembuka, dan penonton
-   * tidak pernah melihatnya - persis keluhan "pas baru masuk animasinya tidak
-   * ada". Selama prop ini false, heksagon menunggu di t = 0.
-   */
   tampil: boolean
-  /**
-   * Arah kompas & kemiringan, dilaporkan tiap kali berubah.
-   *
-   * App memakainya untuk memunculkan tombol "kembalikan arah". Tombol yang
-   * selalu ada akan menempati satu slot permanen untuk keadaan yang jarang
-   * terjadi - dan peta yang tidak pernah diputar tidak butuh tombol pelurus.
-   */
   onArah?: (a: { bearing: number; pitch: number }) => void
   /** Mode 3D: kamera miring dan gedung MAPID berdiri. Milik App, disimpan di peramban. */
   tigaDimensi?: boolean
-  /**
-   * Gaya yang diminta TIDAK berhasil dipasang (sejauh ini hanya satelit, yang
-   * berkasnya datang dari basemap.mapid.io alih-alih dari berkas statis).
-   *
-   * App mengembalikan pilihannya ke gaya sebelumnya. Tanpa itu pemilih basemap
-   * tetap menulis "Satelit" di atas peta yang jelas-jelas bukan citra - layar
-   * yang berbohong tentang keadaannya sendiri, dan itu yang dilaporkan pemilik
-   * repo sebagai "ganti ke satelit selalu error".
-   */
   onGayaGagal?: () => void
 }
 
@@ -1183,39 +763,14 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 ) {
   const wadah = useRef<HTMLDivElement>(null)
   const peta = useRef<MapLibreMap | null>(null)
-  /**
-   * Pin lokasi tersimpan. `Marker` DOM MapLibre, bukan layer simbol - dua
-   * alasan: marker selamat dari pergantian gaya basemap tanpa perlu dipasang
-   * ulang (setiap setStyle menghapus seluruh layer kustom), dan jumlahnya
-   * paling banyak puluhan, jauh di bawah titik di mana DOM mulai kalah dari
-   * WebGL.
-   */
   const pinAktif = useRef<Marker[]>([])
   /** Timer langkah gelombang yang sedang berjalan. Wajib dibatalkan saat
       komponen dilepas: timer yang masih hidup akan menyentuh peta yang sudah
       dibuang. */
   const rafGelombang = useRef(0)
-  /**
-   * Penyelesai janji gelombang yang sedang berjalan.
-   *
-   * Tanpa ini, gelombang yang dibatalkan di tengah jalan meninggalkan `await`
-   * yang menggantung selamanya - dan langkah sesudahnya (setData saat ganti
-   * kawasan) tidak pernah dijalankan. Membatalkan berarti menyelesaikan.
-   */
   const selesaikanGelombang = useRef<(() => void) | null>(null)
-  /**
-   * `layer` versi terbaru, dibaca dari dalam callback yang identitasnya harus
-   * tetap. Kalau jalankanGelombang ikut bergantung pada `layer`, identitasnya
-   * berubah tiap ganti layer, efek muat-data ikut berjalan ulang, dan dua
-   * gelombang (keluar dari muat-ulang, masuk dari ganti-layer) saling
-   * membatalkan. Yang terlihat pengguna: animasinya hilang sama sekali.
-   */
   const layerKini = useRef(layer)
   layerKini.current = layer
-  /** Sama alasannya dengan `layerKini`: layer heksagon DIBANGUN ULANG tiap
-   *  kali data dimuat, dan yang dibangun ulang lahir dengan visibilitas
-   *  bawaannya. Efek di atas saja tidak cukup - ia sudah berjalan sebelum
-   *  layernya ada. Nilainya harus dibaca DI TITIK PEMBUATAN. */
   const namaZona = useNamaZona()
   const teksZona = useTeks(K_PETA)
   const { bahasa } = useBahasa()
@@ -1230,53 +785,13 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   tigaDimensiRef.current = tigaDimensi
   /** Kamera sebelum 3D dinyalakan, untuk dikembalikan saat dimatikan. */
   const kameraDatar = useRef<{ pitch: number; bearing: number; zoom: number } | null>(null)
-  /**
-   * Himpunan fokus, dibaca dari dalam callback gelombang yang identitasnya
-   * harus tetap. Sama alasannya dengan `layerKini`: kalau gelombangnya ikut
-   * bergantung pada state ini, identitasnya berubah tiap kali ada yang diklik,
-   * efek muat-data ikut berjalan ulang, dan seluruh data diminta ulang hanya
-   * karena satu heksagon dipilih.
-   */
   const fokusRef = useRef<string[]>([])
   fokusRef.current = [terpilih, ...dibandingkan].filter(Boolean) as string[]
-  /**
-   * Salinan GeoJSON yang sedang dipakai peta.
-   *
-   * Dipegang supaya titik tengah heksagon bisa dihitung tanpa
-   * `querySourceFeatures`, yang hanya mengembalikan fitur di ubin yang SEDANG
-   * tergambar - heksagon pembanding di luar layar akan hilang nomornya, dan
-   * hilangnya diam.
-   */
   const dataRef = useRef<{ features: FiturHex[] } | null>(null)
-  /**
-   * Gaya basemap SAAT peta dibuat.
-   *
-   * Efek inisialisasi hanya berjalan sekali, jadi ia tidak boleh membaca `gaya`
-   * langsung - nilainya akan basi. Dulu di sini tertulis `urlGaya('terang')`
-   * apa adanya, dan itu bug yang diam: orang yang menutup aplikasi dengan
-   * basemap GELAP lalu kembali mendapat ubin TERANG dengan chrome gelap. Efek
-   * pergantian gaya di bawah tidak menolong - ia dijaga `if (!siap) return`,
-   * dan pada render pertama `siap` memang belum true, sehingga satu-satunya
-   * kesempatan menerapkannya lewat begitu saja.
-   */
   const gayaAwal = useRef(gaya)
   /** Sama alasannya dengan layerKini: efek inisialisasi hanya berjalan sekali. */
   const onArahRef = useRef(onArah)
   onArahRef.current = onArah
-  /**
-   * Callback klik & muat lewat ref, BUKAN lewat dependensi efek.
-   *
-   * Ini memperbaiki bug yang nyata. `m.on('click', ...)` dipasang di dalam efek
-   * muat-data, sementara cleanup efek itu cuma menyetel `batal = true` - ia
-   * tidak pernah melepas penangannya. Jadi tiap kali identitas
-   * `onPilihHeksagon` berubah, efeknya berjalan ulang dan MENUMPUK satu
-   * penangan klik lagi, sementara yang lama tetap hidup memegang closure lama.
-   *
-   * Akibatnya terlihat sebagai perilaku hantu: mengklik peta selagi simulasi
-   * terbuka menutup simulasinya, karena penangan tertua masih meyakini
-   * simulasi belum pernah dibuka. Lewat ref, penangannya dipasang sekali dan
-   * selalu membaca callback terbaru.
-   */
   const onPilihRef = useRef(onPilihHeksagon)
   onPilihRef.current = onPilihHeksagon
   // Alasan yang sama persis dengan `onPilihRef` di atas: pendengar peta
@@ -1293,24 +808,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // berganti tiap render.
   const onPilihBlokRef = useRef(onPilihBlok)
   onPilihBlokRef.current = onPilihBlok
-  /**
-   * `tampil` lewat ref, BUKAN lewat dependensi efek pemuat.
-   *
-   * Sebagai dependensi, ia membuat seluruh data diminta ulang begitu layar
-   * pembuka menyingkir - dan pemuatan ulang itu memudarkan heksagon KELUAR
-   * lebih dulu, tepat saat efek 'pembuka menyingkir' sedang memudarkannya
-   * MASUK. Dua gelombang berjalan bersamaan di layer yang sama, dan yang
-   * menang adalah yang kebetulan selesai belakangan.
-   *
-   * Terukur di terbitan statis: layer terpasang (L_ISI ada, 708 fitur di
-   * sumbernya) dan tidak satu piksel pun tergambar - opasitasnya berhenti
-   * di 0. Tidak ada galat, tidak ada peringatan; peta cuma kosong.
-   *
-   * Kenapa baru muncul sekarang: tanpa backend, layar pembuka tidak perlu
-   * menunggu /health, jadi ia menyingkir lebih cepat dan urutan keduanya
-   * berbalik. Balapannya sudah ada sejak dulu - yang berubah cuma siapa
-   * yang menang.
-   */
   const tampilRef = useRef(tampil)
   tampilRef.current = tampil
   /** Saringan kuadran sebelumnya, untuk membedakan "pengguna menyaring" dari
@@ -1320,18 +817,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   /** Naik sekali saat kunci basemap tiba terlambat; memicu efek ganti gaya. */
   const [kunciTerlambat, setKunciTerlambat] = useState(false)
 
-  /**
-   * Layer tematik BISA DIMATIKAN, dan itu keadaan bawaannya.
-   *
-   * Peta yang langsung penuh 708 heksagon berwarna memaksa orang membaca
-   * kesimpulan sebelum ia sempat mengenali di mana ia sedang melihat. Bawaan
-   * yang benar: basemap dan simpul transit dulu, heksagon menyusul saat
-   * diminta.
-   *
-   * `visibility`, BUKAN melepas layernya. Melepas berarti merakit ulang
-   * seluruh gaya tiap kali dinyalakan - dan gelombang kemunculan heksagon
-   * ikut berjalan ulang setiap kali.
-   */
 
   // Pilihan kerapatan nama tempat, diterapkan ulang tiap kali berubah.
   useEffect(() => {
@@ -1347,10 +832,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       ubin MAPID yang sedang menolak (tidak ada yang bisa kita lakukan), dan
       gaya yang memang salah (itu urusan kita). */
   const [galatPeta, setGalatPeta] = useState<{ pesan: string; ubin: boolean } | null>(null)
-  /**
-   * Cakupan layer yang sedang tampil, dihitung dari fitur yang benar-benar
-   * termuat. `null` = layer ini memang tidak bisa kosong (opportunity).
-   */
   const [cakupan, setCakupan] = useState<{
     terisi: number
     total: number
@@ -1361,10 +842,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   const [sorot, setSorot] = useState<PropertiHeksagon | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
 
-  // Simpul transit dimuat terpisah dari heksagon: jumlahnya sedikit, jarang
-  // berubah, dan digambar sebagai elemen HTML di atas peta - bukan layer
-  // MapLibre. Alasannya bukan kemudahan: penanda HTML bisa difokuskan keyboard
-  // dan dibaca pembaca layar, sedangkan simbol di kanvas tidak bisa keduanya.
   useEffect(() => {
     let batal = false
     api
@@ -1379,11 +856,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   // --- Inisialisasi. Sekali saja seumur komponen. ---
   useEffect(() => {
     if (!wadah.current) return
-    // Gayanya TIDAK diberikan di sini, melainkan lewat `setStyle` di bawah,
-    // sesudah seluruh pendengar terpasang. Sebabnya `transformStyle`: opsi
-    // konstruktor tidak menerimanya, dan gaya satelit yang dipulihkan dari
-    // localStorage butuh ditata (atribusi, glyph) sebelum dipasang - persis
-    // seperti saat dipilih dari menu.
     const m = new MapLibreMap({
       container: wadah.current,
       center: KAWASAN_AWAL.pusat,
@@ -1396,62 +868,24 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       // posisinya bisa dipindah ke kiri bawah.
       attributionControl: false,
     })
-    // SEMUA kontrol berkumpul di kiri bawah dan berjajar mendatar (aturan
-    // .maplibregl-ctrl-bottom-left di index.css). Sebabnya bukan estetika:
-    // panel kanan kini melayang setinggi layar, jadi apa pun yang dipasang di
-    // kanan akan tertutup - termasuk atribusi MAPID, yang wajib terlihat.
-    // Tombol zoom TIDAK dipakai dari MapLibre. Kontrol bawaannya kotak putih
-    // yang tidak bisa dibuat sewarna kaca, dan di dalam wadah kiri-bawah ia
-    // memaksa baris kontrol jadi setinggi dua tombol. Penggantinya ada di
-    // App.tsx sebagai tombol kaca yang memanggil zoomIn/zoomOut lewat ref.
     m.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left')
-    // ODbL menuntut sumber datanya disebut, dan atribusi "© OpenStreetMap" yang
-    // sudah dibawa gaya MAPID itu milik MAPID atas UBIN-nya - bukan milik kita
-    // atas POI yang kita turunkan sendiri jadi angka kompetisi, maupun atas rute
-    // jalan kaki openrouteservice yang digambar di peta ini. Dua kewajiban yang
-    // kebetulan berbunyi mirip, dan yang kedua tidak gugur oleh yang pertama.
     m.addControl(
       new AttributionControl({
-        // `compact: true`, tapi DIKECILKAN (19 Sep 2026, permintaan pemilik
-        // repo). Percobaan sebelumnya memakai baris teks penuh; pemilik repo
-        // menilainya "mengganggu di atas", jadi yang benar: tombol kecil saja
-        // di kiri-bawah, dan daftar sumbernya baru terbuka kalau diketuk.
-        // A.3 tetap terpenuhi - sumbernya ada di DOM dan satu ketukan jauhnya.
         compact: true,
         customAttribution: [
           '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>',
           '<a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">© openrouteservice</a>',
           '<a href="https://www.worldpop.org/" target="_blank" rel="noreferrer">© WorldPop (CC BY 4.0)</a>',
-          // ZoneGuard menggambar status perizinan dari RDTR ATR/BPN, dan panel
-          // detail mengutipnya sampai ke nama zonanya. Sumber yang dikutip
-          // sampai sedetail itu wajib disebut - A.1 menuntutnya untuk setiap
-          // data pendukung, bukan hanya untuk yang berlisensi share-alike.
           '<a href="https://gistaru.atrbpn.go.id/rdtrinteraktif/" target="_blank" rel="noreferrer">© RDTR ATR/BPN (GISTARU)</a>',
         ],
       }),
       'bottom-left',
     )
-    // Di ponsel daftarnya JANGAN terbuka sendiri: `compact:true` membuat
-    // MapLibre menambahkan `maplibregl-compact-show`, dan tanpa dilepas tombol
-    // kecilnya langsung menjadi kotak sumber selebar layar. Yang diinginkan
-    // cuma tombolnya; daftarnya muncul saat diketuk.
     if (window.matchMedia('(max-width: 1023.98px)').matches) {
       m.getContainer()
         .querySelector('.maplibregl-ctrl-attrib')
         ?.classList.remove('maplibregl-compact-show')
     }
-    // DUA pemicu, dan yang kedua bukan sabuk pengaman berlebihan.
-    //
-    // 'load' baru menyala sesudah render pertama yang lengkap, dan itu
-    // menunggu ubin basemap. Terukur 29 Agu 2026: basemap.mapid.io membatasi
-    // laju per-IP dan menjawab 401 untuk SELURUH ubin selama beberapa menit -
-    // dengan kunci maupun tanpa. Selama itu 'load' tidak menyala, penanda
-    // siapnya tetap false, dan heksagon kita sendiri tidak pernah diminta. Yang
-    // terlihat: peta kosong total, padahal yang gagal cuma latarnya.
-    //
-    // 'styledata' menyala begitu gayanya terurai, tanpa menunggu satu ubin
-    // pun. Gayanya berkas statis satu-asal, jadi ia praktis selalu berhasil.
-    // setSiap(true) idempoten - mana pun yang lebih dulu, hasilnya sama.
     m.on('load', () => setSiap(true))
     m.once('styledata', () => setSiap(true))
     // Gaya awal dipasang SESUDAH kunci basemap siap. Terbitan tanpa kunci
@@ -1468,26 +902,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }
     })
 
-    // --- Penangan klik & sorot heksagon: SEKALI seumur peta ---------------
-    //
-    // Dulu dipasang di dalam efek pemuatan heksagon, di cabang yang membangun
-    // ulang seluruh layer - dan cabang itu berjalan lagi SETIAP kali gaya
-    // basemap diganti, karena `setStyle` membongkar semua layer. MapLibre
-    // mempertahankan pendengar berdelegasi-layer menembus `setStyle`, jadi
-    // sesudah N kali ganti basemap, satu klik dua kali menyimpan lokasi N+1
-    // kali. Nol galat; yang terlihat cuma permintaan simpan yang berlipat.
-    // Pendengar berdelegasi aman dipasang sebelum layernya ada: MapLibre
-    // memeriksa `getLayer` saat kejadian, bukan saat mendaftar.
-    // BLOK LEBIH DULU. Ketujuh petak duduk DI DALAM heksagon terpilih, jadi
-    // satu klik di atasnya mengenai kedua layer sekaligus - dan MapLibre
-    // menjalankan penangan berdelegasi menurut urutan PENDAFTARANNYA, bukan
-    // menurut layer mana yang di atas. Tanpa penjaga di penangan heksagon di
-    // bawah, mengklik sebuah blok ikut memilih ulang heksagonnya, dan memilih
-    // ulang heksagon mengosongkan bloknya (App menyetelnya begitu) - jadi
-    // petaknya lenyap tepat pada klik yang dimaksudkan untuk memilihnya.
-    //
-    // Diperiksa lewat `queryRenderedFeatures`, bukan lewat urutan pendaftaran,
-    // supaya benar tanpa bergantung pada baris mana yang ditulis lebih dulu.
     const adaBlokDi = (titik: Point) =>
       m.getLayer(L_BLOK_ISI) && m.queryRenderedFeatures(titik, { layers: [L_BLOK_ISI] }).length > 0
 
@@ -1529,109 +943,36 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }
     })
 
-    // --- Ikon sprite yang tidak ada di gaya MAPID -------------------------
-    //
-    // Gaya MAPID merujuk beberapa ikon POI yang tidak ikut di lembar sprite-nya:
-    // `office`, `swimming_pool`, `gate`, `brownfield`, `lift_gate`,
-    // `sports_centre`. Selama layer POI masih disembunyikan, tidak ada yang
-    // pernah memintanya. Begitu layer itu dinyalakan, MapLibre mencarinya, gagal,
-    // lalu MEMPERINGATKAN - dan mengulanginya untuk tiap ubin yang memuatnya,
-    // sehingga konsol penuh peringatan yang terbaca seperti kerusakan.
-    //
-    // Tidak ada yang rusak: ikonnya memang tidak ada, dan labelnya tetap
-    // tergambar. Yang diperbaiki cuma kebisingannya - satu piksel tembus pandang
-    // didaftarkan atas nama yang diminta, jadi MapLibre berhenti mencari.
-    //
-    // `setMissingStyleImageResolver`, BUKAN penangan kejadian
-    // `styleimagemissing`. Tipe MapLibre v6 menyatakannya apa adanya:
-    // "Event listeners cannot resolve the missing image for the current
-    // request" - kejadian itu menyala SESUDAH resolver diberi kesempatan dan
-    // gagal, jadi mendaftarkan gambar dari dalamnya tidak menghentikan
-    // peringatannya. Dipasang di resolver, MapLibre menunggunya lebih dulu.
     m.setMissingStyleImageResolver((id) => {
       if (!m.hasImage(id)) {
         m.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) })
       }
     })
 
-    // Sebelum ini, gaya yang gagal dimuat berakhir sebagai layar kosong tanpa
-    // sepatah kata pun: 'styledata' tidak pernah menyala, `siap` tetap false,
-    // heksagon tidak pernah kembali. "Basemap-nya tidak ada" tanpa petunjuk
-    // apa pun. MapLibre sebetulnya mengabarkannya lewat 'error'.
     m.on('error', (e) => {
       const pesan = (e as unknown as { error?: Error }).error?.message
-      // Hanya yang terjadi SELAMA gaya dimuat. Sesudah gaya siap, MapLibre
-      // masih mengabarkan ubin tunggal yang gagal sepanjang penggeseran peta,
-      // dan itu normal - menampilkannya berarti memasang peringatan permanen
-      // untuk sesuatu yang tidak perlu ditindaklanjuti siapa pun.
       if (!pesan) return
       // URL-nya ada di dua tempat tergantung versi MapLibre: properti `url`
       // milik AJAXError, dan di dalam pesannya sendiri. Dibaca dari keduanya.
       const url = (e as unknown as { error?: { url?: string } }).error?.url ?? ''
       const keUbin = /basemap\.mapid\.io\/data\//.test(url) || /basemap\.mapid\.io\/data\//.test(pesan)
 
-      // GALAT MENATA LAYER BUKAN GALAT MEMUAT BASEMAP, dan menyamakan keduanya
-      // adalah bug yang dilaporkan pemilik repo: layar berbunyi "The basemap
-      // failed to load - Cannot style non-existing layer \"hex-isi\"" padahal
-      // basemapnya baik-baik saja.
-      //
-      // Sebabnya jendela di bawah: `!m.isStyleLoaded()`. Mengganti gaya
-      // basemap membongkar SELURUH layer lalu memasangnya kembali, dan selama
-      // jeda itu `isStyleLoaded()` false - jadi apa pun yang lewat ikut
-      // dilaporkan, termasuk galat yang datang dari kode kita sendiri: sebuah
-      // efek yang menata `hex-isi` sepersekian detik sesudah layernya dibuang
-      // dan sebelum ia dipasang lagi.
-      //
-      // Galat keluarga ini TIDAK PERLU ditindaklanjuti siapa pun: efek yang
-      // sama berjalan lagi pada `styledata` berikutnya dan hasilnya benar.
-      // Yang salah bukan petanya melainkan laporannya. Ke konsol, bukan ke
-      // layar - keluarga yang sama dengan pesan pengembang yang bocor ke
-      // panel, dan ini tempat keempatnya.
       if (/non-existing layer|does not exist in the map's style/i.test(pesan)) {
         console.warn('[basemap] penataan layer mendahului pemasangannya:', pesan)
         return
       }
 
-      // LEMBAR IKON BUKAN BASEMAP, dan ini laporan kedua dari keluarga "galat
-      // basemap palsu".
-      //
-      // Keempat gaya MAPID menaruh `sprite` di maputnik.github.io - warisan
-      // OSM Liberty yang jadi dasar gayanya, bukan pilihan kita dan bukan
-      // sumber ubin (ubinnya tetap basemap.mapid.io; lihat aturan 6). Lembar
-      // itu gagal diambil di jaringan mana pun yang memblokir github.io, dan
-      // kegagalannya terjadi SELAMA gaya dimuat - jadi ia jatuh tepat ke
-      // jendela pelaporan di bawah dan memasang pita merah "Basemap gagal
-      // dimuat" DI ATAS peta yang tergambar sempurna. Terlihat 12 Sep 2026 di
-      // potret Playwright, bukan oleh satu pun asersi.
-      //
-      // Yang hilang tanpa sprite cuma ikon POI basemap, dan itu pun sudah
-      // ditambal: `setMissingStyleImageResolver` di atas mendaftarkan satu
-      // piksel tembus pandang untuk tiap nama yang tidak ketemu. Jalan, nama
-      // tempat, heksagon, dan seluruh analisisnya utuh.
       if (/\/sprites?[./@]/i.test(url || pesan)) {
         console.warn('[basemap] lembar ikon gaya MAPID tidak terambil:', pesan)
         return
       }
 
-      // CITRA SATELIT datang dari penyedia hulu MAPID, bukan dari server ubin
-      // MAPID - jadi penolakannya tidak sama dengan pemadaman MAPID dan tidak
-      // pulih dengan memuat ulang gaya yang sama. Dilaporkan KAPAN PUN (bukan
-      // hanya selama gaya dimuat): ubin citra baru diminta SESUDAH gayanya
-      // siap, jadi jendela di bawah tidak akan pernah melihatnya, dan peta
-      // hitam tanpa keterangan persis yang tidak boleh terjadi.
       if (/api\.(maptiler|mapbox)\.com/.test(url || pesan)) {
         console.warn('[basemap] citra satelit ditolak penyedianya:', pesan)
         setGalatPeta((g) => g ?? { pesan, ubin: false })
         return
       }
 
-      // Ubin MAPID yang gagal TIDAK lagi memasang peringatan maupun memuat
-      // ulang gaya (13 Sep 2026, permintaan pemilik repo: "bar server ubin
-      // MAPID sedang menolak itu ganggu, dan suka ke-refresh sendiri").
-      // Satu ubin yang gagal selama gaya dimuat sudah cukup memasang bar
-      // itu, lalu `setStyle` tiap menit sampai sepuluh kali - dan setiap
-      // `setStyle` membangun ulang seluruh peta, yang terlihat sebagai
-      // aplikasi yang me-refresh dirinya sendiri. Teknisnya tetap ke konsol.
       if (keUbin) {
         console.warn('[basemap] permintaan ubin ditolak:', pesan, url || '(url tidak disebutkan)')
         return
@@ -1675,44 +1016,16 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   useEffect(() => {
     const m = peta.current
     if (!m || !siap) return
-    // `siap` baru direset SESUATU SAAT setStyle benar-benar dipanggil. Kalau
-    // direset di sini, jeda pengambilan gaya satelit (bisa detik-detik) membuka
-    // jendela tempat `styledata` gaya LAMA menyala lebih dulu, heksagon
-    // dipasang ke gaya lama, lalu setStyle membuangnya - hasilnya peta citra
-    // tanpa satu pun heksagon, terlihat 19 Sep 2026.
     const pasang = (berkas: string | object) => {
       setSiap(false)
       setGalatPeta(null)
       m.once('styledata', () => setSiap(true))
       m.setStyle(berkas as string, { diff: false, transformStyle: tataGaya(gaya) })
     }
-    // `diff: false` WAJIB, dan itu yang membuat tombol coba-ulang berfungsi.
-    //
-    // Bawaannya `diff: true`: MapLibre membandingkan gaya baru dengan yang
-    // sedang terpasang dan menerapkan selisihnya saja. Untuk gaya yang SAMA
-    // PERSIS - yaitu tepat yang terjadi saat memuat ulang karena ubinnya
-    // gagal - selisihnya nol, jadi ia tidak melakukan apa pun. Terukur: nol
-    // permintaan ubin sesudah tombolnya ditekan.
-    //
-    // Gagalnya diam dan menyesatkan: peringatannya HILANG (karena efek ini
-    // memang mengosongkannya) tanpa satu pun ubin diminta ulang, jadi yang
-    // terlihat peta polos tanpa keterangan apa pun.
-    //
-    // SATELIT DIAMBIL SENDIRI, tidak diserahkan pada MapLibre. Gaya satelit
-    // satu-satunya yang berkasnya datang dari basemap.mapid.io, bukan dari
-    // berkas statis, dan lewat jalur MapLibre ia TERKADANG tidak pernah
-    // diminta sama sekali: `styledata` tidak menyala, peta tetap bergaya lama,
-    // dan pemilih basemap sudah bilang "Satelit" - terukur pada satu dari
-    // sekitar tiga percobaan, tanpa satu pun galat di konsol. Diambil sendiri,
-    // hasilnya bisa diperiksa (status, batas waktu) dan wewenangnya jelas.
     if (!GAYA_BASEMAP[gaya]?.langsung) {
       pasang(urlGaya(gaya))
       return
     }
-    // Dua percobaan, masing-masing 12 detik. CDN MAPID kadang menjawab dalam
-    // satu detik dan kadang menggantung; satu percobaan saja membuat peta
-    // menyerah pada gangguan sesaat. Percobaan kedua nyaris gratis, karena
-    // kalau yang pertama gagal karena putus, yang kedua mengulanginya.
     const ambilGaya = async () => {
       let galatTerakhir: unknown = new Error('gaya satelit tidak terambil')
       for (let i = 0; i < 2; i++) {
@@ -1751,12 +1064,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gaya, kunciTerlambat])
 
-  // --- Mode 3D ---
-  //
-  // Dua hal yang berjalan bersama: kamera dimiringkan, dan gedung berdiri.
-  // Kamera hanya digerakkan saat pilihannya BERUBAH - bukan tiap kali gaya
-  // diganti atau peta dimuat - supaya memilih basemap lain tidak melempar
-  // kamera yang sedang dipakai orang.
   const tigaSebelum = useRef(tigaDimensi)
   useEffect(() => {
     const m = peta.current
@@ -1776,16 +1083,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }
       m.easeTo({
         pitch: 58,
-        // TETAP -18, tidak pernah dibaca dari kamera.
-        //
-        // Dulu di sini `Math.abs(m.getBearing()) > 0.5 ? m.getBearing() : -18`,
-        // dengan niat menghormati arah yang sudah diputar orangnya. Yang
-        // terjadi sebaliknya: mematikan 3D beranimasi 700 ms menuju bearing 0,
-        // dan satu klik DI TENGAH animasi itu membaca sudut setengah jalan
-        // (mis. -9) lalu mempertahankannya. Hasilnya "saya klik lagi, malah 3D
-        // dari sudut pandang berbeda" - dilaporkan pemilik repo 13 Sep 2026.
-        // Sudut yang sama setiap kali membuat tombol ini jadi sakelar, bukan
-        // undian.
         bearing: -18,
         // Gedung baru terlihat mulai zoom 14; di bawahnya "3D" cuma peta miring.
         zoom: Math.max(m.getZoom(), 15.2),
@@ -1806,10 +1103,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
   }, [tigaDimensi, siap, gaya])
 
-  /**
-   * Menjalankan gelombang dari `dari` ke `ke`. Mengembalikan janji supaya
-   * "keluar lalu masuk" saat ganti kawasan bisa ditulis berurutan.
-   */
   const jalankanGelombang = useCallback(
     (dari: number, ke: number, durasi: number) =>
       new Promise<void>((selesai) => {
@@ -1833,32 +1126,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           terapkanGelombang(m, layerKini.current, ke, fokusRef.current)
           return tuntas()
         }
-        // --- Kenapa BUKAN requestAnimationFrame ---------------------------
-        //
-        // Versi sebelumnya menggerakkan `t` tiap bingkai lewat rAF. Diukur
-        // bingkai demi bingkai, satu setPaintProperty pada layer isian memakan
-        // ~200ms: MapLibre mengurai ulang ekspresinya, menilainya ulang untuk
-        // setiap fitur di setiap ubin, lalu mengunggah ulang bufernya. Hasilnya
-        // gelombang 950ms yang cuma sempat berganti LIMA kali - dan lima
-        // lompatan tidak terbaca sebagai gerakan, melainkan sebagai heksagon
-        // yang tiba-tiba ada. Persis keluhannya.
-        //
-        // Jadi pembagian kerjanya dibalik. JavaScript cuma menetapkan beberapa
-        // POSE, dan MapLibre yang mengisi antaranya lewat `-transition`
-        // miliknya sendiri - interpolasi itu berjalan di dalam mesin render,
-        // bukan di main thread, dan tidak menambah satu panggilan pun per
-        // bingkai. Delapan pose untuk 950ms: cukup rapat supaya gerbangnya
-        // tetap menyapu, cukup jarang supaya ongkosnya turun hampir empat kali.
         const LANGKAH = 8
         const jeda = durasi / LANGKAH
         m.setPaintProperty(L_ISI, 'fill-opacity-transition', { duration: jeda, delay: 0 })
 
-        // Posenya dihitung dari WAKTU BERJALAN, bukan dari nomor langkah.
-        // Bedanya baru terasa di mesin lambat: kalau satu langkah datang
-        // terlambat, yang dikorbankan pose - bukan durasinya. Dihitung dari
-        // nomor langkah, gelombang 950ms bisa melar jadi enam detik di mesin
-        // yang tersendat, dan animasi yang melar begitu berhenti terasa sebagai
-        // sambutan dan mulai terasa sebagai menunggu.
         const t0 = performance.now()
         const maju = () => {
           if (!peta.current) return tuntas()
@@ -1876,19 +1147,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     [],
   )
 
-  //
-  // MASUK dan SURUT, bukan muncul dan hilang. Diperbaiki 9 Sep 2026: dulu
-  // `visibility` dibalik seketika, jadi memilih "Opportunity Score" dari
-  // "Tanpa layer" menjatuhkan 708 heksagon ke layar dalam satu bingkai - dan
-  // mematikannya mencabut semuanya sama mendadaknya. Gelombang yang dipakai
-  // saat data pertama datang sudah ada; ia cuma tidak pernah dipanggil di sini.
-  //
-  // Menyala: opasitas dipaksa nol DULU, baru layernya ditampakkan, baru
-  // gelombangnya mekar dari pusat kawasan. Tanpa langkah pertama, layer yang
-  // pernah menyala masih memegang opasitas penuhnya dan langsung tampil utuh.
-  // Mati: gelombang surut ke tepi, dan layernya baru disembunyikan SESUDAH
-  // gelombangnya selesai - kalau di tengah jalan orangnya menyalakannya lagi,
-  // `nyalaKini` sudah true dan penyembunyiannya dibatalkan.
   const nyalaSebelum = useRef(layerNyala)
   useEffect(() => {
     const m = peta.current
@@ -1950,17 +1208,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 
         siapkanBasemap(m, gaya, namaKini.current)
 
-        // Heksagon disisipkan DI ATAS seluruh isian dan garis basemap, tetapi
-        // DI BAWAH labelnya. Kalau heksagon menutupi nama jalan dan stasiun,
-        // pengguna kehilangan satu-satunya cara mengenali tempat yang sedang
-        // dilihatnya, dan peta berubah jadi hamparan warna yang tidak menunjuk
-        // apa pun.
-        //
-        // Percobaan pertama menyisipkannya sebelum layer symbol PERTAMA, dan itu
-        // salah: symbol pertama di gaya MAPID adalah `water_name` pada indeks 8
-        // dari 54, jadi seluruh jalan dan bangunan justru tergambar DI ATAS
-        // heksagon dan menyapunya habis. Yang benar: setelah layer bukan-symbol
-        // TERAKHIR.
         const labelPertama = idLabelPertama(m)
 
         m.addLayer(
@@ -2011,18 +1258,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           labelPertama,
         )
 
-        // --- Angka di dalam heksagon --------------------------------------
-        //
-        // Diminta pemilik repo: skor harus terbaca tanpa menyorot heksagonnya
-        // satu per satu. Tiga hal yang membuatnya tidak berubah jadi kekacauan:
-        //
-        //   text-allow-overlap FALSE  - MapLibre membuang label yang tidak muat,
-        //     jadi saat dizoom keluar yang tersisa hanya yang punya ruang.
-        //     Menyalakannya akan menumpuk 700 angka jadi bubur.
-        //   text-size mengikuti zoom  - 0 di bawah z12: pada zoom segitu satu
-        //     heksagon lebih kecil dari angkanya sendiri.
-        //   halo                       - isian heksagon tembus pandang, jadi di
-        //     belakang angka bisa ada apa saja.
         const teks = TEKS_HEX(gaya)
         m.addLayer(
           {
@@ -2046,12 +1281,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             'text-opacity': 0,
           },
         },
-        // DI BAWAH label basemap, bukan di atasnya.
-        //
-        // Tanpa `labelPertama` layer ini duduk paling atas dan angka heksagon
-        // menimpa nama tempat - persis keluhan "heksagonnya nutupin". Angka
-        // skor memang berguna, tetapi ia milik lapisan data; nama tempat milik
-        // petanya, dan peta yang tertutup datanya berhenti jadi peta.
         labelPertama,
       )
 
@@ -2079,17 +1308,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           filter: ['in', ['get', 'h3_index'], ['literal', []]],
         })
 
-        // --- Tujuh blok di dalam heksagon terpilih -------------------------
-        //
-        // DI ATAS heksagon, TANPA beforeId. Ia cuma ada selama seseorang
-        // membedah sebuah heksagon, dan selama itu blok memang yang sedang
-        // dibaca - alasan yang sama dengan lapisan fokus di bawah.
-        //
-        // Isiannya 0,62, bukan 0,3 seperti heksagon. Heksagon harus tembus
-        // pandang karena ia menutupi seluruh kota sekaligus; blok cuma tujuh
-        // petak yang baru saja diminta, dan pertanyaannya "yang mana yang
-        // lebih baik" - pertanyaan yang dijawab warna, bukan oleh jalan di
-        // bawahnya.
         m.addSource(SUMBER_BLOK, {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] } as never,
@@ -2115,10 +1333,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           paint: { 'line-color': GARIS_HEX(gaya), 'line-width': 2.8, 'line-opacity': 0.95 },
           filter: ['in', ['get', 'h3_blok'], ['literal', []]],
         })
-        // Peringkat, bukan skor. Petaknya ±130 m di layar - dua digit masuk,
-        // empat karakter ("73,6") tidak, dan yang ingin diketahui orang di
-        // dalam petak sekecil itu urutannya. Skornya ada di panel, di baris
-        // yang sama dengan petak ini.
         m.addLayer({
           id: L_BLOK_ANGKA,
           type: 'symbol',
@@ -2136,28 +1350,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           },
         })
 
-        // --- Lapisan fokus: garis ke stasiun + nomor heksagon pembanding ---
-        //
-        // Sumber TERPISAH dari heksagon, dan itu perlu: isinya berubah tiap
-        // kali ada yang diklik, sedangkan sumber heksagon hanya berubah saat
-        // kawasannya berganti. Menyatukannya berarti mengirim ulang 708
-        // poligon setiap satu heksagon dipilih.
-        //
-        // Ditambahkan TANPA beforeId, jadi ia duduk di atas segalanya. Ini satu
-        // dari sedikit hal yang memang boleh menutupi nama jalan: ia cuma ada
-        // selama sesuatu sedang difokuskan.
         const fokus = WARNA_FOKUS(gaya)
         m.addSource(SUMBER_FOKUS, {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] } as never,
         })
 
-        // --- Kawasan jangkau (isochrone) ------------------------------
-        //
-        // DI BAWAH rute, DI ATAS heksagon. Urutannya bukan selera: isochrone
-        // itu konteks (sejauh mana orang bisa sampai), rute itu jawaban (lewat
-        // mana persisnya). Konteks yang menutupi jawaban membuat keduanya sulit
-        // dibaca sekaligus.
         m.addSource(SUMBER_ISO, {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] } as never,
@@ -2167,33 +1365,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           type: 'fill',
           source: SUMBER_ISO,
           paint: {
-            // Ketiga pita DIBERI isian, dan tumpukannya DISENGAJA.
-            //
-            // Versi sebelumnya cuma mengisi pita 5 menit pada 0,1 - dengan
-            // alasan bahwa tiga isian bertumpuk membuat pusatnya tiga kali
-            // lebih pekat daripada tepinya, "gradasi yang tidak dimaksudkan
-            // siapa pun". Alasan itu keliru dua kali. Pertama, hasilnya nyaris
-            // tidak terlihat sama sekali di atas basemap terang. Kedua, dan
-            // lebih penting: gradasi itu justru BENAR. Poligonnya memang
-            // bersarang, dan makin dekat stasiun makin banyak orang yang mau
-            // berjalan ke sana - pusat yang lebih pekat menyatakan hal yang
-            // sungguhan, bukan artefak.
-            //
-            // Yang perlu dijaga cuma alfa per pita tetap rendah, supaya
-            // tumpukan paling dalam berhenti di ~0,26 dan angka di dalam
-            // heksagon tetap terbaca menembusnya.
-            // Tiap pita punya WARNANYA sendiri sejak 3 Sep 2026, bukan
-            // satu warna dengan lima opasitas.
-            //
-            // Dengan tiga pita, opasitas saja masih bisa dibedakan. Dengan
-            // lima - dan dua di antaranya jauh lebih luas daripada tiga yang
-            // lama - tumpukannya berubah jadi satu gumpalan biru yang tidak
-            // memberi tahu apa pun. Rona yang bergeser dari kuning ke ungu
-            // membuat "sepuluh menit" dan "tiga puluh menit" terbaca sebagai
-            // dua hal, bukan sebagai satu hal yang lebih pucat.
-            //
-            // Urutan ronanya SEARAH dengan besarnya - kuning dekat, ungu jauh -
-            // jadi ia tetap terbaca sebagai satu skala, bukan lima kategori.
             'fill-color': [
               'interpolate', ['linear'], ['get', 'menit'],
               5, '#f2b705',
@@ -2202,21 +1373,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               30, '#8b3bb8',
               60, '#3b41b8',
             ],
-            // ISIAN DIPANGKAS HABIS, 9 Sep 2026.
-            //
-            // Argumen sebelumnya - bahwa tumpukan pita bersarang menyatakan
-            // sesuatu yang sungguhan - masih benar. Yang salah adalah
-            // harganya: LIMA pita bertumpuk, walaupun tiap satunya tipis,
-            // menutupi seluruh layar dengan kabut berwarna. Dan yang tertutup
-            // bukan hiasan melainkan JALANNYA - satu-satunya hal yang membuat
-            // orang bisa mengenali di mana ia sedang melihat.
-            //
-            // Kawasan jangkau menjawab "sejauh mana orang sampai", dan
-            // pertanyaan itu dijawab BATASNYA. Isian tidak menambah satu pun
-            // keterangan yang tidak sudah dinyatakan garis tepinya.
-            //
-            // Yang tersisa 0,05 di pita terdalam saja - cukup untuk menyatakan
-            // bahwa daerah itu "di dalam", tidak cukup untuk menutupi apa pun.
             'fill-opacity': [
               'interpolate', ['linear'], ['get', 'menit'],
               5, 0.05,
@@ -2267,11 +1423,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               'interpolate', ['linear'], ['get', 'menit'],
               5, 3.2, 15, 1.9, 60, 1.4,
             ],
-            // Tidak lagi pekat penuh. Isian sudah dipangkas habis supaya jalan
-            // di bawahnya terlihat; lima cincin berwarna beropasitas 1 yang
-            // membentang melintasi seluruh layar mengembalikan persoalan yang
-            // sama lewat pintu lain. Pada 0,62 batasnya masih terbaca sebagai
-            // batas, dan jalan yang dilintasinya tetap bisa diikuti mata.
             'line-opacity': 0.62,
             // Pita TERDALAM utuh, sisanya putus-putus. Bentuknya ikut membawa
             // arti: yang utuh batas yang paling layak dipercaya sekaligus yang
@@ -2285,10 +1436,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           source: SUMBER_ISO,
           layout: {
             'symbol-placement': 'line',
-            // Dinaikkan dari 380. Satu pita mengelilingi seluruh kawasan, jadi
-            // jarak 380 px menulis "15 menit jalan kaki" lima sampai delapan
-            // kali di satu layar - dan pengulangan itu tidak menambah satu pun
-            // keterangan, cuma menambah teks yang harus dibaca lalu diabaikan.
             'symbol-spacing': 1100,
             // "5 menit jalan kaki", bukan "5 menit jalan". Dua kata lebih
             // panjang, dan menghapus satu-satunya pertanyaan yang tersisa.
@@ -2307,23 +1454,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           },
         })
 
-        // --- Rute jalan kaki ------------------------------------------
-        //
-        // Empat layer untuk satu garis, dan tiap satu punya tugas yang tidak
-        // bisa diambil alih yang lain:
-        //
-        //   BAYANG  garis lebih tebal berwarna lawan di bawahnya. Tanpa ini
-        //           rute gelap hilang di atas heksagon gelap, dan rute terang
-        //           hilang di atas jalan yang terang. Ini bukan hiasan - ini
-        //           satu-satunya yang membuat rute terbaca di atas SEMUA isian.
-        //   ALT     jalur alternatif, putus-putus dan redup. Putus-putus di
-        //           sini SAH: ia memang bukan yang direkomendasikan.
-        //   UTAMA   rute tercepat, utuh dan tegas.
-        //   TEKS    jarak dan waktu, di tengah garisnya.
-        //
-        // Ditambahkan TANPA beforeId, jadi rute duduk di atas segalanya -
-        // termasuk di atas heksagon. Itu diminta secara eksplisit, dan memang
-        // benar: rute yang tertimbun isian heksagon tidak bisa diikuti mata.
         m.addSource(SUMBER_RUTE, {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] } as never,
@@ -2335,28 +1465,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           data: { type: 'FeatureCollection', features: [] } as never,
         })
 
-        // Bayangan rute. TIGA hal yang harus benar bersamaan, dan versi
-        // sebelumnya salah di ketiganya sekaligus - hasilnya dilaporkan sebagai
-        // "rute jalan kaki kurang rapih".
-        //
-        //   1. Ia ikut BERTITIK untuk jalan kaki. Bayangan PADAT di bawah
-        //      deretan titik menghasilkan pita gelap yang menghubungkan
-        //      titik-titiknya - persis benda yang titik-titik itu dimaksudkan
-        //      menggantikan. Yang benar: tiap titik punya cincin gelapnya
-        //      sendiri, tidak ada yang menyambung di antaranya.
-        //   2. Lebarnya IKUT ZOOM. Bayangan berlebar tetap 8,5 px kalah oleh
-        //      garis atasnya yang tumbuh sampai 9,5 px di zoom 18 - jadi
-        //      justru di zoom terdekat, tempat bayangan paling berguna, ia
-        //      hilang sama sekali.
-        //   3. Perbandingannya TETAP 1,35x di setiap zoom, dan celah dash-nya
-        //      dibagi angka yang sama (2,2 / 1,35 = 1,63). Satuan dasharray
-        //      MapLibre kelipatan LEBAR GARIS, jadi dua layer berlebar berbeda
-        //      dengan celah yang sama menghasilkan jarak titik yang berbeda -
-        //      dan titik yang tidak sejajar dengan cincinnya terbaca sebagai
-        //      garis yang bergetar.
-        //
-        // Alternatif tidak lagi diberi bayangan (`filter`): ia garis tipis
-        // 1,8 px, dan bayangan bertitik di bawah garis padat cuma mengotori.
         m.addLayer({
           id: L_RUTE_BAYANG,
           type: 'line',
@@ -2391,16 +1499,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           filter: ['!', ['get', 'utama']],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
-            // SOLID dan tipis, bukan putus-putus.
-            //
-            // Rute alternatif dulu digambar putus-putus supaya jelas ia bukan
-            // yang tercepat. Yang terlihat justru deretan setrip abu-abu yang
-            // membentang dari titik awal ke tujuan - dilaporkan begitu, dan
-            // memang begitu: pada lebar 2,6 px dengan celah 1,5 px, mata
-            // membaca setripnya lebih dulu daripada jalurnya.
-            //
-            // Yang membedakannya dari rute utama sekarang LEBAR dan OPASITAS,
-            // dan keduanya cukup: ia setengah tebalnya dan separuh pekatnya.
             'line-color': WARNA_RUTE_ALT(gaya),
             'line-width': 1.8,
             'line-opacity': 0.5,
@@ -2415,58 +1513,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': ['get', 'warna'],
-            // Sedikit lebih tebal, dan MELEBAR saat di-zoom masuk. Lebar tetap
-            // membuat rute terlihat seperti benang di zoom rendah dan seperti
-            // pita di zoom tinggi; yang melebar terbaca sama di keduanya.
-            //
-            // MOBIL digambar lebih tebal lagi. Bukan hierarki - keduanya
-            // sama pentingnya - melainkan supaya bedanya terbaca bersama pola
-            // garisnya di bawah: yang padat-dan-tebal jelas bukan yang
-            // putus-putus, bahkan sekilas dan bahkan buta warna.
-            // BUG NYATA yang diperbaiki 4 Sep 2026, ditemukan MapLibre sendiri saat
-            // render: "Only one zoom-based step or interpolate subexpression
-            // may be used in an expression." Bentuk lama membungkus DUA
-            // `interpolate(..., ['zoom'], ...)` di dalam satu `case` - dan itu
-            // dilarang keras di style spec, berapa pun masuk akalnya secara
-            // logika. Yang diizinkan: SATU `interpolate` di zoom sebagai
-            // bungkus terluar, dengan nilai TIAP STOP-nya data-driven lewat
-            // `case`. Bentuknya dibalik, hasilnya sama persis secara angka.
-            // Titik jalan kaki dibuat SETEBAL rute mobil, bukan lebih tipis.
-            // Diameter titik = lebar garis, jadi garis tipis menghasilkan titik
-            // yang nyaris tidak terlihat - kebalikan dari yang dimaksud.
             'line-width': [
               'interpolate', ['linear'], ['zoom'],
               11, ['case', ['==', ['get', 'profil'], 'driving-car'], 5, 5],
               15, ['case', ['==', ['get', 'profil'], 'driving-car'], 7.4, 7.4],
               18, ['case', ['==', ['get', 'profil'], 'driving-car'], 9.5, 9.5],
             ],
-            // JALAN KAKI = TITIK BULAT BERDERET, mobil = garis padat.
-            //
-            // Bukan garis putus-putus, yang sudah dua kali dicoba dan dua kali
-            // ditolak: setrip persegi panjang pada lebar 4-7 px terbaca sebagai
-            // garis yang renggang, bukan sebagai jalur kaki.
-            //
-            // Yang benar TITIK, dan resepnya dua bagian yang harus dipakai
-            // bersama: `line-cap: 'round'` (sudah dipasang di layout layer ini)
-            // ditambah dasharray ber-panjang-garis NOL. Dash sepanjang nol yang
-            // diberi tutup bulat menjadi lingkaran sempurna berdiameter selebar
-            // garisnya; celah 1,8x lebar memberi jarak yang sama dengan yang
-            // dipakai peta jalan kaki di mana-mana.
-            //
-            // Mobil tetap `[1, 0]` - padat, tanpa celah.
-            //
-            // Celah 2,2x lebar, bukan 1,8x. Pada 1,8x jarak antar-TEPI titik
-            // cuma 0,8x diameternya: titiknya nyaris bersentuhan, dan di
-            // tikungan - tempat titik-titiknya merapat lagi - mereka menyatu
-            // jadi gumpalan. 2,2x menyisakan satu diameter penuh di antaranya,
-            // jarak yang dipakai peta jalan kaki di mana-mana.
-            //
-            // SEPEDA = KAPSUL BERDERET (11 Sep 2026). Moda ketiga butuh pola
-            // ketiga, dan pola itu harus terbaca beda dari keduanya tanpa
-            // bantuan warna. Dash 1,4x lebar ditambah tutup bulat jadi kapsul
-            // sepanjang 2,4x lebar; celah 2,4x menyisakan 1,4x lebar kosong
-            // di antaranya. Lebih panjang daripada titik, jelas terputus
-            // dibanding garis padat.
             'line-dasharray': [
               'case',
               ['==', ['get', 'profil'], 'driving-car'],
@@ -2478,32 +1530,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           },
         })
 
-        // LAYER ARUS DICABUT 9 Sep 2026.
-        //
-        // Ia garis putus-putus tipis yang mengalir di atas rute menuju stasiun,
-        // dan gunanya menyatakan ARAH. Dua kali diperbaiki - dibuat sekali
-        // jalan, lalu dipudarkan sesudah selesai - dan dua kali dilaporkan
-        // sebagai "garis garis yang menuju lokasi, jelek sekali".
-        //
-        // Arahnya toh sudah dinyatakan dua hal lain yang tidak bergerak sama
-        // sekali: pin biru di titik awal dan pin merah di tujuan. Menambahkan
-        // yang ketiga cuma menambah gerakan.
 
-        // Titik awal dan tujuan. Cincin kecil, bukan pin: pin punya ujung yang
-        // menunjuk, dan yang ditunjuknya di sini justru garis yang sudah ada.
-        //
-        // DUA layer, bukan satu. Yang bawah cincin lebar beropasitas rendah -
-        // ia yang membuat ujungnya terbaca sebagai simpul, bukan sebagai
-        // titik yang kebetulan ada di situ. Tujuan dapat cincin lebih besar
-        // daripada asal: yang dituju stasiun, dan stasiun memang lebih penting
-        // daripada titik tengah sebuah heksagon.
-        // Gambar pin & gelembung didaftarkan DI SINI, bersama layernya.
-        // `setStyle` menghapus keduanya sekaligus, jadi keduanya harus dipasang
-        // di tempat yang sama - kalau tidak, ganti basemap menghilangkan pinnya
-        // tanpa satu pun galat.
-        // Kepala komet di ujung rute yang sedang tumbuh: yang membuat
-        // kemunculannya terbaca sebagai GERAK dari heksagon menuju stasiun,
-        // bukan garis yang tiba-tiba ada.
         m.addLayer({
           id: L_RUTE_KEPALA,
           type: 'circle',
@@ -2584,12 +1611,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             // jangkar tengah, gelembung menutupi ruas yang sedang dibicarakannya.
             'text-anchor': 'bottom',
             'icon-anchor': 'bottom',
-            // Label rute TIDAK BOLEH kalah berebut ruang. Dengan penempatan
-            // biasa, rute kedua yang kebetulan lewat dekat sebuah nama tempat
-            // kehilangan labelnya diam-diam - dan yang hilang justru satu-
-            // satunya angka yang menjawab "berapa lama dari sini". Nama tempat
-            // selalu bisa dibaca dengan menggeser peta; label rute cuma ada
-            // selagi rutenya ada.
             'text-allow-overlap': true,
           },
           paint: {
@@ -2635,13 +1656,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           await tungguTenang(m)
           if (!batal && peta.current) void jalankanGelombang(0, T_PENUH, DURASI_MASUK)
         } else {
-          // Pembuka masih menutup layar. Jangan biarkan heksagon tertinggal di
-          // opasitas NOL: gelombang "pembuka menyingkir" (efek `[tampil]`) cuma
-          // berjalan kalau layernya SUDAH ada saat `tampil` berubah - dan pada
-          // pemuatan yang lambat, data tiba sesudahnya. Tanpa cabang ini, peta
-          // bisa terbuka kosong tanpa satu pun galat. Terukur 19 Sep 2026 pada
-          // audit desktop: sepuluh asersi merah karena klik heksagon mendarat
-          // di peta kosong.
           terapkanGelombang(m, layerKini.current, T_PENUH, fokusRef.current)
         }
       })
@@ -2674,18 +1688,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tampil])
 
-  // --- Ganti layer tematik tanpa memuat ulang data ---
-  //
-  // SURUT, ganti, MEKAR - tiga langkah, bukan satu. Versi sebelumnya mengganti
-  // warnanya seketika lalu memekarkan opasitasnya dari nol: yang terlihat
-  // heksagon yang berkedip - hilang satu bingkai, lalu tampil lagi dengan warna
-  // lain. Sekarang layer lama surut ke tepi kawasan lebih dulu, warnanya
-  // diganti saat tidak ada satu pun yang terlihat, lalu layer baru mekar dari
-  // pusatnya. Dua gerakan yang berlawanan arah, dan itulah yang membuatnya
-  // terbaca sebagai pergantian, bukan sebagai kedipan.
-  //
-  // Kalau layernya sedang MATI, warnanya cukup diganti diam-diam: tidak ada
-  // yang bisa surut, dan gelombang di layer tersembunyi cuma pekerjaan sia-sia.
   const layerSebelum = useRef(layer)
   useEffect(() => {
     const m = peta.current
@@ -2716,11 +1718,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
   }, [layer, siap, jalankanGelombang])
 
-  // --- Saring kuadran dari Kompas ---
-  //
-  // Menyaring adalah perubahan paling drastis di layar ini: separuh lebih
-  // heksagon lenyap dalam satu bingkai. Justru di sinilah gelombang paling
-  // dibutuhkan, dan justru di sini ia sebelumnya tidak ada sama sekali.
   useEffect(() => {
     const m = peta.current
     if (!m?.getLayer(L_ISI)) return
@@ -2774,36 +1771,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
   }, [saringKuadran, siap, tampil, jalankanGelombang])
 
-  // --- Rute jalan kaki ke stasiun terdekat ---
-  //
-  // Diambil untuk heksagon yang dipilih DAN untuk semua yang sedang
-  // dibandingkan. Membandingkan lokasi tanpa membandingkan jalan menuju
-  // stasiunnya berarti membandingkan angka tanpa melihat apa yang membuat
-  // angkanya begitu - dan rute dua heksagon bertetangga bisa berbeda jauh
-  // kalau ada rel di antaranya.
-  //
-  // Disimpan di Map dan tidak pernah dibuang selama komponennya hidup:
-  // isinya sama untuk siapa pun dan cuma berubah kalau pipeline menghitung
-  // ulang rutenya, jadi mengambil ulang heksagon yang sudah pernah dibuka cuma
-  // menambah permintaan tanpa menambah satu pun informasi.
-  //
-  // KUNCINYA `profil|h3`, bukan `h3` saja. Bentuk lama menimpa satu entri tiap
-  // kali profil berganti, jadi ingatan ini cuma pernah memuat satu profil pada
-  // satu waktu - dan itu yang memaksa jawaban yang datang terlambat dibuang.
   const [konteks, setKonteks] = useState<Map<string, KonteksSimpul>>(new Map())
   const dimintaRef = useRef(new Set<string>())
   /** Profil yang diminta. Namanya sisa masa ketika moda "Motor" menumpang
    *  jalur mobil; sejak sepeda menggantikannya, tiap moda persis satu profil. */
   const profilNyata = profilRute
   const kunciKt = useCallback((h: string) => `${profilNyata}|${h}`, [profilNyata])
-  /** Komponennya masih terpasang. Lihat alasannya di efek pengambilan di bawah.
-   *
-   *  Badannya MENYALAKAN ulang benderanya, bukan cuma pembersihnya yang
-   *  mematikan. StrictMode menjalankan efek dua kali - pasang, bersihkan,
-   *  pasang - jadi bentuk yang hanya punya pembersih meninggalkan benderanya
-   *  MATI selamanya sejak render pertama, dan setiap jawaban rute dibuang.
-   *  Terjadi betulan, dan gejalanya persis bug yang sedang diperbaiki: tidak
-   *  ada rute yang muncul sama sekali, tanpa satu pun galat. */
   const hidupRef = useRef(true)
   useEffect(() => {
     hidupRef.current = true
@@ -2825,13 +1798,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   }, [terpilih, kunciBanding, rutaTampil]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // Kunci ingatan "sudah diminta" memuat PROFILNYA.
-    //
-    // Tanpa itu, berganti ke mobil untuk heksagon yang rute jalan kakinya
-    // sudah pernah diambil menghasilkan NOL permintaan baru: heksagonnya sudah
-    // ada di daftar. Yang terlihat di layar rute jalan kaki yang tidak
-    // berubah, dan tidak ada satu pun galat. Keluarga yang sama persis dengan
-    // kunci cache backend yang dulu membuat dua heksagon berbagi satu jawaban.
     const belum = perluRute.filter((h) => !dimintaRef.current.has(kunciKt(h)))
     if (!belum.length) return
     belum.forEach((h) => dimintaRef.current.add(kunciKt(h)))
@@ -2849,41 +1815,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           }),
       ),
     ).then((hasil) => {
-      // BUG NYATA yang diperbaiki 9 Sep 2026: "heksagon KEDUA yang dibandingkan
-      // tidak pernah muncul rutenya".
-      //
-      // Di sini dulu berdiri bendera `batal` yang dinyalakan fungsi pembersih
-      // efek ini. Niatnya benar - membuang jawaban basi - tetapi pasangannya
-      // salah: daftar "sudah diminta" hidup di REF sehingga bertahan melewati
-      // jalannya efek, sementara benderanya mati bersama jalan itu.
-      //
-      // Akibatnya berurutan persis begini. Mengklik heksagon kedua mengubah
-      // `terpilih` DAN baki sekaligus, permintaannya berangkat. Sesaat kemudian
-      // App menyetel `rutaTampil` kembali ke mati - memang begitu aturannya,
-      // berpindah heksagon menutup rutenya - dan itu menjalankan ULANG efek
-      // ini. Jalan lama dibersihkan (`batal = true`); jalan baru melihat
-      // heksagonnya SUDAH ada di daftar lalu berhenti tanpa meminta apa pun.
-      // Jawaban yang sedang di jalan tiba ke bendera batal dan dibuang, dan
-      // tidak ada yang meminta ulang karena menurut daftar ia sudah diminta.
-      // Yang terlihat pengguna: rute heksagon kedua TIDAK PERNAH muncul.
-      //
-      // Penggantinya cuma penjaga "komponennya masih hidup". Jawaban yang telat
-      // tidak lagi bisa keliru: kuncinya memuat profil, jadi jawaban profil
-      // lama mendarat di kotaknya sendiri dan tidak menimpa siapa pun.
       if (!hidupRef.current) return
       const ada = hasil.filter(Boolean) as (readonly [string, KonteksSimpul])[]
       if (ada.length) setKonteks((m) => new Map([...m, ...ada]))
     })
   }, [perluRute, profilNyata, kunciKt])
 
-  // --- MODE FOKUS ---
-  //
-  // Tiga hal sekaligus, dan ketiganya harus berubah bersamaan supaya tidak
-  // pernah ada bingkai di mana isian sudah hilang tetapi garisnya belum tebal:
-  //
-  //   1. Isian heksagon fokus dikalikan nol - basemap di bawahnya terlihat utuh
-  //   2. Garis batasnya ditebalkan (L_PILIH)
-  //   3. Lencana nomor untuk heksagon yang sedang dibandingkan
   useEffect(() => {
     const m = peta.current
     if (!m?.getLayer(L_PILIH)) return
@@ -2930,21 +1867,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     sumber.setData({ type: 'FeatureCollection', features: fitur } as never)
   }, [terpilih, kunciBanding, dibandingkan, layer, siap])
 
-  /**
-   * Menggambar tujuh blok, dan mendekatkan kamera kalau perlu.
-   *
-   * `siap` ada di dependensinya, bukan cuma `blok`: mengganti gaya basemap
-   * membongkar seluruh sumber dan memasangnya kembali KOSONG, jadi tanpa itu
-   * tujuh petak yang sedang dibaca orang lenyap saat ia menukar ke satelit -
-   * tanpa satu pun galat. Keluarga yang sama dengan rute dan isochrone.
-   *
-   * Kameranya didekatkan HANYA kalau terlalu jauh, dan hanya saat bloknya baru
-   * muncul. Blok bergaris tengah ±130 m: di zoom 13 ketujuhnya jadi satu titik,
-   * dan tombol "bedah" terasa seperti tombol yang tidak melakukan apa pun.
-   * Menggeser kamera pada SETIAP perubahan (mis. saat orangnya cuma mengganti
-   * kelas usaha) justru merebut kendali - jadi yang dibandingkan `blok?.h3_index`,
-   * bukan objeknya.
-   */
   const blokLalu = useRef<string | null>(null)
   useEffect(() => {
     const m = peta.current
@@ -2997,17 +1919,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     ])
   }, [blokTerpilih, siap, blok])
 
-  // --- Kawasan jangkau simpul tujuan ---
-  //
-  // Diambil untuk simpul yang dituju heksagon terpilih, bukan untuk semua
-  // simpul sekaligus. Enam isochrone di layar berarti enam belas poligon
-  // bertumpuk yang tidak menjawab pertanyaan siapa pun; SATU isochrone
-  // menjawab pertanyaan yang justru sedang ditanyakan - "heksagon ini masuk
-  // pita berapa menit dari stasiunnya?"
-  //
-  // Di-cache di ref karena isinya cuma berubah kalau pipeline menghitung
-  // ulang, dan enam simpul yang sama akan diminta berkali-kali sepanjang orang
-  // mengklik heksagon.
   const isoRef = useRef(new Map<number, unknown>())
   // Kawasan jangkau ikut gerbang yang sama dengan rute: keduanya jawaban atas
   // pertanyaan yang sama, dan menampilkan salah satunya saja membuat peta
@@ -3039,10 +1950,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       .then((gj) => {
         if (batal) return
         isoRef.current.set(nodeTujuan, gj)
-        // Pita terluas digambar DULU supaya yang tersempit ada di atasnya.
-        // MapLibre menggambar fitur menurut urutan datanya, dan pita 5 menit
-        // yang tertimbun garis 15 menit adalah pita yang paling ingin dilihat
-        // orang tetapi paling tidak terlihat.
         const f = [...((gj as { features?: { properties?: { menit?: number } }[] }).features ?? [])]
         f.sort((a, b) => (b.properties?.menit ?? 0) - (a.properties?.menit ?? 0))
         sumber.setData({ type: 'FeatureCollection', features: f } as never)
@@ -3057,19 +1964,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
   }, [nodeTujuan, siap])
 
-  // --- Menggambar rute, beserta animasinya ---
-  //
-  // KENAPA rAF DI SINI padahal gelombang heksagon justru menghindarinya. Yang
-  // mahal di gelombang itu `setPaintProperty` pada layer ISIAN: MapLibre
-  // mengurai ulang ekspresinya lalu menilainya ulang untuk 708 fitur di setiap
-  // ubin. Di sini yang ditulis `setData` pada sumber berisi paling banyak
-  // belasan garis - tidak ada ekspresi yang dinilai ulang, dan tidak ada ubin
-  // yang dibangun ulang. Ongkosnya beda kelas, jadi keputusannya pun berbeda.
-  //
-  // Rutenya TUMBUH dari heksagon menuju stasiun, bukan muncul sekaligus. Arah
-  // itu yang bikin orang langsung paham garisnya menjawab "dari sini, ke sana"
-  // - bukan sebaliknya, dan bukan sekadar hiasan yang kebetulan menghubungkan
-  // dua benda.
   const rafRute = useRef(0)
   /** Kunci rute yang kameranya sudah dibingkai, supaya tidak dibingkai ulang
    *  tiap kali efeknya berjalan lagi (ganti gaya, konteks baru). */
@@ -3102,10 +1996,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
     hentiAlir()
 
-    // Saat membandingkan, TIAP heksagon cuma menyumbang rute utamanya. Empat
-    // heksagon dengan alternatifnya masing-masing berarti dua belas garis di
-    // satu layar, dan pada titik itu tidak ada satu pun yang bisa diikuti mata.
-    // Alternatif menjawab "lewat mana lagi dari SINI" - pertanyaan satu lokasi.
     const membandingkan = dibandingkan.length > 1
     const jalur: {
       k: [number, number][]
@@ -3131,22 +2021,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           kum: panjangKumulatif(k),
           warna,
           utama: r.utama,
-          // Dibaca dari RUTENYA, bukan dari profil yang diminta. Bedanya baru
-          // terasa kalau suatu saat satu respons memuat dua profil sekaligus -
-          // dan pada saat itu gaya garis yang disimpulkan dari parameter
-          // permintaan akan menggambar keduanya sama.
           profil: r.profil ?? 'foot-walking',
-          // HANYA rute utama yang berlabel.
-          //
-          // Alternatif sempat ikut diberi "lewat sini - N mnt", dan hasilnya
-          // terlihat di potret: satu heksagon dengan dua alternatif
-          // menumpuk TIGA gelembung di titik tengah yang berdekatan, dan
-          // ketiganya jadi tidak terbaca. Menumpuk tiga jawaban untuk satu
-          // pertanyaan bukan tiga kali lebih informatif.
-          //
-          // Alternatif memang bukan jawabannya - itu sebabnya ia digambar
-          // tipis dan redup - dan menitnya sudah disebut panel di kalimat
-          // "N jalur alternatif tergambar di peta".
           label: r.utama ? `${jarakSingkat(r.jarak_m)} · ${Math.round(r.menit)} mnt` : '',
         })
       })
@@ -3174,21 +2049,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       return
     }
 
-    // BUG NYATA yang diperbaiki 9 Sep 2026: gelembung jarak+waktu tidak pernah
-    // muncul di peta, padahal teksnya sudah dirakit dengan benar.
-    //
-    // Sebabnya `symbol-placement: 'line-center'`. Ia menempelkan label pada
-    // GARIS, dan MapLibre menolak menempatkannya begitu label itu diminta tegak
-    // (`text-rotation-alignment: 'viewport'`) - yang justru harus diminta,
-    // karena tanpa itu gelembungnya ikut miring mengikuti ruas jalan dan
-    // isinya jadi tulisan tegak lurus yang tidak terbaca. Dua syarat yang
-    // saling meniadakan, dan kegagalannya DIAM: tidak ada galat, cuma label
-    // yang tidak pernah ada.
-    //
-    // Yang dipakai sekarang TITIK tersendiri di tengah rute. Penempatan titik
-    // tidak pernah memutar apa pun, jadi tidak ada lagi syarat yang harus
-    // dilanggar - dan tengahnya dihitung dari panjang kumulatif yang sudah
-    // dipakai animasinya, bukan ditebak dari indeks simpulnya.
     const garis = (potong: (j: (typeof jalur)[number], i: number) => [number, number][], berlabel: boolean) => ({
       type: 'FeatureCollection',
       features: [
@@ -3226,12 +2086,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       return () => berhenti()
     }
 
-    // Kamera MUNDUR membingkai seluruh rute sebelum garisnya tumbuh - hanya
-    // untuk satu lokasi, dan hanya sekali per rute yang baru ditampilkan.
-    // Tanpa ini fokus heksagon (zoom 17,4) menaruh hampir seluruh rute di luar
-    // layar, dan animasinya berlangsung tanpa ada yang bisa melihatnya.
-    // Kuncinya memuat PROFIL: berganti jalan kaki -> mobil untuk heksagon yang
-    // sama tidak mengubah `kunciKonteks`, padahal rute mobil jauh lebih lebar.
     const kunciBingkai = `${kunciKonteks}|${profilNyata}`
     if (!membandingkan && ruteDibingkai.current !== kunciBingkai) {
       ruteDibingkai.current = kunciBingkai
@@ -3280,16 +2134,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         mulaiAlir()
       }
     }
-    /**
-     * Arus yang berjalan TERUS sesudah rutenya utuh: satu titik meluncur dari
-     * pusat heksagon ke simpulnya, berulang - "menuju lokasi".
-     *
-     * Sumbernya `SUMBER_ALIR`, yang cuma memuat beberapa titik, jadi menulis
-     * ulangnya tiap langkah tetap murah. Yang MAHAL adalah menulis ulang
-     * GeoJSON rute yang panjang, dan itulah yang dulu membuat arus ini dibuang.
-     * Titiknya TIDAK menutupi rute: ia berjalan di atas garis yang sudah utuh,
-     * jadi arahnya terbaca tanpa mengubah gambar rutenya sendiri.
-     */
     const mulaiAlir = () => {
       const utama = jalur.filter((j) => j.utama)
       if (!alirSumber || !utama.length) return
@@ -3314,10 +2158,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       berhenti()
       hentiAlir()
     }
-    // `profilNyata` ikut jadi dep: sesudah kunci ingatan memuat profil,
-    // berganti moda ke profil yang SUDAH tersimpan tidak lagi mengubah
-    // identitas `konteks` maupun `kunciKonteks` - dan tanpa dep ini petanya
-    // diam memegang gambar profil sebelumnya.
   }, [kunciKonteks, perluRute, konteks, dibandingkan, gaya, siap, profilNyata, kunciKt])
 
   // --- Aksi yang dipanggil dari luar, termasuk oleh AI ---
@@ -3376,20 +2216,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         pitch: peta.current?.getPitch() ?? 0,
       }),
 
-      /**
-       * Terbang ke satu heksagon dan membingkainya.
-       *
-       * Geometrinya dicari di DATA YANG SUDAH DIMUAT (`dataRef`), bukan lewat
-       * `querySourceFeatures`. Bedanya menentukan, dan ini bug yang dilaporkan
-       * pemilik repo: `querySourceFeatures` hanya mengembalikan fitur dari ubin
-       * yang SEDANG dirender. Heksagon yang diklik dari daftar atau dari tab
-       * "Untuk Anda" hampir selalu berada di luar layar - itu justru sebabnya
-       * ia diklik - jadi kuerinya pulang kosong dan petanya diam saja. Tidak
-       * ada galat, tidak ada gerakan, dan yang terlihat tombol yang rusak.
-       *
-       * Kalau datanya memang belum sampai (baru berganti kawasan), ia MENUNGGU
-       * pemuatan berikutnya alih-alih menyerah - maksimal tiga detik.
-       */
       fokusHeksagon: (h3) => {
         const m = peta.current
         if (!m) return
@@ -3411,15 +2237,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             if (y < sLat) sLat = y
             if (y > n) n = y
           }
-          // JAUH lebih dekat sejak 13 Sep 2026, atas permintaan pemilik repo -
-          // "biar lebih detail". Sebelumnya bantalan 220 px dan zoom paling
-          // tinggi 15,4 menaruh heksagonnya sebesar ibu jari di tengah
-          // tetangganya; sekarang ia memenuhi bagian peta yang TIDAK tertutup
-          // panel, cukup dekat untuk membaca nama jalan dan membedakan ketujuh
-          // bloknya. Bantalannya tidak simetris: di layar lebar panel detail
-          // menutupi sisi kanan, di ponsel lembar bawah menutupi separuh bawah
-          // - dan heksagon yang dibingkai di belakang panel sama saja dengan
-          // tidak dibingkai.
           const lebar = m.getContainer().clientWidth
           const tinggi = m.getContainer().clientHeight
           const padding =
@@ -3489,11 +2306,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           Tooltip yang menempel pada kursor menutupi heksagon di sebelahnya —
           persis yang sedang dibandingkan pengguna. */}
       {sorot && (
-        // Tengah atas, tapi DI BAWAH bilah atas - bukan sejajar dengannya.
-        // Pada top-3 ia berdiri di garis yang sama dengan kotak pencarian dan
-        // menu kawasan, dan dua lapisan chrome yang sejajar terbaca sebagai satu
-        // bilah yang berantakan. 5,75rem menaruhnya tepat di bawah bilah itu
-        // (tinggi bilah + bantalan lapisan), dengan celah yang terlihat sengaja.
         <div className="kaca pop pointer-events-none absolute left-1/2 top-[8.75rem] z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-full px-5 py-2.5 max-lg:top-[4.5rem] max-lg:gap-2 max-lg:px-3 max-lg:py-1.5 lg:top-[5.75rem]">
           <p className="papan tabular text-[26px] leading-none max-lg:text-[17px]">
             {sorot.opportunity_score?.toFixed(0) ?? '—'}
@@ -3637,13 +2449,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   )
 })
 
-/**
- * Penanda simpul yang mengikuti kamera peta.
- *
- * Diposisikan ulang tiap kali peta bergerak lewat project(). Marker bawaan
- * MapLibre juga bisa, tetapi ia membungkus isinya dengan DOM sendiri yang lebih
- * sulit diberi gaya dan tidak menerima fokus keyboard secara wajar.
- */
 function PenandaSimpul({
   peta,
   simpul,

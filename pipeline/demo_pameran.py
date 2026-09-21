@@ -1,57 +1,4 @@
-"""Data demo LENGKAP untuk pameran — dan cara mencopotnya kembali dengan tepat.
-
-BACA INI SEBELUM MENJALANKANNYA
-===============================
-
-Skrip ini MENGARANG angka. Ia ada untuk satu keperluan saja: pameran, tempat
-seluruh fitur peta harus bisa diperagakan padahal sebagian besar variabelnya
-belum punya sumber. Ia BUKAN pengganti data, dan hasilnya tidak boleh ikut ke
-mana pun yang menyebut dirinya hasil pengukuran.
-
-Bedanya dengan `demo_seed.py`, dan kenapa berkas ini terpisah:
-
-    demo_seed.py    membangun SELURUH basis data dari nol. Ia MENOLAK jalan
-                    kalau ada rute ORS atau POI OSM, dan `--paksa` membuangnya.
-                    Basis data sekarang memuat 1.549 rute dan 3.444 POI yang
-                    butuh berjam-jam ditarik, jadi ia tidak bisa dipakai lagi.
-
-    demo_pameran.py MENAMBAL. Ia hanya menyentuh sel yang KOSONG, tidak pernah
-                    menimpa satu pun angka yang sudah ada, dan mencatat persis
-                    apa yang disentuhnya supaya bisa dicabut kembali.
-
-YANG MEMBUATNYA BISA DICABUT
-============================
-
-`--isi` menulis manifes ke `data/demo_pameran/`:
-
-    sel_kosong.json     tiap kolom -> daftar h3 yang TADINYA NULL
-    penanda_lama.json   nilai lama n_titik_misi / tingkat_keyakinan /
-                        data_source, karena ketiganya DITIMPA, bukan diisi
-    skor_lama.json      seluruh location_scores + score_factors sebelum diubah
-    baris_baru.json     id baris yang DIBUAT di hex_routes & catchment_areas
-
-`--copot` membaca keempatnya dan mengembalikan keadaan persis seperti semula.
-Tanpa manifes ia MENOLAK jalan - menebak mana yang demo dan mana yang asli
-adalah cara kehilangan data asli.
-
-ANGKANYA TIDAK ACAK
-===================
-
-Tiap nilai diturunkan dari sinyal yang SUDAH ada dan nyata di heksagon itu:
-jarak ke simpul, penduduk WorldPop, jumlah POI OSM, kompetitor terpetakan.
-Dua akibatnya disengaja. Pertama, petanya punya pola yang masuk akal - mahal di
-dekat stasiun, sepi di pinggir - alih-alih bintik acak yang langsung ketahuan
-palsu. Kedua, ia REPRODUSIBEL: benih diturunkan dari h3_index, jadi menjalankan
-ulang menghasilkan angka yang sama persis.
-
-Skornya sendiri TIDAK dikarang. Variabel mentahnya diisi, lalu
-`s7_publish.hitung_ulang_dari_db()` menjalankan mesin skor yang sama persis
-dengan yang memproses data sungguhan. Aturan 1 tetap utuh.
-
-    cd pipeline && python demo_pameran.py --isi
-    cd pipeline && python demo_pameran.py --status
-    cd pipeline && python demo_pameran.py --copot
-"""
+"""Data demo LENGKAP untuk pameran — dan cara mencopotnya kembali dengan tepat."""
 
 from __future__ import annotations
 
@@ -69,22 +16,6 @@ from s7_publish import _mesin, hitung_ulang_dari_db
 
 JEJAK = Path(__file__).parent / "data" / "demo_pameran"
 
-#: Ditulis ke `hex_hourly_profiles.metode`.
-#:
-#: "proxy", bukan "pameran", dan bukan karena panjangnya. `schemas.TitikJam`
-#: mengunci kolom ini ke `Literal["observed", "proxy"]`, jadi nilai lain
-#: melewati basis data dengan mulus lalu MELEDAK di validasi respons - Commuter
-#: Clock menjawab 500 untuk seluruh heksagon, dan sebabnya cuma terlihat di
-#: traceback backend. Batas varchar(10) sudah menolak "demo_pameran" (12)
-#: sebelumnya; ini penolakan KEDUA dari lapisan yang berbeda atas kolom yang
-#: sama.
-#:
-#: "proxy" juga label yang benar: profil jam ini memang turunan, bukan struk
-#: yang teramati.
-#:
-#: Karena "proxy" bisa saja dipakai baris SUNGGUHAN suatu hari, baris demo
-#: TIDAK dikenali lewat kolom ini saat dicopot - id-nya dicatat di manifes,
-#: sama seperti hex_routes dan catchment_areas.
 PENANDA = "proxy"
 
 
@@ -94,12 +25,7 @@ PENANDA = "proxy"
 
 
 def _benih(h3: str, kunci: str) -> float:
-    """0..1 yang tetap sama untuk (heksagon, kolom) yang sama.
-
-    Bukan `random.seed()`: benih global membuat urutan pemanggilan menentukan
-    hasilnya, jadi menambah satu kolom di tengah menggeser seluruh angka
-    sesudahnya. Hash per-sel tidak punya urutan sama sekali.
-    """
+    """0..1 yang tetap sama untuk (heksagon, kolom) yang sama."""
     h = hashlib.blake2b(f"{h3}|{kunci}".encode(), digest_size=8).digest()
     return int.from_bytes(h, "big") / 2**64
 
@@ -143,10 +69,6 @@ def _nilai_demo(b: dict) -> dict[str, object]:
     """Seluruh variabel yang mungkin kosong, diturunkan dari sinyal nyata."""
     h3 = b["h3_index"]
 
-    # --- Dua sumbu yang menggerakkan hampir semuanya ------------------------
-    # `dekat` 1,0 tepat di simpul dan meluruh sampai 0 pada 2,5 km. Itu yang
-    # membuat harga, keramaian, dan NJOP punya pola menuju stasiun alih-alih
-    # tersebar acak.
     jarak = b["jarak_simpul_m"]
     if jarak is None:
         jarak = _antara(h3, "jarak", 300, 2400)
@@ -161,10 +83,6 @@ def _nilai_demo(b: dict) -> dict[str, object]:
     komp = b["n_kompetitor_langsung"] or 0
     ramai = max(0.0, min(1.0, (poi / 60.0) * 0.6 + dekat * 0.4))
 
-    # --- Empat puncak jam, dijamin berjumlah 1 ------------------------------
-    # Dibangkitkan lalu dinormalkan, bukan diambil dari empat undian bebas:
-    # empat angka bebas nyaris tidak pernah berjumlah 1, dan tampilan Commuter
-    # Clock membacanya sebagai porsi.
     mentah = [
         0.9 + _benih(h3, "pagi") * 1.4 + dekat * 0.8,
         0.7 + _benih(h3, "siang") * 1.2,
@@ -174,10 +92,6 @@ def _nilai_demo(b: dict) -> dict[str, object]:
     jum = sum(mentah)
     pagi, siang, sore, malam = (x / jum for x in mentah)
 
-    # --- Uang ---------------------------------------------------------------
-    # Sewa per m2 mengikuti kedekatan simpul dan keramaian; sewa bulanan
-    # diturunkan DARINYA lewat luas, bukan diundi sendiri - kalau keduanya
-    # diundi terpisah, rasionya jadi tidak masuk akal dan itu terlihat.
     sewa_m2 = (55_000 + 340_000 * dekat**1.4 + 90_000 * ramai) * _goyang(h3, "sewa", 0.22)
     luas = b["luas_bangunan_median"] or _antara(h3, "luas", 42, 130)
     sewa_bulan = sewa_m2 * max(18.0, min(120.0, luas * 0.55))
@@ -235,12 +149,7 @@ def _nilai_demo(b: dict) -> dict[str, object]:
 
 
 def _zona_demo(b: dict) -> dict[str, object]:
-    """ZoneGuard: yang kosong diberi status, bukan dibiarkan 'belum pasti'.
-
-    ~6% dibuat TERLARANG dengan sengaja. Menjadikan seluruh peta "boleh" akan
-    membuat ZoneGuard - salah satu fitur yang paling layak diperagakan -
-    tidak punya satu pun contoh untuk ditunjukkan.
-    """
+    """ZoneGuard: yang kosong diberi status, bukan dibiarkan 'belum pasti'."""
     h3 = b["h3_index"]
     u = _benih(h3, "zona")
     boleh = u > 0.06
@@ -365,19 +274,6 @@ def isi(db, penanda: bool = True) -> None:
     total_sel = sum(len(v) for v in sel_kosong.values())
     print(f"  {total_sel} sel kosong di {len(sel_kosong)} kolom\n")
 
-    # --- 3. Tambal, HANYA yang kosong ---------------------------------------
-    #
-    # BERKELOMPOK per kolom, bukan satu UPDATE per heksagon.
-    #
-    # Versi pertama mengirim satu pernyataan per heksagon lalu 12.744 sisipan
-    # satu-satu untuk profil jam. Supabase memutus koneksinya di tengah jalan
-    # ("server closed the connection unexpectedly") - bukan karena datanya
-    # salah, melainkan karena puluhan ribu perjalanan bolak-balik ke basis data
-    # terkelola memang melewati batas waktunya. Transaksinya ter-rollback bersih
-    # dan tidak ada yang rusak, tetapi tidak ada juga yang terisi.
-    #
-    # `executemany` mengirim satu pernyataan dengan banyak baris parameter.
-    # Jumlah perjalanannya turun dari puluhan ribu jadi puluhan.
     nilai_semua = {b["h3_index"]: {**_nilai_demo(b), **_zona_demo(b)} for b in dasar}
     for kol, daftar in sel_kosong.items():
         muatan = [
@@ -390,15 +286,6 @@ def isi(db, penanda: bool = True) -> None:
         db.execute(text(f"UPDATE hex_features SET {kol} = :v WHERE h3_index = :h3"), muatan)
     print(f"  {len(sel_kosong)} kolom ditambal berkelompok")
 
-    # --- 4. Penanda survei -------------------------------------------------
-    # Ditimpa, bukan ditambal: ketiganya sudah punya nilai. Inilah yang membuat
-    # seluruh lencana berhenti berbunyi "Data tipis" dan panel berhenti menulis
-    # "heksagon ini belum disurvei langsung".
-    #
-    # `--tanpa-penanda` MELEWATI langkah ini (13 Sep 2026). Seluruh layer tetap
-    # terisi dan bisa dipakai, tetapi lencana keyakinan tetap mengatakan yang
-    # sebenarnya: angka-angka ini tidak disurvei. Aturan 3 menuntut lencananya
-    # jujur, dan "keyakinan TINGGI" di atas angka karangan justru kebalikannya.
     if not penanda:
         print("  penanda survei TIDAK diubah (--tanpa-penanda)")
         dasar_penanda: list[dict] = []
@@ -467,18 +354,6 @@ def isi(db, penanda: bool = True) -> None:
     ]
     print(f"  {len(jam_baru)} baris profil jam")
 
-    # --- 6. Rute mobil, dicerminkan dari rute jalan kaki ---------------------
-    # Geometrinya SAMA. Itu disengaja dan jujur di dalam konteks demo: yang
-    # diperagakan bahwa produknya bisa membedakan dua profil, bukan bahwa kami
-    # punya jaringan jalan mobil. Waktunya dibagi 3,4 - mobil di jalan kota
-    # Jabodetabek kira-kira 15 km/jam melawan 4,3 km/jam jalan kaki.
-    #
-    # HANYA untuk heksagon yang belum punya rute mobil SUNGGUHAN. Sejak
-    # `rute_ors.py --mobil` benar-benar dijalankan, sebagian besar heksagon
-    # punya jalur mobil dari OpenRouteService - dan cerminan ini akan menimpa
-    # ketelitiannya dengan geometri jalan kaki. `ON CONFLICT DO NOTHING` saja
-    # tidak cukup menjaganya: rute sungguhan boleh punya jumlah alternatif yang
-    # berbeda, jadi sebagian barisnya tetap lolos ke nomor urutan yang kosong.
     sebelum_rute = {r[0] for r in db.execute(text("SELECT id FROM hex_routes")).all()}
     db.execute(
         text(
@@ -504,10 +379,6 @@ def isi(db, penanda: bool = True) -> None:
     ]
     print(f"  {len(rute_baru)} rute mobil")
 
-    # --- 7. Pita isochrone 30 & 60 menit ------------------------------------
-    # Dibuat dengan MEMBESARKAN pita 15 menit lewat ST_Buffer, bukan diundi:
-    # pita yang tidak bersarang di dalam pita berikutnya akan langsung terlihat
-    # salah, dan `smoke_api.py` memang mengujinya.
     sebelum_iso = {r[0] for r in db.execute(text("SELECT id FROM catchment_areas")).all()}
     for menit, skala in ((30, 0.0092), (60, 0.0235)):
         db.execute(
@@ -595,10 +466,6 @@ def copot(db) -> None:
     # Profil jam ikut dihapus MENURUT ID lewat `baris_baru` di atas, bukan
     # menurut `metode` - lihat alasannya di komentar PENANDA.
 
-    # --- 4. Skor dikembalikan APA ADANYA ------------------------------------
-    # Bukan dihitung ulang: menghitung ulang dari variabel yang baru dikosongkan
-    # memang mendekati keadaan semula, tetapi "mendekati" bukan "sama", dan
-    # peringkat yang bergeser diam-diam adalah persis yang tidak boleh terjadi.
     db.execute(text("DELETE FROM score_factors"))
     db.execute(text("DELETE FROM location_scores"))
     for nama in ("location_scores", "score_factors"):

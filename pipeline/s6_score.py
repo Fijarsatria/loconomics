@@ -1,10 +1,4 @@
-"""Tahap 6 - Mesin skoring. Rule-based, deterministik, bisa dijelaskan.
-
-Ini satu-satunya tempat skor dihitung di seluruh proyek. Backend tidak menghitung,
-frontend tidak menghitung, dan LLM sama sekali tidak boleh menghitung.
-
-Alur: 41 variabel -> normalisasi -> 4 indeks komposit -> Skor Peluang -> Hidden Gem.
-"""
+"""Tahap 6 - Mesin skoring. Rule-based, deterministik, bisa dijelaskan."""
 
 from __future__ import annotations
 
@@ -37,12 +31,7 @@ BEREKOR_PANJANG = {
 
 
 def norm(s: pd.Series, nama: str | None = None) -> pd.Series:
-    """Min-max ke [0,1]. NaN tetap NaN - tidak pernah diisi nol.
-
-    "Nol transaksi tercatat" dan "tidak ada transaksi di sini" adalah dua
-    pernyataan berbeda; menyamakannya membuat kawasan yang belum disurvei
-    tampak mati padahal bisa jadi justru ramai.
-    """
+    """Min-max ke [0,1]. NaN tetap NaN - tidak pernah diisi nol."""
     x = pd.to_numeric(s, errors="coerce").astype(float)
     if nama in BEREKOR_PANJANG:
         x = np.log1p(x.clip(lower=0))
@@ -53,13 +42,7 @@ def norm(s: pd.Series, nama: str | None = None) -> pd.Series:
 
 
 def _tertimbang(df: pd.DataFrame, bobot: dict[str, float]) -> pd.Series:
-    """Jumlah tertimbang.
-
-    Kunci bobot memakai KODE variabel (D05, C06) supaya definisi bobot bisa
-    dibaca berdampingan dengan Kamus Data. Sufiks _inv berarti variabel dibalik:
-    1 - norm(x), dipakai untuk variabel yang arahnya terbalik terhadap indeksnya
-    (mis. waktu jalan makin lama makin buruk untuk IPT).
-    """
+    """Jumlah tertimbang."""
     total = pd.Series(0.0, index=df.index)
     for kunci, w in bobot.items():
         kode = kunci.removesuffix("_inv")
@@ -88,25 +71,7 @@ BOBOT_INDEKS = {"IPT": BOBOT_IPT, "IAE": BOBOT_IAE, "IKP": BOBOT_IKP, "IBR": BOB
 
 
 def rincian_faktor(df: pd.DataFrame) -> pd.DataFrame:
-    """Kontribusi tiap variabel terhadap indeksnya - isi tabel score_factors.
-
-    Kenapa di sini dan bukan di backend: kontribusi adalah bobot x nilai
-    ternormalisasi, dan itu aritmetika skor. Aturan 1 repo ini mengunci seluruh
-    aritmetika skor di berkas ini; backend hanya membaca hasilnya.
-
-    Keluarannya BERBENTUK PANJANG - satu baris per (heksagon, variabel), empat
-    belas baris per heksagon. Empat belas, bukan 43: hanya variabel yang
-    benar-benar punya bobot yang muncul. B10 dan P07 tidak ikut karena keduanya
-    variabel tampilan PriceLens dan tidak membentuk satu pun indeks; menampilkan
-    mereka di tabel bernama "faktor pembentuk skor" akan menyatakan sesuatu yang
-    tidak benar.
-
-    `kontribusi` disimpan POSITIF terhadap indeksnya sendiri, bukan terhadap
-    skor akhir. IKP dan IBR memang masuk Skor Peluang dengan tanda negatif,
-    tetapi arah itu sudah dinyatakan kolom `indeks` dan dibaca dari sana oleh
-    antarmuka. Menyimpannya bertanda negatif akan membuat pengurutan
-    "kontribusi terbesar" justru menaruh penekan skor terkuat di paling bawah.
-    """
+    """Kontribusi tiap variabel terhadap indeksnya - isi tabel score_factors."""
     keluar: list[pd.DataFrame] = []
     for indeks, bobot in BOBOT_INDEKS.items():
         for kunci, w in bobot.items():
@@ -124,16 +89,7 @@ def rincian_faktor(df: pd.DataFrame) -> pd.DataFrame:
                         "indeks": indeks,
                         "nilai_mentah": mentah.to_numpy(),
                         "nilai_normalisasi": ternorm.to_numpy(),
-                        # Persentil dihitung atas nilai MENTAH, bukan atas nilai
-                        # yang sudah dibalik. Kalimat yang muncul di layar
-                        # berbunyi "lebih tinggi daripada 78 dari 100 lokasi
-                        # lain" - itu pernyataan tentang variabelnya sendiri,
-                        # bukan tentang arah sumbangannya ke indeks.
                         "persentil": (mentah.rank(pct=True) * 100).to_numpy(),
-                        # fillna(0.5) sama persis dengan _tertimbang(): yang
-                        # hilang dinetralkan, tidak dinolkan. Karena keduanya
-                        # memakai angka yang sama, jumlah kontribusi satu indeks
-                        # selalu sama dengan nilai indeks itu.
                         "kontribusi": (w * ternorm.fillna(0.5)).to_numpy(),
                     }
                 )
@@ -142,13 +98,7 @@ def rincian_faktor(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def hitung_opportunity(idx: pd.DataFrame, zona_izin: pd.Series, bobot=None) -> pd.Series:
-    """Skor Peluang, skala 0-100.
-
-    ZoneGuard adalah GATE, bukan bobot: kalau zona RDTR melarang kegiatan usaha,
-    skor dinolkan berapa pun nilai variabel lain. Zona yang tidak diketahui
-    (NaN, mis. kawasan tanpa RDTR digital) TIDAK dinolkan - ditandai terpisah
-    di antarmuka sebagai "Kawasan tanpa RDTR Digital".
-    """
+    """Skor Peluang, skala 0-100."""
     w = bobot or BOBOT_PELUANG
     mentah = (
         w["IPT"] * idx["ipt"]
@@ -161,16 +111,7 @@ def hitung_opportunity(idx: pd.DataFrame, zona_izin: pd.Series, bobot=None) -> p
 
 
 def hitung_iptt(df: pd.DataFrame) -> pd.Series:
-    """Indeks Permintaan Tak Terlayani - metrik paling orisinal proyek ini.
-
-    Banyak pedagang KELILING x pembeli RAMAI / sedikit usaha MENETAP.
-    Artinya permintaan sudah terbukti ada tetapi belum ada yang melayaninya
-    secara permanen.
-
-    Hanya bisa dihitung karena data misi MAPID punya kolom Mobilitas dan kolom
-    Kondisi Pembeli. Tidak ada dataset komersial yang menyediakan keduanya -
-    pedagang keliling tidak pernah masuk ke peta mana pun.
-    """
+    """Indeks Permintaan Tak Terlayani - metrik paling orisinal proyek ini."""
     return (
         norm(df["rasio_keliling"], "rasio_keliling").fillna(0)
         * norm(df["skor_ramai_terkoreksi"], "skor_ramai_terkoreksi").fillna(0)
@@ -179,17 +120,7 @@ def hitung_iptt(df: pd.DataFrame) -> pd.Series:
 
 
 def hitung_residual_biaya(df: pd.DataFrame, idx: pd.DataFrame) -> pd.Series:
-    """Metode 1 Hidden Gem - regresi OLS biaya terhadap potensi.
-
-        IBR ~ b0 + b1*IPT + b2*IAE + b3*populasi
-
-    Residual sangat NEGATIF -> biaya jauh lebih murah daripada seharusnya
-    mengingat potensi lokasi. Itulah hidden gem.
-
-    Bisa dijelaskan tanpa jargon: "berdasarkan potensi transit dan aktivitas
-    ekonominya, lokasi ini seharusnya berharga sekian, tetapi harga sebenarnya
-    jauh di bawah itu."
-    """
+    """Metode 1 Hidden Gem - regresi OLS biaya terhadap potensi."""
     X = pd.DataFrame({
         "konstanta": 1.0,
         "ipt": idx["ipt"],
@@ -218,13 +149,7 @@ def hitung_prestise_visual(df: pd.DataFrame) -> pd.Series:
 
 
 def tentukan_kuadran(peluang: pd.Series, prestise: pd.Series) -> pd.Series:
-    """Metode 2 Hidden Gem. Empat kuadran dengan makna berbeda.
-
-    Kuadran JEBAKAN_GENGSI juga ditampilkan di platform: berisi lokasi yang
-    terlihat bagus dan mahal tetapi ekonominya tidak mendukung, dan justru itulah
-    yang paling sering menjebak pelaku UMKM pemula. Menampilkannya membuat
-    platform tidak hanya merekomendasikan, tetapi juga melindungi.
-    """
+    """Metode 2 Hidden Gem. Empat kuadran dengan makna berbeda."""
     p_tinggi = peluang >= peluang.median()
     v_tinggi = prestise >= prestise.median()
     return pd.Series(
@@ -238,11 +163,7 @@ def tentukan_kuadran(peluang: pd.Series, prestise: pd.Series) -> pd.Series:
 
 
 def hitung_hidden_gem(df: pd.DataFrame, idx: pd.DataFrame, peluang: pd.Series) -> pd.DataFrame:
-    """Gabungan tiga metode.
-
-    Sebuah lokasi baru disebut hidden gem kalau lolos LEBIH DARI SATU metode -
-    yang diambil irisannya, bukan gabungannya.
-    """
+    """Gabungan tiga metode."""
     residual = hitung_residual_biaya(df, idx)
     iptt = hitung_iptt(df)
     prestise = hitung_prestise_visual(df)
@@ -273,12 +194,7 @@ def hitung_hidden_gem(df: pd.DataFrame, idx: pd.DataFrame, peluang: pd.Series) -
 
 
 def uji_sensitivitas(df: pd.DataFrame, geser: float = SENSITIVITAS_GESER) -> dict[str, float]:
-    """Geser tiap bobot +-0,10, bandingkan peringkat dengan baseline (Spearman rho).
-
-    Pertanyaan "kenapa bobotnya segitu?" hampir pasti ditanyakan juri, dan
-    jawaban terbaiknya bukan pembelaan atas angka bobot, melainkan bukti bahwa
-    hasilnya tidak sensitif terhadap angka itu. Target rho > 0,85.
-    """
+    """Geser tiap bobot +-0,10, bandingkan peringkat dengan baseline (Spearman rho)."""
     idx = hitung_indeks(df)
     zona = df["zona_izin_komersial"]
     baseline = hitung_opportunity(idx, zona).rank()
@@ -332,29 +248,8 @@ def _norm_blok(s: pd.Series, nama: str) -> pd.Series:
 def skor_blok(ind: pd.DataFrame) -> pd.DataFrame:
     """Skor 0-100 tiap blok, umum dan per kelas induk usaha, plus peringkat di
     dalam heksagon induknya.
-
-    `ind` berindeks h3_blok dan memuat kolom `h3_induk` + keluaran
-    `s4_spatial.indikator_blok`.
-
-    Normalisasinya atas SELURUH blok wilayah studi, bukan per induk. Sebabnya
-    terukur di keputusan yang ditolak: min-max per induk membuat tujuh blok
-    yang nyaris sama selalu direntang 0..100, sehingga selisih lima meter ke
-    jalan terbaca sebagai perbedaan terbesar di dunia. Dengan normalisasi
-    global, tujuh blok yang memang mirip tetap berskor mirip - dan itu
-    pernyataan yang benar tentang heksagon itu.
-
-    Kosong dinetralkan 0,5 (aturan 4). Zona RDTR yang MELARANG menolkan skor
-    blok, persis seperti ZoneGuard pada heksagon; zona yang tidak diketahui
-    tidak.
     """
     mentah = pd.Series(0.0, index=ind.index)
-    # KONTRIBUSI tiap indikator disimpan, bukan cuma jumlahnya.
-    #
-    # Tanpa ini panel blok cuma bisa menyebutkan angka akhirnya, dan pertanyaan
-    # yang benar-benar diajukan orang - "kenapa blok ini 96 dan yang sebelah
-    # 84?" - tidak punya jawaban selain membandingkan enam kolom mentah
-    # sendiri. Dihitung DI SINI dan bukan di backend karena aturan 1 tidak
-    # punya pengecualian: aritmetika skor tinggal di s6_score.
     sumbangan: dict[str, pd.Series] = {}
     for kunci, w in BOBOT_BLOK.items():
         kolom = kunci.removesuffix("_inv")
@@ -382,10 +277,6 @@ def skor_blok(ind: pd.DataFrame) -> pd.DataFrame:
             .round(1)
             .mask(dilarang, 0.0)
         )
-    # Kontribusi dinyatakan sebagai PANGSA dari total bobotnya, supaya angka di
-    # layar bisa dibandingkan antar-indikator tanpa pembaca perlu tahu bobot
-    # mana yang 0,30 dan mana yang 0,10. Yang tersimpan sudah bulat tiga
-    # desimal - sisanya derau.
     kunci_urut = list(BOBOT_BLOK) + ["risiko_banjir_inv"]
     keluar["kontribusi"] = [
         {k: round(float(sumbangan[k].iloc[i]), 4) for k in kunci_urut}

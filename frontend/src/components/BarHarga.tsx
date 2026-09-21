@@ -1,19 +1,3 @@
-/**
- * PriceLens — satu nilai terhadap rentang wajar kawasannya.
- *
- * Bentuknya sengaja bukan batang biasa. Pertanyaan yang dijawab bukan "berapa
- * harganya" melainkan "mahal atau murah", dan pertanyaan kedua tidak bisa
- * dijawab angka tunggal tanpa pembanding. Rp 180.000 per m² tidak berarti apa-apa
- * sampai Anda tahu tetangganya berapa.
- *
- * Jadi yang digambar adalah rentangnya lebih dulu — pita persentil 25–75 kawasan
- * — lalu posisi heksagon ini di dalam atau di luar pita itu. Kuartil, bukan
- * simpangan baku, karena sebaran harga sewa berekor panjang: beberapa ruko premium
- * menggeser rata-rata tetapi tidak menggeser kuartil.
- *
- * Perbandingan selalu terhadap kawasan sendiri. Rp 200.000 per m² di Dukuh Atas
- * murah; di Harjamukti mahal.
- */
 
 import type { PosisiHarga, RentangWajar } from '../types'
 import { Kosong } from './primitif'

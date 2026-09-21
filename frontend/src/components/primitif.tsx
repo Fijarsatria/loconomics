@@ -1,16 +1,3 @@
-/**
- * Potongan kecil yang dipakai di banyak tempat.
- *
- * Dua di antaranya menegakkan aturan proyek, bukan sekadar merapikan tampilan:
- *
- *   Badge   — setiap skor wajib membawa tingkat keyakinannya. Komponen ini yang
- *             membuatnya sulit dilupakan: ia diminta oleh tipe di setiap tempat
- *             skor ditampilkan.
- *   Angka   — nilai kosong ditampilkan sebagai "belum ada data", TIDAK PERNAH
- *             sebagai 0. "Nol transaksi tercatat" dan "belum ada yang mensurvei
- *             di sini" adalah dua pernyataan yang sangat berbeda, dan yang kedua
- *             tidak boleh menyamar jadi yang pertama.
- */
 
 import {
   useCallback,
@@ -28,13 +15,6 @@ import { IDENTITAS, KEYAKINAN, KUADRAN, RODA_WARNA } from '../config'
 import { SakelarBahasa, SakelarTema, useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 import type { BadgeKeyakinan, Kuadran as NamaKuadran } from '../types'
 
-/**
- * Kalimat kedua potongan terkecil di berkas ini, dua bahasa.
- *
- * `en` ikut jadi kunci - bukan gaya, melainkan karena `KEYAKINAN` menyimpan
- * pasangan Inggrisnya sendiri (`teksEn`, `labelEn`) di `config.ts`, dan yang
- * dibutuhkan di sini cuma tahu cabang mana yang sedang berlaku.
- */
 const K_KECIL = {
   id: {
     en: false,
@@ -90,28 +70,10 @@ export function Angka({
 
 // --- Badge keyakinan (Q01–Q03) ---------------------------------------------
 
-/**
- * Tiga balok, bukan tiga warna.
- *
- * Merah-kuning-hijau akan membuat keyakinan rendah terbaca sebagai kesalahan.
- * Ia bukan kesalahan — ia hanya berarti datanya belum banyak, dan itu keadaan
- * yang normal di kawasan yang belum disurvei. Balok terisi menyampaikan "sedikit
- * atau banyak" tanpa menyampaikan "buruk atau baik".
- *
- * Sumber `predicted` mendapat arsir, mengikuti aturan tekstur = belum tahu.
- */
 export function Badge({ badge, ringkas }: { badge: BadgeKeyakinan; ringkas?: boolean }) {
   const t = useTeks(K_KECIL)
   const k = KEYAKINAN[badge.tingkat]
   const prediksi = badge.sumber === 'predicted'
-  // "hasil imputasi model" SALAH sejak 29 Agu 2026, dan salahnya ke arah yang
-  // paling merugikan: ia membuat angka yang benar-benar TERUKUR - POI OSM, rute
-  // OpenRouteService, penduduk WorldPop, zonasi RDTR - terbaca seperti tebakan
-  // model. Tidak ada satu pun model imputasi yang berjalan; `s5_impute` justru
-  // MENOLAK jalan sampai ground truth-nya cukup.
-  //
-  // `predicted` di basis data ini berarti satu hal saja: heksagon itu belum
-  // pernah dikunjungi surveyor. Bukan pernyataan tentang mutu angkanya.
   const judul = t.judul(
     t.en ? k.teksEn : k.teks,
     badge.n_titik_misi,
@@ -193,20 +155,6 @@ export function ChipKuadran({ kuadran }: { kuadran: NamaKuadran | null }) {
 
 // --- Struktur panel --------------------------------------------------------
 
-/**
- * Nada warna sebuah bagian panel.
- *
- * Ada karena panel detail heksagon punya SEBELAS bagian berurutan dan sampai
- * 3 September 2026 seluruhnya berwarna sama - tinta di atas putih, dari atas
- * sampai bawah. Akibatnya bukan soal selera: tanpa satu pun penanda, mencari
- * "di mana bagian harga tadi" menuntut membaca judul demi judul, dan panel
- * yang harus DIBACA untuk bisa DILEWATI adalah panel yang tidak bisa dipindai.
- *
- * Warnanya diambil dari palet yang sudah ada, bukan palet baru: `gem` untuk
- * yang menerangkan skor, `jebakan` untuk uang dan waktu, `bahaya` untuk
- * peringatan, `netral` untuk lampiran. Merah TIDAK PERNAH dipakai sekadar
- * sebagai warna keempat - aturan itu sudah tertulis di kepala palet.
- */
 export type NadaBagian = 'gem' | 'pemenang' | 'jebakan' | 'bahaya' | 'netral'
 
 /** Kelas ditulis UTUH, tidak dirangkai. Tailwind memindai sumber sebagai teks;
@@ -258,23 +206,6 @@ export function Bagian({
   )
 }
 
-/**
- * Keterangan panjang yang dilipat.
- *
- * Panel detail pernah menumpuk sebelas paragraf penjelas berturut-turut, dan
- * tiap paragrafnya punya alasan yang benar - keterangan itu yang membedakan
- * "44 dari 100" dari angka yang dikarang. Masalahnya bukan isinya melainkan
- * bahwa SEMUANYA terbuka sekaligus, kepada pembaca yang datang untuk menimbang
- * satu ruko dan bukan untuk mengaudit metodologi.
- *
- * Dilipat, bukan dibuang. Membuangnya akan menghapus satu-satunya hal yang
- * membuat angka di panel ini bisa dipertanggungjawabkan; melipatnya cuma
- * memindahkan keputusan membacanya ke pembacanya.
- *
- * `<details>` asli, bukan state React: ia sudah bisa dibuka keyboard, sudah
- * dibaca pembaca layar sebagai daerah yang bisa dilipat, dan isinya ikut
- * ditemukan Ctrl+F peramban.
- */
 export function Rinci({ ringkas, children }: { ringkas: string; children: ReactNode }) {
   return (
     <details className="group mt-1.5">
@@ -316,10 +247,6 @@ export function Baris({
   )
 }
 
-/**
- * Layar kosong adalah ajakan bertindak, bukan pengumuman kegagalan.
- * Selalu menyebut apa yang harus dilakukan berikutnya.
- */
 export function Ajakan({
   judul,
   anak,
@@ -338,23 +265,6 @@ export function Ajakan({
   )
 }
 
-/**
- * Balok abu-abu saja tidak cukup.
- *
- * Panel yang berganti isi tanpa keterangan terbaca sebagai antarmuka yang
- * menggantung, bukan yang sedang bekerja - terutama saat heksagonnya berganti
- * dan yang berubah cuma bentuk balok yang mirip. Kalimatnya membuat jedanya
- * punya nama.
- */
-/**
- * Bawaannya DUA BAHASA, bukan satu string Indonesia.
- *
- * Sampai 12 Sep 2026 kalimatnya tertulis sebagai nilai bawaan parameter, dan
- * itu lolos dari tsc dan dari kedua uji: pemanggil yang menyediakan `teks`
- * sendiri memang benar, dan yang tidak menyediakannya tidak gagal - ia cuma
- * menampilkan "Sedang memuat data…" di tengah layar berbahasa Inggris.
- * Terlihat di potret Playwright 390 px, bukan di satu pun asersi.
- */
 export function Memuat({ baris = 3, teks }: { baris?: number; teks?: string }) {
   const t = useTeks(K_KECIL)
   teks ??= t.memuat
@@ -375,25 +285,6 @@ export function Memuat({ baris = 3, teks }: { baris?: number; teks?: string }) {
   )
 }
 
-/**
- * Nama produk yang berombak, dipakai SETIAP tempat yang sedang menunggu data.
- *
- * Lahir di panel AI ("Loconomics AI" yang berombak menggantikan titik
- * berdenyut) dan dipindah ke sini 11 Sep 2026 atas permintaan pemilik repo,
- * yang menginginkan gerakan yang sama di daftar lokasi dan di tab "Untuk Anda".
- * Alasannya lebih dari kemiripan: batang abu-abu berkilau menyatakan "sesuatu
- * sedang dimuat" dan tidak lebih, sementara nama yang bergerak menyatakan SIAPA
- * yang sedang mengerjakannya - dan di produk yang seluruh isinya dihitung
- * sendiri, itu kabar yang berbeda.
- *
- * Hurufnya dipecah supaya tiap huruf berangkat pada waktunya sendiri; itu yang
- * membuat geraknya terbaca sebagai gelombang yang MENJALAR, bukan sebagai kata
- * yang naik-turun serempak. Spasi ditulis sebagai escape `\u00A0`, BUKAN
- * karakter mentah - jebakan yang sudah tercatat, dan sudah terulang sekali.
- *
- * `aria-label` memakai kalimat biasa dan hurufnya disembunyikan dari pembaca
- * layar: dieja satu per satu bukan kabar yang berguna.
- */
 export function NamaBerombak({
   teks = 'Loconomics',
   kelas = 'text-[15px]',
@@ -418,13 +309,6 @@ export function NamaBerombak({
   )
 }
 
-/**
- * Layar tunggu bernama: papan nama berombak, satu kalimat di bawahnya.
- *
- * Menggantikan batang berkilau di tempat-tempat yang menunggu LAMA dan punya
- * ruang - daftar lokasi, rekomendasi, komparasi. Batang berkilau tetap dipakai
- * di panel sempit, tempat gerakan sebesar ini akan mendominasi.
- */
 export function MemuatNama({ teks }: { teks: string }) {
   return (
     <div
@@ -447,59 +331,13 @@ export function MemuatNama({ teks }: { teks: string }) {
 // --- Papan nama ------------------------------------------------------------
 
 
-/**
- * Kursor yang berhenti di satu huruf tidak boleh meninggalkan noda permanen.
- * Lewat jeda ini warnanya luntur sendiri, meski kursornya belum pergi.
- */
 const DIAM_MS = 3500
 
-/**
- * Jeda sebelum warna luntur SETELAH kursor pergi.
- *
- * Nol — perilaku sebelumnya — membuat sapuan cepat tidak meninggalkan apa pun:
- * warnanya sudah pulang sebelum mata sempat membaca jejaknya. Dua detik cukup
- * lama untuk melihat sapuannya utuh, masih cukup singkat untuk tidak terasa
- * macet.
- *
- * Getarannya (440ms, di index.css) sengaja jauh lebih pendek dari ini. Kalau
- * keduanya sama panjang, hurufnya terlihat gemetar terus; dengan gerak yang
- * mendarat duluan dan warna yang menyusul pergi, sapuannya terasa punya akhir.
- */
 const LEPAS_MS = 2000
 
 /** Sengaja di luar komponen: satu penghitung untuk seluruh papan nama. */
 let langkahWarna = 0
 
-/**
- * Papan nama "Loconomics" di bilah atas.
- *
- * Tiap huruf dipecah jadi span sendiri supaya bisa mengambil warnanya sendiri.
- * Spasi TIDAK dibungkus span — dibiarkan sebagai teks telanjang, supaya ia tidak
- * ikut berwarna dan pemenggalan barisnya tetap wajar.
- *
- * Pemecahan itu membuat pembaca layar mengeja huruf satu per satu, jadi
- * hurufnya disembunyikan dari pohon aksesibilitas dan judulnya membawa
- * aria-label yang utuh.
- *
- * Tiap huruf yang tersentuh melakukan dua hal dengan tempo yang berbeda: ia
- * melenting sebentar (440ms, .getar-a/.getar-b di index.css) lalu diam, dan ia
- * mengambil warna yang baru pulang beberapa detik kemudian (DIAM_MS/LEPAS_MS).
- * Selisih tempo itulah efeknya — gerak yang mendarat duluan meninggalkan
- * warnanya sebagai jejak, bukan sebagai getaran yang tidak berhenti.
- */
-/**
- * Markah Loconomics: heksagon dengan satu blok lebih terang di dalamnya dan
- * satu garis transit menembusnya - persis `public/favicon.svg`.
- *
- * Ada karena pemilik repo menemukan logo di halaman gerbang BERBEDA dari
- * favicon yang muncul di tab peramban (19 Sep 2026). Yang dipakai di gerbang
- * dulu cuma garis heksagon + satu titik: bentuk yang belum menyatakan apa pun
- * tentang produk ini. Sekarang keduanya satu gambar, dan bila favicon berubah,
- * satu tempat ini yang ikut berubah.
- *
- * Gradiennya lewat `useId`, bukan id tetap: dua markah di satu halaman dengan
- * id gradien yang sama membuat yang kedua mengambil gradien yang pertama.
- */
 export function Markah({ kelas = '' }: { kelas?: string }) {
   const id = useId()
   const isi = `url(#${id})`
@@ -538,25 +376,7 @@ export function PapanNama({
   sebagai: Tag = 'h1',
 }: {
   teks: string
-  /**
-   * Ukuran dan warna diserahkan ke pemanggil, perilakunya tidak.
-   *
-   * Halaman gerbang memakai papan nama yang SAMA dengan bilah atas aplikasi -
-   * tempo warna, arah getar, dan selisih antara keduanya semuanya identik,
-   * karena itu memang diminta begitu. Yang berbeda cuma ukurannya. Menyalin
-   * komponennya untuk mengubah satu kelas akan membuat kedua salinan itu
-   * berpisah tempo pada perubahan berikutnya.
-   */
   kelas?: string
-  /**
-   * Bilah atas aplikasi tetap ada di DOM di belakang halaman gerbang, jadi dua
-   * papan nama bisa hidup bersamaan. Hanya satu yang boleh jadi <h1>.
-   *
-   * `span` untuk papan nama yang duduk DI DALAM tombol - logo bilah gerbang,
-   * yang sekaligus tombol kembali ke atas. `<div>` dan `<h1>` tidak sah di
-   * dalam `<button>`. Hurufnya tersembunyi dari pembaca layar, jadi tombol
-   * pembungkusnya WAJIB membawa `aria-label` sendiri - tanpa itu namanya kosong.
-   */
   sebagai?: 'h1' | 'div' | 'span'
 }) {
   const [warna, setWarna] = useState<Record<number, string>>({})
@@ -595,10 +415,6 @@ export function PapanNama({
   const sentuh = useCallback(
     (i: number) => {
       setWarna((p) => ({ ...p, [i]: RODA_WARNA[langkahWarna++ % RODA_WARNA.length] }))
-      // Memasang ulang kelas animasi yang SUDAH menempel tidak memicu apa pun;
-      // hanya nama animasi yang berganti yang memulai ulang. Penghitung ini
-      // yang membuatnya berselang-seling getar-a/getar-b, sehingga menyapu
-      // bolak-balik di huruf yang sama tetap menggetarkannya tiap kali.
       setGetar((p) => ({ ...p, [i]: (p[i] ?? 0) + 1 }))
       jadwalkan(i, DIAM_MS)
     },
@@ -611,12 +427,6 @@ export function PapanNama({
         huruf === ' ' ? (
           ' '
         ) : (
-          // Dua span, bukan satu: yang luar adalah sasaran kursor dan TIDAK
-          // pernah ikut bergerak, yang dalam yang melenting. Kalau keduanya
-          // digabung, huruf yang sedang membesar ikut melebarkan kotak
-          // sentuhnya dan menutupi tetangganya - sapuan cepat lalu memicu
-          // huruf yang sama berulang kali alih-alih berjalan ke huruf
-          // berikutnya.
           <span
             key={i}
             aria-hidden
@@ -641,19 +451,6 @@ export function PapanNama({
 
 // --- Markdown ---------------------------------------------------------------
 
-/**
- * Perender Markdown seukuran gigitan, ditulis sendiri alih-alih menarik
- * pustaka.
- *
- * Alasannya bukan berat berkas. Jawaban LLM adalah teks yang tidak dipercaya,
- * dan setiap perender Markdown umum punya jalur keluar ke HTML mentah yang
- * harus dimatikan dengan benar. Yang di bawah ini tidak punya jalur itu sama
- * sekali: ia membangun elemen React, tidak pernah menyentuh dangerouslySetInner-
- * HTML, jadi tag di dalam jawaban model tetap jadi teks apa adanya.
- *
- * Yang didukung persis yang benar-benar dipakai model dalam prompt A1-A4:
- * judul, daftar bernomor, daftar poin, tebal, miring, dan kode sebaris.
- */
 
 const POLA_INLINE = /(\*\*.+?\*\*|`[^`]+`|\*[^*\n]+\*)/g
 
@@ -686,15 +483,6 @@ function Sebaris({ teks }: { teks: string }) {
 
 const AWAL_BLOK = /^(#{1,4}\s|\s*[-*•]\s|\s*\d+[.)]\s)/
 
-/**
- * `ungkap` membuat tiap blok muncul berurutan, bukan sekaligus.
- *
- * Ini bukan sekadar hiasan: jawaban asisten sering berupa tiga paragraf
- * sekaligus, dan blok yang mendarat serempak membuat mata tidak tahu harus
- * mulai dari mana. Jeda 70ms per blok menunjukkan urutan bacanya. Pengguna
- * yang mematikan animasi sistem mendapat semuanya sekaligus - aturan
- * prefers-reduced-motion di index.css sudah mengurusnya.
- */
 export function Markdown({ teks }: { teks: string }) {
   const baris = teks.split('\n')
   const blok: ReactNode[] = []
@@ -783,38 +571,8 @@ export function Markdown({ teks }: { teks: string }) {
 
 // --- Tutup yang beranimasi --------------------------------------------------
 
-/**
- * Berapa lama popover DITAHAN terpasang sesudah ditutup.
- *
- * SENGAJA lebih panjang daripada animasi `pop-tutup` (180 ms) di index.css.
- * Jam ini mulai berdetak saat tombol ditekan, sedangkan animasinya baru mulai
- * sesudah React me-render dan peramban menghitung ulang gaya - satu sampai dua
- * bingkai kemudian. Dengan angka yang sama persis, menunya dicabut di tengah
- * pudarnya: terukur di headless, opasitasnya masih 0,44-0,57 saat elemennya
- * hilang, jadi ekor animasinya terbaca sebagai kedipan.
- */
 const TUTUP_MS = 250
 
-/**
- * Menahan sebuah popover tetap TERPASANG selama animasi tutupnya berjalan.
- *
- * Ada karena laporan pemilik repo: menu Pengaturan, Akun, Layer, dan Kawasan
- * MEMBUKA dengan animasi tetapi MENUTUP dengan hilang begitu saja. Sebabnya
- * bukan CSS yang lupa ditulis - `{buka && <div>}` mencabut elemennya dari DOM
- * pada render yang sama dengan `buka` jadi false, dan elemen yang sudah tidak
- * ada tidak bisa dianimasikan apa pun.
- *
- * Satu kait untuk keempatnya, bukan empat salinan: yang ditulis empat kali
- * adalah yang suatu saat berbeda satu dari tiga lainnya.
- *
- * Keadaannya disesuaikan SAAT RENDER (pola "state dari prop sebelumnya"),
- * bukan lewat efek: lewat efek, render pertama sesudah `buka` jadi false sudah
- * mencabut elemennya sebelum efeknya sempat menahan apa pun - satu bingkai
- * kosong yang terlihat sebagai kedipan.
- *
- * Membuka lagi di tengah tutup membatalkan tutupnya: `menutup` jatuh ke false,
- * nama animasinya kembali ke `pop`, dan peramban memulainya dari awal.
- */
 export function useTutupHalus(buka: boolean): { tampil: boolean; menutup: boolean } {
   const [menutup, setMenutup] = useState(false)
   const [bukaSebelum, setBukaSebelum] = useState(buka)
@@ -833,19 +591,6 @@ export function useTutupHalus(buka: boolean): { tampil: boolean; menutup: boolea
 
 // --- Menu pilihan -----------------------------------------------------------
 
-/**
- * Pengganti <select> bawaan.
- *
- * Bukan soal selera. Elemen <select> menggambar daftarnya lewat widget sistem
- * operasi: `color` dan `background` yang kita pasang tidak berlaku di dalamnya,
- * dan pada Windows daftarnya selalu terang. Begitu chrome berpindah ke mode
- * gelap, tulisan di dalam kotak pilihan berakhir gelap di atas gelap — itu
- * cacat yang tidak bisa diperbaiki dari CSS, hanya dengan mengganti elemennya.
- *
- * Yang dijaga dari versi <select>: bisa dipakai penuh dari papan ketik. Panah
- * atas-bawah memindahkan sorotan, Enter memilih, Escape menutup, Tab keluar.
- * Home dan End melompat ke ujung, karena daftar kawasan akan bertambah panjang.
- */
 export function Menu<T extends string>({
   label,
   nilai,
@@ -857,11 +602,6 @@ export function Menu<T extends string>({
   nilai: T
   opsi: { nilai: T; label: string; catatan?: string }[]
   onUbah: (v: T) => void
-  /**
-   * Ke mana daftar pilihannya membuka. `turun` (bawaan) untuk menu di bilah
-   * atas; `naik` untuk menu yang duduk di dekat dasar layar - pil filter
-   * kiri-bawah di ponsel - supaya daftarnya tidak jatuh keluar layar.
-   */
   arah?: 'turun' | 'naik'
 }) {
   const [buka, setBuka] = useState(false)
@@ -966,11 +706,6 @@ export function Menu<T extends string>({
                     onUbah(o.nilai)
                     setBuka(false)
                   }}
-                  // Baris muncul berurutan, bukan serentak. Jaraknya 28ms:
-                  // cukup untuk terbaca sebagai daftar yang MEMBUKA, terlalu
-                  // singkat untuk terasa seperti menunggu. Dibatasi 6 baris
-                  // supaya menu Kawasan yang panjang tidak berakhir dengan
-                  // baris terakhir yang datang seperempat detik belakangan.
                   style={{ animationDelay: `${Math.min(i, 6) * 28}ms` }}
                   className={`ungkap flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-sm px-3 py-2 text-left text-[13.5px] transition-colors ${
                     i === sorot ? 'bg-surface-2' : ''
@@ -1005,15 +740,6 @@ export function Menu<T extends string>({
 
 // --- Pemilih basemap -------------------------------------------------------
 
-/**
- * Contoh tampilan tiap basemap, digambar sebagai SVG — bukan gambar ubin.
- *
- * Menarik ubin sungguhan sebagai pratinjau berarti lima permintaan jaringan
- * tambahan hanya untuk sebuah tombol, dan jalur raster/XYZ MAPID memang rusak di
- * sisi server (lihat CLAUDE.md). Lima lingkaran ini cukup: yang perlu dikenali
- * pengguna adalah "yang terang", "yang gelap", "yang satelit" — bukan jalan mana
- * yang tergambar di dalamnya.
- */
 function IsiSwatch({ nama }: { nama: string }) {
   if (nama === 'gelap')
     return (
@@ -1092,28 +818,8 @@ const LENSA = UK + 6
 /** Lama blob melar sebelum kembali bulat. Sama dengan durasi transisi posisinya. */
 const LUNCUR_MS = 520
 
-/**
- * Jeda sebelum basemapnya benar-benar diganti.
- *
- * Mengganti gaya membuat MapLibre membangun ulang seluruh lapisannya, dan itu
- * memblokir main thread: diukur, animasi lensanya turun ke ~29 fps kalau
- * keduanya berangkat bersamaan. Seperempat perjalanan lebih dulu sudah cukup -
- * mata membaca AWAL sebuah gerakan, dan 150 ms tidak terasa sebagai tundaan.
- */
 const JEDA_UBAH_MS = 150
 
-/**
- * Pemilih basemap: satu tombol bulat yang memanjang ke kiri jadi deretan pilihan.
- *
- * Yang menandai pilihan bukan cincin atau centang melainkan satu lensa kaca yang
- * BERPINDAH. Satu elemen, bukan satu per pilihan — itulah sebabnya ia terbaca
- * sebagai benda yang mengalir dari satu lingkaran ke lingkaran lain, bukan dua
- * sorotan yang bergantian menyala. Saat berpindah ia melar mendatar dan memipih
- * sedikit, seperti tetesan yang ditarik, lalu bulat lagi begitu sampai.
- *
- * Tumbuhnya ke KIRI bukan pilihan gaya: tombolnya menempel di tepi kanan layar,
- * jadi ke kiri satu-satunya arah yang tidak keluar layar.
- */
 export function PilihBasemap<T extends string>({
   nilai,
   opsi,
@@ -1126,30 +832,8 @@ export function PilihBasemap<T extends string>({
   nilai: T
   opsi: { nilai: T; label: string }[]
   onUbah: (v: T) => void
-  /**
-   * Ke mana pilnya memanjang. Bukan selera: arahnya harus MENJAUHI tepi layar
-   * terdekat, kalau tidak pilnya keluar layar. Tombolnya sekarang di tepi kiri,
-   * jadi bawaannya ke kanan.
-   */
   arah?: 'kiri' | 'kanan'
-  /**
-   * Arah saat layar SEMPIT (<1024px). Tumpukan kendali peta pindah ke kanan
-   * tepi di ponsel, jadi pilnya harus memanjang ke KIRI - kalau tidak, ia
-   * mendorong tombolnya sendiri ke kiri alih-alih mengembang ke samping.
-   * Di desktop tumpukannya di kiri, jadi `arah` biasa tetap dipakai.
-   */
   arahSempit?: 'kiri' | 'kanan'
-  /**
-   * Terbuka atau tidak, DIKENDALIKAN dari luar. Boleh dikosongkan; tanpa
-   * keduanya komponen ini mengurus keadaannya sendiri seperti sebelumnya.
-   *
-   * Ada karena tombol ini duduk dalam satu tumpukan bersama pembuka Kompas
-   * Kuadran, dan dua panel yang sama-sama memanjang ke kanan tidak boleh
-   * terbuka bersamaan - yang kedua cuma mendorong yang pertama makin ke tepi
-   * alih-alih menggantikannya. Siapa yang boleh terbuka adalah keputusan
-   * TUMPUKANNYA, bukan keputusan masing-masing tombol, jadi keadaannya harus
-   * tinggal di tempat yang bisa melihat keduanya.
-   */
   buka?: boolean
   onBuka?: (v: boolean) => void
 }) {
@@ -1262,29 +946,16 @@ export function PilihBasemap<T extends string>({
             aria-hidden
             className="pointer-events-none absolute z-10 rounded-full"
             style={{
-              // Sedikit LEBIH BESAR dari swatch-nya, digeser setengah selisih.
-              // Lensa seukuran isinya terbaca sebagai topeng yang mengganti
-              // swatch; lensa yang melimpah sedikit terbaca sebagai benda yang
-              // menumpang di atasnya.
               left: PAD - (LENSA - UK) / 2 + idx * (UK + JARAK),
               top: PAD - (LENSA - UK) / 2,
               width: LENSA,
               height: LENSA,
               transform: luncur ? 'scaleX(1.3) scaleY(0.86)' : 'none',
               transition: `left ${LUNCUR_MS}ms var(--ease-jelly), transform ${LUNCUR_MS}ms var(--ease-jelly)`,
-              // Isinya harus tetap TERBACA di bawah lensa. Versi pertama memakai
-              // 26% putih + brightness 1,1 dan itu memutihkan swatch di bawahnya
-              // sampai hilang - yang sedang dipilih justru jadi satu-satunya yang
-              // tidak bisa dikenali.
               background: 'color-mix(in srgb, var(--color-surface) 10%, transparent)',
               backdropFilter: 'blur(0.4px) saturate(170%) brightness(1.03)',
               WebkitBackdropFilter: 'blur(0.4px) saturate(170%) brightness(1.03)',
               border: '1.5px solid color-mix(in srgb, #ffffff 82%, transparent)',
-              // Cahayanya datang dari BAWAH, dan itu yang membuat kaca terbaca
-              // sebagai setetes air alih-alih sebuah cakram. Tepi bawah paling
-              // terang, pendarnya naik ke dalam, tepi atas justru diredupkan -
-              // kebalikan dari tombol timbul biasa. Cincin gelap tipis di luar
-              // tetap ada supaya pilihan tegas di atas swatch seterang apa pun.
               boxShadow: [
                 'inset 0 -2px 0 rgb(255 255 255 / 0.98)',
                 'inset 0 -9px 14px -6px rgb(255 255 255 / 0.85)',
@@ -1337,10 +1008,6 @@ export function PilihBasemap<T extends string>({
         aria-expanded={buka}
         aria-label={`Basemap: ${terpilih?.label ?? ''}. ${buka ? 'Tutup' : 'Buka'} pilihan`}
         title={`Basemap — ${terpilih?.label ?? ''}`}
-        // `kaca` di sini BUKAN untuk latarnya (ditutup swatch) melainkan untuk
-        // BORDERNYA: bahan yang sama dengan bilah atas dan bilah bawah, jadi
-        // cincin luarnya sewarna dengan tepi kedua bilah itu di tema mana pun
-        // (permintaan 19 Sep 2026). Latarnya tidak terlihat, hanya tepinya.
         className={`kaca grid h-12 w-12 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-full transition-transform duration-200 ease-jelly hover:scale-[1.06] ${
           buka ? 'ring-2 ring-ink/70' : ''
         }`}
@@ -1372,14 +1039,6 @@ function BarisIdentitas({ label, nilai }: { label: string; nilai: string }) {
   )
 }
 
-/**
- * Dua layar menu pengaturan, dua bahasa.
- *
- * Yang diterjemahkan hanya LABEL-nya. Nilainya - nama produk, judul resmi
- * lomba, nama tim, nama institusi - identitas, dan identitas tidak
- * dialihbahasakan: "Telkom University" tetap "Telkom University" di layar
- * mana pun.
- */
 const K_PENGATURAN = {
   id: {
     pengaturan: 'Pengaturan',
@@ -1395,10 +1054,6 @@ const K_PENGATURAN = {
     kontak: {
       judul: 'Kontak',
       label: ['Surel', 'Instagram', 'Situs', 'Repositori'],
-      // Dulu "Isi nilainya di IDENTITAS pada frontend/src/config.ts." - pesan
-      // untuk pengembang di layar pengguna, dan sejak menu ini juga berdiri di
-      // halaman gerbang ia jadi kalimat yang dibaca juri. Hanya tampil selama
-      // KEEMPAT nilainya kosong; lihat `isi` di MenuPengaturan.
       catatan: 'Kontak tim belum dicantumkan.',
     },
   },
@@ -1437,15 +1092,6 @@ const NILAI_PENGATURAN = {
 
 type KunciPengaturan = keyof typeof NILAI_PENGATURAN
 
-/**
- * Gerigi di ujung kanan bilah atas: Tentang kami dan Kontak.
- *
- * Gerigi yang BERPUTAR saat disentuh bukan hiasan yang ditambahkan belakangan.
- * Ikon gerigi dipakai untuk begitu banyak hal berbeda sehingga ia nyaris tidak
- * berarti apa-apa; yang bergerak saat didekati setidaknya mengumumkan bahwa ia
- * bisa ditekan. Putarannya seperempat lingkaran - satu putaran penuh terbaca
- * sebagai indikator memuat, dan ini bukan sedang memuat apa pun.
- */
 /** Empat posisi kerapatan nama tempat, berikut namanya di dua bahasa. */
 const K_NAMA_TEMPAT = {
   id: {
@@ -1488,28 +1134,9 @@ export function MenuPengaturan({
 }: {
   namaTempat?: string
   onNamaTempat?: (k: string) => void
-  /**
-   * Mode 3D. Di layar lebar ada tombolnya sendiri di tumpukan zoom; di layar
-   * sempit tumpukan itu disembunyikan (cubit-untuk-zoom menggantikannya), dan
-   * tanpa baris ini 3D tidak punya satu pun jalan masuk di ponsel.
-   */
   tigaDimensi?: boolean
   onTigaDimensi?: (v: boolean) => void
-  /**
-   * Membuka daftar sumber data. Layarnya TIDAK dibangun di sini: isinya
-   * berasal dari `lib/ringkasan-data.ts` yang dibangkitkan pipeline, dan
-   * mengimpornya dari berkas primitif akan menyeret seluruh berkas itu ke
-   * dalam bundel pertama - termasuk ke halaman gerbang yang tidak
-   * membutuhkannya sampai ada yang menekan tombolnya.
-   */
   onSumber?: () => void
-  /**
-   * `gerbang` = bilah atas halaman perkenalan. Yang berbeda cuma BAHAN dan
-   * ukuran tombolnya - pil kaca setinggi tombol-tombol di sebelahnya, bukan
-   * cincin tipis bilah peta. Isi menunya sengaja tidak punya varian: dua menu
-   * pengaturan yang isinya boleh berbeda adalah dua menu yang suatu saat
-   * berselisih soal apa arti "Tampilan".
-   */
   varian?: 'peta' | 'gerbang'
 } = {}) {
   const { bahasa } = useBahasa()
@@ -1830,25 +1457,6 @@ export function MenuPengaturan({
 // Tirai fitur berbayar
 // ---------------------------------------------------------------------------
 
-/**
- * Tirai yang menutup bagian berbayar.
- *
- * SATU HAL YANG HARUS DIPAHAMI SEBELUM MEMAKAINYA: yang diburamkan di sini
- * BUKAN data sungguhan. Backend tidak pernah mengirim isi bagian berbayar
- * kepada yang belum membayar - lihat `terkunci` di respons /hex/{h3}. Kalau
- * data aslinya yang diburamkan, siapa pun bisa membuka panel pengembang,
- * mencabut satu baris CSS, dan membaca semuanya. Buram adalah lapisan cat;
- * ia tidak pernah boleh jadi satu-satunya kunci.
- *
- * Jadi yang tergambar di balik tirai adalah BENTUK - baris-baris seukuran
- * data yang seharusnya ada di situ. Gunanya jujur: memberi tahu ada sesuatu
- * yang seukuran ini di baliknya, tanpa berpura-pura sedang menyembunyikan
- * angka yang sebenarnya tidak dikirim.
- *
- * `onBuka` sengaja prop, bukan `useSesi()` di dalam sini. Berkas primitif ini
- * tidak tahu-menahu soal akun, dan menjaganya begitu berarti ia tetap bisa
- * dipakai di mana pun tanpa menyeret konteks sesi ke belakangnya.
- */
 export function Terkunci({
   judul,
   kalimat,
@@ -1868,20 +1476,6 @@ export function Terkunci({
   /** Tinggi minimum, mis. '13rem'. Bawaannya mengikuti jumlah baris. */
   tinggi?: string
 }) {
-  // YANG MENENTUKAN TINGGI ADALAH AJAKANNYA, bukan bentuk di belakangnya.
-  //
-  // Versi pertama membalik keduanya: bentuk digambar sebagai isi biasa, dan
-  // ajakannya ditumpuk di atasnya dengan `absolute inset-0`. Akibatnya tinggi
-  // kotak ditentukan oleh jumlah baris bentuk, sementara isi ajakan - ikon,
-  // judul, kalimat, tombol - bisa lebih tinggi daripada itu. Yang kelebihan
-  // digunting `overflow-hidden`, dan yang pertama hilang justru tombolnya,
-  // karena ia paling bawah. Terukur di bagian riwayat: labelnya terpotong habis
-  // dan tirainya menabrak paragraf di bawahnya.
-  //
-  // Sekarang bentuknya yang `absolute inset-0` dan ajakannya yang mengalir
-  // biasa. Bentuk itu hiasan; ia boleh digunting sesuka kotaknya. Ajakan itu
-  // satu-satunya jalan keluar dari tirai ini, dan ia tidak boleh pernah
-  // digunting.
   return (
     <div
       className="relative overflow-hidden rounded-sm"

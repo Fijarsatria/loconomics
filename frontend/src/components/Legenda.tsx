@@ -1,24 +1,3 @@
-/**
- * Legenda yang menempati slot yang sama dengan Kompas Kuadran.
- *
- * Kompas hanya benar untuk layer yang diwarnai menurut kuadran. Saat peta
- * menampilkan harga atau zonasi, warnanya tidak lagi berarti kuadran, dan
- * membiarkan Kompas di sana akan membuatnya berbohong.
- *
- * Jadi slotnya bertukar isi, bukan bertambah. Tempat, ukuran, dan bingkainya
- * tetap sama supaya mata tidak perlu mencari ulang setiap kali layer berganti.
- *
- * Versi pertama legenda ini hanya menamai warna: "murah", "mahal", "zona
- * mengizinkan usaha". Itu menjawab "warna ini artinya apa" tapi tidak menjawab
- * satu pun pertanyaan yang sebenarnya dibawa pengguna ke layar ini — murah itu
- * berapa, dan dari berapa banyak heksagon angka itu berasal. Sekarang ia
- * membawa angka kawasan yang sedang dilihat: kuartil sewa yang sesungguhnya,
- * jumlah heksagon per status zona, dan seberapa luas datanya benar-benar ada.
- *
- * Cakupan ditampilkan justru karena ia sering rendah. Legenda yang menyembunyikan
- * bahwa separuh kawasan belum tersurvei membuat gradasi warnanya terbaca lebih
- * berwibawa daripada yang pantas ia terima.
- */
 
 import { useEffect, useState } from 'react'
 
@@ -180,20 +159,6 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
   const t = useTeks(K)
   const [semuaHarga, setSemuaHarga] = useState<RingkasanHarga[] | null>(null)
   const [semuaZona, setSemuaZona] = useState<RingkasanZona[] | null>(null)
-  /**
-   * Dibedakan dari `harga === null` dengan sengaja.
-   *
-   * `/pricelens/ringkasan` memakan 3,5 detik pada mesin uji. Tanpa penanda ini
-   * legenda menulis "belum ada sampel" selama tiga setengah detik itu - dan itu
-   * bukan sekadar tampilan yang kurang, itu pernyataan yang salah. "Belum
-   * selesai dimuat" dan "memang tidak ada datanya" adalah dua hal berbeda,
-   * persis seperti aturan 4 repo ini soal nol dan kosong.
-   *
-   * Tidak pernah di-set ulang di dalam efek - App memasang `key={kawasan}`, jadi
-   * ganti kawasan berarti komponen ini dipasang ulang dan nilai awalnya kembali
-   * true dengan sendirinya. Menyetel state di dalam efek untuk hal yang bisa
-   * diurus nilai awal selalu menambah satu render tanpa menambah apa pun.
-   */
   const [memuat, setMemuat] = useState(true)
 
   // Keduanya ringkasan seluruh kawasan pilot dalam satu respons kecil, jadi
@@ -212,15 +177,6 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
     }
   }, [kawasan])
 
-  /**
-   * Baris yang sedang disaring. `null` berarti tidak ada saringan sama sekali.
-   *
-   * Versi sebelumnya memakai `.find(r => r.kawasan === kawasan)`, dan itu tidak
-   * pernah cocok untuk DUA keadaan yang justru paling sering muncul: tampilan
-   * bawaan ("semua kawasan", nilainya string kosong) dan saringan multi-kawasan
-   * ("Bekasi,Depok Baru"). Akibatnya legenda menulis "belum ada sampel" di atas
-   * peta yang penuh angka - pernyataan yang salah, bukan sekadar kosong.
-   */
   const dipilih =
     kawasan === SEMUA_KAWASAN ? null : new Set(kawasan.split(',').filter(Boolean))
   const saring = <T extends { kawasan: string }>(b: T[] | null): T[] =>
@@ -229,13 +185,6 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
   const barisHarga = saring(semuaHarga)
   const barisZona = saring(semuaZona)
 
-  /**
-   * Kuartil hanya ditampilkan untuk SATU kawasan.
-   *
-   * Median dari beberapa median bukan median, dan menampilkannya seolah begitu
-   * akan mengarang angka - persis yang dilarang aturan 4 repo ini. Cakupan
-   * datanya lain soal: ia rasio dua hitungan, dan hitungan boleh dijumlah.
-   */
   const harga = barisHarga.length === 1 ? barisHarga[0] : null
 
   const totalHex = barisHarga.reduce((a, r) => a + (r.total_heksagon || 0), 0)
@@ -382,12 +331,6 @@ export default function Legenda({ layer, kawasan }: { layer: NamaLayer; kawasan:
   )
 }
 
-/**
- * Bingkainya sengaja sama persis dengan kartu Kompas Kuadran — `kaca`,
- * `rounded-lg`, `pop-naik-kiri`. Keduanya bergantian menempati satu slot, dan
- * bingkai yang berbeda membuat pergantian itu terbaca sebagai panel yang
- * DIGANTI, bukan sebagai isi yang bertukar.
- */
 function Bingkai({
   judul,
   kawasan,

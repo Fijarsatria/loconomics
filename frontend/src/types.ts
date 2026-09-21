@@ -1,34 +1,14 @@
-/**
- * Cerminan `backend/app/schemas.py`.
- *
- * Kalau skema backend berubah, berkas ini harus ikut berubah. Tidak ada
- * pembangkitan otomatis — jumlah tipenya sedikit dan stabil, dan menuliskannya
- * tangan membuat perbedaan langsung terlihat saat `tsc` dijalankan.
- */
 
 export type TingkatKeyakinan = 'TINGGI' | 'SEDANG' | 'RENDAH'
 export type SumberData = 'observed' | 'predicted'
 export type Kuadran = 'HIDDEN_GEM' | 'JEBAKAN_GENGSI' | 'PEMENANG_JELAS' | 'HINDARI'
 
-/**
- * Wajib menyertai setiap skor. Backend dirancang supaya tidak mungkin mengirim
- * skor tanpa badge — tipe di sini menegakkan aturan yang sama di frontend.
- */
 export interface BadgeKeyakinan {
   n_titik_misi: number
   tingkat: TingkatKeyakinan
   sumber: SumberData
 }
 
-/**
- * Berapa bahan sebuah indeks yang benar-benar terukur.
- *
- * Variabel kosong DINETRALKAN ke 0,5, bukan dinolkan - benar untuk perhitungan,
- * berbahaya untuk tampilan. Tanpa ini, indeks yang seluruh bahannya kosong
- * tetap tampil sebagai angka di sekitar 0,5 dan tidak bisa dibedakan dari hasil
- * pengukuran. Terukur 30 Agu 2026: "perputaran uang" 1% terukur, "biaya dan
- * risiko" 5%.
- */
 export interface CakupanIndeks {
   terukur: number
   total: number
@@ -37,19 +17,6 @@ export interface CakupanIndeks {
   layak_tampil: boolean
 }
 
-/**
- * Bahan sumbu DATAR kuadran mana yang benar-benar terukur.
- *
- * Sekeluarga dengan `CakupanIndeks`, tanpa `layak_tampil` — sumbu prestise tidak
- * pernah disembunyikan. Ia yang menentukan kuadran, dan kuadrannya sudah
- * tergambar di peta; menyembunyikan penjelasannya cuma membuat penempatan yang
- * sama jadi tidak bisa ditanyakan.
- *
- * Yang dilaporkan DAFTAR bahannya, bukan pecahannya, karena yang menentukan arti
- * sumbu ini bukan berapa bahan yang terisi melainkan bahan yang mana. Terukur 2
- * Sep 2026: tiga dari lima terisi — 60%, lolos ambang apa pun — dan yang dua
- * hilang justru satu-satunya yang menilai TAMPILAN secara langsung.
- */
 export interface CakupanPrestise {
   /** Kode variabel yang punya nilai, urut seperti pipeline. */
   terisi: string[]
@@ -110,11 +77,6 @@ export interface Simulasi {
     sewa_bulanan_diminta: number | null
     harga_rata_rata: number | null
   }
-  /**
-   * Asal tiap angka yang bisa datang dari dua arah. `null` = belum ada dari
-   * mana pun. Tanpa ini, angka yang diketik orang dan angka yang diukur
-   * pipeline terlihat sama persis di layar.
-   */
   sumber: {
     sewa: 'pengguna' | 'data' | null
     harga_rata_rata: 'pengguna' | 'data' | null
@@ -136,13 +98,6 @@ export interface Simulasi {
     laba_kotor_bulanan: number | null
     rasio_sewa_terhadap_omzet: number | null
     pembeli_impas_per_hari: number | null
-    /**
-     * Pangsa yang membuat laba tepat nol.
-     *
-     * Angka paling layak dipercaya di seluruh simulasi: ia TIDAK memuat asumsi
-     * pangsa milik pengguna sama sekali - cuma harga sewa dibagi uang yang
-     * benar-benar terukur di heksagon itu.
-     */
     pangsa_impas_persen: number | null
     /** Sewa bulanan x 12. Ruko lazim ditagih setahun di muka. */
     sewa_tahun_pertama: number | null
@@ -190,14 +145,6 @@ export interface FaktorSkor {
 export interface DetailHeksagon {
   skor: SkorHeksagon
   indeks: IndeksKomposit
-  /**
-   * 43 variabel analisis, sudah teragregasi. Tidak pernah memuat record misi mentah.
-   *
-   * KOSONG untuk tamu dan akun gratis — backend tidak mengirimnya sama sekali,
-   * bukan mengirim lalu membiarkan frontend memburamkannya. Periksa `terkunci`,
-   * jangan `Object.keys(variabel).length`: keduanya kebetulan sepakat sekarang,
-   * tetapi yang pertama menyatakan MAKSUD dan yang kedua cuma gejalanya.
-   */
   variabel: Record<string, unknown>
   faktor: FaktorSkor[]
   /** Nama bagian yang ditahan backend karena tingkat akun. Kosong = terbuka penuh. */
@@ -211,12 +158,6 @@ export interface DetailHeksagon {
   kuadran_penjelasan: string | null
   /** Sumbu datar kuadran berdiri di atas bahan apa UNTUK HEKSAGON INI. */
   cakupan_prestise: CakupanPrestise | null
-  /**
-   * Angka PERKIRAAN, tidak pernah dari pengukuran di heksagon ini sendiri.
-   *
-   * Berbayar, sama dengan `variabel` — untuk tamu ia array kosong dan
-   * 'perkiraan' muncul di `terkunci`.
-   */
   perkiraan: PerkiraanHeksagon[]
 }
 
@@ -359,38 +300,8 @@ export interface SimpulTransit {
   lon: number
 }
 
-/**
- * Hubungan satu heksagon dengan stasiun terdekatnya.
- *
- * BUKAN isochrone. Isochrone mengikuti jaringan jalan dan tinggal di
- * `catchment_areas` — masih kosong sampai routing dikerjakan. Yang ini garis
- * lurus, dan `garis_lurus` ada supaya antarmuka tidak bisa lupa mengatakannya.
- */
-/**
- * Satu jalur jalan kaki heksagon -> simpul. Cermin `schemas.RuteJalan`.
- *
- * `koordinat` sudah [lon, lat], urutan GeoJSON - bisa langsung dipakai sebagai
- * geometri LineString tanpa dibalik.
- */
-/**
- * Profil rute yang benar-benar TERSIMPAN, dan sekaligus moda yang bisa dipilih.
- *
- * Motor tidak ada di sini dan tidak akan pernah ada dari ORS - layanannya tidak
- * menyediakan profil sepeda motor sama sekali.
- *
- * SEPEDA menggantikan tempat motor sejak 11 Sep 2026, atas permintaan pemilik
- * repo. Sebelumnya layar menawarkan "Motor" yang meminjam jaringan MOBIL dan
- * cuma menampilkan jarak, karena waktu tempuh motor tidak pernah diukur siapa
- * pun. Sepeda punya profil ORS-nya sendiri, jadi jaringan DAN waktunya diukur -
- * dan dengan itu `ModaTampil` beserta pemetaan moda->profilnya dicabut: setiap
- * moda di layar sekarang persis satu profil tersimpan, tanpa perkecualian.
- */
 export type ProfilRute = 'foot-walking' | 'driving-car' | 'cycling-regular'
 
-/**
- * Satu blok (anak H3 res-10, ±130 m) di dalam heksagon. Cerminan
- * `schemas.BlokDalamHeksagon`. Seluruhnya data terbuka; skornya milik pipeline.
- */
 export interface BlokDalamHeksagon {
   h3_blok: string
   peringkat: number
@@ -496,10 +407,6 @@ export type NamaFungsi =
   | 'setLayer'
   | 'filter'
 
-/**
- * Bentuk konkret "spatial output" yang diminta ketentuan C.2: jawaban AI tidak
- * berhenti sebagai teks, tapi menggerakkan peta.
- */
 export interface AksiPeta {
   fungsi: NamaFungsi
   argumen: Record<string, unknown>
@@ -512,11 +419,6 @@ export interface PesanRiwayat {
 
 export interface PermintaanAI {
   pertanyaan: string
-  /**
-   * Giliran sebelumnya, terlama dulu. Dikirim ulang tiap giliran — backend
-   * tanpa-status, jadi tidak ada sesi yang bisa bocor antarpengguna atau hilang
-   * saat proses Render tidur. Backend membatasi 20 pesan.
-   */
   riwayat?: PesanRiwayat[]
   hex_terpilih?: string | null
   layer_aktif?: string | null
@@ -542,19 +444,6 @@ export interface JawabanAI {
   hex_disebut: string[]
 }
 
-/**
- * Kesiapan backend.
- *
- * `data_sintetis` DITURUNKAN backend dari jumlah heksagon bertanda `predicted`,
- * bukan sakelar yang disetel tangan — jadi pitanya menyusut sendiri begitu
- * survei masuk, dan tidak bisa berbohong ke arah sebaliknya.
- *
- * `heksagon_predicted` ikut dibawa supaya TEKS pitanya juga bisa diturunkan dari
- * angka. Versi pertama menurunkan PEMICUNYA dari data tetapi menulis teksnya
- * dengan tangan ("Data demo — belum ada survei lapangan"), dan begitu variabel
- * sintetis dikosongkan, kedua bagian kalimat itu jadi salah sekaligus: datanya
- * bukan demo, dan survei lapangannya bukan nol.
- */
 export interface Kesiapan {
   siap: boolean
   lingkungan: string
@@ -570,10 +459,6 @@ export interface Kesiapan {
 
 export interface StatusAI {
   siap: boolean
-  /**
-   * Tidak siap karena jatah penyedianya habis, BUKAN karena belum tersambung.
-   * Bedanya menentukan: yang ini pulih sendiri, jadi kotak ketik tetap hidup.
-   */
   dibatasi?: boolean
   model: string | null
   n_alat_backend: number
@@ -604,11 +489,6 @@ export interface PropertiHeksagon {
 
 // --- Akun dan langganan ----------------------------------------------------
 
-/**
- * Tingkat akses. Selalu dibaca dari respons backend, tidak pernah disimpulkan
- * di frontend dari "ada tiket berarti premium" — tiket cuma membuktikan siapa,
- * bukan membuktikan sudah bayar.
- */
 export type Tingkat = 'tamu' | 'gratis' | 'premium'
 
 export interface RingkasLangganan {
@@ -723,11 +603,6 @@ export interface BarisKomparasi {
 
 export interface Komparasi {
   baris: BarisKomparasi[]
-  /**
-   * Per metrik, h3_index yang menang — sudah memperhitungkan arah di BACKEND.
-   * IKP dan IBR tinggi itu buruk; frontend tidak perlu tahu itu, cukup
-   * menebalkan yang disebut. Nilai null = tidak ada kolom yang punya datanya.
-   */
   menang: Record<string, string | null>
 }
 

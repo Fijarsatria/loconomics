@@ -1,49 +1,4 @@
-"""Jalan kaki di sekitar simpul transportasi, lewat OpenRouteService.
-
-DUA HAL, satu berkas, karena keduanya memakai layanan dan kunci yang sama:
-
-  RUTE       jalur heksagon -> simpul terdekat        -> tabel `hex_routes`
-  ISOCHRONE  kawasan yang tercapai 5/10/15 menit      -> tabel `catchment_areas`
-
-Bedanya bukan cuma bentuk. Rute itu GARIS: "dari sini, ke sana, lewat mana".
-Isochrone itu BIDANG: "sejauh mana orang sampai dari stasiun dalam 10 menit" -
-dan bidang itulah yang tidak boleh pernah digambar sebagai lingkaran.
-
-Dijalankan MANUAL, offline, sesekali - bukan bagian dari s1..s7 dan bukan bagian
-dari permintaan HTTP mana pun.
-
-KENAPA BERKAS SENDIRI, bukan di dalam s4_spatial.py. s4 bekerja atas DataFrame
-dan tidak menyentuh basis data sama sekali; tahap ini kebalikannya - ia membaca
-geometri dari PostGIS, memanggil layanan jaringan, lalu menulis balik ke PostGIS.
-Menyatukannya berarti s4 tidak bisa lagi diuji tanpa basis data dan tanpa kunci
-API, padahal test_s4_spatial.py justru bernilai karena tidak butuh keduanya.
-
-KENAPA GARIS LURUS TIDAK CUKUP. Diukur di Manggarai: satu titik berjarak 830 m
-garis lurus dari stasiun ternyata 1.418 m berjalan kaki - 1,7 kali lipat, karena
-rel memotong jalan yang di peta kelihatan lurus. Angka 830 m itu bukan sekadar
-kurang tepat; ia menjawab pertanyaan yang tidak pernah ditanyakan siapa pun.
-Tidak ada yang berjalan menembus rel.
-
-KUOTA. Paket gratis ORS: 2.000 permintaan directions per hari, 40 per menit.
-Satu heksagon = satu permintaan, dan satu permintaan mengembalikan rute tercepat
-BESERTA alternatifnya sekaligus. 708 heksagon muat dalam sehari dengan sisa
-banyak. Skrip ini melambatkan dirinya sendiri ke bawah batas per menit dan
-melewati heksagon yang rutenya sudah ada, jadi menjalankannya ulang sesudah
-terputus tidak membayar ulang apa pun.
-
-Pemakaian:
-
-    cd pipeline
-    python rute_ors.py                 # yang belum punya rute saja
-    python rute_ors.py --mobil         # profil driving-car, ditambahkan
-    python rute_ors.py --sepeda        # profil cycling-regular, ditambahkan
-    python rute_ors.py --kawasan Manggarai
-    python rute_ors.py --ulang         # hitung ulang semuanya
-    python rute_ors.py --batas 20      # coba sedikit dulu
-    python rute_ors.py --status        # tidak memanggil ORS sama sekali
-    python rute_ors.py --rapikan       # jahit ujung + urutkan, juga tanpa ORS
-    python rute_ors.py --isochrone     # kawasan jangkau 5/10/15 menit tiap simpul
-"""
+"""Jalan kaki di sekitar simpul transportasi, lewat OpenRouteService."""
 
 from __future__ import annotations
 
@@ -67,41 +22,15 @@ from app.models import CatchmentArea, HexRoute  # noqa: E402
 
 URL_ORS = "https://api.openrouteservice.org/v2/directions/{profil}/geojson"
 
-#: Profil yang boleh ditarik, beserta batas kewajaran jaraknya masing-masing.
-#:
-#: MOTOR TIDAK ADA, dan itu bukan kelalaian: OpenRouteService tidak menyediakan
-#: profil sepeda motor. Menyodorkan `driving-car` sebagai "kira-kira motor"
-#: akan salah ke arah yang paling merugikan - motor melewati gang yang mobil
-#: tidak bisa, jadi rute mobil MELEBIH-LEBIHKAN jaraknya. Lebih baik tidak ada
-#: daripada ada dan menyesatkan.
-#:
-#: SEPEDA menggantikan tempat motor di antarmuka sejak 11 Sep 2026, atas
-#: permintaan pemilik repo ("motor itu pake jalur sepeda aja... ganti aja
-#: motobike jadi sepeda"). Ia diterbitkan sebagai SEPEDA, dengan nama itu -
-#: bukan sebagai motor yang meminjam jaringan sepeda. Jaringan sepeda ORS
-#: memang lebih dekat ke jalur motor daripada jaringan mobil (lewat gang,
-#: menghindari tol), tetapi waktu tempuhnya waktu MENGAYUH, dan mencetaknya
-#: sebagai menit bermotor akan jadi angka yang tidak diukur siapa pun.
 PROFIL_JALAN = "foot-walking"
 PROFIL_MOBIL = "driving-car"
 PROFIL_SEPEDA = "cycling-regular"
 
-#: Profil yang SEDANG ditarik. Disetel sekali di `main()` dari benderanya.
-#: Modul-level supaya `minta_rute` dan `simpan` tidak perlu meneruskannya
-#: lewat lima lapis pemanggilan yang tidak memakainya untuk apa pun selain
-#: meneruskan.
 PROFIL = PROFIL_JALAN
 
 
 def kunci_ors() -> str:
-    """Kunci ORS untuk profil yang SEDANG ditarik.
-
-    Profil mobil memakai kuncinya sendiri (`ORS_API_KEY_MOBIL`) kalau diisi.
-    Kuota gratis ORS 2.000 permintaan per hari PER AKUN, dan penarikan mobil
-    pernah berhenti di 369 dari 708 heksagon - Manggarai dan Tanah Abang nol -
-    karena berbagi jatah dengan rute jalan kaki. Kunci dari akun lain membuat
-    keduanya tidak saling menghabiskan. Kosong = kembali ke kunci utama.
-    """
+    """Kunci ORS untuk profil yang SEDANG ditarik."""
     if PROFIL == "driving-car" and settings.ors_api_key_mobil:
         return settings.ors_api_key_mobil
     return settings.ors_api_key
@@ -110,17 +39,8 @@ def kunci_ors() -> str:
 #: satu permintaan yang kebetulan lambat tidak mendorong yang berikutnya lewat.
 JEDA_DETIK = 1.7
 
-#: Berapa alternatif yang diminta. ORS mengembalikan lebih sedikit kalau memang
-#: tidak ada jalur lain yang cukup berbeda - itu jawaban yang sah, bukan galat.
-#: `share_factor` 0,6 = alternatif boleh berbagi paling banyak 60% ruas dengan
-#: rute utama. Tanpa itu "alternatif" cuma rute yang sama dengan satu belokan
-#: berbeda, dan menyebutnya pilihan adalah kebohongan kecil.
 ALTERNATIF = {"target_count": 3, "share_factor": 0.6, "weight_factor": 1.6}
 
-#: Batas kewajaran. Rute 8 km berjalan kaki (sekitar 100 menit) bukan lagi
-#: "dekat stasiun" dalam arti apa pun, dan menggambarnya cuma mengotori layar.
-#: Heksagon seperti itu tetap tidak punya baris - dan endpoint-nya mengatakannya
-#: apa adanya alih-alih menggambar sesuatu yang tidak berarti.
 MAKS_METER = 8000
 
 #: Batas yang sama untuk MOBIL. 8 km berkendara itu belasan menit, bukan
@@ -139,36 +59,14 @@ def maks_meter() -> float:
 
 URL_ISO = "https://api.openrouteservice.org/v2/isochrones/{profil}"
 
-#: Pita isochrone, menit. Harus sama dengan `pipeline/config.py::ISOCHRONE_MENIT`
-#: dan `app/api/transit.py::ISOCHRONE_MENIT` - ketiganya menyebut hal yang sama,
-#: dan sejak 3 Sep 2026 ketiganya DIJAGA UJI (`backend/tests/test_aturan.py`).
-#:
-#: Diperluas dari (5, 10, 15) atas permintaan pemilik repo. Satu permintaan ORS
-#: mengembalikan seluruh pita sekaligus - `range` menerima daftar - jadi menambah
-#: dua pita TIDAK menambah satu pun permintaan. Yang bertambah cuma ukuran
-#: responsnya.
-#:
-#: 60 menit BERJALAN KAKI kira-kira 5 km, dan itu memang jauh. Ia tetap
-#: diterbitkan karena pertanyaannya sah untuk kawasan yang angkutan pengumpannya
-#: buruk - tetapi pita sebesar itu akan banyak bertindihan antar-simpul, dan
-#: itulah sebabnya tiap pita sekarang dibedakan WARNA, bukan cuma opasitas.
 ISOCHRONE_MENIT = (5, 10, 15, 30, 60)
 
 #: Kuota isochrone ORS jauh lebih ketat daripada directions: 500 per hari dan
 #: 20 per menit. Enam simpul cuma butuh enam permintaan, jadi jedanya longgar.
 JEDA_ISO_DETIK = 3.5
 
-#: Sejauh mana pusat isochrone boleh bergeser dari simpulnya sebelum kita
-#: menolaknya. ORS menempelkan titik ke jaringan jalan; pergeseran puluhan meter
-#: wajar, ratusan meter berarti isochrone-nya menggambarkan tempat LAIN - dan
-#: menyimpannya berarti menggambar kawasan jangkau stasiun di sekitar sesuatu
-#: yang bukan stasiun itu.
 MAKS_GESER_M = 250
 
-#: Kecepatan jalan kaki untuk penggal penyambung. Sama dengan
-#: `aturan.KECEPATAN_JALAN_M_PER_MENIT` - disalin, bukan diimpor, karena yang
-#: satu aturan TAMPILAN backend dan yang ini bagian dari data yang diterbitkan.
-#: Kalau keduanya harus berbeda suatu saat, mereka memang boleh berbeda.
 M_PER_MENIT = 80.0
 
 
@@ -187,22 +85,7 @@ DEKAT_M = 1.0
 
 
 def menit_penggal(meter: float, profil: str, jarak_m: float, menit: float) -> float:
-    """Berapa menit tambahan untuk penggal penyambung sepanjang `meter`.
-
-    JALAN KAKI tetap 80 m/menit - angka yang sama dengan
-    `aturan.KECEPATAN_JALAN_M_PER_MENIT`, dan angka yang sudah dipakai setiap
-    rute jalan kaki yang tersimpan. Menggantinya sekarang akan menggeser D04
-    dan setiap menit yang sudah terbit, demi perbaikan yang tidak diminta.
-
-    MOBIL tidak boleh memakainya. Penggal 50 m yang dihargai 0,6 menit masuk
-    akal untuk kaki dan tidak untuk kendaraan: dipakai apa adanya, ia menambah
-    hampir sepersepuluh ke rute mobil rata-rata - dan menambahkannya berarti
-    mencampur dua moda di dalam satu angka. Yang dipakai kecepatan RUTE ITU
-    SENDIRI, satu-satunya laju yang benar-benar terukur untuk perjalanan itu.
-
-    SEPEDA ikut aturan mobil, dengan alasan yang sama: ia kendaraan, dan laju
-    rutenya sendiri yang terukur.
-    """
+    """Berapa menit tambahan untuk penggal penyambung sepanjang `meter`."""
     if profil == PROFIL_JALAN or menit <= 0 or jarak_m <= 0:
         return meter / M_PER_MENIT
     return meter / (jarak_m / menit)
@@ -211,28 +94,7 @@ def menit_penggal(meter: float, profil: str, jarak_m: float, menit: float) -> fl
 def jahit(
     koordinat: list, awal: tuple[float, float], akhir: tuple[float, float]
 ) -> tuple[list, float]:
-    """Sambungkan ujung rute ke titik yang SEBENARNYA diminta.
-
-    KENAPA PERLU. ORS menempelkan (`snap`) titik yang tidak berdiri di atas
-    jaringan jalan ke ruas terdekat, lalu melaporkan jarak antara titik-titik
-    HASIL TEMPEL - bukan antara titik yang kita minta. Terukur di 708 heksagon:
-    rata-rata 22 m di pangkal dan 28 m di ujung, sampai 220 m untuk heksagon
-    yang tengahnya jatuh di dalam blok tanpa jalan.
-
-    Diam-diam itu membuat angkanya KURANG dilaporkan, dan sekali membuatnya
-    mustahil: satu heksagon Manggarai yang berjarak 119 m garis lurus dari
-    stasiun menghasilkan "rute" 11 m, karena kedua ujungnya menempel ke ruas
-    yang sama. Rute yang lebih pendek daripada garis lurusnya adalah pernyataan
-    yang tidak bisa benar.
-
-    Penggal penyambungnya memang garis lurus, dan itu jujur: berjalan dari
-    tengah blok ke mulut jalan memang tidak punya jalur bernama. Yang tidak
-    boleh cuma menyembunyikannya - jadi panjangnya IKUT DIHITUNG, bukan
-    dibuang.
-
-    Idempoten: kalau ujungnya sudah menyentuh titiknya, tidak ada yang
-    ditambahkan.
-    """
+    """Sambungkan ujung rute ke titik yang SEBENARNYA diminta."""
     k = [[float(x), float(y)] for x, y, *_ in koordinat]
     tambahan = 0.0
     depan = (k[0][0], k[0][1])
@@ -247,14 +109,7 @@ def jahit(
 
 
 def minta_isochrone(lon: float, lat: float) -> list[dict] | str:
-    """Kawasan jangkau jalan kaki dari satu titik, ketiga pita sekaligus.
-
-    SATU permintaan untuk 5, 10, dan 15 menit - `range` menerima daftar. Itu
-    yang membuat enam simpul cukup enam permintaan alih-alih delapan belas,
-    dan dengan kuota isochrone 500/hari perbedaannya nyata.
-
-    Mengembalikan daftar {menit, geometri, luas_m2}, atau string alasan gagal.
-    """
+    """Kawasan jangkau jalan kaki dari satu titik, ketiga pita sekaligus."""
     badan = {
         "locations": [[lon, lat]],
         "range": [m * 60 for m in ISOCHRONE_MENIT],
@@ -333,18 +188,7 @@ def simpan_isochrone(db, node_id: int, pita: list[dict]) -> int:
 
 
 def isochrone(db) -> int:
-    """Ambil kawasan jangkau untuk SETIAP simpul transportasi.
-
-    Setiap pita diperiksa terhadap dua invarian sebelum disimpan:
-
-      1. Luasnya tidak boleh MELEBIHI lingkaran berjari-jari `menit x 80 m`.
-         Kawasan yang dibatasi jaringan jalan tidak mungkin lebih luas daripada
-         kawasan yang bisa ditembus ke segala arah. Kalau ia melebihi, yang
-         dikembalikan ORS bukan isochrone jalan kaki.
-      2. Pita yang lebih lama harus lebih LUAS. Kalau 10 menit lebih sempit
-         daripada 5 menit, ada pita yang tertukar - dan tertukar tidak
-         menghasilkan galat, cuma peta yang salah.
-    """
+    """Ambil kawasan jangkau untuk SETIAP simpul transportasi."""
     simpul = db.execute(
         text("SELECT id, nama, ST_X(geom) AS lon, ST_Y(geom) AS lat FROM transport_nodes ORDER BY id")
     ).mappings().all()
@@ -386,12 +230,7 @@ def isochrone(db) -> int:
 
 
 def ambil_target(db, kawasan: str | None, ulang: bool, batas: int | None) -> list[dict]:
-    """Heksagon yang perlu dirutekan, beserta simpul terdekatnya.
-
-    Simpul terdekat ditentukan PostGIS lewat `<->` (indeks GiST), bukan ORS -
-    memilih TUJUAN tidak butuh jaringan jalan, cuma butuh tahu mana yang paling
-    dekat. Yang butuh jaringan jalan cuma jalur menuju ke sana.
-    """
+    """Heksagon yang perlu dirutekan, beserta simpul terdekatnya."""
     saring_kawasan = "AND h.kawasan = :kawasan" if kawasan else ""
     saring_ulang = "" if ulang else "AND r.h3_index IS NULL"
     sql = f"""
@@ -431,12 +270,7 @@ def ambil_target(db, kawasan: str | None, ulang: bool, batas: int | None) -> lis
 
 
 def minta_rute(awal: tuple[float, float], akhir: tuple[float, float]) -> list[dict] | str:
-    """Panggil ORS sekali. Mengembalikan daftar rute, atau string alasan gagal.
-
-    Galat dikembalikan sebagai TEKS, bukan dilempar: satu heksagon yang tidak
-    bisa dirutekan tidak boleh menghentikan 707 lainnya. Yang gagal dicatat lalu
-    dilewati, dan ketiadaan barisnya nanti terbaca jujur di antarmuka.
-    """
+    """Panggil ORS sekali. Mengembalikan daftar rute, atau string alasan gagal."""
     badan = {
         "coordinates": [[awal[0], awal[1]], [akhir[0], akhir[1]]],
         "alternative_routes": ALTERNATIF,
@@ -495,22 +329,7 @@ def simpan(
     awal: tuple[float, float],
     akhir: tuple[float, float],
 ) -> int:
-    """Tulis rute satu heksagon. Menghapus yang lama dulu supaya idempoten.
-
-    DIURUTKAN ULANG menurut durasi. ORS memberi urutannya sendiri berdasarkan
-    "weight" internal - yang bukan durasi, dan bisa jauh berbeda: terukur di 147
-    dari 705 heksagon, jalur pertama versi ORS kalah cepat dari alternatifnya,
-    sampai selisih 11 menit.
-
-    Itu penting karena antarmuka menuliskan satu angka besar - "N menit jalan
-    kaki" - dan angka itu diambil dari `urutan = 0`. Menampilkan jalur yang
-    bukan tercepat sebagai jawaban atas "berapa lama jalan kakinya" adalah
-    jawaban yang salah, bukan sekadar urutan yang berbeda selera.
-    """
-    # HANYA profil yang sedang ditulis. Tanpa saringan ini, penarikan mobil
-    # MENGHAPUS rute jalan kaki heksagon itu sebelum menulis rute mobilnya -
-    # padahal benderanya sendiri menjanjikan "ditambahkan, tidak menggantikan".
-    # Yang hilang data yang butuh berjam-jam dibuat, dan hilangnya diam.
+    """Tulis rute satu heksagon. Menghapus yang lama dulu supaya idempoten."""
     db.execute(
         delete(HexRoute).where(HexRoute.h3_index == h3, HexRoute.profil == PROFIL)
     )
@@ -556,15 +375,7 @@ def simpan(
 
 
 def urutkan_ulang(db) -> int:
-    """Nomori ulang `urutan` menurut durasi, untuk baris yang sudah tersimpan.
-
-    Satu UPDATE dengan window function - bukan lulus-per-baris dari Python -
-    karena yang dikerjakan murni penomoran ulang di dalam basis data.
-
-    Kendala unik (h3_index, transport_node_id, urutan) membuat penomoran
-    langsung bisa bentrok di tengah jalan, jadi nomornya digeser jauh dulu ke
-    wilayah negatif sebelum ditulis ke nilai akhirnya.
-    """
+    """Nomori ulang `urutan` menurut durasi, untuk baris yang sudah tersimpan."""
     db.execute(text("UPDATE hex_routes SET urutan = -urutan - 1"))
     n = db.execute(
         text(
@@ -594,16 +405,7 @@ def urutkan_ulang(db) -> int:
 
 
 def jahit_ulang(db) -> None:
-    """Jahit ujung SELURUH rute yang sudah tersimpan. Tanpa memanggil ORS.
-
-    Ada karena 1.587 rute sudah terlanjur ditulis sebelum `jahit()` dipasang,
-    dan mengambilnya ulang berarti membayar 705 permintaan lagi untuk geometri
-    yang sudah ada di basis data. Yang kurang cuma dua penggal di ujungnya, dan
-    keduanya bisa dihitung dari data yang sudah kita punya.
-
-    Idempoten lewat `jahit()`: dijalankan dua kali, yang kedua tidak mengubah
-    apa pun.
-    """
+    """Jahit ujung SELURUH rute yang sudah tersimpan. Tanpa memanggil ORS."""
     baris = db.execute(
         text(
             """
@@ -654,14 +456,7 @@ def jahit_ulang(db) -> None:
 
 
 def status(db) -> None:
-    """Cakupan per kawasan, DIPISAH PER PROFIL.
-
-    Satu tabel untuk dua profil pernah berdiri di sini, dan angkanya berbohong
-    tanpa terlihat berbohong: "rata menit" merata-ratakan menit jalan kaki
-    dengan menit berkendara, jadi kawasan yang rute mobilnya baru separuh
-    ditarik tampak makin cepat dijalani KAKI. Yang dibaca orang satu angka;
-    yang dihitung dua hal yang berbeda.
-    """
+    """Cakupan per kawasan, DIPISAH PER PROFIL."""
     baris = (
         db.execute(
             text(
@@ -732,11 +527,6 @@ def _minta_matriks(sumber: list[tuple[float, float]], tujuan: tuple[float, float
         "sources": list(range(len(sumber))),
         "destinations": [len(sumber)],
         "metrics": ["duration", "distance"],
-        # `resolve_locations` mengembalikan jarak TEMPEL tiap titik ke ruas
-        # terdekat. Matriks menghitung dari titik hasil tempel, jadi tanpa ini
-        # blok yang pusatnya di tengah kompleks tanpa jalan terbaca "0 menit"
-        # lebih dekat daripada kenyataannya - jebakan yang sama dengan rute
-        # yang lebih pendek daripada garis lurusnya.
         "resolve_locations": True,
     }
     req = urllib.request.Request(
@@ -758,20 +548,7 @@ def _minta_matriks(sumber: list[tuple[float, float]], tujuan: tuple[float, float
 
 
 def matriks_blok(db) -> int:
-    """Waktu jalan kaki tiap BLOK (anak H3 res-10) ke simpul heksagon induknya.
-
-    Satu matriks per potongan, bukan satu rute per blok: 4.956 blok lewat
-    directions menghabiskan dua setengah hari kuota, lewat matriks belasan
-    permintaan. Yang hilang cuma geometri jalurnya - dan blok memang tidak
-    menggambar jalur; yang ditanyakan cuma berapa menit.
-
-    Simpul tujuan = simpul yang SAMA dengan rute utama heksagon induknya, jadi
-    tujuh blok satu heksagon selalu diukur ke stasiun yang sama dan bisa
-    dibandingkan satu sama lain.
-
-    Keluaran mentah ke `data/01_mentah/ors_blok.json`; s7 yang memuatnya.
-    Disinggahkan per potongan, jadi yang putus di tengah melanjutkan.
-    """
+    """Waktu jalan kaki tiap BLOK (anak H3 res-10) ke simpul heksagon induknya."""
     import h3
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -940,16 +717,6 @@ def main() -> int:
 
         for i, t in enumerate(target, 1):
             hasil = minta_rute((t["hx"], t["hy"]), (t["sx"], t["sy"]))
-            # KUOTA HABIS menghentikan seluruh putaran, bukan cuma heksagon ini.
-            #
-            # Terjadi 11 Sep 2026: kuota harian ORS habis di heksagon ke-195
-            # penarikan mobil, dan skripnya tetap berjalan - 338 "gagal" untuk
-            # mobil lalu 706 lagi untuk sepeda, masing-masing 1,7 detik, dan
-            # ringkasannya membaca seperti ribuan heksagon yang tidak bisa
-            # dirutekan. Padahal tidak satu pun yang salah; layanannya cuma
-            # menolak semua permintaan sampai kuotanya pulih. Yang sudah
-            # tersimpan tetap tersimpan, dan menjalankan ulang besok melanjutkan
-            # dari heksagon yang belum punya rute.
             if isinstance(hasil, str) and hasil.startswith("HTTP 403") and "uota" in hasil:
                 db.commit()
                 print(

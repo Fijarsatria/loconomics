@@ -1,30 +1,3 @@
-/**
- * Simulasi kelayakan usaha — lembar bawah, mode fokus.
- *
- * KENAPA BERKAS SENDIRI. Alasannya sama dengan `PanelAI.tsx`: ini kemampuan
- * produk bernama, dengan permintaan jaringannya sendiri, keadaan kendalinya
- * sendiri, dan siklus hidupnya sendiri.
- *
- * KENAPA LEMBAR BAWAH, BUKAN PANEL SAMPING. Simulasi menjawab pertanyaan yang
- * berbeda dari seluruh layar di belakangnya. Panel samping menempatkannya
- * sebagai salah satu tab di antara yang lain; lembar yang naik dari bawah dan
- * menutup separuh bawah layar menyatakan "sekarang kita sedang mengerjakan satu
- * hal". Tingginya dijaga di bawah setengah layar dengan sengaja - peta harus
- * tetap terlihat, karena heksagon yang sedang disimulasikan ada di sana, dan
- * membandingkannya dengan tetangganya adalah bagian dari pekerjaannya.
- *
- * YANG MEMBUATNYA JUJUR. Seluruh aritmetikanya di `backend/app/core/simulasi.py`
- * - komponen ini tidak menghitung satu angka pun. Yang ditampilkan dipisah tiga:
- *
- *   TERUKUR   angka basis data. Tidak bisa disentuh.
- *   ASUMSI    milik pengguna. Punya penggeser, bawaannya angka BULAT.
- *   TURUNAN   hasilnya, selalu dengan rumusnya tertulis di bawahnya.
- *
- * DUA HAL YANG SERING DIMINTA TAPI TIDAK ADA, dan tidak dikarang di sini:
- *   UMR                  data SK gubernur, di luar 43 variabel Kamus Data.
- *   Jumlah jalan akses   butuh agregasi jaringan jalan yang belum dikerjakan s4.
- * Keduanya tidak muncul sebagai baris kosong maupun sebagai tebakan.
- */
 
 import { useEffect, useRef, useState } from 'react'
 
@@ -38,23 +11,6 @@ import { Badge, Memuat } from './primitif'
 import { useIstilah, useTeks } from '../lib/bahasa'
 import { BAWAAN, JENIS_USAHA as JENIS, KELOMPOK_JENIS } from '../lib/jenis-usaha'
 
-/**
- * Kalimat lembar ini, dua bahasa.
- *
- * Label dan contoh keenam belas jenis usaha TIDAK ada di sini: keduanya sudah
- * duduk di `JENIS` bersama `nilai` dan `glif`-nya, dan memindahkan setengahnya
- * ke kamus berarti satu jenis usaha dijelaskan di dua tempat. Yang di sini
- * hanya nama kelompoknya, yang memang tidak punya rumah lain.
- *
- * Nama variabel lingkungan juga tidak ada: keduapuluh tiga label "Penduduk di
- * sekitar", "Pesaing sejenis", ... datang dari `ARTI_VARIABEL` lewat
- * `useIstilah()`, sumber yang sama dengan panel detail dan Laporan PDF. Baris
- * yang sama tidak boleh punya dua nama di dua layar.
- *
- * `peringatan[].pesan` dan `masukan.label_usaha` datang dari backend dan
- * dibiarkan apa adanya - kecuali label usaha, yang justru DIPULIHKAN dari
- * `JENIS` di sini supaya tombolnya ikut berbahasa Inggris.
- */
 const K = {
   id: {
     kelompok: { 'Makanan & minuman': 'Makanan & minuman', Ritel: 'Ritel', Jasa: 'Jasa' } as Record<string, string>,
@@ -288,14 +244,6 @@ const K = {
 }
 
 
-/**
- * Angka yang berjalan naik ke nilai barunya, bukan yang berganti seketika.
- *
- * Bukan kemeriahan. Satu geseran mengubah empat angka sekaligus, dan angka yang
- * berganti seketika tidak memberi tahu mana yang naik dan mana yang turun. Yang
- * berjalan menunjukkan ARAH — dan arah itulah yang sedang dicari orang saat
- * menggeser.
- */
 function useAngkaBerjalan(target: number | null, durasi = 420) {
   const [nilai, setNilai] = useState(target ?? 0)
   const dari = useRef(target ?? 0)
@@ -319,16 +267,6 @@ function useAngkaBerjalan(target: number | null, durasi = 420) {
   return target === null ? null : nilai
 }
 
-/**
- * Isian rupiah. Beda dari `Penggeser` bukan cuma bentuknya: penggeser cocok
- * untuk asumsi yang rentangnya kita tahu (jam buka 4-24), sedangkan sewa dan
- * harga jual adalah angka yang penggunanya SUDAH PEGANG - memaksanya menggeser
- * ke Rp4.500.000 lewat penggeser adalah cara paling cepat membuat orang
- * menyerah dan menerima angka yang salah.
- *
- * Kosong berarti "belum diisi", dan itu dikirim sebagai `undefined` - bukan 0.
- * Nol akan terbaca backend sebagai sewa gratis kalau penjaganya lengah.
- */
 function IsianRupiah({
   label,
   nilai,
@@ -409,14 +347,6 @@ function Penggeser({
   )
 }
 
-/**
- * Satu fakta lingkungan: label, angka, dan sebatang bar.
- *
- * Bar-nya relatif terhadap `puncak` yang diberikan pemanggil — bukan terhadap
- * nilai maksimum sepanjang masa, yang tidak diketahui siapa pun. Tanpa bar,
- * "8,5 pesaing" tidak berarti apa-apa bagi orang yang belum pernah melihat
- * angka pesaing di heksagon lain.
- */
 function Fakta({
   label,
   nilai,
@@ -472,16 +402,6 @@ function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; t
   if (!profil.length) {
     return <p className="text-[12px] italic leading-snug text-ink-3">{t.jamKosong}</p>
   }
-  // Sumbu SELALU 05.00-22.00 penuh, jam yang tak berdata digambar sebagai
-  // rongga - bukan dimampatkan.
-  //
-  // Versi pertama memetakan baris apa adanya. Cuma 58 dari 474 heksagon punya
-  // 18 jam penuh; sisanya 4-17 jam. Dengan `flex-1` per baris, heksagon yang
-  // datanya cuma pukul 06,07,08,15,16,17 tampil sebagai enam batang berdempet
-  // dengan label "06.00 ... 17.00" - terbaca sebagai enam jam berurutan yang
-  // ramai merata, padahal ada tujuh jam sepi di tengahnya yang tidak pernah
-  // disurvei. Itu persis yang dilarang aturan 4 repo ini: kosong tetap kosong,
-  // dan kosong yang dimampatkan berubah jadi pernyataan yang tidak benar.
   const JAM_AWAL = 5
   const JAM_AKHIR = 22
   const menurutJam = new Map(profil.map((j) => [j.jam, j]))
@@ -554,18 +474,6 @@ function GrafikJam({ profil, teramai }: { profil: HasilSimulasi['profil_jam']; t
   )
 }
 
-/**
- * Empat bagian hari, dirata-ratakan dari profil jam yang sudah ada.
- *
- * Batasnya sama dengan ember Commuter Clock di pipeline (B01-B04) supaya satu
- * gagasan tidak punya dua definisi di produk yang sama - kecuali ember malam,
- * yang di sini berhenti di 22.00 karena profil jamnya memang berhenti di sana.
- *
- * Bagian yang SELURUH jamnya tak berdata mengaku belum tersurvei alih-alih
- * ditampilkan sebagai nol. "Tidak ada transaksi tercatat" dan "sepi" adalah dua
- * pernyataan yang berbeda, dan yang kedua tidak pernah bisa dibuktikan data
- * yang tidak ada.
- */
 const BAGIAN_HARI: { nama: string; jam: string; dari: number; sampai: number }[] = [
   { nama: 'Pagi', jam: '05–10', dari: 5, sampai: 10 },
   { nama: 'Siang', jam: '11–14', dari: 11, sampai: 14 },
@@ -704,10 +612,6 @@ export default function Simulasi({
   onKeDetail: () => void
   onTutup: () => void
 }) {
-  // Preferensi onboarding jadi BAWAAN, bukan paksaan: kalau sudah pernah
-  // menjawab "kopi & jajanan", lembar ini langsung membuka skenarionya alih-alih
-  // menanyakan hal yang sama untuk kesekian kalinya. Tetap bisa diganti lewat
-  // tombol "Ganti jenis usaha".
   const t = useTeks(K)
   const ist = useIstilah()
   const { akun } = useSesi()
@@ -735,11 +639,6 @@ export default function Simulasi({
   const [banding, setBanding] = useState<HasilSimulasi | null>(null)
   const hasilBanding = banding
   const [galat, setGalat] = useState<string | null>(null)
-  /**
-   * Lembar ini bisa DITARIK jadi setinggi layar (berhenti di bawah bilah atas),
-   * sama seperti lembar tab. Bawaannya tetap ringkas 64vh. `sudahGeser` menahan
-   * klik yang menyusul seretan agar tidak ikut membalik keadaan.
-   */
   const [penuh, setPenuh] = useState(false)
   const mulaiSeret = useRef(0)
   const sudahGeser = useRef(false)
@@ -785,17 +684,8 @@ export default function Simulasi({
       batal = true
       clearTimeout(t)
     }
-    // `bahasa` ikut jadi dependensi, dan itu bukan kelebihan.
-    // Belasan kalimat di respons ini DIRAKIT BACKEND dari angka heksagon -
-    // penjelasan kuadran, catatan pola jam, peringatan simulasi. Menukar
-    // bahasa tanpa meminta ulang meninggalkan kalimat lama di layar yang
-    // seluruh sisanya sudah berganti.
   }, [h3, h3Blok, h3Banding, jenis, jam, luas, pangsa, margin, sewaDiisi, hargaDiisi, ist.bahasa])
 
-  // Escape menutup lembarnya, sama dengan setiap dialog lain di aplikasi ini.
-  // Tanpa ini ia satu-satunya lapisan menutup layar yang tidak menanggapi
-  // Escape - dan lapisan yang berperilaku lain dari saudara-saudaranya terbaca
-  // sebagai macet, bukan sebagai pengecualian yang disengaja.
   useEffect(() => {
     const kunci = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onTutup()
@@ -814,19 +704,6 @@ export default function Simulasi({
     setJenis(v)
   }
 
-  /**
-   * Slide mana yang sedang dibaca.
-   *
-   * Lembar ini dulu memuat empat kolom sekaligus dalam 46vh, dan pemilik repo
-   * melaporkannya apa adanya: "kurang besar, mungkin karena terlalu banyak".
-   * Diagnosisnya benar - masalahnya bukan tingginya, melainkan bahwa empat
-   * pertanyaan berbeda dijawab serentak di satu layar sempit, jadi tidak ada
-   * satu pun yang mendapat ruang untuk dibaca.
-   *
-   * Sekarang satu slide satu pertanyaan, selebar lembar. Digeser dengan
-   * `scroll-snap` - jadi trackpad, layar sentuh, tombol panah, dan titik
-   * navigasi semuanya bekerja tanpa satu baris pun kode gerak.
-   */
   const [slide, setSlide] = useState(0)
   const rel = useRef<HTMLDivElement>(null)
   // `fak()` menarik nama DAN satuan sebuah kolom dari kosakata bersama, jadi
@@ -846,12 +723,6 @@ export default function Simulasi({
 
   const laba = hasil?.hasil.laba_kotor_bulanan ?? null
   const untung = laba !== null && laba > 0
-  // Sejak omzet menuntut data survei sementara sewa dan harga jual boleh diisi
-  // sendiri, judulnya harus mengikuti apa yang BISA dihitung - bukan selalu
-  // laba. Tanpa ini, heksagon tanpa data belanja memasang judul "Perkiraan
-  // kekurangan tiap bulan" di atas angka kosong, lalu menutupnya dengan
-  // "omzetnya belum menutup sewa" - kalimat yang menyatakan sesuatu yang justru
-  // tidak diketahui.
   const impasPembeli = hasil?.hasil.pembeli_impas_per_hari ?? null
   const bisaLaba = laba !== null
   const bisaImpas = !bisaLaba && impasPembeli !== null

@@ -1,11 +1,4 @@
-"""Uji tahap terbit: pembersihan nilai dan pemotongan batch.
-
-    cd pipeline && python test_s7_publish.py
-
-Tidak menyentuh basis data. Yang diuji hanya bagian yang murni - tetapi justru
-bagian itu yang paling berbahaya kalau salah, karena kesalahannya tidak pernah
-memunculkan galat.
-"""
+"""Uji tahap terbit: pembersihan nilai dan pemotongan batch."""
 
 import numpy as np
 import pandas as pd
@@ -30,13 +23,7 @@ def cek(nama, syarat, catatan=""):
 
 
 def test_nan_jadi_none():
-    """NaN yang lolos ke PostgreSQL tersimpan sebagai 'NaN'::float, BUKAN NULL.
-
-    Akibatnya `WHERE kolom IS NULL` tidak menemukannya, sementara setiap
-    perbandingan dengannya bernilai false - jadi heksagonnya diam-diam hilang
-    dari setiap filter tanpa pernah memunculkan galat. Ini kelas bug yang bisa
-    bertahan sampai hari presentasi.
-    """
+    """NaN yang lolos ke PostgreSQL tersimpan sebagai 'NaN'::float, BUKAN NULL."""
     cek("float nan -> None", _bersih(float("nan")) is None)
     cek("np.nan -> None", _bersih(np.nan) is None)
     cek("pd.NA lewat kolom float -> None", _bersih(pd.Series([np.nan])[0]) is None)
@@ -77,13 +64,6 @@ def test_potong_kosong():
     cek("daftar kosong tidak meledak", list(_potong([], 500)) == [])
 
 
-# ---------------------------------------------------------------------------
-# Survei lapangan: penguraian CSV
-#
-# Yang diuji di sini bukan "apakah angkanya masuk", melainkan empat cara
-# berkas isian tangan bisa salah TANPA memunculkan galat. Ketiganya pernah
-# terjadi di sumber data lain di repo ini.
-# ---------------------------------------------------------------------------
 
 
 def _csv(baris, kolom=None):

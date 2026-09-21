@@ -1,15 +1,3 @@
-/**
- * DIBUAT OTOMATIS oleh `pipeline/s7_publish.py --ekspor`. Jangan disunting tangan.
- *
- * Halaman gerbang menyebut angka soal cakupan datanya sendiri. Angka yang
- * ditulis tangan di sana sudah pernah kedaluwarsa ke arah yang paling
- * merugikan — mengaku 43 variabel saat 25 yang terisi, menjanjikan profil
- * per jam saat tabelnya nol baris. Yang dihitung tidak bisa ketinggalan.
- *
- * Untuk menyegarkannya:
- *
- *   cd pipeline && python s7_publish.py --ekspor
- */
 
 export interface SumberData {
   nama: string
@@ -90,14 +78,6 @@ export interface KelasUsaha {
   heksagon: number
 }
 
-/**
- * Delapan kelas induk usaha, diurutkan menurut jumlah POI terpetakan.
- *
- * Satu POI masuk TEPAT SATU kelas — kalau sebuah POI bisa masuk dua,
- * kepadatan kompetitor terhitung dobel dan seluruh indeks kompetisi jadi
- * salah. Angkanya dari `business_pois`, jadi ia berubah begitu penarikan
- * OSM diulang dan tidak bisa basi tanpa ketahuan.
- */
 export const KELAS_USAHA: KelasUsaha[] = [
   { kode: "F1", nama: "Kuliner Duduk", poi: 969, heksagon: 355 },
   { kode: "R1", nama: "Ritel Kebutuhan Harian", poi: 580, heksagon: 333 },
@@ -116,13 +96,6 @@ export const BATASAN: string[] = [
   "Survei lapangan menyentuh 26 dari 708 heksagon; 682 sisanya ditandai “belum dikunjungi surveyor”. Itu pernyataan tentang kunjungan, bukan tentang mutu angkanya — POI, rute, penduduk, dan zonasi tetap hasil pengukuran.",
 ]
 
-/**
- * Empat kali pengukuran membantah dugaan yang wajar. Seluruhnya — termasuk
- * KALIMATNYA — dirangkai `s7_publish.hitung_temuan()` dari basis data.
- *
- * Temuan yang bahannya tidak ada tidak diterbitkan, jadi daftar ini boleh
- * lebih pendek. Komponen yang membacanya wajib tahan terhadap daftar kosong.
- */
 export const TEMUAN: Temuan[] = [
   {"kunci": "rute", "dugaan": "Jarak lurus ke stasiun cukup untuk memperkirakan jalan kakinya.", "judul": "Rute jalan kaki rata-rata 1,78× lebih panjang daripada garis lurusnya", "angka": "1,78×", "satuan": "rata-rata rute memutar", "uraian": "703 rute tercepat dihitung openrouteservice dari pusat tiap heksagon ke simpul terdekatnya, lalu dibandingkan dengan jarak lurus ke titik yang sama. Median 1,53×, dan yang terjauh memutar 7,07× — 161 heksagon harus berjalan dua kali lipat jarak lurusnya atau lebih. Tidak satu pun rute lebih pendek daripada garis lurusnya (0 dari 703), dan itu invarian yang sengaja diuji: kalau ada, lintang dan bujurnya tertukar.", "akibat": "Garis lurus putus-putus dicabut dari peta. Yang tergambar sekarang jalur yang benar-benar bisa dijalani, dan menit yang tertulis di panel dibaca dari jalur itu.", "deret": [{"label": "di bawah 1,2×", "nilai": 17}, {"label": "1,2–1,5×", "nilai": 310}, {"label": "1,5–2×", "nilai": 215}, {"label": "2× ke atas", "nilai": 161, "tekan": true}], "deretSatuan": "heksagon", "desimal": 0},
   {"kunci": "jangkau", "dugaan": "Stasiun yang lebih sibuk menjangkau kawasan yang lebih luas.", "judul": "Stasiun Manggarai justru punya kawasan jangkau tersempit — 3,1× lebih kecil daripada MRT Dukuh Atas BNI", "angka": "0,96 km²", "satuan": "jangkauan 15 menit Stasiun Manggarai", "uraian": "Kawasan jangkau ditarik dari openrouteservice sebagai isochrone berjalan kaki, lalu luasnya diukur di atas geografi bumi. Dalam 15 menit, Stasiun Manggarai hanya menjangkau 9 dari 708 heksagon, sementara MRT Dukuh Atas BNI menjangkau 28. Bukan soal ukuran stasiunnya: emplasemen rel yang lebar memotong jalan kaki ke segala arah, dan yang tersisa cuma dua sisi peron.", "akibat": "Kawasan jangkau digambar sebagai bentuk yang diukur, bukan sebagai lingkaran berjari-jari sekian meter. Lingkaran akan menjanjikan pembeli dari arah yang tidak ada jalannya.", "deret": [{"label": "Stasiun Manggarai · KRL", "nilai": 0.96, "tekan": true}, {"label": "LRT Harjamukti · LRT", "nilai": 1.5}, {"label": "Stasiun Bekasi · KRL", "nilai": 2.31}, {"label": "Stasiun Depok Baru · KRL", "nilai": 2.79}, {"label": "Stasiun Tanah Abang · KRL", "nilai": 2.85}, {"label": "MRT Dukuh Atas BNI · MRT", "nilai": 2.99}], "deretSatuan": "km² dalam 15 menit", "desimal": 2},

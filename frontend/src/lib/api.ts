@@ -1,14 +1,3 @@
-/**
- * Satu-satunya tempat frontend memanggil backend.
- *
- * Komponen tidak boleh memanggil `fetch` sendiri. Kalau nanti perlu retry,
- * pembatalan, atau header autentikasi, tempatnya hanya satu.
- *
- * Header autentikasi itu sekarang ADA, dan ia dipasang di sini — bukan
- * diteruskan sebagai argumen dari tiap komponen yang kebetulan sedang memegang
- * tiket. Satu tempat memasangnya berarti tidak ada endpoint yang bisa lupa
- * membawanya, dan tidak ada komponen yang perlu tahu bentuk tiketnya.
- */
 
 import { API_BASE } from '../config'
 import type {
@@ -45,14 +34,6 @@ type GeoJSON = { type: 'FeatureCollection'; features: unknown[] }
 /** Kunci localStorage untuk tiket sesi. */
 const KUNCI_TIKET = 'loconomics.tiket'
 
-/**
- * Tiket disimpan di modul DAN di localStorage.
- *
- * Salinan di modul supaya `ambil()` tidak menyentuh localStorage di setiap
- * permintaan — pembacaannya sinkron dan memblokir utas utama, dan peta ini
- * memanggil backend puluhan kali saat memuat. Salinan di localStorage supaya
- * sesi selamat dari refresh; itu permintaan eksplisit pemilik repo.
- */
 let tiketSekarang: string | null = null
 try {
   tiketSekarang = localStorage.getItem(KUNCI_TIKET)
@@ -74,20 +55,7 @@ export function setTiket(tiket: string | null): void {
 
 export const adaTiket = (): boolean => tiketSekarang !== null
 
-/**
- * Galat yang membawa KODE backend, bukan cuma teksnya.
- *
- * Ini yang membuat antarmuka bisa bercabang dengan benar: 401 membuka dialog
- * masuk, 402 BUTUH_PREMIUM membuka dialog langganan. Mencabangkan pada teks
- * pesan akan pecah begitu
- * pesannya diperbaiki — dan pesan memang sering diperbaiki.
- */
 export class GalatAPI extends Error {
-  // Ditulis sebagai field lalu diisi di badan constructor, bukan sebagai
-  // parameter-property (`readonly kode: string` di daftar parameter). Yang
-  // kedua lebih ringkas tetapi ditolak `erasableSyntaxOnly` di tsconfig repo
-  // ini: ia sintaks TypeScript yang MENGHASILKAN kode, bukan yang hilang saat
-  // tipe dilucuti.
   readonly status: number
   readonly kode: string
   readonly detail?: unknown
@@ -101,39 +69,8 @@ export class GalatAPI extends Error {
   }
 }
 
-/**
- * Batas waktu satu permintaan. Jaring pengaman, bukan mekanisme utama.
- *
- * `fetch` tanpa `signal` menunggu SELAMANYA - peramban baru menyerah setelah
- * satu-dua menit, dan sampai saat itu tidak ada satu pun galat yang bisa
- * ditangkap. Itu jadi masalah nyata begitu backend duduk di Render free tier:
- * layanannya TIDUR sesudah 15 menit menganggur dan bangunnya memakan puluhan
- * detik, jadi permintaan pertama tidak gagal - ia menggantung. Yang terlihat
- * di layar bukan pesan galat melainkan antarmuka yang membeku, dan cadangan
- * statis di `layerHeksagon` tidak pernah menyala karena tidak ada yang dilempar.
- *
- * 25 detik, bukan lima: yang dijaga di sini backend yang TIDAK MENJAWAB, bukan
- * backend yang lambat. `/meta/siap` sendiri butuh 2,6 dtk lewat Supabase, dan
- * memutus permintaan yang sebenarnya masih dalam perjalanan menghasilkan
- * kegagalan yang kita karang sendiri.
- */
 const BATAS_WAKTU_MS = 25_000
 
-/**
- * Bahasa kalimat yang dirakit BACKEND, ditempelkan ke tiap permintaan.
- *
- * Backend merakit belasan kalimat dari angka heksagon - penjelasan kuadran,
- * peringatan simulasi, alasan rekomendasi - dan kalimat yang dirakit dari data
- * tidak boleh disalin ke frontend sebagai kamus kedua. Jadi yang dikirim ke
- * sana adalah bahasanya, dan yang pulang sudah dalam bahasa itu.
- *
- * DIBACA dari `documentElement.lang`, sama dengan `lib/format.ts`, dan dengan
- * alasan yang sama: berkas ini bukan komponen dan tidak boleh memanggil kait.
- *
- * Hanya ditempel saat bahasanya INGGRIS. Indonesia adalah bawaan backend, jadi
- * menempelkannya cuma memanjangkan URL dan menggandakan kunci cache untuk
- * jawaban yang sama persis.
- */
 function bahasaKini(): string | null {
   if (typeof document === 'undefined') return null
   return document.documentElement.lang === 'en' ? 'en' : null
@@ -167,11 +104,6 @@ async function ambil<T>(jalur: string, opsi?: RequestInit): Promise<T> {
         detail = j.galat.detail
       }
     } catch {
-      // Badan yang BUKAN JSON ikut ditempel ke pesan - berguna saat proxy
-      // menjawab teks pendek, dan merusak saat ia menjawab halaman HTML:
-      // yang muncul di layar jadi potongan `<!doctype html><head><meta ...`.
-      // Terlihat di terbitan statis, tempat setiap endpoint backend dijawab
-      // halaman 404 GitHub Pages.
       const htmlSaja = /^\s*<(!doctype|html)/i.test(mentah)
       if (mentah && !htmlSaja) pesan = `${pesan} — ${mentah.slice(0, 200)}`
       else if (htmlSaja) pesan = `${pesan} — mesin data tidak menjawab di alamat ini`
@@ -183,25 +115,11 @@ async function ambil<T>(jalur: string, opsi?: RequestInit): Promise<T> {
 
 const kueri = (params: Record<string, string | number | boolean | undefined>) => {
   const q = new URLSearchParams()
-  // String KOSONG diperlakukan sama dengan undefined: dibuang, bukan dikirim.
-  //
-  // Antarmuka memakai '' untuk "kawasan tidak disaring", dan backend memakai
-  // parameter yang TIDAK ADA untuk hal yang sama. Tanpa baris ini yang terkirim
-  // adalah ?kawasan= , dan periksa_kawasan() menolaknya sebagai nama kawasan
-  // yang tidak dikenal - benar menurut aturannya sendiri, tapi bukan yang
-  // dimaksud. Angka 0 dan false TETAP dikirim; keduanya nilai yang sah.
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') q.set(k, String(v))
   const s = q.toString()
   return s ? `?${s}` : ''
 }
 
-/**
- * Unduh berkas PDF.
- *
- * Satu-satunya jalur yang TIDAK lewat `ambil()`: jawabannya berkas, bukan JSON,
- * jadi `res.json()` akan meledak. Amplop galatnya tetap dibaca dengan bentuk
- * yang sama supaya cabang 402 di pemanggil tidak perlu tahu bedanya.
- */
 /** Isian simulasi. Satu bentuk, dipakai permintaan JSON-nya DAN unduhan PDF-nya. */
 export interface ParamSimulasi {
   [k: string]: string | number | boolean | undefined
@@ -244,23 +162,6 @@ async function unduhPdf(jalur: string, namaBerkas: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
-/**
- * Ketuk backend sekali saat halaman dibuka, lalu lupakan hasilnya.
- *
- * Render free tier TIDUR sesudah 15 menit menganggur, dan bangunnya memakan
- * puluhan detik. Yang menanggung ongkos itu selalu permintaan PERTAMA - dan di
- * alur produk ini permintaan pertama jatuh tepat di layar pembuka, yaitu satu
- * dari dua layar yang pasti dilihat juri.
- *
- * Yang membuat ini nyaris gratis: urutannya gerbang -> pembuka -> peta, dan
- * gerbang adalah halaman scrollytelling sembilan bagian yang sengaja dibuat
- * untuk dibaca. Puluhan detik itu sudah ada di sana, dan sebelumnya dihabiskan
- * dengan backend yang tetap tertidur. Sesudah ini ia dipakai membangunkannya.
- *
- * Sengaja `void` dan tanpa penanganan galat: tidak ada satu pun keputusan di
- * antarmuka yang bergantung pada jawabannya. Yang memeriksa kesiapan tetap
- * layar pembuka, dengan percobaan ulangnya sendiri.
- */
 export function bangunkan(): void {
   if (!API_BASE) return
   void fetch(`${API_BASE}/health`, {
@@ -269,38 +170,12 @@ export function bangunkan(): void {
 }
 
 export const api = {
-  /**
-   * `opsi` ada untuk satu pemanggil: layar pembuka, yang memeriksa berkali-kali
-   * dengan batas waktu pendek alih-alih sekali dengan batas waktu panjang.
-   */
   sehat: (opsi?: RequestInit) => ambil<{ status: string }>('/health', opsi),
 
-  /**
-   * Kesiapan backend, dipanggil sekali saat memuat.
-   *
-   * Dipakai untuk satu hal di antarmuka: memutuskan apakah pita "data demo"
-   * dipasang. Backend yang menurunkan jawabannya dari jumlah baris observasi
-   * misi, jadi frontend tidak pernah perlu tahu - apalagi menebak - apakah isi
-   * petanya sungguhan.
-   */
   kesiapan: () => ambil<Kesiapan>('/meta/siap'),
 
   // --- Heksagon ---
   /** `kawasan` boleh satu nama atau beberapa dipisah koma (alat Premium). */
-  /**
-   * Grid heksagon. SATU-SATUNYA endpoint yang punya sumber cadangan statis.
-   *
-   * Kenapa hanya yang ini: tanpa heksagon, layar utama produk ini kosong
-   * melompong dan tidak ada satu pun yang bisa ditunjukkan. Sisanya - daftar,
-   * kuadran, detail - boleh gagal dengan pesan yang jujur, karena kegagalannya
-   * terlihat sebagai bagian yang kosong, bukan sebagai aplikasi yang mati.
-   *
-   * Berkasnya dibangkitkan `s7_publish.py --ekspor`, isinya SAMA PERSIS dengan
-   * respons endpoint ini - 708 fitur, 840 KB untuk keenam kawasan. Dipakai
-   * hanya kalau backend tidak bisa dihubungi sama sekali; kalau backend
-   * menjawab dengan galat, galatnya diteruskan apa adanya. Backend yang SALAH
-   * tidak boleh disamarkan jadi backend yang TIDAK ADA.
-   */
   layerHeksagon: async (p: { kawasan?: string; min_score?: number; versi?: string } = {}) => {
     const statis = async () => {
       const nama =
@@ -312,23 +187,11 @@ export const api = {
       return (await res.json()) as GeoJSON
     }
 
-    // TIDAK ADA backend dan BACKEND YANG MENOLAK adalah dua keadaan berbeda,
-    // dan membedakannya harus dari konfigurasi - bukan dari bentuk galatnya.
-    //
-    // Versi pertama membedakannya lewat `e instanceof GalatAPI`, dan itu salah:
-    // dengan API_BASE kosong, permintaannya jadi relatif dan GitHub Pages
-    // menjawab 404 HTML - yang terbaca persis seperti backend yang menolak.
-    // Jadi cadangannya tidak akan pernah dipakai, tepat di satu-satunya
-    // keadaan yang ia dibuat untuknya.
     if (!API_BASE) return statis()
 
     try {
       return await ambil<GeoJSON>(`/hex/layer${kueri(p)}`)
     } catch (e) {
-      // Backend DIKONFIGURASI tapi tidak terjangkau (mati, tidur, jaringan
-      // putus): pakai cadangan supaya peta tetap tergambar. Backend yang
-      // menjawab dengan galat diteruskan apa adanya - backend yang SALAH tidak
-      // boleh disamarkan jadi backend yang TIDAK ADA.
       if (e instanceof GalatAPI) throw e
       return statis()
     }
@@ -337,10 +200,6 @@ export const api = {
   detailHeksagon: (h3: string, versi?: string) =>
     ambil<DetailHeksagon>(`/hex/${h3}${kueri({ versi })}`),
 
-  /**
-   * Stasiun terdekat + jarak garis lurus, untuk garis penghubung di peta.
-   * GRATIS: ini konteks peta, bukan kedalaman data.
-   */
   simpulTerdekat: (h3: string, profil?: ProfilRute) =>
     ambil<KonteksSimpul>(
       `/hex/${h3}/simpul-terdekat${profil ? `?profil=${encodeURIComponent(profil)}` : ''}`,
@@ -349,10 +208,6 @@ export const api = {
   /** Commuter Clock — 18 titik jam, captive vs choice rider. */
   commuterClock: (h3: string) => ambil<CommuterClock>(`/hex/${h3}/commuter-clock`),
 
-  /**
-   * Tujuh blok di dalam satu heksagon. GRATIS: data terbuka, skor pipeline.
-   * `kelas` = kelas induk usaha (F1..T1) supaya pesaing sekelas ikut dihitung.
-   */
   blokHeksagon: (h3: string, kelas?: string | null) =>
     ambil<BedahBlok>(`/hex/${h3}/blok${kueri({ kelas: kelas ?? undefined })}`),
 
@@ -410,11 +265,6 @@ export const api = {
   /** Dipanggil saat memuat, supaya panel AI bisa menampilkan keadaan sebenarnya. */
   statusAI: () => ambil<StatusAI>('/ai/status'),
 
-  // Batas waktunya SENDIRI, 150 detik. Satu pertanyaan bisa memanggil sepuluh
-  // alat dalam delapan putaran model, dan diukur di produksi 13 Sep 2026 butuh
-  // 19 detik pada saat sepi - batas 25 detik milik endpoint lain memutusnya
-  // di tengah jalan, dan yang tampil "Could not reach the assistant: signal
-  // timed out" padahal jawabannya sedang disusun.
   tanyaAI: (permintaan: PermintaanAI) =>
     ambil<JawabanAI>('/ai/tanya', {
       method: 'POST',
@@ -486,24 +336,12 @@ export const api = {
   dinamikaKawasan: (kawasan: string) =>
     ambil<DinamikaKawasan>(`/skor/dinamika${kueri({ kawasan })}`),
 
-  /**
-   * Laporan Kelayakan. Satu-satunya panggilan yang TIDAK lewat `ambil()`:
-   * jawabannya berkas PDF, bukan JSON, jadi `res.json()` akan meledak.
-   * Amplop galatnya tetap dibaca dengan bentuk yang sama supaya cabang 402
-   * di pemanggil tidak perlu tahu bedanya.
-   */
   unduhKomparasi: (h3: string[]) => {
     const q = new URLSearchParams()
     for (const x of h3) q.append('h3', x)
     return unduhPdf(`/akun/laporan-komparasi?${q.toString()}`, `Perbandingan-${h3.length}-lokasi.pdf`)
   },
 
-  /**
-   * Laporan Simulasi Usaha. Parameternya PERSIS sama dengan `simulasi()` di
-   * atas, dan itu syaratnya: backend memanggil endpoint simulasi yang sama,
-   * jadi angka di PDF tidak bisa berselisih dengan angka di layar hanya
-   * karena satu isian tidak ikut terkirim.
-   */
   unduhSimulasi: (h3: string, namaKawasan: string, p: ParamSimulasi = {}) =>
     unduhPdf(
       `/akun/laporan-simulasi/${h3}${kueri(p)}`,

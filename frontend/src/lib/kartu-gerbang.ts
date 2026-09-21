@@ -1,11 +1,3 @@
-/**
- * DIBUAT OTOMATIS oleh `scripts/potret-kartu.mjs`. Jangan disunting tangan.
- *
- * Angkanya dihitung dari data yang sama yang dipakai menggambar berkas WebP
- * di `public/kartu/`, pada detik yang sama. Untuk menyegarkannya:
- *
- *   cd frontend && node scripts/potret-kartu.mjs
- */
 
 import type { NamaLayer } from '../config'
 
@@ -24,13 +16,6 @@ export interface KartuGerbang {
   n: number
   kuadran: Record<string, number>
   sorotan: { nilai: string; label: string }
-  /**
-   * Heksagon sungguhan kartu ini, dalam piksel kotak gambarnya.
-   *
-   * `sel` pusat SELURUH heksagon; `sorot` yang menjawab pertanyaan kartunya,
-   * urut sesuai jawabannya, dengan warna yang DIBACA dari peta - bukan dari
-   * salinan kedua aturan pewarnaan. `bentuk` dipakai bersama keduanya.
-   */
   sorot: {
     w: number
     h: number
@@ -51,18 +36,6 @@ export interface KartuGerbang {
   }
 }
 
-/**
- * Berkas dan basemap yang BENAR-BENAR dipakai untuk tema yang sedang berlaku.
- *
- * Kartu bergaya gelap punya kembaran terang (`berkasTerang`), dan di halaman
- * terang kembaran itulah yang dipasang - dilaporkan pemilik repo: kartu
- * GemFinder tampil sebagai peta hitam di tengah halaman putih. `gelap` ikut
- * dihitung ulang dari berkas yang dipakai, BUKAN dibaca dari manifes: garis
- * kisi yang dipilih untuk basemap hitam jadi garis putih di atas peta putih.
- *
- * Tinggal di sini, di sebelah manifesnya, karena ia satu-satunya yang tahu
- * arti `berkasTerang` - dan dipakai dua komponen (Solusi dan Ekosistem).
- */
 export function potretUntukTema(d: KartuGerbang, tema: 'terang' | 'gelap') {
   const kembar = tema === 'terang' && d.berkasTerang !== null
   return { berkas: kembar ? (d.berkasTerang as string) : d.berkas, gelap: kembar ? false : d.gelap }

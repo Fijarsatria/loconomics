@@ -1,22 +1,3 @@
-/**
- * Empat alat berbayar, sesuai tabel fitur.
- *
- *   MenuKawasan      "filter multi-kawasan secara simultan"      (baris 1)
- *   DialogKomparasi  "side-by-side comparison beberapa titik"    (baris 4)
- *   DialogPantauan   "pemantauan churn rate & dinamika kawasan"  (baris 5)
- *   BagianRiwayat    "riwayat perubahan skor"                    (baris 2)
- *
- * Baris 3 (43 variabel granular) tidak di sini - ia sudah hidup di dalam
- * PanelInsight dan cukup ditutup tirai. Baris 6 (PDF Export) juga tidak: ia
- * satu tombol, dan tombolnya duduk di tempat dokumennya diterbitkan.
- *
- * SATU KEPUTUSAN YANG BERULANG DI SELURUH BERKAS INI, dan yang paling mudah
- * dilanggar tanpa sadar: kalau datanya tidak ada, katakan tidak ada. Riwayat
- * dari satu versi skor bukan tren; dinamika dari satu potret bukan deret waktu.
- * Backend sudah mengirim `cukup_untuk_tren` dan `catatan` justru supaya
- * frontend tidak perlu menebak - dan supaya tidak ada yang tergoda menggambar
- * garis mendatar yang terlihat meyakinkan.
- */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -41,17 +22,6 @@ import { useSesi } from './Akun'
 import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
 import { Badge, Glif, Kosong, Memuat, MemuatNama, Terkunci, useTutupHalus } from './primitif'
 
-/**
- * Kalimat keempat alat berbayar ini, dua bahasa.
- *
- * Label dan keterangan keenam belas metrik komparasi TIDAK di sini melainkan
- * di `METRIK` sebagai `labelEn`/`bantuanEn` - satu metrik dijelaskan di satu
- * tempat, bersama `arah` dan `format`-nya, bukan separuh di sini separuh di
- * sana.
- *
- * `dinamika.catatan`, `b.catatan`, `b.risiko.label`, dan tiap pesan galat
- * datang dari backend dan dibiarkan apa adanya.
- */
 const K = {
   id: {
     tutup: 'Tutup',
@@ -341,21 +311,6 @@ function Lembar({
 // 1 · Filter multi-kawasan
 // ---------------------------------------------------------------------------
 
-/**
- * Pengganti menu Kawasan yang bisa memilih beberapa sekaligus.
- *
- * `nilai` tetap SATU STRING, bukan array — 'Bekasi,Depok Baru'. Bentuk itu
- * dipilih supaya seluruh rantai yang sudah ada tidak perlu diubah: state di
- * App, parameter kueri, dan kunci cache backend semuanya sudah berupa string,
- * dan mengubahnya jadi array berarti menyentuh belasan tempat demi keuntungan
- * yang nol.
- *
- * Untuk yang belum berlangganan, menunya tetap BEKERJA PENUH sebagai pemilih
- * tunggal - keenam kawasan tetap bisa dibuka satu per satu, dan "Semua kawasan"
- * tetap ada. Yang terkunci cuma kemampuan menggabungkan beberapa. Mengunci
- * seluruh menunya akan melanggar baris pertama tabel fitur sendiri, yang
- * menyatakan seluruh grid terbuka untuk dilihat.
- */
 export function MenuKawasan({
   nilai,
   onUbah,
@@ -563,17 +518,6 @@ function Kotak({ aktif, bulat }: { aktif: boolean; bulat?: boolean }) {
 // 2 · Komparasi berdampingan
 // ---------------------------------------------------------------------------
 
-/**
- * Metrik yang dibandingkan, berurutan dari yang paling menentukan.
- *
- * `arah` menyatakan sisi mana yang lebih baik, dan itulah satu-satunya hal yang
- * membuat tabel ini bisa dibaca tanpa berpikir: IKP dan IBR RENDAH yang bagus,
- * dan pembaca tidak seharusnya perlu mengingat itu. Backend sudah menghitung
- * pemenangnya; `arah` di sini hanya mengarahkan panjang barnya.
- *
- * Namanya bahasa orang, bukan nama indeks. "IPT 0,93" tidak berarti apa pun
- * bagi calon pemilik warung; "Akses ke stasiun" berarti.
- */
 const METRIK: {
   kunci: string
   label: string
@@ -756,13 +700,6 @@ const METRIK: {
   },
 ]
 
-/**
- * Satu baris metrik: label di kiri, satu bar per lokasi di bawahnya.
- *
- * Bar, bukan angka telanjang. "Rp150.776 vs Rp204.014" menuntut mata
- * membandingkan dua deret digit; dua bar dengan panjang berbeda menjawabnya
- * sebelum angkanya sempat dibaca.
- */
 function BarisMetrik({
   m,
   data,
@@ -797,16 +734,6 @@ function BarisMetrik({
         {data.baris.map((b, i) => {
           const v = m.ambil(b)
           const menang = juara === b.h3_index && data.baris.length > 1
-          /**
-           * Panjang bar relatif terhadap yang dibandingkan saja, bukan terhadap
-           * skala absolut — yang ingin dilihat pembaca adalah selisih di antara
-           * pilihannya sendiri.
-           *
-           * Untuk metrik "rendah lebih baik", barnya DIBALIK: yang termurah
-           * jadi yang terpanjang. Kalau tidak, kolom termahal tampil paling
-           * panjang dan mata membacanya sebagai yang terbaik — persis
-           * kebalikannya.
-           */
           const lebar =
             v === null || maks === 0
               ? 0
@@ -852,12 +779,6 @@ function BarisMetrik({
                   className="h-full rounded-full transition-[width] duration-700 ease-liquid"
                   style={{
                     width: `${v === null ? 0 : Math.max(6, lebar)}%`,
-                    // Bukan `line-2`: warnanya nyaris sama dengan rel di
-                    // belakangnya (#bcc5bf vs #dde2df), jadi bar yang kalah
-                    // praktis tak terlihat - dan panjang bar itulah SATU-
-                    // SATUNYA gunanya baris ini. `ink-3` cukup gelap untuk
-                    // dibandingkan, cukup netral untuk tidak berebut dengan
-                    // hijau pemenangnya.
                     background: menang ? 'var(--color-gem)' : 'var(--color-ink-3)',
                   }}
                 />
@@ -905,13 +826,6 @@ export function DialogKomparasi({
     // `zoneguard.penjelasan` di respons ini dirakit backend.
   }, [h3, bahasa])
 
-  /**
-   * Berapa metrik yang dimenangkan tiap lokasi.
-   *
-   * Ini yang dicari orang lebih dulu — "jadi yang mana?" — dan tanpa baris ini
-   * ia harus menghitung sendiri sepuluh baris. Dihitung dari `menang` milik
-   * backend, jadi arah tiap metrik tidak pernah ditebak ulang di sini.
-   */
   const skorMenang = useMemo(() => {
     const n = new Map<string, number>()
     for (const juara of Object.values(data?.menang ?? {})) {
@@ -1167,14 +1081,6 @@ function IsianNama({ awal, onSimpan }: { awal: string | null; onSimpan: (nama: s
   )
 }
 
-/**
- * Kabar sesudah menaruh titik favorit dengan satu klik.
- *
- * Satu klik yang langsung menyimpan menuntut dua jalan keluar di tempat yang
- * sama: memberinya NAMA (yang diminta pemilik repo) dan MEMBATALKANNYA (klik
- * yang tidak sengaja). Tanpa yang kedua, satu klik keliru berarti membuka
- * dialog Tersimpan hanya untuk menghapusnya.
- */
 export function KabarPin({
   h3,
   baru,

@@ -1,46 +1,4 @@
-"""Tahap 5 - GapFill: mengisi heksagon yang tidak pernah disurvei.
-
-Masalah yang diselesaikan tahap ini harus dibicarakan terbuka sejak awal, bukan
-disembunyikan sampai hari presentasi: dataset sampel MAPID hanya berisi 15 titik
-per misi, sementara wilayah studi terdiri dari ribuan heksagon. Kalau data itu
-dipakai apa adanya, hampir seluruh peta akan kosong.
-
-Kuncinya adalah mengubah cara memandang data misi:
-    data MAPID = GROUND TRUTH, bukan COVERAGE.
-Data itu tidak dipakai untuk mengisi peta, melainkan untuk MENGAJARI MODEL
-menerjemahkan variabel yang tersedia di mana-mana menjadi variabel yang hanya
-tersedia di titik survei.
-
-Yang dipelajari model:
-
-    skor_ramai_terkoreksi (D10) ~ f(kepadatan POI OSM, populasi WorldPop,
-                                    skor simpul, tutupan bangunan, jarak simpul)
-
-    harga_median_porsi (B07)    ~ f(NJOP, pangsa waralaba, luas bangunan median,
-                                    kepadatan kantor)
-
-Secara teknis tahap ini BUKAN AI generatif, dan itu bukan kelemahan. Justru
-sebaliknya - menunjukkan tim paham kapan harus memakai LLM dan kapan harus
-memakai model statistik.
-
----
-
-SATU HAL YANG HARUS DIBACA SEBELUM MENJALANKANNYA, per 29 Agustus 2026.
-
-Modul ini LENGKAP dan teruji, dan ia akan MENOLAK jalan di basis data hari ini.
-Itu bukan kerusakan, melainkan penjaganya bekerja: `skor_ramai_terkoreksi` dan
-`harga_median_porsi` masing-masing terisi di DELAPAN heksagon dari 708, karena
-hanya 27 titik misi MAPID yang jatuh di dalam kawasan pilot.
-
-Melatih Random Forest atas delapan baris lalu menyebarkan hasilnya ke 700
-heksagon bukan imputasi - itu mengarang dengan langkah tambahan, dan hasilnya
-akan terlihat persis seperti data sungguhan di layar. `_periksa_kecukupan()`
-yang menahannya, dan ambangnya ditulis sebagai angka supaya bisa diperdebatkan
-terbuka alih-alih disepakati diam-diam.
-
-Begitu survei lapangan masuk (lihat `docs/data.md` bagian 11), modul ini jalan
-tanpa perlu disentuh.
-"""
+"""Tahap 5 - GapFill: mengisi heksagon yang tidak pernah disurvei."""
 
 from __future__ import annotations
 
@@ -66,13 +24,6 @@ FITUR_PREDIKTOR = [
 
 TARGET = ["skor_ramai_terkoreksi", "harga_median_porsi"]
 
-#: Baris ground truth minimum sebelum model boleh dilatih sama sekali.
-#:
-#: Angkanya tidak diturunkan dari teori melainkan dari akibatnya: di bawah ini,
-#: satu titik survei menggeser prediksi ratusan heksagon, dan spatial k-fold
-#: kehilangan arti karena tiap lipatan tinggal berisi satu-dua baris. Lebih baik
-#: peta yang kosong dan mengakuinya daripada peta yang penuh dan tidak bisa
-#: dipertanggungjawabkan.
 MIN_GROUND_TRUTH = 30
 
 #: Kawasan berbeda minimum. Spatial k-fold membagi PER KAWASAN, jadi dengan dua
@@ -102,12 +53,7 @@ class HasilLatih:
 
     @property
     def lebih_baik_dari_menebak(self) -> bool:
-        """Apakah model mengalahkan 'selalu tebak rata-rata'?
-
-        Dilaporkan terpisah dari R2 karena R2 negatif sudah menyatakannya, tetapi
-        MAE yang dibandingkan langsung jauh lebih mudah dipertanggungjawabkan di
-        depan juri: 'model kami salah rata-rata sekian, menebak salah sekian'.
-        """
+        """Apakah model mengalahkan 'selalu tebak rata-rata'?"""
         return self.mae < self.baseline_mae
 
     def ringkas(self) -> str:
@@ -125,12 +71,7 @@ class DataTidakCukup(RuntimeError):
 
 
 def _periksa_kecukupan(df: pd.DataFrame, target: str, fitur: list[str]) -> None:
-    """Penjaga. Melempar sebelum satu baris pun dilatih.
-
-    Ditulis sebagai fungsi terpisah, bukan `if` di dalam `latih_model`, dengan
-    alasan yang sama seperti `wajib_akses_penuh()` di backend: penjaga yang
-    harus diingat untuk dipanggil adalah penjaga yang suatu saat lupa dipanggil.
-    """
+    """Penjaga. Melempar sebelum satu baris pun dilatih."""
     n = len(df)
     kawasan = sorted(df["kawasan"].dropna().unique()) if "kawasan" in df else []
     kurang = []
@@ -154,18 +95,7 @@ def _fitur_terpakai(df: pd.DataFrame) -> list[str]:
 
 
 def latih_model(df_ground_truth: pd.DataFrame, target: str) -> HasilLatih:
-    """Gradient Boosting / Random Forest.
-
-    VALIDASI WAJIB: spatial k-fold - pembagian dilakukan PER KAWASAN, bukan acak.
-
-    Kalau data dibagi acak, titik dari kawasan yang sama tersebar di data latih
-    dan data uji sekaligus. Model lalu terlihat sangat akurat padahal hanya
-    menghafal karakteristik kawasan itu. Dengan membagi per kawasan, model diuji
-    pada kawasan yang benar-benar belum pernah dilihatnya - dan itulah kondisi
-    sebenarnya saat model diterapkan ke seluruh wilayah studi.
-
-    R kuadrat dan MAE DILAPORKAN APA ADANYA, termasuk kalau hasilnya mengecewakan.
-    """
+    """Gradient Boosting / Random Forest."""
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.metrics import mean_absolute_error, r2_score
     from sklearn.model_selection import LeaveOneGroupOut
@@ -221,17 +151,7 @@ def latih_model(df_ground_truth: pd.DataFrame, target: str) -> HasilLatih:
 
 
 def prediksi_seluruh_heksagon(hasil: HasilLatih, df_semua: pd.DataFrame) -> pd.DataFrame:
-    """Terapkan model ke heksagon tanpa data misi.
-
-    Setiap nilai hasil prediksi ditandai data_source = 'predicted' dan membawa
-    interval ketidakpastian. Tidak pernah disamarkan sebagai hasil observasi.
-
-    Intervalnya diturunkan dari SEBARAN antar-pohon, bukan dari satu angka
-    global: sebuah heksagon yang mirip dengan data latih menghasilkan pohon-pohon
-    yang sepakat, dan yang tidak mirip menghasilkan pohon-pohon yang berselisih.
-    Selisih itulah keterangan yang paling berguna - ia menandai persis di mana
-    modelnya sedang menebak.
-    """
+    """Terapkan model ke heksagon tanpa data misi."""
     if hasil.model is None:
         raise ValueError("HasilLatih tidak membawa model")
 
@@ -260,28 +180,14 @@ def prediksi_seluruh_heksagon(hasil: HasilLatih, df_semua: pd.DataFrame) -> pd.D
 
 
 def tandai_keyakinan(n_titik_misi: int) -> tuple[str, str]:
-    """Q02 + Q03. Badge ini WAJIB tampil di antarmuka setiap kali skor ditampilkan.
-
-    Kenapa langkah ini menaikkan nilai, bukan menurunkan: sistem pendukung
-    keputusan yang jujur tentang ketidakpastiannya jauh lebih dipercaya
-    dibanding sistem yang menampilkan angka desimal di mana-mana seolah semuanya pasti.
-
-    Badge ini juga jawaban siap pakai untuk pertanyaan juri "data kalian kan cuma
-    sedikit?" - bukan pembelaan lisan, melainkan sesuatu yang sudah terbangun
-    di dalam produk dan bisa ditunjuk langsung di layar.
-    """
+    """Q02 + Q03. Badge ini WAJIB tampil di antarmuka setiap kali skor ditampilkan."""
     tingkat = tingkat_keyakinan(n_titik_misi)
     sumber = "observed" if n_titik_misi > 0 else "predicted"
     return tingkat, sumber
 
 
 def laporan_kesiapan(df: pd.DataFrame) -> str:
-    """Apakah GapFill sudah bisa dijalankan, dan kalau belum, apa yang kurang.
-
-    Dipisahkan dari `latih_model` supaya keadaannya bisa ditanyakan tanpa
-    memicu galat - itu yang dipakai `s7_publish.py --gapfill` untuk melapor
-    alih-alih berhenti.
-    """
+    """Apakah GapFill sudah bisa dijalankan, dan kalau belum, apa yang kurang."""
     fitur = _fitur_terpakai(df)
     baris = [
         f"Prediktor terisi : {len(fitur)}/{len(FITUR_PREDIKTOR)}  {fitur}",

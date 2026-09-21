@@ -1,53 +1,3 @@
-/**
- * Bento "Enam keputusan" untuk halaman gerbang.
- *
- * DUA ELEMEN TEKS PER KARTU, dan itu batas keras. Versi pertama bento ini
- * memuat ENAM - eyebrow, judul, kalimat, angka besar, batang kuadran, dan baris
- * kaki - lalu dibandingkan berdampingan dengan susunan yang ditirunya. Bedanya
- * bukan warna maupun jarak: kartu yang ramai berhenti jadi kartu dan berubah
- * jadi tabel kecil, dan mata tidak tahu harus mendarat di mana.
- *
- * BARIS KAKI DICABUT 10 Sep 2026 ("Tanah Abang · 55 opportunity score median").
- * Ia elemen ketiga yang dibaca paling akhir dan paling jarang, ia mengulang
- * nama kawasan yang sudah terlihat di petanya sendiri, dan angkanya datang dari
- * manifes potret yang bisa basi tanpa ada yang tahu. Yang tersisa: nama alat,
- * judul, satu kalimat.
- *
- * TIGA BENTUK, bukan satu yang diulang enam kali. Deretan kartu seukuran
- * terbaca sebagai daftar; deretan yang bentuknya berbeda-beda terbaca sebagai
- * susunan yang dirancang. Bentuknya mengikuti berapa banyak LEBAR yang
- * dipunyai kartunya:
- *
- *   belah   teks di kiri, peta di kanan      - kartu selebar setengah baris
- *   atas    teks di atas, peta mengisi bawah - kolom sempit yang tinggi
- *   bawah   peta di atas, teks di bawah      - kebalikannya, supaya tak seragam
- *   banding DUA peta berdampingan            - kartu komparasi, dan hanya itu
- *
- * Semuanya `<img>`, dan halaman ini tidak memuat MapLibre sama sekali - satu
- * asersi audit menjaganya.
- *
- * KENAPA GAMBARNYA COCOK DENGAN KALIMATNYA. Tiap kartu dipasangkan menurut
- * LAYER yang benar-benar tergambar di berkasnya: kartu "menakar sewa" memakai
- * potret layer PriceLens, kartu "memastikan boleh" memakai potret ZoneGuard.
- *
- * YANG BERGERAK DI ATASNYA adalah heksagon SUNGGUHAN kartu itu (11 Sep 2026).
- *
- * Sebelumnya di sini berdiri kisi heksagon karangan yang menutupi seluruh kotak
- * gambar: ia tidak berdiri di tempat mana pun, tidak membawa satu angka pun,
- * dan tidak menjawab pertanyaan kartunya. Dilaporkan apa adanya - "animasi
- * layer heksagon yang jelek dan ga nyambung sama masing masing konteks". Kisi
- * itu memang tidak nyambung; ia tidak bisa nyambung, karena tidak pernah ada
- * hubungannya dengan peta di belakangnya.
- *
- * Yang menggantikannya datang dari `KARTU_GERBANG[i].sorot`, dihitung
- * `scripts/potret-kartu.mjs --sorot` dengan KAMERA YANG SAMA dengan WebP-nya -
- * jadi tiap heksagon berdiri persis di atas dirinya sendiri di dalam gambar.
- * Warnanya pun dibaca kembali dari peta yang digambar MapLibre, bukan ditebak.
- *
- * Dan yang DISOROT menjawab pertanyaan kartunya: skor tertinggi untuk "memilih
- * lokasi", sewa termurah untuk "menakar sewa", zona terlarang untuk "memastikan
- * boleh" - yang lalu PERGI, persis yang dijanjikan kalimatnya.
- */
 
 import { useEffect, useMemo, useRef } from 'react'
 
@@ -69,14 +19,6 @@ interface Keputusan {
   /** Nama alat di dalam produk. */
   alat: string
   bentuk: Bentuk
-  /**
-   * Kelas kolom untuk lg ke atas, ditulis APA ADANYA.
-   *
-   * Bukan dirakit lewat template string: Tailwind memindai kelas sebagai TEKS
-   * di dalam berkas sumber, dan kelas yang baru terbentuk saat program berjalan
-   * tidak pernah ikut ke berkas CSS. Gagalnya diam - kelasnya ada di DOM,
-   * aturannya tidak ada di mana pun.
-   */
   rentang: string
 }
 
@@ -183,17 +125,6 @@ const LABEL: Record<Bahasa, { buka: (k: string, l: string) => string; peta: (l: 
    `[data-tampil]` yang dipasang pengamat di bawah.
    ========================================================================== */
 
-/*
- * PERBESARAN CSS KARTU KOMPARASI DICABUT (11 Sep 2026).
- *
- * Kartu itu dulu meminjam potret Harjamukti dan Manggarai milik kartu lain -
- * kamera yang membingkai SELURUH kawasan - lalu memperbesarnya 1,55x di sini.
- * Pemilik repo meminta dua hal yang tidak bisa dipenuhi cara itu: "lebih zoom
- * lagi" (WebP 620 px sudah mulai lunak pada 1,55x) dan rute yang lebih panjang
- * (rute heksagon teratas Harjamukti memang pendek). Sekarang keduanya punya
- * potret sendiri, `KARTU_BANDING`, yang kameranya membingkai RUTE-nya dengan
- * zoom yang sama untuk keduanya. Tidak ada satu piksel pun yang diperbesar.
- */
 
 /** Berapa cincin jarak dipakai mengundak kisi. Tujuh sudah terbaca sebagai gelombang. */
 const N_CINCIN = 7
@@ -207,13 +138,6 @@ function poligon(bentuk: number[], x: number, y: number) {
   return d + 'Z'
 }
 
-/**
- * Lapisan heksagon sungguhan di atas potret.
- *
- * `jeda` menggeser seluruh siklusnya - dipakai kartu komparasi supaya kedua
- * petanya tidak menyala berbarengan, yang justru menghapus kesan "yang satu,
- * lalu yang lain" yang jadi seluruh gunanya kartu itu.
- */
 function LapisanHeks({
   d,
   gelap,
@@ -228,26 +152,9 @@ function LapisanHeks({
   rute?: 'A' | 'B'
 }) {
   const s = d.sorot
-  /**
-   * Satuan ukuran garis dan penanda, dalam piksel GAMBAR.
-   *
-   * Potret komparasi 900 px dan tampil sekitar 460 px - separuh ukurannya -
-   * sementara angka garis di bawah ditulis untuk potret 620 px yang dulu
-   * diperbesar 1,55x, yaitu tampil hampir seukuran aslinya. Tanpa pengali ini
-   * penanda A dan B mengecil jadi titik tiga piksel.
-   */
   const u = rute ? s.w / 460 : 1
   const uGaris = rute ? 1.3 : 1
 
-  /**
-   * Kisi dipecah jadi tujuh CINCIN, bukan satu path tunggal maupun 108 simpul.
-   *
-   * Satu path tidak bisa diundak - dan tanpa undakan tidak ada gelombang, cuma
-   * kisi yang berkedip. Seratus delapan simpul bisa diundak, tetapi itu 108
-   * elemen yang dianimasikan di enam kartu sekaligus, dan halaman ini sudah
-   * pernah dibuat berat oleh hal yang persis seperti itu. Tujuh path membeli
-   * gelombangnya dengan tujuh elemen.
-   */
   const cincin = useMemo(() => {
     const jarak: number[] = []
     let maks = 0
@@ -267,15 +174,6 @@ function LapisanHeks({
   // Garis kisi harus melawan basemapnya, sama alasannya dengan `GARIS_HEX` di
   // peta: garis gelap di atas basemap gelap tidak menggambar apa pun.
   const garis = gelap ? 'rgba(233,244,240,0.5)' : 'rgba(16,33,28,0.42)'
-  /**
-   * Cincin heksagon yang menjawab. WARNANYA LAWAN BASEMAP, bukan warna isinya.
-   *
-   * Percobaan pertama memakai warna isian juga, dan itu gagal persis di kartu
-   * yang paling membutuhkannya: ujung MURAH skala PriceLens `#e4ece9` - hampir
-   * putih - digambar di atas basemap terang, dengan garis yang juga hampir
-   * putih. Yang terlihat noda pucat, bukan heksagon yang dipilih. Isinya tetap
-   * membawa datanya; cincinnya yang membuatnya terbaca sebagai "yang ini".
-   */
   const tepiJawab = gelap ? 'rgba(255,255,255,0.92)' : 'rgba(12,22,18,0.78)'
 
   return (
@@ -312,10 +210,6 @@ function LapisanHeks({
           style={{
             transformOrigin: `${h.x}px ${h.y}px`,
             animationDelay: `${(jeda + 0.5 + i * 0.085).toFixed(2)}s`,
-            // Potret komparasi dipotret dari dekat, dan delapan belas heksagon
-            // seukuran itu pada 0,68 menutup seluruh jalannya dengan satu
-            // blok hijau - terlihat begitu di potret. Isinya diturunkan; tepi
-            // legapnya yang tetap menandai "yang ini".
             ...(rute ? { fillOpacity: 0.36 } : null),
           }}
         />
@@ -398,11 +292,6 @@ function Potret({ d, jeda = 0, rute }: { d: KartuGerbang; jeda?: number; rute?: 
       <div className="g-bento-masuk absolute inset-0">
       <div className="g-bento-media-isi absolute inset-0">
       <img
-        // `BASE_URL`, BUKAN garis miring di depan. Terbitan GitHub Pages
-        // disajikan di /loconomics/, jadi jalur berakar seperti `/kartu/...`
-        // menunjuk ke akar domain dan pulang 404 - keenam potret hilang tanpa
-        // satu pun galat JavaScript. Terukur di terbitan hidup 9 Sep 2026.
-        // Gaya basemap dan GeoJSON statis sudah memakai pola ini sejak awal.
         src={`${import.meta.env.BASE_URL}kartu/${berkas}.webp`}
         alt={label.peta(LAYER[d.layer].nama, d.kawasan)}
         /* Ukuran intrinsik ditulis supaya peramban menyediakan ruangnya sebelum
@@ -488,21 +377,6 @@ function KartuKeputusan({
     </div>
   )
 
-  /**
-   * Kartu komparasi memperlihatkan DUA peta, dipisah satu garis rambut.
-   *
-   * Sebelumnya ia satu potret seperti kelima kartu lain - kartu yang berbicara
-   * tentang membandingkan dua tempat sambil menunjukkan satu tempat. Sekarang
-   * bentuknya sendiri yang mengatakannya, dan lapisan heksagonnya digeser
-   * setengah siklus supaya yang kiri menyala lebih dulu.
-   *
-   * HANYA PETA KIRI yang dipudarkan, dan pudarnya tipis (11 Sep 2026). Dulu
-   * kedua peta memakai scrim samping yang sama - 68% lebar - padahal peta
-   * kanan tidak bersentuhan dengan teks mana pun. Separuh kiri peta kanan
-   * tertutup kabut putih tanpa alasan, dan separuh kiri peta kiri ikut
-   * termakan. Dilaporkan pemilik repo: "setengah kirinya itu kayak kemakan
-   * transisi warna putih/hitam".
-   */
   const mediaBanding = pembanding && (
     <div className="relative flex min-h-[150px] flex-1 self-stretch overflow-hidden">
       <div className="g-bento-media g-bento-media-samping-tipis relative min-w-0 flex-1 overflow-hidden">
@@ -572,14 +446,6 @@ function KartuKeputusan({
 export default function BentoKeputusan({ onBuka }: { onBuka: (p: PilihanKawasan) => void }) {
   const grid = useRef<HTMLDivElement>(null)
 
-  /**
-   * Lapisan heksagon HANYA berjalan selagi kartunya terlihat.
-   *
-   * Enam animasi tak berujung yang terus memutar dirinya walaupun jauh di luar
-   * layar adalah persis yang membuat halaman ini dulu berat. Di sini
-   * `animation-play-state` dibalik lewat satu atribut, dan satu pengamat
-   * mengurus keenamnya.
-   */
   useEffect(() => {
     const n = grid.current
     if (!n) return
@@ -602,23 +468,10 @@ export default function BentoKeputusan({ onBuka }: { onBuka: (p: PilihanKawasan)
     return () => pengamat.disconnect()
   }, [])
 
-  /**
-   * Kedua potret kartu komparasi, dari manifesnya SENDIRI (`KARTU_BANDING`).
-   *
-   * Keduanya bergaya `terang` - alasan yang sama dengan pilihan `manggarai`
-   * sebelumnya: basemap yang berbeda terang di kedua sisi membuat kartunya
-   * terbaca sebagai satu kartu yang rusak, bukan dua peta yang dibandingkan.
-   * Kalau manifesnya belum memuat keduanya (skrip belum pernah dijalankan),
-   * kartu itu jatuh kembali ke satu potret biasa - bukan ke peta kosong.
-   */
   const pembanding =
     KARTU_BANDING.length >= 2 ? ([KARTU_BANDING[0], KARTU_BANDING[1]] as const) : undefined
 
   return (
-    // ENAM kolom, bukan tiga: kartu selebar setengah baris butuh 3, kolom
-    // sempit butuh 2, dan kartu penutup butuh 6. Tiga kolom memaksa ketiganya
-    // jadi ukuran yang sama - dan kartu seukuran itu persis yang membuat versi
-    // sebelumnya terbaca sebagai daftar, bukan sebagai susunan.
     <div ref={grid} className="g-bento-grid mx-auto grid w-full max-w-[76rem] gap-4 sm:grid-cols-2 lg:grid-cols-6">
       {KARTU_GERBANG.map((d) => {
         const k = BENTUK[d.berkas]

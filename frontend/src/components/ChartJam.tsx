@@ -1,19 +1,3 @@
-/**
- * Commuter Clock — pola transaksi per jam, 05:00–22:00.
- *
- * Namanya "clock", dan godaan untuk menggambarnya sebagai dial melingkar besar.
- * Bentuk itu ditolak: pekerjaan datanya adalah membandingkan besaran antarjam,
- * dan mata jauh lebih buruk membandingkan panjang busur daripada tinggi batang.
- * Nama fitur boleh puitis; bentuknya harus jujur.
- *
- * Captive dan choice rider adalah dua bagian dari SATU besaran yang sama —
- * jumlah transaksi pada jam itu. Jadi encoding yang benar bukan dua warna
- * kategorikal melainkan dua langkah dari satu rona: gelap dan terang. Memberi
- * keduanya warna berbeda akan menyiratkan dua hal yang tidak berhubungan.
- *
- * Jam yang angkanya berasal dari proksi diberi arsir, mengikuti aturan
- * tekstur = kami belum tahu.
- */
 
 import { useState } from 'react'
 

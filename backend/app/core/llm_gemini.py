@@ -1,48 +1,4 @@
-"""Adapter Gemini yang berbicara dalam bentuk Anthropic Messages.
-
-KENAPA ADAPTER, BUKAN MENULIS ULANG `api/ai.py`
-===============================================
-
-`app/api/ai.py` memuat loop agentik lengkap: delapan putaran, dua belas alat,
-penjaga tingkat akun, pencatatan biaya, dan penerjemahan aksi peta. Seluruhnya
-berbicara dalam bentuk Anthropic - `balasan.content` berisi blok bertipe
-`tool_use`, giliran berikutnya membawa `tool_result` ber-`tool_use_id`.
-
-Menulis ulang loop itu untuk bentuk Gemini berarti menyentuh satu-satunya
-berkas di backend yang membelanjakan uang sungguhan, pada malam sebelum
-pameran. Adapter ini menyentuh nol baris di sana.
-
-Docstring `llm.py` sudah menjanjikannya sejak awal: "Kalau penyedia diganti,
-hanya berkas ini yang berubah." Berkas ini yang menepatinya.
-
-YANG DITERJEMAHKAN, DAN KENAPA TIDAK SEKADAR MENGGANTI NAMA BIDANG
-==================================================================
-
-Tiga hal yang bentuknya benar-benar berbeda, bukan cuma beda nama:
-
-  SKEMA ALAT   Anthropic menerima JSON Schema apa adanya, termasuk tipe union
-               `["string", "null"]` dan bendera `strict`. Gemini MENOLAK
-               keduanya - ia memakai bagian kecil OpenAPI, tempat "boleh null"
-               dinyatakan `nullable: true` dan tipenya tunggal. Dua belas alat
-               di repo ini semuanya memakai tipe union, jadi tanpa pembersihan
-               ini tidak satu pun alat bisa didaftarkan.
-
-  ID PANGGILAN Anthropic memberi tiap panggilan alat sebuah `id`, dan hasilnya
-               dikembalikan dengan `tool_use_id` yang sama. Gemini tidak
-               memberi id sama sekali - hasil dicocokkan lewat NAMA fungsi.
-               Id di sini karena itu DIBUAT, dengan namanya disisipkan di
-               dalamnya, supaya ia bisa dibaca kembali saat hasilnya pulang.
-
-  PERAN        Anthropic memakai "assistant"; Gemini memakai "model".
-
-BIAYANYA BUKAN NOL, DAN ITU TETAP DICATAT
-=========================================
-
-`biaya_usd()` di `llm.py` menghitung dengan tarif Claude Opus. Untuk Gemini
-Flash tarifnya jauh lebih murah, dan angka yang salah di kolom biaya lebih
-buruk daripada angka yang kasar tetapi benar arahnya - plafon harian dihitung
-darinya. Tarifnya ikut di sini.
-"""
+"""Adapter Gemini yang berbicara dalam bentuk Anthropic Messages."""
 
 from __future__ import annotations
 
@@ -59,20 +15,6 @@ log = logging.getLogger(__name__)
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-#: Model cadangan, dicoba berurutan kalau yang diminta terus-menerus 503.
-#:
-#: Terukur 3 September 2026, dalam satu menit yang sama:
-#:      gemini-flash-latest       503
-#:      gemini-3-flash-preview    200
-#:      gemini-flash-lite-latest  200
-#:
-#: Jadi 503 di sini bukan "Gemini sedang padam" melainkan "MODEL ITU sedang
-#: penuh" - dan pindah model menyelesaikannya seketika. Untuk pameran, tempat
-#: yang menjalankan demo tidak bisa membuka log dan mengganti .env, kemampuan
-#: berpindah sendiri itu bedanya antara fitur yang jalan dan fitur yang mati
-#: di depan penonton.
-#:
-#: Yang diminta lewat LLM_MODEL selalu dicoba PERTAMA; daftar ini cuma jaring.
 MODEL_CADANGAN = ("gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-flash-latest")
 
 #: Sekat atas untuk menunggu di tengah satu permintaan. Orangnya sedang berdiri
@@ -82,17 +24,7 @@ TUNGGU_MAKS_DETIK = 10.0
 
 
 def lama_menunggu(rinci: str) -> float | None:
-    """Berapa detik yang DIMINTA penyedianya, dari balasan 429-nya sendiri.
-
-    Balasan Google membawa angkanya dua kali: sebagai `retryDelay` di dalam
-    `details[].RetryInfo`, dan sebagai kalimat "Please retry in 1.93s" di
-    pesannya. Yang kedua dibaca sebagai cadangan karena bentuk `details`
-    berubah-ubah antar versi API sementara kalimatnya sudah bertahan lama.
-
-    Kenapa ini penting sampai perlu fungsinya sendiri: tanpa membacanya, satu
-    hambatan 20-permintaan-per-menit tidak bisa dibedakan dari jatah harian yang
-    benar-benar habis - dan keduanya lalu diperlakukan sebagai yang terburuk.
-    """
+    """Berapa detik yang DIMINTA penyedianya, dari balasan 429-nya sendiri."""
     try:
         badan = json.loads(rinci)
     except (ValueError, TypeError):
@@ -109,14 +41,7 @@ def lama_menunggu(rinci: str) -> float | None:
 
 
 def batas_harian(rinci: str) -> bool:
-    """Apakah 429-nya jatah HARIAN, bukan hambatan per menit.
-
-    Dibaca dari `details[].violations[].quotaId` lebih dulu - diukur 13 Sep
-    2026, jatah harian bernama `GenerateRequestsPerDayPerProjectPerModel-FreeTier`
-    sementara KALIMAT pesannya tidak menyebut "per day" sama sekali. Membaca
-    kalimatnya saja membuat jatah harian yang habis tampil sebagai "coba lagi
-    dua detik lagi". Kalimat tetap diperiksa sebagai cadangan.
-    """
+    """Apakah 429-nya jatah HARIAN, bukan hambatan per menit."""
     try:
         badan = json.loads(rinci)
     except (ValueError, TypeError):
@@ -128,17 +53,8 @@ def batas_harian(rinci: str) -> bool:
     return "perday" in rinci.replace(" ", "").lower()
 
 
-#: Berapa lama pasangan (kunci, model) yang jatah HARIANNYA habis dilewati
-#: sebelum dicoba lagi. Sejam, bukan sampai tengah malam Pasifik: menghitung
-#: zona waktu Pasifik di Windows menuntut paket tzdata, dan satu 429 per jam
-#: yang cepat jauh lebih murah daripada satu dependensi baru.
 JEDA_HARIAN_DETIK = 60 * 60
 
-#: Pasangan (urutan kunci, model) -> kapan boleh dicoba lagi. Milik PROSES,
-#: bukan permintaan: yang membuat perpindahan kunci "cepat" adalah tidak
-#: mengetuk pintu yang sudah diketahui tertutup pada setiap pertanyaan.
-#: Kuncinya URUTAN, bukan nilai kunci API - nilai kunci tidak pernah boleh
-#: jadi bagian dari apa pun yang bisa masuk log.
 _dilewati_sampai: dict[tuple[int, str], float] = {}
 
 
@@ -162,19 +78,6 @@ KUNCI_SKEMA = {"type", "description", "properties", "required", "items", "enum",
 # ---------------------------------------------------------------------------
 
 
-#: `tanda` adalah `thoughtSignature` milik Gemini, dan ia WAJIB dikembalikan.
-#:
-#: Model Gemini baru menyertakan tanda tangan penalaran pada tiap part yang
-#: memuat panggilan fungsi. Saat percakapan dikirim ulang di putaran berikutnya,
-#: tanda itu harus ikut - kalau tidak, Google menolak dengan 400:
-#:
-#:     "Function call is missing a thought_signature in functionCall parts.
-#:      This is required for tools to work correctly."
-#:
-#: Ini yang membuat panggilan PERTAMA selalu berhasil sementara panggilan kedua
-#: - yang membawa hasil alat - selalu 400. Gejalanya menyesatkan: seolah skema
-#: alatnya salah, padahal skemanya benar dan yang hilang cuma satu string yang
-#: dibuang saat menerjemahkan balasan.
 @dataclass
 class BlokTeks:
     text: str
@@ -252,13 +155,7 @@ def _alat_gemini(tools: list[dict]) -> list[dict]:
 
 
 def _nama_dari_id(kode: str) -> str:
-    """Id dibuat sebagai `panggil-<n>-<nama>`; namanya dibaca kembali di sini.
-
-    Gemini mencocokkan hasil alat lewat NAMA, bukan id. Menyimpan peta id->nama
-    di dalam objek klien akan bekerja untuk satu percakapan lalu bocor ke
-    percakapan berikutnya begitu ada dua permintaan berbarengan - dan gagalnya
-    diam: satu pengguna menerima hasil alat milik pengguna lain.
-    """
+    """Id dibuat sebagai `panggil-<n>-<nama>`; namanya dibaca kembali di sini."""
     potong = kode.split("-", 2)
     return potong[2] if len(potong) == 3 else kode
 
@@ -319,11 +216,6 @@ def _isi_gemini(messages: list[dict]) -> list[dict]:
 
 class _Pesan:
     def __init__(self, kunci: str | list[str]) -> None:
-        # Beberapa kunci, dicoba berurutan. Kunci kedua ada untuk satu hal:
-        # jatah gratis Gemini dihitung PER PROYEK Google, jadi kunci dari
-        # proyek lain membawa jatahnya sendiri. Kunci kedua dari proyek yang
-        # SAMA tidak menambah apa pun - dan itu tidak bisa diketahui sebelum
-        # dicoba, jadi keduanya tetap dicoba.
         daftar = [kunci] if isinstance(kunci, str) else list(kunci)
         self._kunci = [k for k in daftar if k]
 
@@ -353,17 +245,6 @@ class _Pesan:
         # `dict.fromkeys` membuang duplikat tanpa mengacak urutannya.
         urutan = list(dict.fromkeys([model, *MODEL_CADANGAN]))
         muatan = json.dumps(badan).encode()
-        # Dicoba ulang untuk galat SEMENTARA saja.
-        #
-        # Terukur 3 September 2026: `gemini-flash-latest` mengembalikan 503
-        # berulang kali dalam hitungan detik, lalu melayani permintaan yang
-        # sama persis dengan sempurna. Itu kelebihan beban di sisi Google,
-        # bukan permintaan yang salah - dan satu 503 sesaat tidak boleh
-        # mematikan pertanyaan orang yang sedang berdiri di depan layar.
-        #
-        # 400 dan 403 TIDAK dicoba ulang: permintaan yang salah bentuk atau
-        # kunci yang ditolak akan salah lagi berapa kali pun diulang, dan
-        # mengulangnya cuma memperlambat pesan galat yang benar.
         data = None
         # Lamanya-menunggu TERKECIL yang diminta penyedianya, dan apakah SEMUA
         # penolakan menyebut jatah harian. Dipakai di bawah untuk memutuskan
@@ -470,10 +351,6 @@ class _Pesan:
             # jendela penuhnya yang panjang. Hambatan per menit: sependek yang
             # diminta penyedianya.
             tandai_penyedia_penuh(None if harian or minta_tunggu is None else minta_tunggu)
-            # Kalimat yang sampai ke layar menyebut lamanya, kalau tahu.
-            # "Coba lagi sebentar lagi" adalah kalimat yang sama untuk tunggu
-            # sepuluh detik dan untuk jatah harian yang habis - dan yang
-            # membacanya harus memutuskan hal yang berbeda di dua keadaan itu.
             from app.core.llm import sisa_penuh_detik
 
             sisa = sisa_penuh_detik()

@@ -1,26 +1,3 @@
-/**
- * Dari mana angkanya — daftar sumber, cakupan, dan batasannya.
- *
- * Berkas ini lahir dari satu permintaan yang terdengar sederhana: "buatkan
- * daftar data mana yang resmi". Yang membuatnya tidak sederhana adalah bahwa
- * daftar seperti itu cuma berguna kalau ia TIDAK BISA berbohong — dan daftar
- * sumber yang ditulis tangan selalu berbohong ke arah yang sama, yaitu ke arah
- * yang menguntungkan penulisnya. Enam angka yang pernah ditulis tangan di
- * `CLAUDE.md` untuk keperluan ini sudah meleset seluruhnya saat diperiksa.
- *
- * Maka seluruh isinya datang dari `lib/ringkasan-data.ts`, yang DIBUAT
- * `pipeline/s7_publish.py --ekspor` dari basis data yang sama dengan yang
- * menggambar petanya. Tidak ada satu pun angka di layar ini yang diketik
- * manusia. Kalau sebuah sumber berhenti mengisi apa pun, cakupannya di sini
- * turun tanpa ada yang perlu ingat menyuntingnya.
- *
- * Pemisahan RESMI dan PERKIRAAN adalah isi pokoknya, bukan hiasan. Sumber
- * berjenis `perkiraan` tidak pernah mengisi satu kolom pun di `hex_features`,
- * tidak pernah menghitung skor, dan tidak pernah mewarnai peta — dan satu-
- * satunya cara pembaca bisa mempercayai pernyataan itu adalah kalau yang
- * lemah ikut tercantum dengan namanya sendiri, bukan disembunyikan di dokumen
- * lain.
- */
 
 import { BATASAN, DIUKUR, RINGKASAN, SUMBER, TEMUAN } from '../lib/ringkasan-data'
 import { useTeks } from '../lib/bahasa'
