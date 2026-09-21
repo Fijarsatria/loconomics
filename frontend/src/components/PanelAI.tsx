@@ -424,16 +424,11 @@ function PanelAI({
   hexTerpilih,
   layerAktif,
   onKeLokasi,
-  tanyaAwal,
-  onTanyaDipakai,
 }: {
   kendali: KendaliPeta
   hexTerpilih: string | null
   layerAktif: NamaLayer
   onKeLokasi: (h3: string, kawasan?: string) => void
-  /** Pertanyaan yang dititipkan pil pintasan, dikirim begitu panel terbuka. */
-  tanyaAwal?: { teks: string; kunci: number } | null
-  onTanyaDipakai?: () => void
 }) {
   const t = useTeks(K)
   const { bahasa } = useBahasa()
@@ -639,22 +634,6 @@ function PanelAI({
   const dibatasi = status?.dibatasi === true
   const mati = terkunci || (status !== null && !status.siap && !dibatasi)
 
-  /**
-   * Pil pintasan menitipkan pertanyaannya lewat `tanyaAwal`; dikirim SEKALI,
-   * lalu ditandai sudah dipakai. Tidak dikirim selagi panelnya terkunci -
-   * pertanyaan yang terbang ke dinding Premium cuma membingungkan.
-   */
-  const kunciTerakhir = useRef<number | null>(null)
-  useEffect(() => {
-    if (!tanyaAwal || terkunci || memuat) return
-    if (kunciTerakhir.current === tanyaAwal.kunci) return
-    kunciTerakhir.current = tanyaAwal.kunci
-    onTanyaDipakai?.()
-    void kirim(tanyaAwal.teks)
-    // `kirim` sengaja tidak jadi dependensi: identitasnya berubah tiap render,
-    // dan efek ini cuma boleh berjalan saat kuncinya berganti.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tanyaAwal, terkunci, memuat, onTanyaDipakai])
   /** Ada sesuatu yang perlu diberitahukan - entah mati, entah cuma dibatasi. */
   const berkabar = status !== null && !status.siap
 

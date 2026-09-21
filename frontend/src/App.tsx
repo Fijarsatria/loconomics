@@ -46,7 +46,6 @@ import PanelAI from './components/PanelAI'
 import PanelInsight from './components/PanelInsight'
 const Gerbang = lazy(() => import('./components/Gerbang'))
 import { PERISTIWA_BUKA_PETA, TombolAkun, useSesi, type DetailBukaPeta } from './components/Akun'
-import { JENIS_USAHA } from './lib/jenis-usaha'
 import { useBahasa, useNamaZona, useTema, useTeks, type Bahasa } from './lib/bahasa'
 import { KabarPin, MenuKawasan } from './components/Premium'
 const Rekomendasi = lazy(() => import('./components/Rekomendasi'))
@@ -229,8 +228,6 @@ const K_APP: Record<
     bukaPanel: string
     bukaPanelDaftar: string
     bukaDaftar: string
-    pintasanJudul: string
-    pintasanBuka: (s: string) => string
     kembaliDaftar: string
     klikLain: string
     kosongkanBaki: string
@@ -292,8 +289,6 @@ const K_APP: Record<
     bukaPanel: 'Buka panel',
     bukaPanelDaftar: 'Buka panel daftar lokasi',
     bukaDaftar: 'Buka daftar lokasi',
-    pintasanJudul: 'Pintasan preferensi',
-    pintasanBuka: (s: string) => `Tanya Loconomics AI: ${s}`,
     kembaliDaftar: 'Kembali ke daftar lokasi',
     klikLain: 'Klik heksagon lain di peta untuk membandingkan',
     kosongkanBaki: 'Kosongkan baki',
@@ -364,8 +359,6 @@ const K_APP: Record<
     bukaPanel: 'Open panel',
     bukaPanelDaftar: 'Open the locations panel',
     bukaDaftar: 'Open the location list',
-    pintasanJudul: 'Preference shortcuts',
-    pintasanBuka: (s: string) => `Ask Loconomics AI: ${s}`,
     kembaliDaftar: 'Back to the list',
     klikLain: 'Click another hexagon on the map to compare',
     kosongkanBaki: 'Clear tray',
@@ -904,74 +897,8 @@ export default function App() {
     tersimpan,
   } = useSesi()
 
-  const pintasan = useMemo(() => {
-    const p = akun?.preferensi
-    const jenis = JENIS_USAHA.find((j) => j.nilai === p?.jenis_usaha)
-    const namaJenis = jenis ? (bahasa === 'en' ? jenis.labelEn : jenis.label) : null
-    const kw = p?.kawasan ?? KAWASAN_AWAL.nama
-    const budget = p?.budget_sewa_bulanan ?? null
-    const en = bahasa === 'en'
-    const rp = (n: number) => `Rp${n.toLocaleString(en ? 'en-US' : 'id-ID')}`
-    const keluar: { kunci: string; teks: string; glif?: string }[] = []
-
-    if (jenis && namaJenis) {
-      keluar.push({
-        kunci: 'jenis-kw',
-        teks: en ? `${namaJenis} business in ${kw}` : `Lokasi Usaha ${namaJenis} di ${kw}`,
-        glif: jenis.glif,
-      })
-    }
-    keluar.push({
-      kunci: 'spot',
-      teks: en ? `The best spots in ${kw}` : `Spot terbaik di ${kw}`,
-    })
-    if (budget) {
-      keluar.push({
-        kunci: 'anggaran',
-        teks: en
-          ? `Rent under ${rp(budget)} a month in ${kw}`
-          : `Sewa di bawah ${rp(budget)} di ${kw}`,
-      })
-    }
-    keluar.push({
-      kunci: 'umkm',
-      teks: en ? `Promising UMKM locations in ${kw}` : `Lokasi Usaha UMKM di ${kw}`,
-    })
-    keluar.push({
-      kunci: 'hidden',
-      teks: en
-        ? `Which places in ${kw} are good but still overlooked?`
-        : `Mana yang bagus tapi belum dilirik di ${kw}?`,
-    })
-    keluar.push({
-      kunci: 'jebakan',
-      teks: en
-        ? `Which places in ${kw} risk becoming a trap?`
-        : `Mana yang berisiko menjebak di ${kw}?`,
-    })
-    keluar.push({
-      kunci: 'sewa',
-      teks: en ? `What rent is fair in ${kw}?` : `Berapa harga sewa yang wajar di ${kw}?`,
-    })
-    keluar.push({
-      kunci: 'zona',
-      teks: en ? `Is a business allowed around ${kw}?` : `Boleh buka usaha di sekitar ${kw}?`,
-    })
-
-    const unik = new Map(keluar.map((x) => [x.teks, x]))
-    return [...unik.values()].slice(0, 8)
-  }, [akun, bahasa])
 
   const [kabarPin, setKabarPin] = useState<{ h3: string; baru: boolean; kunci: number } | null>(null)
-
-  /**
-   * Pertanyaan yang dititipkan pil pintasan ke Loconomics AI.
-   *
-   * `kunci` (bukan cuma teksnya) supaya menekan pil yang SAMA dua kali tetap
-   * mengirim pertanyaan lagi - teks yang sama persis tidak akan pernah dianggap
-   * perubahan state.
-   */
-  const [tanyaAI, setTanyaAI] = useState<{ teks: string; kunci: number } | null>(null)
 
   /** Daftar pin yang sedang tergambar - sumber kebenaran di sisi layar. */
   const pinKini = useRef<
@@ -2302,8 +2229,6 @@ export default function App() {
                       hexTerpilih={hexTerpilih}
                       layerAktif={layer}
                       onKeLokasi={keLokasiAI}
-                      tanyaAwal={tanyaAI}
-                      onTanyaDipakai={() => setTanyaAI(null)}
                     />
                   </div>
                 </div>
@@ -2383,38 +2308,6 @@ export default function App() {
                 {kendaliFilter('turun')}
               </div>
             )}
-          </div>
-
-          {/* --- Pintasan preferensi ------------------------------------------
-              Ponsel: baris pil di ATAS bilah bawah, berhenti sebelum kolom
-              kendali kanan, digeser mendatar kalau tidak muat. Desktop: deret
-              yang sama di kiri-atas, di bawah bilah. Keduanya disembunyikan
-              saat lembar terbuka - sama seperti pil filter dan atribusi. */}
-          <div
-            className="pintasan-pil pointer-events-none absolute left-2.5 z-30 flex max-lg:right-[4.5rem] flex-row gap-1.5 overflow-x-auto lg:left-4 lg:right-[27rem] lg:top-[6.25rem] lg:gap-2 lg:scroll-px-4"
-            role="list"
-            aria-label={t.pintasanJudul}
-          >
-            {pintasan.map((p) => (
-              <button
-                key={p.kunci}
-                role="listitem"
-                onClick={() => {
-                  setTanyaAI({ teks: p.teks, kunci: Date.now() })
-                  setTab('ai')
-                  setPanelTerbuka(true)
-                }}
-                title={t.pintasanBuka(p.teks)}
-                className="pil-pendar pointer-events-auto flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[12px] font-semibold text-ink transition-transform duration-200 ease-jelly hover:scale-[1.04] active:scale-95 lg:px-3.5 lg:py-2 lg:text-[12.5px]"
-              >
-                {p.glif && (
-                  <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden className="shrink-0 opacity-80">
-                    <path d={p.glif} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-                {p.teks}
-              </button>
-            ))}
           </div>
 
           {/* --- Lembar simulasi ------------------------------------------

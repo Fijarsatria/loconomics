@@ -10,6 +10,8 @@ const K = {
     judul: 'Metodologi & sumber data',
     isi: 'Setiap angka di Loconomics berasal dari sumber yang bisa Anda buka sendiri. Daftar ini dibangkitkan dari basis data yang sama dengan yang menggambar petanya — bukan diketik ulang.',
     diukur: (t: string) => `Diukur ${t}`,
+    petaKredit:
+      'Basemap dan citra: © MAPID Maps · © OpenStreetMap contributors · citra satelit dari hulu MAPID (© MapTiler / © Mapbox).',
     resmiJudul: 'Data resmi — diukur, dan boleh mengisi kolom',
     resmiRingkas: 'menghitung skor & keyakinan',
     resmiIsi: 'Yang di bawah ini menghitung skor, mewarnai peta, dan menentukan lencana keyakinan.',
@@ -88,6 +90,8 @@ const K = {
     judul: 'Methodology & data sources',
     isi: 'Every number in Loconomics comes from a source you can open yourself. This list is generated from the same database that draws the map — not retyped.',
     diukur: (t: string) => `Measured ${t}`,
+    petaKredit:
+      'Basemap and imagery: © MAPID Maps · © OpenStreetMap contributors · satellite imagery from MAPID’s upstream (© MapTiler / © Mapbox).',
     resmiJudul: 'Official data — measured, and allowed to fill columns',
     resmiRingkas: 'computes scores & confidence',
     resmiIsi: 'These compute the scores, colour the map, and set the confidence badges.',
@@ -365,6 +369,12 @@ export default function SumberData({ onTutup }: { onTutup?: () => void }) {
         </Lipat>
       </div>
 
+      {/* Kredit peta ikut di sini, bukan cuma di tombol "!" di peta: halaman
+          inilah yang dibuka orang yang ingin tahu dari mana angkanya, dan
+          basemap-nya sumber yang sama-sama dipakai seluruh layar. */}
+      <p className="border-t border-line/60 pt-3 text-[11.5px] leading-snug text-ink-3">
+        {t.petaKredit}
+      </p>
       <p className="text-[11.5px] leading-snug text-ink-3">{t.diukur(DIUKUR)}</p>
     </div>
   )

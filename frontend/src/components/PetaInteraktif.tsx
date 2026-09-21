@@ -877,6 +877,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           '<a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">© openrouteservice</a>',
           '<a href="https://www.worldpop.org/" target="_blank" rel="noreferrer">© WorldPop (CC BY 4.0)</a>',
           '<a href="https://gistaru.atrbpn.go.id/rdtrinteraktif/" target="_blank" rel="noreferrer">© RDTR ATR/BPN (GISTARU)</a>',
+          // Penunjuk ke tempat rinciannya: panel ini harus tetap ada di peta
+          // (ketentuan A.3), dan yang panjang - metodologi, cakupan, batasan -
+          // memang tempatnya di menu Pengaturan.
+          '<span class="loc-attr-catatan">Rincian metodologi &amp; cakupan: menu Pengaturan.<br>Methodology &amp; coverage: Settings menu.</span>',
         ],
       }),
       'bottom-left',
