@@ -2268,13 +2268,14 @@ input:focus-visible {
   /* Tombol (i) pindah ke KANAN-ATAS, di bawah bilah - simetris dengan pil
      Filter di kiri-atas (permintaan 21 Sep 2026). Tempat lama di kiri-bawah
      berdesakan dengan pil pintasan. */
-  /* Tombol sumber peta DIHAPUS di ponsel dan tablet (permintaan pemilik repo
-     21 Sep 2026): keterangannya sudah berkumpul di menu Pengaturan →
-     "Metodologi & sumber data", dan di layar sempit panelnya selalu bertabrakan
-     dengan pil Filter maupun kendali peta - yang tidak mungkin dinaikkan,
-     karena seluruh kendali peta duduk di bawah lapisan krom. */
+  /* Wadah kendali kiri-bawah kembali ke tempat asalnya. Isinya di ponsel cuma
+     skala jarak, dan itu memang disembunyikan di layar sempit. */
   .maplibregl-ctrl-bottom-left {
-    display: none !important;
+    top: auto !important;
+    bottom: calc(6rem + env(safe-area-inset-bottom)) !important;
+    left: 0.625rem !important;
+    right: auto !important;
+    display: block !important;
   }
   .maplibregl-ctrl-bottom-right {
     display: none !important;
@@ -2350,7 +2351,8 @@ input:focus-visible {
     transform: scale(1.08);
   }
   body:has(aside[data-buka='true']) .maplibregl-ctrl-bottom-left,
-  body:has(aside[data-buka='true']) .pil-filter {
+  body:has(aside[data-buka='true']) .pil-filter,
+  body:has(aside[data-buka='true']) .tombol-atribusi {
     opacity: 0;
     pointer-events: none;
   }
@@ -4670,17 +4672,11 @@ input:focus-visible {
    krom, jadi ia memang selalu menang. Di kiri-atas kini tidak ada apa pun:
    pil pintasan sudah dihapus, dan kartu sorot heksagon duduk di tengah.
    Yang digeser HANYA atribusinya; skala jarak ("300 m") tetap di kiri-bawah. */
-@media (min-width: 1024px) {
-  /* `!important` di sini bukan kelalaian: CSS MapLibre disuntikkan berkas yang
-     dimuat malas (PetaInteraktif), jadi ia SELALU sesudah index.css dan menang
-     pada spesifisitas yang sama - `.maplibregl-ctrl-attrib.maplibregl-compact`
-     memang menulis `position: relative` dengan bobot yang sama dengan selektor
-     ini. Tanpa `!important`, panelnya tetap duduk di kiri-bawah. */
-  .maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib {
-    position: fixed !important;
-    top: calc(4.75rem + env(safe-area-inset-top)) !important;
-    left: 0.625rem !important;
-    right: auto !important;
-    bottom: auto !important;
-  }
+/* Kontrol atribusi bawaan MapLibre DISEMBUNYIKAN seluruhnya - tombolnya maupun
+   panelnya. Yang tampil di layar adalah tombol "i" dan pop-up kita sendiri
+   (App.tsx), yang arah bukanya bisa diatur dan tombolnya tidak ikut berpindah.
+   Elemennya tetap ada di DOM beserta isinya: itu yang membuat ketentuan A.3
+   tetap terjaga dan `audit-prd` tetap menemukan 'MAPID Maps'. */
+.maplibregl-ctrl-attrib {
+  display: none !important;
 }

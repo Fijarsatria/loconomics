@@ -47,6 +47,7 @@ import {
 } from '../lib/layer-peta'
 
 import {
+  ATRIBUSI_PETA,
   ATRIBUSI_SATELIT,
   GAYA_BASEMAP,
   GLYPH_MAPID,
@@ -872,16 +873,17 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     m.addControl(
       new AttributionControl({
         compact: true,
-        customAttribution: [
-          '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>',
-          '<a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">© openrouteservice</a>',
-          '<a href="https://www.worldpop.org/" target="_blank" rel="noreferrer">© WorldPop (CC BY 4.0)</a>',
-          '<a href="https://gistaru.atrbpn.go.id/rdtrinteraktif/" target="_blank" rel="noreferrer">© RDTR ATR/BPN (GISTARU)</a>',
-          // Penunjuk ke tempat rinciannya: panel ini harus tetap ada di peta
-          // (ketentuan A.3), dan yang panjang - metodologi, cakupan, batasan -
-          // memang tempatnya di menu Pengaturan.
-          '<span class="loc-attr-catatan">Rincian metodologi &amp; cakupan: menu Pengaturan.<br>Methodology &amp; coverage: Settings menu.</span>',
-        ],
+        // Panelnya SENDIRI tidak pernah terlihat: yang tampil di layar adalah
+        // tombol "!" kita dan pop-upnya (App.tsx). Kontrol ini tetap dipasang
+        // supaya isinya ada di DOM - ketentuan A.3, dan `audit-prd` menjaga
+        // 'MAPID Maps' tetap ada di sana. Tiga sumber pertama dibawa gaya MAPID
+        // sendiri, jadi yang dikirim ke sini cuma yang belum disebut.
+        customAttribution: ATRIBUSI_PETA.filter((a) => !a.dariGaya).map(
+          (a) =>
+            `<a href="${a.url}" target="_blank" rel="noreferrer">© ${a.nama}${
+              a.lisensi ? ` (${a.lisensi})` : ''
+            }</a>`,
+        ),
       }),
       'bottom-left',
     )
@@ -2318,7 +2320,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           Tooltip yang menempel pada kursor menutupi heksagon di sebelahnya —
           persis yang sedang dibandingkan pengguna. */}
       {sorot && (
-        <div className="kaca pop pointer-events-none absolute left-1/2 top-[8.75rem] z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-full px-5 py-2.5 max-lg:top-[4.5rem] max-lg:gap-2 max-lg:px-3 max-lg:py-1.5 lg:top-[9.25rem]">
+        <div className="kaca pop pointer-events-none absolute left-1/2 top-[8.75rem] z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-full px-5 py-2.5 max-lg:top-[4.5rem] max-lg:gap-2 max-lg:px-3 max-lg:py-1.5 lg:top-[5.75rem]">
           <p className="papan tabular text-[26px] leading-none max-lg:text-[17px]">
             {sorot.opportunity_score?.toFixed(0) ?? '—'}
           </p>

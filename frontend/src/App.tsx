@@ -19,6 +19,7 @@ import {
   KAWASAN_PILOT,
   KUADRAN,
   SEMUA_KAWASAN,
+  ATRIBUSI_PETA,
   URUTAN_KUADRAN,
   LAYER,
   frasaKawasan,
@@ -228,6 +229,8 @@ const K_APP: Record<
     bukaPanel: string
     bukaPanelDaftar: string
     bukaDaftar: string
+    atribusiJudul: string
+    atribusiCatatan: string
     kembaliDaftar: string
     klikLain: string
     kosongkanBaki: string
@@ -289,6 +292,9 @@ const K_APP: Record<
     bukaPanel: 'Buka panel',
     bukaPanelDaftar: 'Buka panel daftar lokasi',
     bukaDaftar: 'Buka daftar lokasi',
+    atribusiJudul: 'Sumber peta',
+    atribusiCatatan:
+      'Rincian metodologi, cakupan, dan batasannya ada di menu Pengaturan → “Metodologi & sumber data”.',
     kembaliDaftar: 'Kembali ke daftar lokasi',
     klikLain: 'Klik heksagon lain di peta untuk membandingkan',
     kosongkanBaki: 'Kosongkan baki',
@@ -359,6 +365,9 @@ const K_APP: Record<
     bukaPanel: 'Open panel',
     bukaPanelDaftar: 'Open the locations panel',
     bukaDaftar: 'Open the location list',
+    atribusiJudul: 'Map sources',
+    atribusiCatatan:
+      'Methodology, coverage, and their limits live in the Settings menu → “Methodology & data sources”.',
     kembaliDaftar: 'Back to the list',
     klikLain: 'Click another hexagon on the map to compare',
     kosongkanBaki: 'Clear tray',
@@ -714,6 +723,8 @@ export default function App() {
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
   const [kuadranPenuh, setKuadranPenuh] = useState(false)
   const [sumberTerbuka, setSumberTerbuka] = useState(false)
+  /** Pop-up "sumber peta": pengganti panel bawaan MapLibre yang menganga. */
+  const [atribusiTerbuka, setAtribusiTerbuka] = useState(false)
 
   /** Penanda "sedang menutup" untuk dua dialog di atas peta; elemennya ditahan
    *  terpasang selama animasinya, jadi menutupnya tidak lagi hilang seketika. */
@@ -1381,6 +1392,24 @@ export default function App() {
     },
     [tab, panelTerbuka],
   )
+
+  /** Pop-up sumber peta: tutup lewat ketukan di luar atau Escape. */
+  const atribusiRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!atribusiTerbuka) return
+    const luar = (e: MouseEvent) => {
+      if (!atribusiRef.current?.contains(e.target as Node)) setAtribusiTerbuka(false)
+    }
+    const kunci = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAtribusiTerbuka(false)
+    }
+    document.addEventListener('mousedown', luar)
+    document.addEventListener('keydown', kunci)
+    return () => {
+      document.removeEventListener('mousedown', luar)
+      document.removeEventListener('keydown', kunci)
+    }
+  }, [atribusiTerbuka])
 
   useEffect(() => {
     if (!filterTerbuka) return
@@ -2308,6 +2337,58 @@ export default function App() {
                 {kendaliFilter('turun')}
               </div>
             )}
+          </div>
+
+          {/* --- Sumber peta (tombol "!") ------------------------------------
+              Pop-up MILIK KITA, bukan panel bawaan MapLibre. Panel bawaan itu
+              (a) menganga terus karena MapLibre menambahkan sendiri kelas
+              `compact-show`, (b) duduk di kiri-bawah tempat kendali peta, jadi
+              ia menutupi kompas, dan (c) tombolnya ikut bergerak ke atas
+              sehingga susah ditutup. Di sini arah bukanya bisa diatur: ponsel
+              ke ATAS (tidak ada ruang ke kanan), desktop memanjang ke KANAN.
+              Kontrol MapLibre-nya tetap terpasang dan tersembunyi - isinya
+              wajib ada di DOM (ketentuan A.3, dijaga `audit-prd`). */}
+          <div
+            ref={atribusiRef}
+            className="tombol-atribusi pointer-events-none absolute bottom-[6rem] left-2.5 z-30 lg:bottom-auto lg:left-4 lg:top-[4.75rem]"
+          >
+            <div className="relative">
+              <button
+                onClick={() => setAtribusiTerbuka((v) => !v)}
+                aria-expanded={atribusiTerbuka}
+                title={t.atribusiJudul}
+                className={`pointer-events-auto grid h-10 w-10 cursor-pointer place-items-center rounded-full text-[13px] font-bold transition-all duration-200 ease-jelly hover:scale-[1.06] ${
+                  atribusiTerbuka
+                    ? 'kaca text-ink'
+                    : 'bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)]'
+                }`}
+              >
+                i
+              </button>
+              {atribusiTerbuka && (
+                <div className="kaca pop pointer-events-auto absolute bottom-full left-0 mb-2 w-[min(20rem,calc(100vw-1.5rem))] rounded-xl p-3.5 sm:bottom-0 sm:left-full sm:mb-0 sm:ml-2.5 lg:top-0 lg:bottom-auto">
+                  <p className="eyebrow mb-2">{t.atribusiJudul}</p>
+                  <ul className="flex flex-col gap-1">
+                    {ATRIBUSI_PETA.map((a) => (
+                      <li key={a.nama} className="text-[12px] leading-snug">
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-ink underline decoration-line-2 underline-offset-2 transition-colors hover:decoration-ink"
+                        >
+                          © {a.nama}
+                        </a>
+                        {a.lisensi && <span className="text-ink-3"> · {a.lisensi}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2.5 border-t border-line/70 pt-2 text-[11px] leading-snug text-ink-3">
+                    {t.atribusiCatatan}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* --- Lembar simulasi ------------------------------------------

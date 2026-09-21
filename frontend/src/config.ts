@@ -41,6 +41,28 @@ export const SUMBER_UBIN_MAPID = {
     '<a href="https://mapid.co.id/" target="_blank">&copy; MAPID Maps</a> <a href="https://www.openmaptiles.org/" target="_blank">&copy; OpenMapTiles</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
 }
 
+/**
+ * Sumber peta dan data yang wajib disebut di layar (ketentuan A.3).
+ *
+ * SATU sumber kebenaran untuk dua tempat: panel MapLibre yang tersembunyi
+ * (HTML-nya dibangkitkan dari sini) dan pop-up "!" milik kita sendiri. Tiga
+ * yang pertama sudah dibawa gaya MAPID di dalam berkasnya sendiri, jadi tidak
+ * diulang ke MapLibre - tetapi tetap didaftar di sini supaya pop-upnya lengkap.
+ */
+export const ATRIBUSI_PETA: { nama: string; url: string; lisensi?: string; dariGaya?: boolean }[] = [
+  { nama: 'MAPID Maps', url: 'https://mapid.co.id/', dariGaya: true },
+  { nama: 'OpenMapTiles', url: 'https://www.openmaptiles.org/', dariGaya: true },
+  {
+    nama: 'OpenStreetMap contributors',
+    url: 'https://www.openstreetmap.org/copyright',
+    lisensi: 'ODbL',
+    dariGaya: true,
+  },
+  { nama: 'openrouteservice', url: 'https://openrouteservice.org/' },
+  { nama: 'WorldPop', url: 'https://www.worldpop.org/', lisensi: 'CC BY 4.0' },
+  { nama: 'RDTR ATR/BPN', url: 'https://gistaru.atrbpn.go.id/rdtrinteraktif/', lisensi: 'GISTARU' },
+]
+
 export const ATRIBUSI_SATELIT =
   '<a href="https://mapid.co.id/" target="_blank">&copy; MAPID Maps</a> · Citra/Imagery <a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.mapbox.com/about/maps/" target="_blank">&copy; Mapbox</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>'
 
