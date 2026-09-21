@@ -2306,7 +2306,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           Tooltip yang menempel pada kursor menutupi heksagon di sebelahnya —
           persis yang sedang dibandingkan pengguna. */}
       {sorot && (
-        <div className="kaca pop pointer-events-none absolute left-1/2 top-[8.75rem] z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-full px-5 py-2.5 max-lg:top-[4.5rem] max-lg:gap-2 max-lg:px-3 max-lg:py-1.5 lg:top-[5.75rem]">
+        <div className="kaca pop pointer-events-none absolute left-1/2 top-[8.75rem] z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-full px-5 py-2.5 max-lg:top-[4.5rem] max-lg:gap-2 max-lg:px-3 max-lg:py-1.5 lg:top-[9.25rem]">
           <p className="papan tabular text-[26px] leading-none max-lg:text-[17px]">
             {sorot.opportunity_score?.toFixed(0) ?? '—'}
           </p>
@@ -2357,7 +2357,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           dipakai pil info layer beberapa baris di bawah untuk masalah yang
           persis sama, jadi keduanya sekarang sejajar dan sama-sama di bawah
           bilah atas. */}
-      <div className="pointer-events-none absolute left-4 top-[8.75rem] z-10 flex max-w-[calc(100%-2rem)] lg:top-[5.75rem] flex-col items-start gap-2 sm:max-w-[24rem]">
+      <div className="pointer-events-none absolute left-4 top-[8.75rem] z-10 flex max-w-[calc(100%-2rem)] flex-col items-start gap-2 sm:max-w-[24rem] lg:top-[9.25rem]">
         {/* --- Layer ini punya berapa data ---------------------------------
 
             Muncul HANYA kalau cakupannya di bawah separuh. Pemberitahuan yang

@@ -2215,57 +2215,49 @@ input:focus-visible {
      terasa kurang: CINCIN WARNA yang berputar (teal - ungu - pink - kuning,
      jadi warnanya tidak monoton) dan DENYUT yang jauh lebih cepat daripada
      versi pertama (1,6 dtk, bukan 3,2) supaya tombolnya terlihat hidup. */
+  /* Pendar tombol AI: BERNAFAS, bukan berputar.
+     Versi kedua memutar cincin warna, dan yang terbaca bukan "tombol ini
+     hidup" melainkan hiasan yang berputar-putar. Yang diminta: terang-padam
+     seperti benda yang menyala. Dua lapis - halo warna yang menguat lalu
+     meredup, dan tombolnya sendiri yang ikut sedikit membesar. */
   .ai-pendar {
     isolation: isolate;
-    box-shadow:
-      0 0 20px -2px rgb(45 232 192 / 0.65),
-      0 0 34px -6px rgb(124 92 255 / 0.6),
-      0 0 46px -10px rgb(244 114 182 / 0.5);
-  }
-  .ai-pendar::before,
-  .ai-pendar::after {
-    content: '';
-    position: absolute;
-    border-radius: inherit;
-    pointer-events: none;
+    animation: ai-hidup-tombol 1700ms ease-in-out infinite;
   }
   .ai-pendar::before {
-    inset: -3px;
-    background: conic-gradient(
-      from 0deg,
-      #2de8c0,
-      #22d3ee,
-      #7c5cff,
-      #f472b6,
-      #fbbf24,
-      #2de8c0
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      circle at 50% 50%,
+      rgb(45 232 192 / 0.9) 0%,
+      rgb(124 92 255 / 0.55) 52%,
+      rgb(244 114 182 / 0.4) 72%,
+      transparent 78%
     );
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
-    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
-    animation: ai-putar 4200ms linear infinite;
+    filter: blur(7px);
+    animation: ai-hidup-halo 1700ms ease-in-out infinite;
   }
-  .ai-pendar::after {
-    inset: -2px;
-    border: 2px solid var(--color-gem);
-    opacity: 0;
-    animation: ai-denyut 1600ms ease-out infinite;
-  }
-  @keyframes ai-putar {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  @keyframes ai-denyut {
-    0% {
-      opacity: 0.85;
-      transform: scale(1);
-    }
-    70% {
-      opacity: 0;
-      transform: scale(1.22);
-    }
+  @keyframes ai-hidup-halo {
+    0%,
     100% {
-      opacity: 0;
+      opacity: 0.4;
+      transform: scale(0.97);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+  }
+  @keyframes ai-hidup-tombol {
+    0%,
+    100% {
+      filter: brightness(1);
+    }
+    50% {
+      filter: brightness(1.12);
     }
   }
   /* Pintasan preferensi: satu baris pil di ATAS bilah bawah, berhenti sebelum
@@ -2273,14 +2265,10 @@ input:focus-visible {
      Angkanya melewati piringan tombol AI (yang naik ±8,5rem dari dasar). */
   .pintasan-pil {
     bottom: calc(8.15rem + env(safe-area-inset-bottom));
-    scrollbar-width: none;
     /* Tepi KANAN memudar, bukan terpotong: pil yang berhenti tepat sebelum
        kolom kendali kanan tidak boleh terlihat seperti terpotong paksa. */
     -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 2.5rem), transparent 100%);
     mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 2.5rem), transparent 100%);
-  }
-  .pintasan-pil::-webkit-scrollbar {
-    display: none;
   }
 
   /* Lembar Simulasi menempel DASAR layar, jadi keadaan penuhnya tidak dikurangi
@@ -4647,19 +4635,27 @@ input:focus-visible {
   border: 1px solid transparent;
   background:
     linear-gradient(
-        color-mix(in srgb, var(--color-surface) 80%, transparent),
-        color-mix(in srgb, var(--color-surface) 80%, transparent)
+        color-mix(in srgb, var(--color-surface) 84%, transparent),
+        color-mix(in srgb, var(--color-surface) 84%, transparent)
       )
       padding-box,
     linear-gradient(96deg, #2de8c0 0%, #7c5cff 55%, #f472b6 100%) border-box;
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   backdrop-filter: blur(18px) saturate(160%);
-  box-shadow:
-    0 6px 18px -10px rgb(22 33 28 / 0.55),
-    0 0 16px -8px rgb(45 232 192 / 0.6);
+  /* Bayangan WARNA pada pil DIHAPUS: tepinya cukup bergradien, dan pendar yang
+     melimpah keluar membuat warnanya bocor ke bilah bawah (keluhan pemilik repo
+     21 Sep 2026). Yang tersisa cuma bayangan netral yang tipis. */
+  box-shadow: 0 4px 12px -8px rgb(22 33 28 / 0.5);
 }
 .pil-pendar:hover {
-  box-shadow:
-    0 8px 22px -10px rgb(22 33 28 / 0.6),
-    0 0 22px -6px rgb(124 92 255 / 0.7);
+  box-shadow: 0 6px 16px -8px rgb(22 33 28 / 0.55);
+}
+
+/* Baris pil digeser mendatar, tetapi TANPA batang gulir yang terlihat - di
+   desktop batangnya muncul sebagai garis abu di bawah pilnya. */
+.pintasan-pil {
+  scrollbar-width: none;
+}
+.pintasan-pil::-webkit-scrollbar {
+  display: none;
 }

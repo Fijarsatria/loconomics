@@ -2320,8 +2320,6 @@ export default function App() {
                 aria-label={t.bukaPanel}
               >
                 {URUTAN_NAV.map((k) => {
-                  const label =
-                    k === 'rekomendasi' ? t.navUntuk : k === 'daftar' ? t.navLokasi : t.navAI
                   const nama =
                     k === 'rekomendasi' ? t.tabRekomendasi : k === 'daftar' ? t.tabDaftar : t.tabAI
                   return (
@@ -2333,10 +2331,9 @@ export default function App() {
                       }}
                       aria-label={`${t.bukaPanel}: ${nama}`}
                       title={nama}
-                      className="kaca pop flex w-[3.75rem] cursor-pointer flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+                      className="kaca pop grid h-14 w-14 cursor-pointer place-items-center rounded-full text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
                     >
-                      <IkonNav k={k} ukuran={26} />
-                      <span className="text-[10.5px] font-semibold leading-none">{label}</span>
+                      <IkonNav k={k} ukuran={24} />
                     </button>
                   )
                 })}
