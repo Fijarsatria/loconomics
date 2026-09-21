@@ -15,6 +15,8 @@ import {
   ScaleControl,
   type ExpressionSpecification,
   type GeoJSONSource,
+  type MapLayerMouseEvent,
+  type MapLayerTouchEvent,
   type Point,
   type StyleSpecification,
 } from 'maplibre-gl'
@@ -925,22 +927,69 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       onPilihBlokRef.current(h3b)
     })
 
+    // Simpan lokasi = TAHAN di dalam heksagon yang sudah terbuka, bukan klik
+    // sekali. Versi klik-sekali membuat satu gerakan punya dua arti, dan di
+    // layar sentuh ia bertabrakan dengan seret peta: tersimpan berulang, dan
+    // sering meleset karena ketukan pertama sudah memindahkan petanya.
+    const TAHAN_MS = 460
+    let jamTahan = 0
+    let asalTahan: Point | null = null
+    let abaikanKlik = 0
+    const batalTahan = () => {
+      if (jamTahan) window.clearTimeout(jamTahan)
+      jamTahan = 0
+      asalTahan = null
+    }
+    const mulaiTahan = (e: MapLayerMouseEvent | MapLayerTouchEvent) => {
+      const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
+      if (!onTaruhPinRef.current || !p?.h3_index) return
+      if (p.h3_index !== terpilihRef.current || adaBlokDi(e.point)) return
+      asalTahan = e.point
+      const h3 = p.h3_index
+      const { lat, lng } = e.lngLat
+      jamTahan = window.setTimeout(() => {
+        jamTahan = 0
+        if (!asalTahan) return
+        asalTahan = null
+        abaikanKlik = Date.now()
+        onTaruhPinRef.current?.(h3, lat, lng)
+      }, TAHAN_MS)
+    }
+    // Jari yang bergeser sedikit pun membatalkan: yang menahan sambil menyeret
+    // peta sedang menggeser peta, bukan menandai tempat.
+    const jagaTahan = (e: { point: Point }) => {
+      if (asalTahan && Math.hypot(e.point.x - asalTahan.x, e.point.y - asalTahan.y) > 9) {
+        batalTahan()
+      }
+    }
+    m.on('mousedown', L_ISI, mulaiTahan)
+    m.on('touchstart', L_ISI, mulaiTahan)
+    m.on('mouseup', () => batalTahan())
+    m.on('touchend', () => batalTahan())
+    m.on('touchcancel', () => batalTahan())
+    m.on('dragstart', () => batalTahan())
+    m.on('movestart', () => batalTahan())
+    m.on('mousemove', jagaTahan)
+    m.on('touchmove', jagaTahan)
+
     m.on('click', L_ISI, (e) => {
       if (adaBlokDi(e.point)) return
-      const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
-      // Di dalam heksagon yang SEDANG terbuka: taruh titik favorit di sana.
-      // Di luarnya: pilih heksagon itu, seperti biasa.
-      if (p?.h3_index && p.h3_index === terpilihRef.current && onTaruhPinRef.current) {
-        onTaruhPinRef.current(p.h3_index, e.lngLat.lat, e.lngLat.lng)
+      // Klik yang menyusul tahanan yang sudah tersimpan jangan memilih ulang -
+      // apalagi menerbangkan peta ke heksagon yang sama. Berbatas waktu: kalau
+      // ternyata tidak ada klik yang menyusul, jangan sampai klik berikutnya
+      // yang sungguhan ikut dimakan.
+      if (abaikanKlik && Date.now() - abaikanKlik < 900) {
+        abaikanKlik = 0
         return
       }
+      const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
       onPilihRef.current(p?.h3_index ?? null)
     })
     m.on('mousemove', L_ISI, (e) => {
       const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
       setSorot(p ?? null)
       // Kursor bidik di heksagon yang terbuka: satu-satunya petunjuk bahwa
-      // klik di sini menaruh titik, bukan memilih.
+      // TAHAN di sini menaruh titik, bukan memilih.
       m.getCanvas().style.cursor =
         p?.h3_index && p.h3_index === terpilihRef.current && onTaruhPinRef.current && !adaBlokDi(e.point)
           ? 'crosshair'

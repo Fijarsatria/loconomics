@@ -2350,7 +2350,7 @@ export default function App() {
               wajib ada di DOM (ketentuan A.3, dijaga `audit-prd`). */}
           <div
             ref={atribusiRef}
-            className="tombol-atribusi pointer-events-none absolute bottom-[6rem] left-2.5 z-30 lg:bottom-[0.625rem] lg:left-[5rem]"
+            className="tombol-atribusi pointer-events-none absolute bottom-[6rem] left-2.5 z-30 lg:bottom-[0.625rem] lg:left-[0.625rem]"
           >
             <div className="relative">
               <button
@@ -2366,7 +2366,7 @@ export default function App() {
                 i
               </button>
               {atribusiTerbuka && (
-                <div className="kaca pop pointer-events-auto absolute bottom-full left-0 mb-2 w-[min(19rem,calc(100vw-1.5rem))] rounded-xl p-3.5 sm:bottom-0 sm:left-full sm:mb-0 sm:ml-2.5">
+                <div className="kaca pop pointer-events-auto absolute bottom-full left-0 mb-2 w-[min(19rem,calc(100vw-1.5rem))] rounded-xl p-3.5 sm:bottom-0 sm:left-full sm:mb-0 sm:ml-2.5 lg:left-[6.5rem] lg:ml-0">
                   <p className="eyebrow mb-2">{t.atribusiJudul}</p>
                   <ul className="flex flex-col gap-1">
                     {ATRIBUSI_PETA.map((a) => (

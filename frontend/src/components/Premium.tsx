@@ -65,7 +65,7 @@ const K = {
     titikTengah: 'Titik tengah heksagon',
     pinTersimpan: 'Titik favorit tersimpan',
     pinDipindah: 'Titik favorit dipindah ke sini',
-    pinPetunjuk: 'Klik titik lain di dalam heksagon ini untuk memindahkannya.',
+    pinPetunjuk: 'Tahan (tekan lama) titik lain di dalam heksagon ini untuk memindahkannya.',
     batalkan: 'Batalkan',
     tutupKabar: 'Tutup',
     ketSimpan:
@@ -174,7 +174,7 @@ const K = {
     titikTengah: 'Hexagon centre',
     pinTersimpan: 'Favourite spot saved',
     pinDipindah: 'Favourite spot moved here',
-    pinPetunjuk: 'Click another spot inside this hexagon to move it.',
+    pinPetunjuk: 'Press and hold another spot inside this hexagon to move it.',
     batalkan: 'Undo',
     tutupKabar: 'Close',
     ketSimpan:

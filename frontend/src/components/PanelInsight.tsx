@@ -63,7 +63,7 @@ const K = {
     simpanMasuk: 'Buat akun dulu untuk menyimpan lokasi.',
     simpanPremium: 'Menyimpan dan memantau lokasi bagian dari Loconomics Premium.',
     simpanOke:
-      'Lokasi tersimpan dan skornya dibekukan. Klik titik mana pun di dalam heksagon ini untuk menandai tempat persisnya.',
+      'Lokasi tersimpan dan skornya dibekukan. Tahan (tekan lama) di titik mana pun dalam heksagon ini untuk menandai tempat persisnya.',
     simpanGagal: 'Gagal menambahkan pantauan.',
     hapusOke: 'Lokasi dihapus dari simpanan.',
     hapusGagal: 'Gagal menghapus lokasi dari simpanan.',
@@ -224,7 +224,7 @@ const K = {
     simpanMasuk: 'Create an account first to save locations.',
     simpanPremium: 'Saving and watching locations is part of Loconomics Premium.',
     simpanOke:
-      'Location saved and its score frozen. Click any spot inside this hexagon to mark the exact place.',
+      'Location saved and its score frozen. Press and hold any spot inside this hexagon to mark the exact place.',
     simpanGagal: 'Could not add it to your watchlist.',
     hapusOke: 'Location removed from your saved list.',
     hapusGagal: 'Could not remove the location.',

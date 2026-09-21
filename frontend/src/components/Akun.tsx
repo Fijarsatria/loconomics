@@ -1483,10 +1483,11 @@ export function TombolAkun({
         className={
           bulat
             ? `grid h-10 w-10 cursor-pointer place-items-center rounded-full text-[13px] font-bold transition-all duration-300 ease-jelly hover:scale-[1.08] ${
-                // Pelanggan berpendar teal - sinyal status yang ikut terbawa ke
-                // bar bawah, tempat label "Premium" tidak lagi muat.
+                // Pelanggan memakai efek warna tombol sign up (`.g-catalyst`):
+                // cincin gradien teal-ungu yang berdenyut. Label "Premium" tidak
+                // lagi muat di bar bawah, jadi warnanya yang membawa statusnya.
                 premium
-                  ? 'bg-gem text-white shadow-[0_0_22px_-2px_rgb(45_232_192/0.7)] hover:shadow-[0_0_32px_-2px_rgb(45_232_192/0.95)]'
+                  ? 'g-catalyst'
                   : 'kaca-tebal text-ink shadow-[0_0_16px_-6px_rgb(22_33_28/0.45)] hover:bg-ink hover:text-surface hover:shadow-[0_0_24px_-6px_rgb(22_33_28/0.75)]'
               } ${buka ? 'ring-2 ring-ink/60' : ''}`
             : `flex cursor-pointer items-center gap-2 rounded-full border py-1 pl-1 pr-3 transition-all duration-300 ease-jelly hover:scale-[1.03] ${
@@ -1498,7 +1499,11 @@ export function TombolAkun({
         title={akun.nama_pengguna}
       >
         {bulat ? (
-          inisial
+          premium ? (
+            <span className="g-catalyst-teks">{inisial}</span>
+          ) : (
+            inisial
+          )
         ) : (
           <>
             <span

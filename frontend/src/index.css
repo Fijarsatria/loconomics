@@ -1755,6 +1755,8 @@ input:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .ai-cincin::before,
+  .ai-pendar::before,
+  .ai-pendar::after,
   .ai-spin,
   .ai-ombak span {
     animation: none;
@@ -2189,6 +2191,14 @@ input:focus-visible {
   align-items: flex-end;
   gap: 8px;
 }
+/* Desktop: tombol (i) menempati pojok paling kiri, skala jarak digeser ke
+   kanannya - jadi urutannya "(i)" dulu, baru "300 m" (permintaan pemilik repo
+   21 Sep 2026). 42px = lebar tombol (24) + celahnya. */
+@media (min-width: 1024px) {
+  .maplibregl-ctrl-scale {
+    margin-left: 2.625rem !important;
+  }
+}
 @media (max-width: 1023.98px) {
   .nav-peta {
     bottom: calc(0.625rem + env(safe-area-inset-bottom));
@@ -2221,36 +2231,56 @@ input:focus-visible {
      kabur yang menutupi sekelilingnya dicabut - warnanya sempat membasahi isi
      dan sekitarnya. Yang tersisa: cincin bergradien 3,5px di tepinya, plus
      pendar tipis ke LUAR saja. */
+  /* Gaya yang SAMA dengan tombol sign up (`.g-catalyst`): cincin gradien
+     teal-ungu di tepinya, pendar dua warna ke luar, dan satu cincin tipis yang
+     melebar lalu memudar. Versi sebelumnya memakai pelangi penuh, dan itu
+     terbaca sebagai hiasan - bukan sebagai ajakan yang sama dengan tombol
+     daftar (permintaan pemilik repo 21 Sep 2026). */
   .ai-pendar {
     isolation: isolate;
-    box-shadow: 0 0 14px -4px rgb(45 232 192 / 0.55);
+    box-shadow:
+      0 0 22px -6px rgb(45 232 192 / 0.5),
+      0 0 30px -8px rgb(124 92 255 / 0.42);
   }
   .ai-pendar::before {
     content: '';
     position: absolute;
-    inset: -3.5px;
+    inset: -2.5px;
     border-radius: inherit;
     pointer-events: none;
-    background: conic-gradient(
-      from 200deg,
-      #2de8c0,
-      #22d3ee,
-      #7c5cff,
-      #f472b6,
-      #fbbf24,
-      #2de8c0
-    );
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
-    mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
-    animation: ai-cincin-hidup 1700ms ease-in-out infinite;
+    background: conic-gradient(from 140deg, #2de8c0, #7c5cff 48%, #5bf3d3 76%, #2de8c0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    animation: ai-cincin-hidup 3400ms ease-out infinite;
+  }
+  .ai-pendar::after {
+    content: '';
+    position: absolute;
+    inset: -1.5px;
+    border-radius: inherit;
+    border: 1.5px solid #2de8c0;
+    opacity: 0;
+    pointer-events: none;
+    animation: ai-cincin-melebar 3400ms ease-out infinite;
   }
   @keyframes ai-cincin-hidup {
     0%,
     100% {
-      opacity: 0.5;
+      opacity: 0.62;
     }
     50% {
       opacity: 1;
+    }
+  }
+  @keyframes ai-cincin-melebar {
+    0% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    62%,
+    100% {
+      opacity: 0;
+      transform: scale(1.11);
     }
   }
 
