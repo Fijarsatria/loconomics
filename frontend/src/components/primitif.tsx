@@ -1337,7 +1337,11 @@ export function PilihBasemap<T extends string>({
         aria-expanded={buka}
         aria-label={`Basemap: ${terpilih?.label ?? ''}. ${buka ? 'Tutup' : 'Buka'} pilihan`}
         title={`Basemap — ${terpilih?.label ?? ''}`}
-        className={`grid h-12 w-12 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-full transition-transform duration-200 ease-jelly hover:scale-[1.06] ${
+        // `kaca` di sini BUKAN untuk latarnya (ditutup swatch) melainkan untuk
+        // BORDERNYA: bahan yang sama dengan bilah atas dan bilah bawah, jadi
+        // cincin luarnya sewarna dengan tepi kedua bilah itu di tema mana pun
+        // (permintaan 19 Sep 2026). Latarnya tidak terlihat, hanya tepinya.
+        className={`kaca grid h-12 w-12 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-full transition-transform duration-200 ease-jelly hover:scale-[1.06] ${
           buka ? 'ring-2 ring-ink/70' : ''
         }`}
         style={{ boxShadow: '0 12px 30px -12px rgb(22 33 28 / 0.65)' }}

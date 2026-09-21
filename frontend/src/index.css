@@ -2991,6 +2991,36 @@ input:focus-visible {
   pointer-events: none;
 }
 
+/* Popover yang memanjang ke SAMPING dari tombolnya (pil Filter di ponsel).
+   Arahnya MENDATAR, bukan turun: benda yang keluar dari tombol di sebelah
+   kirinya harus terlihat DATANG DARI tombol itu, dan gerak turun-dari-atas
+   terbaca sebagai sesuatu yang jatuh dari bilah atas (permintaan pemilik repo
+   19 Sep 2026: "dari button filternya atau dari kiri ke kanan"). */
+@keyframes pop-kiri {
+  from {
+    opacity: 0;
+    transform: translateX(-12px) scaleX(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop-kiri-tutup {
+  to {
+    opacity: 0;
+    transform: translateX(-10px) scaleX(0.94);
+  }
+}
+.pop-dari-kiri {
+  transform-origin: left center;
+  animation: pop-kiri 300ms var(--ease-liquid) both;
+}
+.pop-dari-kiri[data-menutup='1'] {
+  animation: pop-kiri-tutup 180ms cubic-bezier(0.4, 0, 0.7, 1) both;
+  pointer-events: none;
+}
+
 /* Untuk yang digantung DI ATAS pemicunya: kartu konsultan AI, Kompas. Arah
    geraknya dibalik - ia naik, bukan turun - karena benda yang muncul harus
    terlihat berangkat dari tombol yang memanggilnya, bukan dari arah mana pun. */
@@ -3135,18 +3165,26 @@ input:focus-visible {
   .lembar-peta {
     bottom: calc(6rem + env(safe-area-inset-bottom));
   }
+  /* TIGA tingkat tinggi lembar, dan seretan mendarat di salah satunya
+     (permintaan 19 Sep 2026: "bisa seperempat, bisa setengah, dan bisa full 1
+     layar"). Sebelumnya cuma ada 45svh dan PENUH. Angka-angka ini SAMA dengan
+     `tinggiTingkat()` di App.tsx - di sana dipakai untuk menghitung snap, di
+     sini untuk menggambar; kalau salah satunya diubah, snap-nya mendarat di
+     tempat yang tidak digambar. */
+  .lembar-peta[data-tingkat='ringkas'] {
+    height: 26svh;
+  }
+  .lembar-peta[data-tingkat='setengah'] {
+    height: 50svh;
+  }
+  .lembar-peta[data-tingkat='penuh'] {
+    height: calc(100svh - 10.5rem - env(safe-area-inset-bottom));
+  }
   /* Pil filter pindah ke KIRI-ATAS, sebaris dengan tumpukan basemap di kanan
      (keduanya `4.75rem` = 12px di bawah bilah atas). */
   .pil-filter {
     top: calc(4.75rem + env(safe-area-inset-top));
     bottom: auto;
-  }
-  /* Keadaan PENUH: menyeret lembar naik membuatnya setinggi layar, berhenti
-     tepat di bawah bilah atas (4.5rem) - bukan 76svh yang menyisakan celah.
-     Satu angka dengan bilah atas dan `bottom` di atas, jadi tidak bisa
-     berselisih. */
-  .lembar-peta[data-penuh='true'] {
-    height: calc(100svh - 10.5rem - env(safe-area-inset-bottom));
   }
   /* Lembar Simulasi menempel DASAR layar, jadi keadaan penuhnya tidak dikurangi
      `bottom`: setinggi layar dikurangi tinggi bilah atas saja. */
@@ -3270,6 +3308,22 @@ input:focus-visible {
      soal kendali peta, dan sebaliknya. */
   body:has(aside[data-buka='true']) .maplibregl-ctrl-bottom-left,
   body:has(aside[data-buka='true']) .pil-filter {
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* Hal yang sama untuk lembar Simulasi. Lembar itu setinggi 74svh dan bertemu
+     tombol lokasi tersimpan / kompas / basemap di tepi kanan - karena bahannya
+     kaca (88%), tombol-tombol itu MASIH TERLIHAT menembusnya dan terbaca
+     sebagai tombol yang menimpa silang penutupnya (laporan pemilik repo 19 Sep
+     2026). Lembar Simulasi memang lembar terdepan selama ia terbuka, jadi
+     kendali peta menyingkir - dengan transisi, bukan lenyap seketika. */
+  .tumpukan-peta,
+  .pil-filter,
+  .maplibregl-ctrl-bottom-left {
+    transition: opacity 220ms var(--ease-liquid);
+  }
+  body:has(.simulasi-sheet) .tumpukan-peta,
+  body:has(.simulasi-sheet) .maplibregl-ctrl-bottom-left {
     opacity: 0;
     pointer-events: none;
   }

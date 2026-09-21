@@ -142,6 +142,16 @@ const L_RUTE = 'rute-utama'
 const L_RUTE_TEKS = 'rute-teks'
 /** Kepala bercahaya di ujung rute yang sedang tumbuh. Hanya ada selama animasi. */
 const L_RUTE_KEPALA = 'rute-kepala'
+/**
+ * Aliran rute yang TERUS berjalan sesudah rutenya selesai digambar.
+ *
+ * Sumber TERPISAH, dan itu yang penting: sumbernya cuma memuat beberapa TITIK
+ * (<= 4 - satu per rute utama), jadi menulis ulang tiap bingkai harganya tetap
+ * kecil. Versi lama menulis ulang SELURUH GeoJSON rute tiap bingkai, dan itu
+ * yang membuatnya dibuang dulu (lihat catatan "Arus" di efek rute).
+ */
+const SUMBER_ALIR = 'rute-alir'
+const L_ALIR = 'rute-alir-titik'
 /** Pin titik awal (pusat heksagon) dan tujuan (simpul). */
 const L_UJUNG = 'rute-ujung'
 
@@ -158,6 +168,12 @@ const GAMBAR_MS = 1700
 const UNDAK_MS = 240
 /** Garis mulai tumbuh sesudah kamera mulai mundur, bukan bersamaan. */
 const TUNDA_RUTE_MS = 380
+/** Satu perjalanan penuh titik aliran, dari pusat heksagon ke simpulnya. */
+const ALIR_MS = 2400
+/** Jeda antar-langkah aliran. 16 langkah/detik - sama dengan alasan jam arus
+ *  yang lama: mata sudah membacanya halus, dan rAF 60x berarti empat kali
+ *  ongkos untuk gerak yang sama. */
+const ALIR_LANGKAH_MS = 62
 
 /**
  * Panjang kumulatif tiap simpul sebuah polyline, dalam derajat.
@@ -2312,6 +2328,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] } as never,
         })
+        // Sumber titik kecil untuk aliran rute yang terus berjalan. Titiknya
+        // digerakkan efek rute sesudah garisnya selesai tumbuh.
+        m.addSource(SUMBER_ALIR, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] } as never,
+        })
 
         // Bayangan rute. TIGA hal yang harus benar bersamaan, dan versi
         // sebelumnya salah di ketiganya sekaligus - hasilnya dilaporkan sebagai
@@ -2493,6 +2515,22 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             'circle-stroke-color': ['get', 'warna'],
             'circle-stroke-width': 3,
             'circle-blur': 0.15,
+          },
+        })
+
+        // Aliran yang berjalan MENUJU lokasi. Digambar di atas kepala animasi
+        // dan di bawah pin, jadi ia menempel pada garisnya tanpa menutup
+        // penanda asal/tujuan.
+        m.addLayer({
+          id: L_ALIR,
+          type: 'circle',
+          source: SUMBER_ALIR,
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 3.2, 16, 5.4, 18, 6.4],
+            'circle-color': ['get', 'warna'],
+            'circle-stroke-color': 'rgba(255,255,255,0.92)',
+            'circle-stroke-width': 1.6,
+            'circle-blur': 0.1,
           },
         })
 
@@ -3055,6 +3093,14 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       rafRute.current = 0
     }
     berhenti()
+    const alirSumber = m.getSource(SUMBER_ALIR) as GeoJSONSource | undefined
+    let idAlir = 0
+    const hentiAlir = () => {
+      if (idAlir) window.clearInterval(idAlir)
+      idAlir = 0
+      alirSumber?.setData(kosong as never)
+    }
+    hentiAlir()
 
     // Saat membandingkan, TIAP heksagon cuma menyumbang rute utamanya. Empat
     // heksagon dengan alternatifnya masing-masing berarti dua belas garis di
@@ -3231,11 +3277,43 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         rafRute.current = requestAnimationFrame(maju)
       } else {
         sumber.setData(garis((j) => j.k, true) as never)
+        mulaiAlir()
       }
+    }
+    /**
+     * Arus yang berjalan TERUS sesudah rutenya utuh: satu titik meluncur dari
+     * pusat heksagon ke simpulnya, berulang - "menuju lokasi".
+     *
+     * Sumbernya `SUMBER_ALIR`, yang cuma memuat beberapa titik, jadi menulis
+     * ulangnya tiap langkah tetap murah. Yang MAHAL adalah menulis ulang
+     * GeoJSON rute yang panjang, dan itulah yang dulu membuat arus ini dibuang.
+     * Titiknya TIDAK menutupi rute: ia berjalan di atas garis yang sudah utuh,
+     * jadi arahnya terbaca tanpa mengubah gambar rutenya sendiri.
+     */
+    const mulaiAlir = () => {
+      const utama = jalur.filter((j) => j.utama)
+      if (!alirSumber || !utama.length) return
+      const t1 = performance.now()
+      const langkah = () => {
+        const t = ((performance.now() - t1) % ALIR_MS) / ALIR_MS
+        alirSumber.setData({
+          type: 'FeatureCollection',
+          features: utama.map((j) => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: titikPada(j.k, j.kum, t) },
+            properties: { warna: j.warna },
+          })),
+        } as never)
+      }
+      langkah()
+      idAlir = window.setInterval(langkah, ALIR_LANGKAH_MS)
     }
     rafRute.current = requestAnimationFrame(maju)
 
-    return () => berhenti()
+    return () => {
+      berhenti()
+      hentiAlir()
+    }
     // `profilNyata` ikut jadi dep: sesudah kunci ingatan memuat profil,
     // berganti moda ke profil yang SUDAH tersimpan tidak lagi mengubah
     // identitas `konteks` maupun `kunciKonteks` - dan tanpa dep ini petanya

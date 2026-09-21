@@ -293,6 +293,61 @@ const AWAL = bacaTampilan()
 const URUTAN_TAB = ['rekomendasi', 'daftar', 'ai'] as const
 type NamaTab = (typeof URUTAN_TAB)[number]
 
+/**
+ * Urutan butir di BILAH BAWAH ponsel - sengaja BEDA dari `URUTAN_TAB`.
+ *
+ * Permintaan pemilik repo 19 Sep 2026: Loconomics AI pindah ke tombol besar di
+ * tengah, dan Daftar lokasi menempati slot yang tadi dipakai AI. Urutan tab
+ * panel TIDAK ikut berubah: `URUTAN_TAB` juga yang menentukan dari sisi mana
+ * isi tab masuk, dan menukarnya akan membalik arah animasi tabnya.
+ */
+const URUTAN_NAV: readonly NamaTab[] = ['rekomendasi', 'ai', 'daftar']
+
+/**
+ * Ikon bilah bawah, satu tempat untuk ketiganya.
+ *
+ * Sebelumnya "Daftar lokasi" dan "Loconomics AI" memakai gambar yang SAMA
+ * (gelembung obrolan) - dua butir berbeda dengan ikon identik, dan itu terbaca
+ * sebagai salah tempel. Sekarang tiap tab punya gambarnya sendiri.
+ */
+function IkonNav({ k, ukuran }: { k: NamaTab; ukuran: number }) {
+  const p = {
+    width: ukuran,
+    height: ukuran,
+    viewBox: '0 0 20 20',
+    'aria-hidden': true,
+    className: 'shrink-0',
+  }
+  if (k === 'ai')
+    return (
+      <svg {...p}>
+        <path d="M10 2.4l1.9 4.6 4.6 1.9-4.6 1.9L10 15.4l-1.9-4.6L3.5 8.9l4.6-1.9z" fill="currentColor" />
+        <path d="M4 14.2l.8 1.9 1.9.8-1.9.8L4 19.6l-.8-1.9-1.9-.8 1.9-.8z" fill="currentColor" opacity="0.75" />
+      </svg>
+    )
+  if (k === 'rekomendasi')
+    return (
+      <svg {...p}>
+        <circle cx="8" cy="6.6" r="3" fill="currentColor" />
+        <path d="M2.8 16.6a5.2 5.2 0 0 1 10.4 0Z" fill="currentColor" />
+        <path d="M15.6 2.8l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="currentColor" />
+      </svg>
+    )
+  return (
+    <svg {...p}>
+      <circle cx="4.6" cy="5.4" r="1.7" fill="currentColor" />
+      <circle cx="4.6" cy="10" r="1.7" fill="currentColor" />
+      <circle cx="4.6" cy="14.6" r="1.7" fill="currentColor" />
+      <path
+        d="M9 5.4h7M9 10h7M9 14.6h4.6"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Pencarian
 // ---------------------------------------------------------------------------
@@ -966,21 +1021,20 @@ export default function App() {
     () => typeof window === 'undefined' || window.matchMedia('(min-width: 1024px)').matches,
   )
   /**
-   * Lembar bawah ponsel sedang mekar penuh atau tidak. Di desktop tidak
-   * dipakai sama sekali (panel jadi kolom tetap).
-   */
-  const [lembarPenuh, setLembarPenuh] = useState(false)
-  /**
-   * Lembar ponsel dalam keadaan RINGKAS: seperempat layar, bukan 45%.
+   * TIGA tinggi tetap lembar bawah ponsel, dan seretan mendarat di salah
+   * satunya - bukan lagi dua keadaan (ringkas/penuh).
    *
-   * Dipakai saat yang ditampilkan adalah DETAIL satu heksagon (tab Daftar
-   * dengan heksagon terpilih) - kepala detailnya sendiri sudah memuat nama
-   * kawasan, skor, dan kuadrannya, dan menutup hampir setengah peta untuk itu
-   * membalik gunanya: yang perlu dilihat justru petanya. Sisanya tetap
-   * terjangkau dengan menyeret lembar ke atas, jadi yang ringkas bukan "lebih
-   * sedikit", melainkan "mulai dari yang penting" (permintaan 19 Sep 2026).
+   * Permintaan pemilik repo 19 Sep 2026: "bisa seperempat, bisa setengah, dan
+   * bisa full 1 layar", dan berhenti di tengah. Sebelumnya cuma ada 26svh dan
+   * 45svh, dan seretannya hanya memilih salah satu dari dua itu.
+   *
+   * Yang jadi tinggi AWAL pun mengikuti isinya: detail satu heksagon dibuka
+   * RINGKAS (kepalanya sudah memuat nama, skor, dan kuadran - yang perlu
+   * terlihat justru petanya), daftar dibuka SETENGAH. Sesudah itu orangnya
+   * bebas menyeretnya ke mana saja, dan pilihannya bertahan sampai ia memilih
+   * heksagon lain.
    */
-  const detailRingkas = panelTerbuka && tab === 'daftar' && Boolean(hexTerpilih) && !lembarPenuh
+  const [tingkat, setTingkat] = useState<'ringkas' | 'setengah' | 'penuh'>('setengah')
   /* Titik sentuh awal + penanda "barusan digeser", supaya klik setelah seretan
      tidak ikut membalik keadaan. Lihat penangan di kepala lembar. */
   const mulaiLembar = useRef(0)
@@ -1004,8 +1058,8 @@ export default function App() {
   const tinggiAwal = useRef(0)
   const tinggiKini = useRef(0)
 
-  /** Tinggi keadaan PENUH, dihitung sama dengan `.lembar-peta[data-penuh]`. */
-  const tinggiPenuhLembar = () => {
+  /** Tinggi keadaan PENUH, dihitung sama dengan `.lembar-peta[data-tingkat='penuh']`. */
+  const tinggiPenuhLembar = useCallback(() => {
     const probe = document.createElement('div')
     probe.style.cssText =
       'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom)'
@@ -1013,7 +1067,36 @@ export default function App() {
     const safe = probe.getBoundingClientRect().height
     probe.remove()
     return window.innerHeight - 10.5 * 16 - safe
-  }
+  }, [])
+
+  /** Tinggi tiap tingkat dalam piksel - satu sumber untuk snap dan tabrakan. */
+  const tinggiTingkat = useCallback(
+    (t: 'ringkas' | 'setengah' | 'penuh') =>
+      t === 'ringkas'
+        ? window.innerHeight * 0.26
+        : t === 'setengah'
+          ? window.innerHeight * 0.5
+          : tinggiPenuhLembar(),
+    [tinggiPenuhLembar],
+  )
+
+  /**
+   * Tinggi AWAL mengikuti apa yang baru dibuka: detail satu heksagon dibuka
+   * RINGKAS (seperempat), daftar dibuka SETENGAH. Sesudah itu pilihan orangnya
+   * yang berlaku sampai isinya berganti.
+   */
+  const isiLembar = useRef('')
+  useEffect(() => {
+    if (!panelTerbuka) {
+      isiLembar.current = ''
+      return
+    }
+    const isi = `${tab}:${tab === 'daftar' && hexTerpilih ? 'detail' : 'daftar'}`
+    if (isi === isiLembar.current) return
+    isiLembar.current = isi
+    setTingkat(tab === 'daftar' && hexTerpilih ? 'ringkas' : 'setengah')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelTerbuka, tab, hexTerpilih])
 
   const seretMulai = (e: React.PointerEvent<HTMLButtonElement>) => {
     const el = lembarRef.current
@@ -1044,19 +1127,31 @@ export default function App() {
       setTinggiSeret(null)
       return
     }
-    const ringkas = window.innerHeight * 0.45
-    const penuh = tinggiPenuhLembar()
     const h = tinggiKini.current
+    const titik: Array<'ringkas' | 'setengah' | 'penuh'> = ['ringkas', 'setengah', 'penuh']
+    const ringkas = tinggiTingkat('ringkas')
     if (h < ringkas - 40) {
       // Seret turun cukup jauh: tutup dengan gerakan, bukan lenyap seketika.
-      setTinggiSeret(penuh * 0.04)
+      setTinggiSeret(tinggiPenuhLembar() * 0.04)
       window.setTimeout(() => {
         setTinggiSeret(null)
         setPanelTerbuka(false)
       }, 240)
       return
     }
-    setLembarPenuh(h > (ringkas + penuh) / 2)
+    // Snap ke tingkat dengan SELISIH TERKECIL, bukan ke ambang tetap: dengan
+    // tiga titik, ambang tetap akan membuat seretan dari penuh ke setengah
+    // mendarat di tempat yang tidak dipilih siapa pun.
+    let terdekat: 'ringkas' | 'setengah' | 'penuh' = 'setengah'
+    let selisih = Infinity
+    for (const t of titik) {
+      const d = Math.abs(tinggiTingkat(t) - h)
+      if (d < selisih) {
+        selisih = d
+        terdekat = t
+      }
+    }
+    setTingkat(terdekat)
     setTinggiSeret(null)
   }
   /**
@@ -2138,12 +2233,17 @@ export default function App() {
             {/* Logo Loconomics. Di desktop sudah tampil; di ponsel kini JUGA
                 tampil - identitas produk tumbuh di bilah atas yang tinggal satu
                 baris, persis seperti aplikasi peta. */}
-            <div className="flex shrink-0 items-baseline gap-2.5">
-              {/* Di ponsel logonya dikecilkan dua kali: 20px membuat
+            <div className="flex shrink-0 items-center gap-2 max-lg:gap-1.5">
+              {/* Markah heksagon di KIRI teksnya, sama seperti di halaman
+                  pembuka - jadi bilah atas peta dan bilah gerbang memakai
+                  identitas yang persis sama (permintaan 19 Sep 2026). */}
+              <Markah kelas="h-[19px] w-[19px] shrink-0 max-lg:h-[16px] max-lg:w-[16px]" />
+              {/* Di ponsel logonya dikecilkan tiga kali: 20px membuat
                   "Loconomics" memakan hampir separuh bilah sampai pencariannya
-                  tercekik, dan 16px masih dilaporkan "kegedean" (19 Sep 2026).
-                  14px masih terbaca sebagai papan nama tanpa berebut ruang. */}
-              <PapanNama teks="Loconomics" kelas="text-[20px] leading-none max-lg:!text-[14px]" />
+                  tercekik, 16px masih dilaporkan "kegedean", dan 14px pun masih
+                  ketat sesudah markahnya ikut berdiri di sebelahnya. 12,5px
+                  masih terbaca sebagai papan nama tanpa berebut ruang. */}
+              <PapanNama teks="Loconomics" kelas="text-[20px] leading-none max-lg:!text-[12.5px]" />
             </div>
 
             <Cari
@@ -2538,18 +2638,15 @@ export default function App() {
                 seluruh gunanya peta ini.
 
                 Di ponsel lembar duduk DI ATAS bilah navigasi (`bottom: 6rem` +
-                safe-area, lihat `.lembar-peta`) dan tingginya dua keadaan:
-                ringkas (45svh) dan PENUH - menyeret naik membuatnya setinggi
-                layar penuh, berhenti tepat di bawah bilah atas
-                (`calc(100svh - 10.5rem)`, lihat `.lembar-peta[data-penuh]`). */}
+                safe-area, lihat `.lembar-peta`) dan TIGA tingkatnya ditulis di
+                css (`[data-tingkat]`): ringkas 26svh, setengah 50svh, penuh
+                `calc(100svh - 10.5rem)` - berhenti tepat di bawah bilah atas. */}
             <aside
               ref={lembarRef}
               data-buka={panelTerbuka}
-              data-penuh={lembarPenuh}
+              data-tingkat={tingkat}
               aria-hidden={!panelTerbuka}
-              className={`kolom-geser lembar-peta melayang pointer-events-auto absolute inset-x-0 min-h-0 max-lg:z-40 max-lg:rounded-t-2xl max-lg:shadow-[0_-18px_50px_-24px_rgb(10_20_16/0.55)] max-lg:transition-[height] max-lg:duration-300 max-lg:ease-liquid lg:static lg:h-auto ${
-                detailRingkas ? 'max-lg:h-[26svh]' : 'max-lg:h-[45svh]'
-              }`}
+              className="kolom-geser lembar-peta melayang pointer-events-auto absolute inset-x-0 min-h-0 max-lg:z-40 max-lg:rounded-t-2xl max-lg:shadow-[0_-18px_50px_-24px_rgb(10_20_16/0.55)] max-lg:transition-[height] max-lg:duration-300 max-lg:ease-liquid lg:static lg:h-auto"
               style={
                 {
                   '--lebar-kolom': panelTerbuka ? '25rem' : '0rem',
@@ -2658,13 +2755,18 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       if (geserLembar.current) return
-                      setLembarPenuh((v) => !v)
+                      // Ketukan (tanpa seret) menaikkan SATU tingkat, lalu
+                      // berputar kembali ke ringkas - supaya ketiga tingginya
+                      // terjangkau tanpa harus menyeret sama sekali.
+                      setTingkat((v) =>
+                        v === 'ringkas' ? 'setengah' : v === 'setengah' ? 'penuh' : 'ringkas',
+                      )
                     }}
                     onPointerDown={seretMulai}
                     onPointerMove={seretGerak}
                     onPointerUp={seretLepas}
                     onPointerCancel={seretLepas}
-                    aria-label={lembarPenuh ? t.lipat : 'Perbesar panel'}
+                    aria-label={tingkat === 'penuh' ? t.lipat : 'Perbesar panel'}
                     className="flex min-w-0 flex-1 cursor-grab touch-none flex-col items-center gap-1 py-1.5 active:cursor-grabbing lg:hidden"
                   >
                     <span className="h-1.5 w-10 rounded-full bg-line-2" />
@@ -2877,7 +2979,7 @@ export default function App() {
             {filterTampil && (
               <div
                 data-menutup={filterMenutup ? '1' : undefined}
-                className="kendali-peta pop pop-kanan kaca pointer-events-auto flex min-w-0 max-w-[calc(100vw_-_7.5rem)] flex-row items-center gap-1 rounded-full p-1.5"
+                className="kendali-peta pop-dari-kiri kaca pointer-events-auto flex min-w-0 max-w-[calc(100vw_-_7.5rem)] flex-row items-center gap-1 rounded-full p-1.5"
               >
                 {kendaliFilter('turun')}
               </div>
@@ -2965,9 +3067,9 @@ export default function App() {
                 <span className="text-[10.5px] font-semibold leading-none">{t.navBeranda}</span>
               </button>
 
-              {URUTAN_TAB.map((k) => {
+              {URUTAN_NAV.map((k) => {
                 const aktif = panelTerbuka && tab === k
-                const pusat = k === 'daftar'
+                const pusat = k === 'ai'
                 const label =
                   k === 'rekomendasi' ? t.navUntuk : k === 'daftar' ? t.navLokasi : t.navAI
                 const nama =
@@ -2980,7 +3082,14 @@ export default function App() {
                     aria-label={nama}
                     className={
                       pusat
-                        ? 'relative flex min-w-0 flex-1 cursor-pointer items-center justify-center'
+                        ? // SLOT-nya selebar tombolnya sendiri (`w-[6.75rem]`,
+                          // bukan `flex-1`). Dengan slot 1fr yang cuma ~72px, dua
+                          // butir di kiri-kanannya duduk DI BAWAH tepi bulatan
+                          // 96px itu dan terbaca berdesakan; melebarkannya
+                          // menggeser "Untuk Anda" ke kiri dan "Daftar lokasi"
+                          // ke kanan sampai keduanya sejajar tepi tombolnya
+                          // (permintaan 19 Sep 2026).
+                          'relative flex w-[6.75rem] shrink-0 cursor-pointer items-center justify-center'
                         : `flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-1.5 transition-colors ${
                             // TANPA `bg-surface-2`: yang menandai butir aktif
                             // adalah pendarnya di IKON (`.sinar-ikon`), bukan
@@ -2989,61 +3098,39 @@ export default function App() {
                           }`
                     }
                   >
-                    {/* "Lokasi": bulatan BESAR seperti FAB MAPID, tanpa label.
-                        `absolute` + `bottom-[-0.375rem]` (6px = `py-1.5` bilah)
-                        menaruh sisi BAWAHNYA rata dengan dasar bilah, sementara
-                        atasnya menembus keluar - persis yang diminta 19 Sep 2026:
-                        "bulatnya melewati bar, tapi di sisi bawahnya pas dengan
-                        sisi bar bawah". Sebelumnya `-translate-y-3.5` membuatnya
-                        melayang di TENGAH bilah, bukan tumbuh darinya. */}
+                    {/* Loconomics AI: bulatan BESAR seperti FAB MAPID, tanpa
+                        label, dan bilahnya ikut MEMBESAR di tengah - piringan
+                        kaca seukuran ~1,2x bulatannya dipasang di belakangnya
+                        dengan bahan yang SAMA dengan bilah (`kaca`), jadi
+                        keduanya terbaca sebagai satu bilah yang melingkar di
+                        tengah, bukan tombol yang menempel di atas bilah.
+
+                        `bottom-[-0.375rem]` (6px = `py-1.5` bilah) menaruh sisi
+                        BAWAHnya rata dengan dasar bilah, sementara atasnya
+                        menembus keluar. Warna tombolnya `bg-ink text-surface`:
+                        token itu memang TERBALIK mengikuti tema - gelap di mode
+                        terang, terang di mode gelap - jadi ia selalu mencolok
+                        tanpa satu pun aturan tema tambahan. */}
                     {pusat ? (
-                      <span
-                        className={`absolute bottom-[-0.375rem] left-1/2 grid h-24 w-24 -translate-x-1/2 place-items-center rounded-full bg-ink text-surface shadow-[0_16px_32px_-10px_rgb(22_33_28/0.9)] transition-transform duration-300 ease-jelly ${
-                          aktif ? 'scale-105' : ''
-                        }`}
-                      >
-                        <svg width={32} height={32} viewBox="0 0 20 20" aria-hidden className="shrink-0">
-                          <circle cx="5" cy="5" r="1.6" fill="currentColor" />
-                          <circle cx="5" cy="10" r="1.6" fill="currentColor" />
-                          <circle cx="5" cy="15" r="1.6" fill="currentColor" />
-                          <path
-                            d="M9.2 5h6.3M9.2 10h6.3M9.2 15h4.4"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                          />
-                        </svg>
+                      <span className="absolute bottom-[-0.375rem] left-1/2 grid -translate-x-1/2 place-items-center">
+                        <span
+                          aria-hidden
+                          className="kaca absolute h-[7.5rem] w-[7.5rem] rounded-full"
+                        />
+                        <span
+                          className={`relative grid h-24 w-24 place-items-center rounded-full bg-ink text-surface shadow-[0_18px_36px_-12px_rgb(22_33_28/0.95)] ring-1 ring-line transition-transform duration-300 ease-jelly ${
+                            aktif ? 'scale-105' : ''
+                          }`}
+                        >
+                          <IkonNav k={k} ukuran={34} />
+                        </span>
                       </span>
                     ) : (
                       <>
                         <span
                           className={`isolate relative grid place-items-center ${aktif ? 'sinar-ikon' : ''}`}
                         >
-                        <svg width={26} height={26} viewBox="0 0 20 20" aria-hidden className="shrink-0">
-                          {k === 'rekomendasi' ? (
-                            <>
-                              <path
-                                d="M10 2.4l1.9 4.6 4.6 1.9-4.6 1.9L10 15.4l-1.9-4.6L3.5 8.9l4.6-1.9z"
-                                fill="currentColor"
-                              />
-                              <path
-                                d="M4 14.2l.8 1.9 1.9.8-1.9.8L4 19.6l-.8-1.9-1.9-.8 1.9-.8z"
-                                fill="currentColor"
-                                opacity="0.75"
-                              />
-                            </>
-                          ) : (
-                            <>
-                              <path
-                                d="M3.2 9.4c0-3.1 3-5.6 6.8-5.6s6.8 2.5 6.8 5.6-3 5.6-6.8 5.6c-.7 0-1.4-.1-2-.2L4 16.2l1-2.5c-1.1-1-1.8-2.6-1.8-4.3z"
-                                fill="currentColor"
-                              />
-                              <circle cx="7.4" cy="9.4" r="1" fill="var(--color-surface, #fff)" />
-                              <circle cx="10" cy="9.4" r="1" fill="var(--color-surface, #fff)" />
-                              <circle cx="12.6" cy="9.4" r="1" fill="var(--color-surface, #fff)" />
-                            </>
-                          )}
-                        </svg>
+                          <IkonNav k={k} ukuran={29} />
                         </span>
                         <span className="text-[10.5px] font-semibold leading-none">{label}</span>
                       </>

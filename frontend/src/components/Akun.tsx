@@ -1635,8 +1635,8 @@ export function TombolAkun({
                 // Pelanggan berpendar teal - sinyal status yang ikut terbawa ke
                 // bar bawah, tempat label "Premium" tidak lagi muat.
                 premium
-                  ? 'bg-gem text-white shadow-[0_0_18px_-2px_rgb(45_232_192/0.6)] hover:shadow-[0_0_26px_-2px_rgb(45_232_192/0.85)]'
-                  : 'kaca-tebal text-ink hover:bg-ink hover:text-surface hover:shadow-[0_10px_28px_-10px_rgb(22_33_28/0.55)]'
+                  ? 'bg-gem text-white shadow-[0_0_22px_-2px_rgb(45_232_192/0.7)] hover:shadow-[0_0_32px_-2px_rgb(45_232_192/0.95)]'
+                  : 'kaca-tebal text-ink shadow-[0_0_16px_-6px_rgb(22_33_28/0.45)] hover:bg-ink hover:text-surface hover:shadow-[0_0_24px_-6px_rgb(22_33_28/0.75)]'
               } ${buka ? 'ring-2 ring-ink/60' : ''}`
             : `flex cursor-pointer items-center gap-2 rounded-full border py-1 pl-1 pr-3 transition-all duration-300 ease-jelly hover:scale-[1.03] ${
                 buka
