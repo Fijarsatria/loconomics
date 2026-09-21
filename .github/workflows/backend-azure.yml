@@ -202,7 +202,13 @@ jobs:
       - name: Periksa terbitan yang baru naik
         env:
           URL: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
-          ASAL: https://fijarsatria.github.io
+          # Asal yang benar-benar dipakai, dan DUA-duanya diperiksa. Yang pertama
+          # domain utama (CNAME panitia MAPID, sejak 21 Sep 2026); yang kedua
+          # terbitan GitHub Pages yang tetap hidup. Memeriksa satu saja pernah
+          # cukup, dan itulah kenapa kegagalannya hanya muncul di peramban: asal
+          # yang lupa didaftarkan tetap lolos dari `curl` tanpa header Origin.
+          ASAL: https://loconomics.mapid.io
+          ASAL_CADANGAN: https://fijarsatria.github.io
         run: |
           set -euo pipefail
 
@@ -218,14 +224,16 @@ jobs:
           echo "1. /health -> $kode"
           [ "$kode" = "200" ] || { echo "GAGAL: backend tidak naik"; exit 1; }
 
-          acao=$(curl -s -D - -o /dev/null --max-time 30 -H "Origin: $ASAL" "$URL/meta/siap" \
-                 | tr -d '\r' | grep -i '^access-control-allow-origin:' | cut -d' ' -f2- || true)
-          echo "2. allow-origin untuk $ASAL -> ${acao:-TIDAK ADA}"
-          [ "$acao" = "$ASAL" ] || {
-            echo "GAGAL: peramban akan memblokir SELURUH panggilan data."
-            echo "Betulkan CORS_ORIGINS di Application settings - asal saja, tanpa jalur."
-            exit 1
-          }
+          for asal in "$ASAL" "$ASAL_CADANGAN"; do
+            acao=$(curl -s -D - -o /dev/null --max-time 30 -H "Origin: $asal" "$URL/meta/siap" \
+                   | tr -d '\r' | grep -i '^access-control-allow-origin:' | cut -d' ' -f2- || true)
+            echo "2. allow-origin untuk $asal -> ${acao:-TIDAK ADA}"
+            [ "$acao" = "$asal" ] || {
+              echo "GAGAL: peramban akan memblokir SELURUH panggilan data dari $asal."
+              echo "Betulkan CORS_ORIGINS di Application settings - asal saja, tanpa jalur."
+              exit 1
+            }
+          done
 
           # Tiket karangan berbentuk sah ke endpoint yang menuntut identitas.
           #
