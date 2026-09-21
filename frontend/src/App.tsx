@@ -108,7 +108,15 @@ import type { AksiPetaRef, KendaliPeta } from './components/PetaInteraktif'
  * jadi ia tidak menyeret modulnya kembali ke bundel utama.
  */
 const PetaInteraktif = lazy(() => import('./components/PetaInteraktif'))
-import { Glif, Markah, Menu, MenuPengaturan, PapanNama, PilihBasemap } from './components/primitif'
+import {
+  Glif,
+  Markah,
+  Menu,
+  MenuPengaturan,
+  PapanNama,
+  PilihBasemap,
+  useTutupHalus,
+} from './components/primitif'
 
 /** Layer yang diwarnai menurut kuadran — hanya di sini Kompas benar. */
 /**
@@ -1081,6 +1089,15 @@ export default function App() {
    */
   const [filterTerbuka, setFilterTerbuka] = useState(false)
   const filterRef = useRef<HTMLDivElement>(null)
+  /**
+   * Animasi TUTUP pil filter, sama seperti pemilih basemap.
+   *
+   * Sebelumnya popovernya dipasang `pop-kanan` saja - dan kelas itu cuma
+   * menyetel titik tumpu, ia TIDAK membawa satu pun animasi (yang membawa
+   * `pop`). Jadi pil filter muncul dan hilang begitu saja sementara pemilih
+   * basemap tumbuh dan menyusut; dilaporkan pemilik repo 19 Sep 2026.
+   */
+  const { tampil: filterTampil, menutup: filterMenutup } = useTutupHalus(filterTerbuka)
   const [diagram, setDiagram] = useState<DiagramKuadran | null>(null)
   const [simpul, setSimpul] = useState<SimpulTransit[]>([])
   /**
@@ -1613,6 +1630,13 @@ export default function App() {
       setHexBanding(null)
       if (h3) {
         setTab('daftar')
+        // LEMBARNYA DIBUKA di sini. Di ponsel panelnya memang mulai tertutup
+        // (peta dulu tampil penuh), jadi tanpa baris ini mengklik heksagon
+        // hanya mengubah tab di balik layar - tidak ada satu pun yang terlihat
+        // berubah, dan itu dilaporkan pemilik repo 19 Sep 2026: "kok pas saya
+        // klik heksagonnya ga kebuka". Di desktop panelnya sudah terbuka, jadi
+        // baris ini tidak mengubah apa pun di sana.
+        setPanelTerbuka(true)
         peta.current?.fokusHeksagon(h3)
       }
     },
@@ -2714,7 +2738,7 @@ export default function App() {
                         <div className="masuk-kanan absolute inset-0 z-10 flex flex-col bg-surface">
                           <button
                             onClick={lepasPilihan}
-                            className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-line/70 px-4 py-2.5 text-left text-[13px] font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+                            className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-line/70 px-4 py-2.5 text-left text-[13px] font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink max-lg:px-3 max-lg:py-1.5 max-lg:text-[11.5px]"
                           >
                             <svg
                               width="12"
@@ -2850,8 +2874,11 @@ export default function App() {
               {bahasa === 'en' ? 'Filters' : 'Filter'}
             </button>
 
-            {filterTerbuka && (
-              <div className="kendali-peta pop-kanan kaca pointer-events-auto flex min-w-0 max-w-[calc(100vw_-_7.5rem)] flex-row items-center gap-1 rounded-full p-1.5">
+            {filterTampil && (
+              <div
+                data-menutup={filterMenutup ? '1' : undefined}
+                className="kendali-peta pop pop-kanan kaca pointer-events-auto flex min-w-0 max-w-[calc(100vw_-_7.5rem)] flex-row items-center gap-1 rounded-full p-1.5"
+              >
                 {kendaliFilter('turun')}
               </div>
             )}

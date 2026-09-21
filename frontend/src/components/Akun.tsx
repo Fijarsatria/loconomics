@@ -40,7 +40,7 @@ import { useBahasa, useTeks } from '../lib/bahasa'
 import { api, GalatAPI, setTiket, adaTiket } from '../lib/api'
 import { KAWASAN_PILOT } from '../config'
 import { JENIS_USAHA, KELOMPOK_JENIS } from '../lib/jenis-usaha'
-import { PapanNama, useTutupHalus } from './primitif'
+import { Markah, PapanNama, useTutupHalus } from './primitif'
 import type { Akun, KatalogPaket, Tingkat } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -759,7 +759,10 @@ function DialogAkun({
               disentuh, lalu mengambil warna yang luntur beberapa detik kemudian
               - ikut apa adanya, dan tidak ada salinan yang bisa berpisah tempo
               pada perubahan berikutnya. */}
-          <PapanNama teks="Loconomics" sebagai="div" kelas="text-[17px] leading-none text-ink" />
+          <span className="flex items-center gap-2">
+            <Markah kelas="h-6 w-6 shrink-0 sm:h-7 sm:w-7" />
+            <PapanNama teks="Loconomics" sebagai="div" kelas="text-[17px] leading-none text-ink" />
+          </span>
           <button
             onClick={onTutup}
             aria-label={t.tutup}
@@ -1125,8 +1128,9 @@ function DialogLangganan({
                 {t.lencanaDemo}
               </span>
             </p>
-            <h2 className="papan mt-1 text-[21px] leading-tight">
-              {rayakan ? t.satuLangkah : t.bukaKedalaman}
+            <h2 className="mt-1.5 flex items-center gap-2 text-[21px] leading-tight">
+              <Markah kelas="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+              <span className="papan">{rayakan ? t.satuLangkah : t.bukaKedalaman}</span>
             </h2>
             <p className="mt-1.5 max-w-[34rem] text-[13.5px] leading-snug text-ink-2">
               {alasan ?? (rayakan ? t.alasanRayakan : t.alasanBiasa)}
@@ -1489,7 +1493,17 @@ export function TombolAkun({
   }
 
   const inisial = (akun.nama_tampilan || akun.nama_pengguna).slice(0, 2).toUpperCase()
-  const bulat = varian === 'bar'
+  /**
+   * Bentuk BULAT, bukan pil: dipakai di bilah bawah peta dan di bilah gerbang.
+   *
+   * Di gerbang ia dulu pil dengan nama pengguna di sebelah avatarnya. Yang
+   * terlihat di layar sempit cuma bulatannya - dan karena pilnya menyisakan
+   * bantalan kanan untuk teks yang tidak dirender, bulatannya duduk tidak di
+   * tengah dan terbaca sebagai "kurang bulat" (permintaan pemilik repo 19 Sep
+   * 2026). Sekarang bulatannya sama di ketiga varian, dan namanya pindah ke
+   * kepala menu yang terbuka - tempat ia memang dibaca.
+   */
+  const bulat = varian === 'bar' || varian === 'gerbang'
 
   /**
    * Isi menu dipisah supaya bisa dipakai DUA bentuk wadah: dropdown biasa, dan
@@ -1519,6 +1533,15 @@ export function TombolAkun({
             />
           </svg>
         </button>
+        {/* Markah Loconomics di kepala menu akun. Ia bukan hiasan kosong:
+            menu ini satu-satunya tempat di ponsel yang dibuka dari bilah bawah
+            dan setinggi layar penuh, jadi ia berdiri sebagai halaman tersendiri -
+            dan halaman tersendiri tanpa nama produknya terbaca sebagai daftar
+            setelan milik sistem, bukan milik Loconomics. */}
+        <div className="mb-3 flex items-center gap-1.5 pr-8">
+          <Markah kelas="h-4 w-4" />
+          <PapanNama teks="Loconomics" kelas="text-[13px] leading-none tracking-[0.01em]" />
+        </div>
         <div className="flex items-center gap-3 pr-8">
           <span
             className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[14px] font-bold ${
@@ -1608,16 +1631,18 @@ export function TombolAkun({
         aria-label={akun.nama_pengguna}
         className={
           bulat
-            ? `grid h-10 w-10 cursor-pointer place-items-center rounded-full text-[13px] font-bold transition-transform duration-300 ease-jelly hover:scale-[1.05] ${
+            ? `grid h-10 w-10 cursor-pointer place-items-center rounded-full text-[13px] font-bold transition-all duration-300 ease-jelly hover:scale-[1.08] ${
                 // Pelanggan berpendar teal - sinyal status yang ikut terbawa ke
                 // bar bawah, tempat label "Premium" tidak lagi muat.
                 premium
-                  ? 'bg-gem text-white shadow-[0_0_18px_-2px_rgb(45_232_192/0.6)]'
-                  : 'kaca-tebal text-ink'
+                  ? 'bg-gem text-white shadow-[0_0_18px_-2px_rgb(45_232_192/0.6)] hover:shadow-[0_0_26px_-2px_rgb(45_232_192/0.85)]'
+                  : 'kaca-tebal text-ink hover:bg-ink hover:text-surface hover:shadow-[0_10px_28px_-10px_rgb(22_33_28/0.55)]'
               } ${buka ? 'ring-2 ring-ink/60' : ''}`
             : `flex cursor-pointer items-center gap-2 rounded-full border py-1 pl-1 pr-3 transition-all duration-300 ease-jelly hover:scale-[1.03] ${
-                buka ? 'border-transparent bg-ink text-surface' : 'border-line text-ink hover:border-line-2'
-              } ${varian === 'gerbang' ? 'sm:py-1.5 sm:pl-1.5 sm:pr-4' : ''}`
+                buka
+                  ? 'border-transparent bg-ink text-surface'
+                  : 'border-line text-ink hover:border-ink hover:shadow-[0_10px_26px_-12px_rgb(22_33_28/0.5)]'
+              }`
         }
         title={akun.nama_pengguna}
       >
@@ -1628,15 +1653,11 @@ export function TombolAkun({
             <span
               className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11.5px] font-bold ${
                 premium ? 'bg-gem text-white' : 'bg-surface-2 text-ink-2'
-              } ${varian === 'gerbang' ? 'sm:h-8 sm:w-8 sm:text-[12.5px]' : ''}`}
+              }`}
             >
               {inisial}
             </span>
-            <span
-              className={`hidden max-w-[7rem] truncate text-[12.5px] font-semibold sm:inline ${
-                varian === 'gerbang' ? 'sm:max-w-[9rem] sm:text-[14px]' : ''
-              }`}
-            >
+            <span className="hidden max-w-[7rem] truncate text-[12.5px] font-semibold sm:inline">
               {akun.nama_pengguna}
             </span>
             {premium && (

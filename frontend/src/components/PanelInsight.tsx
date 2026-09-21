@@ -708,7 +708,7 @@ function PanelInsight({
           Kepekatannya rendah dan berhenti sebelum teks: yang diwarnai LATAR,
           dan kontras tulisan terhadapnya tidak berubah sama sekali. */}
       <div
-        className="border-b border-line px-4 py-3"
+        className="border-b border-line px-4 py-3 max-lg:px-3 max-lg:py-2"
         style={{
           background: skor.kuadran
             ? `linear-gradient(180deg, ${KUADRAN[skor.kuadran].lembut} 0%, var(--color-surface) 78%)`
@@ -719,12 +719,12 @@ function PanelInsight({
             kecil. Indeksnya TETAP ada - ia yang dipakai kalau seseorang perlu
             menelusuri ke basis data - tapi ia bukan yang dicari mata saat
             panel ini terbuka. */}
-        <div className="mb-2 flex items-baseline justify-between gap-2">
+        <div className="mb-2 flex items-baseline justify-between gap-2 max-lg:mb-1.5">
           <span className="min-w-0">
-            <span className="block truncate text-[13.5px] font-semibold text-ink">
+            <span className="block truncate text-[13.5px] font-semibold text-ink max-lg:text-[12.5px]">
               {kodeLokasi(skor.h3_index, skor.kawasan)}
             </span>
-            <code className="block truncate font-mono text-[10.5px] text-ink-3">
+            <code className="block truncate font-mono text-[10.5px] text-ink-3 max-lg:text-[9.5px]">
               {skor.h3_index}
             </code>
           </span>
@@ -735,15 +735,15 @@ function PanelInsight({
           <div>
             <div className="flex items-baseline gap-1.5">
               <span
-                className={`papan tabular text-[42px] leading-none ${
+                className={`papan tabular text-[42px] leading-none max-lg:text-[30px] ${
                   terlarang ? 'text-ink-3 line-through decoration-bahaya decoration-2' : ''
                 }`}
               >
                 {skor.opportunity_score?.toFixed(0) ?? '—'}
               </span>
-              <span className="text-[13px] text-ink-3">/ 100</span>
+              <span className="text-[13px] text-ink-3 max-lg:text-[11px]">/ 100</span>
             </div>
-            <p className="eyebrow mt-1">
+            <p className="eyebrow mt-1 max-lg:mt-0.5">
               Opportunity Score
               {skor.peringkat !== null && t.peringkat(skor.peringkat)}
             </p>

@@ -3228,6 +3228,41 @@ input:focus-visible {
   .maplibregl-ctrl-attrib a {
     color: inherit !important;
   }
+  /* Buka/TUTUP daftar sumber sehalus pemilih basemap (permintaan pemilik repo
+     19 Sep 2026). MapLibre menyembunyikan isinya dengan `display: none`, dan
+     `display` tidak ikut beranimasi kecuali transisinya diberi
+     `allow-discrete` - tanpa itu panelnya muncul dan hilang begitu saja.
+     `@starting-style` menyediakan keadaan AWAL untuk animasi masuk. Keduanya
+     fitur peramban modern; di peramban lama hasilnya persis seperti sebelumnya
+     (tanpa animasi), jadi tidak ada yang rusak. */
+  .maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-inner {
+    transition:
+      opacity 200ms var(--ease-liquid),
+      transform 200ms var(--ease-liquid),
+      display 200ms allow-discrete;
+    transform-origin: bottom left;
+  }
+  .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)
+    .maplibregl-ctrl-attrib-inner {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  @starting-style {
+    .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner {
+      opacity: 0;
+      transform: translateY(6px) scale(0.96);
+    }
+  }
+  /* Tombolnya sendiri ikut melunak saat ditekan - sinyal yang sama dengan
+     tombol peta lain. */
+  .maplibregl-ctrl-attrib-button {
+    transition:
+      transform 200ms var(--ease-jelly, var(--ease-liquid)),
+      opacity 200ms var(--ease-liquid) !important;
+  }
+  .maplibregl-ctrl-attrib-button:hover {
+    transform: scale(1.08);
+  }
   /* Saat lembar bawah terbuka, ia menutupi dasar peta - dan atribusi yang
      duduk tepat di atas bilah masih menyembul menembus kaca lembar. Disembunyikan
      selama itu: yang tertutup lembar bukan atribusi yang "terlihat". Begitu
