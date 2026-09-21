@@ -292,6 +292,49 @@ Application settings. CORS yang salah membuat SELURUH panggilan data gagal dari
 peramban sementara `curl` tetap berhasil — jenis kegagalan yang paling lama
 dikejar karena gejalanya menunjuk ke tempat yang salah.
 
+### Menambahkan subdomain MAPID ke Cloudflare Pages
+
+Alur yang BENAR, dan satu pilihan yang hampir pasti salah. Di
+**Workers & Pages → loconomics → Custom domains → Set up a custom domain**,
+sesudah `loconomics.mapid.io` diketik, Cloudflare menawarkan DUA cara:
+
+| Kartu | Artinya | Dipakai? |
+|---|---|---|
+| **Cloudflare DNS** — "Begin DNS transfer" | Memindahkan zona `mapid.io` ke akun Cloudflare kita, yang berarti mengganti **nameserver** domain itu | **TIDAK.** `mapid.io` milik panitia, dan `basemap.mapid.io` — server ubin yang menggambar seluruh peta ini — hidup di zona yang sama. Ini mematikan peta kita sendiri |
+| **My DNS provider** — "Begin CNAME setup" | Cloudflare hanya meminta SATU catatan DNS | **YA** |
+
+Catatan yang diminta bentuknya:
+
+```
+CNAME   loconomics   loconomics.pages.dev
+```
+
+Itu **diserahkan ke panitia MAPID** — mereka yang memegang DNS `mapid.io`.
+Selama catatannya belum ada, statusnya `Pending`; begitu menyebar, Cloudflare
+memverifikasi sendiri dan mengubahnya jadi `Active` berikut sertifikat SSL/TLS.
+Satu-satunya kasus di mana "Add a site" di Cloudflare benar adalah kalau panitia
+mendelegasikan subdomainnya lewat **NS record** (tim menerima dua alamat
+nameserver); kalau yang dikirim hanya target CNAME, jalur di atas yang berlaku.
+
+**Dua langkah yang mudah terlupa sesudah domainnya Active, dan keduanya gagal
+DIAM** — halaman terbuka normal, isinya yang kosong:
+
+1. **Kunci basemap dibatasi domain.** `basemap.mapid.io` menuntut `Referer` yang
+   terdaftar, jadi `loconomics.mapid.io` harus ditambahkan ke daftar itu di sisi
+   MAPID. Tanpa ini **petanya kosong tanpa satu pun galat**. Gejala dan cara
+   memeriksanya ada di `docs/jebakan.md`.
+2. **`CORS_ORIGINS`** di Azure App Service (lihat paragraf di atas). Tanpa ini
+   panel detail, akun, dan AI gagal semua dari domain baru.
+
+Yang **tidak** perlu diubah: CSP di `frontend/public/_headers` (sudah
+mengizinkan backend dan basemap), `VITE_API_BASE_URL` (backend Azure yang sama),
+dan `.github/workflows/pages.yml` (terbitan GitHub Pages tetap hidup di URL-nya
+sendiri; domain kustom hanya menempel pada proyek Cloudflare Pages).
+
+Catatan kecil yang bukan bug: `localStorage` terpisah per asal, jadi sesi dan
+preferensi yang dibuat di `loconomics.pages.dev` **tidak** ikut terbawa ke
+`loconomics.mapid.io` — orangnya tinggal masuk sekali lagi di domain baru.
+
 ### Ketahanan saat backend belum siap
 
 Dulu berjudul "mitigasi free tier" dan seluruhnya soal Render yang tidur.

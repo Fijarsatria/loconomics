@@ -36,8 +36,15 @@
 #                              Tanpa ini server tetap NAIK dan health check tetap
 #                              HIJAU - yang mati cuma daftar/masuk, karena kunci
 #                              tiket dibaca saat MELAYANI, bukan saat impor.
-#      CORS_ORIGINS            https://fijarsatria.github.io
-#                              Asal saja, TANPA jalur. Bukan .../loconomics/.
+#      CORS_ORIGINS            https://fijarsatria.github.io,https://loconomics.pages.dev,https://loconomics.mapid.io
+#                              Daftar asal dipisah koma, TANPA jalur. Bukan
+#                              .../loconomics/. Tiap asal yang benar-benar
+#                              dipakai harus ada di sini - asal yang lupa
+#                              didaftarkan membuat SELURUH panggilan data gagal
+#                              dari peramban sementara curl tetap berhasil.
+#                              Subdomain MAPID (loconomics.mapid.io) masuk daftar
+#                              begitu statusnya Active di Cloudflare Pages; alur
+#                              lengkapnya di docs/arsitektur.md.
 #      LINGKUNGAN              produksi
 #      MAPID_MAPS_API_KEY      basemap; hanya untuk mengambil style.json
 #      MAPID_BASEMAP_KEY_PERAMBAN  kunci ubin untuk peramban (= VITE_MAPID_BASEMAP_KEY);
