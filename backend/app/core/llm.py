@@ -14,7 +14,9 @@ MODEL_DEFAULT = "claude-opus-5"
 # Bawaan saat LLM_PROVIDER=gemini. Bisa ditimpa LLM_MODEL, sama seperti di atas.
 MODEL_GEMINI = "gemini-flash-latest"
 
-MAKS_PUTARAN = 8
+# Ditekan dari 8 ke 6 (21 Sep 2026): tiap putaran = satu panggilan model penuh,
+# dan satu pertanyaan sudah memakai 5. Panggilan penutup tetap menjamin jawaban.
+MAKS_PUTARAN = 6
 
 # Cukup untuk narasi beberapa paragraf plus panggilan alat. Bukan angka besar:
 # jawaban AI Consultant memang harus ringkas.

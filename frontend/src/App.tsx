@@ -2350,23 +2350,23 @@ export default function App() {
               wajib ada di DOM (ketentuan A.3, dijaga `audit-prd`). */}
           <div
             ref={atribusiRef}
-            className="tombol-atribusi pointer-events-none absolute bottom-[6rem] left-2.5 z-30 lg:bottom-auto lg:left-4 lg:top-[4.75rem]"
+            className="tombol-atribusi pointer-events-none absolute bottom-[6rem] left-2.5 z-30 lg:bottom-[0.625rem] lg:left-[5rem]"
           >
             <div className="relative">
               <button
                 onClick={() => setAtribusiTerbuka((v) => !v)}
                 aria-expanded={atribusiTerbuka}
                 title={t.atribusiJudul}
-                className={`pointer-events-auto grid h-10 w-10 cursor-pointer place-items-center rounded-full text-[13px] font-bold transition-all duration-200 ease-jelly hover:scale-[1.06] ${
+                className={`pointer-events-auto grid h-6 w-6 cursor-pointer place-items-center rounded-full text-[11px] font-bold leading-none transition-all duration-200 ease-jelly hover:scale-110 ${
                   atribusiTerbuka
                     ? 'kaca text-ink'
-                    : 'bg-ink text-surface shadow-[0_12px_30px_-10px_rgb(22_33_28/0.7)]'
+                    : 'bg-ink text-surface shadow-[0_8px_18px_-10px_rgb(22_33_28/0.6)]'
                 }`}
               >
                 i
               </button>
               {atribusiTerbuka && (
-                <div className="kaca pop pointer-events-auto absolute bottom-full left-0 mb-2 w-[min(20rem,calc(100vw-1.5rem))] rounded-xl p-3.5 sm:bottom-0 sm:left-full sm:mb-0 sm:ml-2.5 lg:top-0 lg:bottom-auto">
+                <div className="kaca pop pointer-events-auto absolute bottom-full left-0 mb-2 w-[min(19rem,calc(100vw-1.5rem))] rounded-xl p-3.5 sm:bottom-0 sm:left-full sm:mb-0 sm:ml-2.5">
                   <p className="eyebrow mb-2">{t.atribusiJudul}</p>
                   <ul className="flex flex-col gap-1">
                     {ATRIBUSI_PETA.map((a) => (
