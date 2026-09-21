@@ -766,7 +766,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 ) {
   const wadah = useRef<HTMLDivElement>(null)
   const peta = useRef<MapLibreMap | null>(null)
-  const pinAktif = useRef<Marker[]>([])
+  const pinAktif = useRef<Map<string, { marker: Marker; el: HTMLElement; label: string }>>(new Map())
   /** Timer langkah gelombang yang sedang berjalan. Wajib dibatalkan saat
       komponen dilepas: timer yang masih hidup akan menyentuh peta yang sudah
       dibuang. */
@@ -941,6 +941,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       asalTahan = null
     }
     const mulaiTahan = (e: MapLayerMouseEvent | MapLayerTouchEvent) => {
+      // Sudah ada tahanan berjalan: satu sentuhan bisa sampai ke sini DUA kali
+      // (touchstart-nya sendiri, lalu mousedown yang disintesis peramban), dan
+      // dua pewaktu untuk satu gerakan = tersimpan dua kali.
+      if (jamTahan) return
       const p = e.features?.[0]?.properties as PropertiHeksagon | undefined
       if (!onTaruhPinRef.current || !p?.h3_index) return
       if (p.h3_index !== terpilihRef.current || adaBlokDi(e.point)) return
@@ -956,7 +960,11 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }, TAHAN_MS)
     }
     // Jari yang bergeser sedikit pun membatalkan: yang menahan sambil menyeret
-    // peta sedang menggeser peta, bukan menandai tempat.
+    // peta sedang menggeser peta, bukan menandai tempat. Pergerakan inilah
+    // SATU-SATUNYA pembatalnya - `movestart` dan `dragstart` TIDAK dipakai,
+    // karena di layar sentuh keduanya menyala begitu jari menyentuh layar,
+    // sebelum tahanannya sempat berjalan (terukur: tahan 750 ms tidak pernah
+    // tersimpan sama sekali).
     const jagaTahan = (e: { point: Point }) => {
       if (asalTahan && Math.hypot(e.point.x - asalTahan.x, e.point.y - asalTahan.y) > 9) {
         batalTahan()
@@ -967,8 +975,6 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     m.on('mouseup', () => batalTahan())
     m.on('touchend', () => batalTahan())
     m.on('touchcancel', () => batalTahan())
-    m.on('dragstart', () => batalTahan())
-    m.on('movestart', () => batalTahan())
     m.on('mousemove', jagaTahan)
     m.on('touchmove', jagaTahan)
 
@@ -2239,8 +2245,32 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       setPin: (daftar) => {
         const m = peta.current
         if (!m) return
-        for (const p of pinAktif.current) p.remove()
-        pinAktif.current = daftar.map(({ lat, lon, h3, label, sendiri }) => {
+        // Penanda yang sudah ada cuma DIPINDAH dan diberi label baru. Versi
+        // lama membongkar-pasang semuanya tiap panggilan, dan `setPin` dipanggil
+        // tiga kali per satu simpan (optimistis, sesudah POST, lalu sesudah
+        // daftar disegarkan) - jadi satu kali tahan terlihat seperti tiga kali
+        // penanda muncul, masing-masing mengulang animasi jatuhnya.
+        const tetap = new Set(daftar.map((p) => p.h3))
+        for (const [h3, pin] of pinAktif.current) {
+          if (!tetap.has(h3)) {
+            pin.marker.remove()
+            pinAktif.current.delete(h3)
+          }
+        }
+        for (const { lat, lon, h3, label, sendiri } of daftar) {
+          const ada = pinAktif.current.get(h3)
+          if (ada) {
+            ada.marker.setLngLat([lon, lat])
+            if (ada.label !== label) {
+              ada.label = label
+              ada.el.setAttribute('aria-label', label)
+              const n = ada.el.querySelector('.pin-simpan-nama')
+              if (n) n.textContent = label
+            }
+            if (sendiri) ada.el.dataset.sendiri = '1'
+            else delete ada.el.dataset.sendiri
+            continue
+          }
           const el = document.createElement('button')
           el.type = 'button'
           el.className = 'pin-simpan'
@@ -2265,10 +2295,11 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             ev.stopPropagation()
             onPilihRef.current(h3)
           })
-          return new Marker({ element: el, anchor: 'bottom' })
+          const marker = new Marker({ element: el, anchor: 'bottom' })
             .setLngLat([lon, lat])
             .addTo(m)
-        })
+          pinAktif.current.set(h3, { marker, el, label })
+        }
       },
 
       resetArah: () =>
