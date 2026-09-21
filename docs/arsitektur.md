@@ -269,10 +269,16 @@ Berkas konfigurasinya sudah ada di repo, jadi ini bukan lagi rencana:
 
 | Bagian | Layanan | Berkas | Catatan |
 |---|---|---|---|
-| Frontend | GitHub Pages | `.github/workflows/pages.yml` | Build `npm run build`, keluaran `dist/` |
+| Frontend (2 terbitan) | **Cloudflare Pages** + GitHub Pages | `.github/workflows/pages.yml` | Build `npm run build`, keluaran `dist/` |
 | Backend | Azure App Service | `.github/workflows/backend-azure.yml` | Kredit Azure for Students, **tidak tidur** |
 | Basis data | Supabase | — | Connection string mode *Transaction pooler* |
-| Subdomain | Disediakan panitia MAPID | — | Alurnya di berkas briefing Technical Meeting |
+| Subdomain | **`loconomics.mapid.io`** (CNAME ke `loconomics.pages.dev`) | — | Aktif 21 Sep 2026; alur & jebakannya di bagian berikut |
+
+Frontend terbit ke **dua** tempat dari commit yang sama: `loconomics.mapid.io`
+(Cloudflare Pages — domain utama, di situ `_headers`/`_redirects` benar-benar
+berlaku dan CSP serta aturan cache-nya terukur ada) dan
+`fijarsatria.github.io/loconomics/` (GitHub Pages — mengabaikan kedua berkas itu
+sepenuhnya).
 
 Backend terbit lewat GitHub Actions. Alurnya menguji dulu (`test_infra` +
 `test_ai_loop`, keduanya sengaja lolos tanpa `.env`), menerbitkan, lalu
@@ -317,14 +323,31 @@ mendelegasikan subdomainnya lewat **NS record** (tim menerima dua alamat
 nameserver); kalau yang dikirim hanya target CNAME, jalur di atas yang berlaku.
 
 **Dua langkah yang mudah terlupa sesudah domainnya Active, dan keduanya gagal
-DIAM** — halaman terbuka normal, isinya yang kosong:
+DIAM** — halaman terbuka normal, isinya yang kosong. Keduanya sudah dikerjakan
+dan diukur 21 Sep 2026, berikut buktinya:
 
 1. **Kunci basemap dibatasi domain.** `basemap.mapid.io` menuntut `Referer` yang
-   terdaftar, jadi `loconomics.mapid.io` harus ditambahkan ke daftar itu di sisi
-   MAPID. Tanpa ini **petanya kosong tanpa satu pun galat**. Gejala dan cara
-   memeriksanya ada di `docs/jebakan.md`.
-2. **`CORS_ORIGINS`** di Azure App Service (lihat paragraf di atas). Tanpa ini
-   panel detail, akun, dan AI gagal semua dari domain baru.
+   terdaftar. **Hasil ukur: tidak perlu perubahan apa pun** — ubin, gaya, dan
+   font menjawab 200 untuk `Referer: https://loconomics.mapid.io` (uji baris
+   perintah) dan 9-15 respons 200 dari peramban sungguhan di domain itu. Kalau
+   suatu saat petanya kosong di domain baru sementara di domain lama tidak, di
+   sinilah tempat memeriksanya lebih dulu — gejalanya di `docs/jebakan.md`.
+2. **`CORS_ORIGINS`** di Azure App Service (lihat paragraf di atas). **Diperbarui
+   21 Sep 2026** lewat `az webapp config appsettings set` menjadi
+   `https://fijarsatria.github.io,https://loconomics.pages.dev,https://loconomics.mapid.io`,
+   lalu `az webapp restart`. Dua bukti yang diambil sesudahnya: preflight
+   `OPTIONS /akun/masuk` dari KETIGA asal menjawab 200 dengan
+   `access-control-allow-origin` yang cocok, dan `audit-prd.mjs` dijalankan
+   langsung ke `APP=https://loconomics.mapid.io` →
+   **47 lolos, 0 gagal** (lebih banyak daripada di dev, karena cabang produksi
+   menambah asersi `<meta>` CSP), dengan 9 panggilan API, 0 galat konsol, dan
+   nol permintaan gagal.
+
+Catatan penting tentang nomor 2: yang salah BUKAN nilai lamanya, melainkan
+**kelengkapan**-nya. Daftar itu harus memuat setiap asal yang benar-benar
+dipakai; asal yang lupa didaftarkan tidak menggagalkan apa pun yang terlihat di
+`curl` — kegagalannya cuma muncul di peramban, tempat preflight-nya dijawab
+**400** sementara domain lama tetap 200.
 
 Yang **tidak** perlu diubah: CSP di `frontend/public/_headers` (sudah
 mengizinkan backend dan basemap), `VITE_API_BASE_URL` (backend Azure yang sama),
