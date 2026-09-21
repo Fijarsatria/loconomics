@@ -1102,9 +1102,15 @@ def _alasan_untuk(
 
 #: Berapa baris yang dilihat akun gratis. Bukan nol - rekomendasi adalah inti
 #: produk ini, dan produk yang intinya tidak bisa dicicipi tidak pernah
-#: meyakinkan siapa pun untuk membayar. Tiga cukup untuk membuktikan daftarnya
-#: nyata dan beralasan, terlalu sedikit untuk dipakai memilih.
-CICIP_GRATIS = 3
+#: meyakinkan siapa pun untuk membayar. SATU cukup untuk membuktikan daftarnya
+#: nyata dan beralasan, dan sengaja tidak cukup untuk dipakai memilih.
+#:
+#: Diturunkan dari tiga ke satu 19 Sep 2026 atas permintaan pemilik repo: akun
+#: gratis terbukti bisa membuka dua sampai tiga lokasi berturut-turut, dan itu
+#: terbaca sebagai kebocoran fitur berbayar - bukan sebagai cicipan. Jumlahnya
+#: tetap disebut apa adanya di antarmuka (`sisa_cocok`), jadi yang dikunci
+#: tidak pernah tersembunyi.
+CICIP_GRATIS = 1
 
 
 @router.get(

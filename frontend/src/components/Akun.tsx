@@ -926,7 +926,8 @@ const K_BAYAR = {
   id: {
     locale: 'id-ID',
     gagalPaket: 'Gagal memuat daftar paket.',
-    premiumAktif: 'Loconomics Premium aktif. Seluruh fitur terbuka.',
+    premiumAktif:
+      'Loconomics Premium aktif (aktivasi demo, tanpa pembayaran sungguhan). Seluruh fitur terbuka.',
     gagalAktivasi: 'Aktivasi gagal. Coba lagi.',
     selamatDatang: 'Selamat datang di Premium',
     judulDialog: 'Loconomics Premium',
@@ -952,7 +953,8 @@ const K_BAYAR = {
     paket: 'Paket',
     total: 'Total',
     mengaktifkan: 'Mengaktifkan…',
-    aktifkan: 'Aktifkan sekarang',
+    aktifkan: 'Aktifkan (mode demo)',
+    lencanaDemo: 'DEMO',
     pilihDulu: 'Pilih paket dulu',
     belumTerpasang: 'Gerbang pembayaran belum terpasang di lingkungan ini.',
     masukSebagai: 'Masuk sebagai',
@@ -990,7 +992,8 @@ const K_BAYAR = {
   en: {
     locale: 'en-GB',
     gagalPaket: 'Could not load the plans.',
-    premiumAktif: 'Loconomics Premium is active. Everything is open.',
+    premiumAktif:
+      'Loconomics Premium is active (demo activation, no real payment). Everything is open.',
     gagalAktivasi: 'Activation failed. Try again.',
     selamatDatang: 'Welcome to Premium',
     judulDialog: 'Loconomics Premium',
@@ -1015,7 +1018,8 @@ const K_BAYAR = {
     paket: 'Plan',
     total: 'Total',
     mengaktifkan: 'Activating…',
-    aktifkan: 'Activate now',
+    aktifkan: 'Activate (demo mode)',
+    lencanaDemo: 'DEMO',
     pilihDulu: 'Pick a plan first',
     belumTerpasang: 'No payment gateway is wired up in this environment.',
     masukSebagai: 'Signed in as',
@@ -1110,7 +1114,17 @@ function DialogLangganan({
         {/* --- Kepala ------------------------------------------------------ */}
         <div className="flex items-start justify-between gap-5 border-b border-line/70 px-6 py-5 sm:px-7">
           <div className="min-w-0">
-            <p className="eyebrow">{rayakan ? t.sudahAktif : t.judulDialog}</p>
+            <p className="eyebrow flex items-center gap-2">
+              {rayakan ? t.sudahAktif : t.judulDialog}
+              {/* Lencana ini menjawab pertanyaan yang paling mudah disalahpahami
+                  di layar berbayar: "sudah bayar atau belum?". Backend memang
+                  mengaktifkan tanpa transaksi, dan itu DINYATAKAN - bukan
+                  disembunyikan di catatan kaki (permintaan pemilik repo 19 Sep
+                  2026, menyangkut penilaian lomba). */}
+              <span className="rounded-full border border-line-2 px-1.5 py-[1px] text-[10px] font-bold leading-none tracking-[0.08em] text-ink-3">
+                {t.lencanaDemo}
+              </span>
+            </p>
             <h2 className="papan mt-1 text-[21px] leading-tight">
               {rayakan ? t.satuLangkah : t.bukaKedalaman}
             </h2>
@@ -1226,8 +1240,11 @@ function DialogLangganan({
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-ink-3">{t.total}</dt>
-                    <dd className="tabular text-right font-semibold text-ink">
-                      {harga === null ? '—' : rp(harga, t.locale)}
+                    <dd className="flex items-center justify-end gap-2 text-right font-semibold text-ink">
+                      <span className="tabular">{harga === null ? '—' : rp(harga, t.locale)}</span>
+                      <span className="rounded-full border border-line-2 px-1.5 py-[1px] text-[10px] font-bold leading-none tracking-[0.08em] text-ink-3">
+                        {t.lencanaDemo}
+                      </span>
                     </dd>
                   </div>
                 </dl>

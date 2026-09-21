@@ -331,10 +331,89 @@ const L_GEDUNG = 'loc-gedung-3d'
 const SUMBER_GEDUNG = 'loc-mapidtiles'
 
 /**
+ * Buka bungkus "fungsi lama" peninggalan Mapbox GL JS v0.
+ *
+ * Gaya satelit MAPID adalah hasil konversi yang tidak selesai: `text-size`
+ * beberapa layer simbol masih berbentuk `{"value": ["zoom"], "Count": 1}`
+ * alih-alih `["zoom"]`, dan ada pula `{"stops": [[0, 12], [2, 13]]}`.
+ * MapLibre v5 menolak SELURUH gaya karena satu ekspresi begitu - "zoom
+ * expression may only be used as input to a top-level step or interpolate
+ * expression" - dan penolakannya persis terlihat sebagai keluhan pemilik
+ * repo 19 Sep 2026, "ganti ke peta satelit selalu error": gaya lama tetap
+ * terpasang, citra tidak pernah muncul, pita "Basemap gagal dimuat" naik,
+ * dan NOL galat jaringan (ditemukan dari `console.warn`-nya, bukan dari satu
+ * pun asersi).
+ *
+ * Yang dilakukan hanya MEMBUKA bungkusnya - `{value, Count}` menjadi
+ * nilainya sendiri, `{stops}` menjadi interpolate linear atas zoom. Tidak
+ * ada sumber ubin, kunci, atau gaya baru yang ditambahkan; apa pun yang sudah
+ * berbentuk ekspresi sah dibiarkan apa adanya.
+ */
+function bukaFungsiLama(v: unknown): unknown {
+  if (Array.isArray(v)) {
+    // Bentuk lama `["linear", x1, y1, x2, y2]` adalah "linear ber-easing" milik
+    // Mapbox v0; padanannya di MapLibre adalah `["cubic-bezier", ...]`.
+    // `["linear"]` polos (tanpa angka) sudah sah dan dibiarkan.
+    if (v[0] === 'linear' && v.length === 5 && v.every((x, i) => i === 0 || typeof x === 'number')) {
+      return ['cubic-bezier', ...v.slice(1)].map(bukaFungsiLama)
+    }
+    return v.map(bukaFungsiLama)
+  }
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    const k = Object.keys(o)
+    if ('value' in o && k.every((x) => x === 'value' || x === 'Count')) {
+      return bukaFungsiLama(o.value)
+    }
+    if (k.length === 1 && Array.isArray(o.stops)) {
+      const rata: unknown[] = ['interpolate', ['linear'], ['zoom']]
+      for (const s of o.stops as [number, unknown][]) rata.push(s[0], bukaFungsiLama(s[1]))
+      return rata
+    }
+    const keluar: Record<string, unknown> = {}
+    for (const [kk, vv] of Object.entries(o)) keluar[kk] = bukaFungsiLama(vv)
+    return keluar
+  }
+  return v
+}
+
+/**
+ * Ukuran teks label satelit dijadikan ANGKA tetap.
+ *
+ * Ekspresi `text-size` bawaan gaya itu tetap ditolak MapLibre 6 walau sudah
+ * dibuka dari bungkus lamanya - dan yang ditolak bukan cuma bentuknya, tapi
+ * SELURUH gaya, jadi peta citra tidak pernah terpasang. Angka tidak bisa
+ * ditafsirkan salah. Nilainya diambil dari ukuran terakhir yang disebut
+ * gayanya (ukuran di zoom terjauh), lalu dibatasi 10-14 px: label basemap di
+ * layar ponsel tidak perlu lebih besar dari itu, dan di peta citra labelnya
+ * memang pelengkap, bukan isi.
+ */
+function rapiLapis(l: unknown): unknown {
+  const lapis = l as { layout?: Record<string, unknown> }
+  const ts = lapis.layout?.['text-size']
+  if (ts === undefined) return l
+  let n = 12
+  if (typeof ts === 'number') n = ts
+  else {
+    const semua: number[] = []
+    const kumpul = (v: unknown) => {
+      if (typeof v === 'number') semua.push(v)
+      else if (Array.isArray(v)) v.forEach(kumpul)
+    }
+    kumpul(ts)
+    if (semua.length) n = semua[semua.length - 1]
+  }
+  return { ...lapis, layout: { ...lapis.layout, 'text-size': Math.min(14, Math.max(10, n)) } }
+}
+
+/**
  * Siapkan gaya satelit SEBELUM dipasang - lewat `transformStyle` MapLibre.
  *
- * Dua hal, keduanya tidak bisa dikerjakan sesudah gayanya terpasang tanpa
+ * Tiga hal, semuanya tidak bisa dikerjakan sesudah gayanya terpasang tanpa
  * membongkarnya lagi:
+ *
+ *   FUNGSI LAMA. Lihat `bukaFungsiLama` di atas - tanpa ini gayanya ditolak
+ *   MapLibre seluruhnya.
  *
  *   ATRIBUSI. Sumber citra di gaya satelit MAPID tidak membawa satu pun teks
  *   atribusi, jadi kontrol atribusi akan diam tentang siapa pemilik gambarnya.
@@ -355,7 +434,8 @@ function tataGaya(gaya: NamaGaya) {
     if (kunciCitra) {
       sumber[kunciCitra] = { ...sumber[kunciCitra], attribution: ATRIBUSI_SATELIT } as never
     }
-    return { ...baru, glyphs: GLYPH_MAPID, sources: sumber }
+    const lapis = baru.layers.map((l) => rapiLapis(bukaFungsiLama(l))) as typeof baru.layers
+    return { ...baru, glyphs: GLYPH_MAPID, sources: sumber, layers: lapis }
   }
 }
 
@@ -1564,9 +1644,17 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
   useEffect(() => {
     const m = peta.current
     if (!m || !siap) return
-    setSiap(false)
-    setGalatPeta(null)
-    m.once('styledata', () => setSiap(true))
+    // `siap` baru direset SESUATU SAAT setStyle benar-benar dipanggil. Kalau
+    // direset di sini, jeda pengambilan gaya satelit (bisa detik-detik) membuka
+    // jendela tempat `styledata` gaya LAMA menyala lebih dulu, heksagon
+    // dipasang ke gaya lama, lalu setStyle membuangnya - hasilnya peta citra
+    // tanpa satu pun heksagon, terlihat 19 Sep 2026.
+    const pasang = (berkas: string | object) => {
+      setSiap(false)
+      setGalatPeta(null)
+      m.once('styledata', () => setSiap(true))
+      m.setStyle(berkas as string, { diff: false, transformStyle: tataGaya(gaya) })
+    }
     // `diff: false` WAJIB, dan itu yang membuat tombol coba-ulang berfungsi.
     //
     // Bawaannya `diff: true`: MapLibre membandingkan gaya baru dengan yang
@@ -1578,7 +1666,54 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     // Gagalnya diam dan menyesatkan: peringatannya HILANG (karena efek ini
     // memang mengosongkannya) tanpa satu pun ubin diminta ulang, jadi yang
     // terlihat peta polos tanpa keterangan apa pun.
-    m.setStyle(urlGaya(gaya), { diff: false, transformStyle: tataGaya(gaya) })
+    //
+    // SATELIT DIAMBIL SENDIRI, tidak diserahkan pada MapLibre. Gaya satelit
+    // satu-satunya yang berkasnya datang dari basemap.mapid.io, bukan dari
+    // berkas statis, dan lewat jalur MapLibre ia TERKADANG tidak pernah
+    // diminta sama sekali: `styledata` tidak menyala, peta tetap bergaya lama,
+    // dan pemilih basemap sudah bilang "Satelit" - terukur pada satu dari
+    // sekitar tiga percobaan, tanpa satu pun galat di konsol. Diambil sendiri,
+    // hasilnya bisa diperiksa (status, batas waktu) dan wewenangnya jelas.
+    if (!GAYA_BASEMAP[gaya]?.langsung) {
+      pasang(urlGaya(gaya))
+      return
+    }
+    // Dua percobaan, masing-masing 12 detik. CDN MAPID kadang menjawab dalam
+    // satu detik dan kadang menggantung; satu percobaan saja membuat peta
+    // menyerah pada gangguan sesaat. Percobaan kedua nyaris gratis, karena
+    // kalau yang pertama gagal karena putus, yang kedua mengulanginya.
+    const ambilGaya = async () => {
+      let galatTerakhir: unknown = new Error('gaya satelit tidak terambil')
+      for (let i = 0; i < 2; i++) {
+        const batas = new AbortController()
+        const jam = window.setTimeout(() => batas.abort(), 12000)
+        try {
+          const r = await fetch(bubuhiKunciBasemap(urlGaya(gaya)), { signal: batas.signal })
+          if (!r.ok) throw new Error(`HTTP ${r.status}`)
+          return await r.json()
+        } catch (e) {
+          galatTerakhir = e
+        } finally {
+          window.clearTimeout(jam)
+        }
+      }
+      throw galatTerakhir
+    }
+    let batal = false
+    ambilGaya()
+      .then((json) => {
+        if (batal) return
+        pasang(json)
+      })
+      .catch((e: unknown) => {
+        if (batal) return
+        // Gaya lama dipertahankan - peta tidak mendadak kosong; yang gagal
+        // cuma citranya, dan itu keterangan yang jujur.
+        console.warn('[basemap] gaya satelit tidak terambil; gaya sebelumnya dipertahankan', e)
+      })
+    return () => {
+      batal = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gaya, kunciTerlambat])
 
@@ -3263,8 +3398,8 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         // menu kawasan, dan dua lapisan chrome yang sejajar terbaca sebagai satu
         // bilah yang berantakan. 5,75rem menaruhnya tepat di bawah bilah itu
         // (tinggi bilah + bantalan lapisan), dengan celah yang terlihat sengaja.
-        <div className="kaca pop pointer-events-none absolute left-1/2 top-[8.75rem] z-10 flex -translate-x-1/2 lg:top-[5.75rem] items-center gap-3.5 rounded-full px-5 py-2.5">
-          <p className="papan tabular text-[26px] leading-none">
+        <div className="kaca pop pointer-events-none absolute left-1/2 top-[8.75rem] z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-full px-5 py-2.5 max-lg:top-[4.5rem] max-lg:gap-2 max-lg:px-3 max-lg:py-1.5 lg:top-[5.75rem]">
+          <p className="papan tabular text-[26px] leading-none max-lg:text-[17px]">
             {sorot.opportunity_score?.toFixed(0) ?? '—'}
           </p>
           {/* Indeks H3 sengaja TIDAK di sini. Lima belas karakter heksadesimal
@@ -3272,17 +3407,17 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               peta - yang ia butuhkan cuma tahu ini di mana. Indeksnya tetap ada
               di panel detail, tempat orang memang sedang menelusuri satu
               lokasi tertentu. */}
-          <p className="text-[12.5px] leading-tight text-ink-3">
+          <p className="text-[12.5px] leading-tight text-ink-3 max-lg:text-[10px]">
             Opportunity Score
-            <span className="block text-[11.5px] font-medium text-ink-2">{sorot.kawasan}</span>
+            <span className="block text-[11.5px] font-medium text-ink-2 max-lg:text-[9.5px]">{sorot.kawasan}</span>
           </p>
-          <p className="flex items-center gap-1.5 border-l border-line pl-3.5 text-[13.5px] text-ink-2">
+          <p className="flex items-center gap-1.5 border-l border-line pl-3.5 text-[13.5px] text-ink-2 max-lg:pl-2.5 max-lg:text-[11px]">
             <span className="flex flex-col leading-tight">
               <span className="font-semibold" style={{ color: sorot.kuadran ? KUADRAN[sorot.kuadran].warna : undefined }}>
                 {sorot.kuadran ? namaZona(sorot.kuadran) : teksZona.belum}
               </span>
               {sorot.kuadran && (
-                <span className="text-[11.5px] text-ink-3">
+                <span className="text-[11.5px] text-ink-3 max-lg:text-[9.5px]">
                   {bahasa === 'en' ? KUADRAN[sorot.kuadran].ringkasEn : KUADRAN[sorot.kuadran].ringkas}
                 </span>
               )}
@@ -3353,8 +3488,13 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           // bottom-24, bukan bottom-4: kaki peta sudah ditempati pil pertanyaan
           // layer / ajakan simulasi / baki komparasi, dan pesan ini lebih
           // tinggi daripada versi satu-barisnya. Ditaruh di atas keduanya.
-          className="kaca pop pointer-events-auto relative max-w-[22rem] rounded-md px-4 py-3"
+          className="kaca pop pointer-events-auto relative max-w-[22rem] rounded-md px-4 py-3 max-lg:max-w-[13.5rem] max-lg:rounded-lg max-lg:px-2.5 max-lg:py-1.5"
         >
+          {/* Di ponsel kartu ini dikecilkan: yang perlu terbaca cuma "petanya
+              kenapa". Pesan teknis dari MapLibre (nama layer, nama properti)
+              tidak menolong siapa pun yang sedang melihat peta - ia cuma
+              membuat layar terlihat rusak - jadi di sana ia dipotong dua baris
+              dan dikecilkan, bukan disembunyikan (isinya tetap bisa dibaca). */}
           {/* Dua kegagalan, dua kalimat.
 
               Versi sebelumnya selalu menulis "Basemap gagal dimuat" lalu
@@ -3368,13 +3508,16 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
               (dengan kunci pun 401), sementara `styles/*` menjawab 200 dengan
               kunci yang sama dan `fonts/*` 200 tanpa kunci. Jadi kuncinya sah
               dan yang padam sisi MAPID. */}
-          <p className="pr-7 text-[13.5px] font-semibold text-bahaya">
+          <p className="pr-7 text-[13.5px] font-semibold text-bahaya max-lg:pr-0 max-lg:text-[11px]">
             {teksZona.basemapJudul}
           </p>
-          <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
+          <p
+            className="mt-1 text-[13px] leading-relaxed text-ink-2 max-lg:mt-0.5 max-lg:line-clamp-2 max-lg:text-[10px]"
+            title={galatPeta.pesan}
+          >
             {galatPeta.pesan}
           </p>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3 max-lg:hidden">
             {teksZona.basemapLanjut}
           </p>
         </div>
@@ -3384,10 +3527,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       {galat && (
         <div
           role="alert"
-          className="absolute bottom-4 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-md border border-bahaya/30 bg-bahaya-soft px-4 py-3 text-[15px] text-bahaya shadow-[0_18px_40px_-14px_rgb(22_33_28/0.35)] lg:left-[calc(50%-13rem)]"
+          className="absolute bottom-4 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-md border border-bahaya/30 bg-bahaya-soft px-4 py-3 text-[15px] text-bahaya shadow-[0_18px_40px_-14px_rgb(22_33_28/0.35)] max-lg:max-w-[15rem] max-lg:px-2.5 max-lg:py-2 max-lg:text-[11.5px] lg:left-[calc(50%-13rem)]"
         >
           <p className="font-semibold">{teksZona.heksJudul}</p>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-ink-2">
+          <p className="mt-1 text-[13.5px] leading-relaxed text-ink-2 max-lg:mt-0.5 max-lg:line-clamp-2 max-lg:text-[10.5px]">
             {/* `TypeError` peramban ("Failed to fetch") bukan kalimat untuk pengunjung. */}
             {galat === 'Failed to fetch' ? teksZona.tanpaSambungan : galat}
           </p>
@@ -3460,3 +3603,4 @@ function PenandaSimpul({
 }
 
 export default PetaInteraktif
+

@@ -941,6 +941,17 @@ export default function App() {
    * dipakai sama sekali (panel jadi kolom tetap).
    */
   const [lembarPenuh, setLembarPenuh] = useState(false)
+  /**
+   * Lembar ponsel dalam keadaan RINGKAS: seperempat layar, bukan 45%.
+   *
+   * Dipakai saat yang ditampilkan adalah DETAIL satu heksagon (tab Daftar
+   * dengan heksagon terpilih) - kepala detailnya sendiri sudah memuat nama
+   * kawasan, skor, dan kuadrannya, dan menutup hampir setengah peta untuk itu
+   * membalik gunanya: yang perlu dilihat justru petanya. Sisanya tetap
+   * terjangkau dengan menyeret lembar ke atas, jadi yang ringkas bukan "lebih
+   * sedikit", melainkan "mulai dari yang penting" (permintaan 19 Sep 2026).
+   */
+  const detailRingkas = panelTerbuka && tab === 'daftar' && Boolean(hexTerpilih) && !lembarPenuh
   /* Titik sentuh awal + penanda "barusan digeser", supaya klik setelah seretan
      tidak ikut membalik keadaan. Lihat penangan di kepala lembar. */
   const mulaiLembar = useRef(0)
@@ -2490,7 +2501,9 @@ export default function App() {
               data-buka={panelTerbuka}
               data-penuh={lembarPenuh}
               aria-hidden={!panelTerbuka}
-              className="kolom-geser lembar-peta melayang absolute inset-x-0 min-h-0 max-lg:h-[45svh] max-lg:rounded-t-2xl max-lg:shadow-[0_-18px_50px_-24px_rgb(10_20_16/0.55)] max-lg:transition-[height] max-lg:duration-300 max-lg:ease-liquid lg:static lg:h-auto"
+              className={`kolom-geser lembar-peta melayang pointer-events-auto absolute inset-x-0 min-h-0 max-lg:z-40 max-lg:rounded-t-2xl max-lg:shadow-[0_-18px_50px_-24px_rgb(10_20_16/0.55)] max-lg:transition-[height] max-lg:duration-300 max-lg:ease-liquid lg:static lg:h-auto ${
+                detailRingkas ? 'max-lg:h-[26svh]' : 'max-lg:h-[45svh]'
+              }`}
               style={
                 {
                   '--lebar-kolom': panelTerbuka ? '25rem' : '0rem',

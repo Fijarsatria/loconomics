@@ -2136,7 +2136,13 @@ export default function Gerbang({ onMasuk }: { onMasuk: (pilihan?: PilihanKawasa
                 ditulis dua kali adalah dua menu yang suatu saat berbeda isi.
                 Yang tidak ikut cuma "Nama tempat" - itu setelan basemap, dan
                 halaman ini tidak punya basemap. */}
-            <MenuPengaturan varian="gerbang" />
+            {/* Urutan di layar sempit: akun DULU, pengaturan BELAKANGAN, supaya
+                tombol Setting yang berdiri di pojok KANAN - bukan akun
+                (permintaan pemilik repo 19 Sep 2026). Di `sm` ke atas urutan
+                aslinya kembali, karena "Masuk ke peta" yang jadi paling kanan. */}
+            <span className="inline-flex max-sm:order-last">
+              <MenuPengaturan varian="gerbang" />
+            </span>
             <TombolAkun varian="gerbang" />
             <span className="hidden sm:inline-flex">
               {tombolMasuk('px-5 py-2.5', 'kecil', Boolean(akun))}
