@@ -293,7 +293,7 @@ const K_APP: Record<
     bukaPanelDaftar: 'Buka panel daftar lokasi',
     bukaDaftar: 'Buka daftar lokasi',
     pintasanJudul: 'Pintasan preferensi',
-    pintasanBuka: (s: string) => `Buka rekomendasi untuk ${s}`,
+    pintasanBuka: (s: string) => `Tanya Loconomics AI: ${s}`,
     kembaliDaftar: 'Kembali ke daftar lokasi',
     klikLain: 'Klik heksagon lain di peta untuk membandingkan',
     kosongkanBaki: 'Kosongkan baki',
@@ -365,7 +365,7 @@ const K_APP: Record<
     bukaPanelDaftar: 'Open the locations panel',
     bukaDaftar: 'Open the location list',
     pintasanJudul: 'Preference shortcuts',
-    pintasanBuka: (s: string) => `Open recommendations for ${s}`,
+    pintasanBuka: (s: string) => `Ask Loconomics AI: ${s}`,
     kembaliDaftar: 'Back to the list',
     klikLain: 'Click another hexagon on the map to compare',
     kosongkanBaki: 'Clear tray',
@@ -721,6 +721,25 @@ export default function App() {
   const [nHeksagon, setNHeksagon] = useState<number | null>(null)
   const [kuadranPenuh, setKuadranPenuh] = useState(false)
   const [sumberTerbuka, setSumberTerbuka] = useState(false)
+
+  /** Penanda "sedang menutup" untuk dua dialog di atas peta; elemennya ditahan
+   *  terpasang selama animasinya, jadi menutupnya tidak lagi hilang seketika. */
+  const [menutupSumber, setMenutupSumber] = useState(false)
+  const [menutupKuadran, setMenutupKuadran] = useState(false)
+  const tutupSumber = useCallback(() => {
+    setMenutupSumber(true)
+    window.setTimeout(() => {
+      setSumberTerbuka(false)
+      setMenutupSumber(false)
+    }, 200)
+  }, [])
+  const tutupKuadran = useCallback(() => {
+    setMenutupKuadran(true)
+    window.setTimeout(() => {
+      setKuadranPenuh(false)
+      setMenutupKuadran(false)
+    }, 200)
+  }, [])
   // Daftar dulu, detail belakangan. Pertanyaan pertama pengguna adalah "yang mana
   // yang harus saya lihat", bukan "bagaimana lokasi ini" - dan layar kosong yang
   // menyuruh mengklik heksagon menjawab pertanyaan yang belum diajukan.
@@ -887,33 +906,72 @@ export default function App() {
 
   const pintasan = useMemo(() => {
     const p = akun?.preferensi
-    const keluar: { kunci: string; teks: string; glif?: string }[] = []
     const jenis = JENIS_USAHA.find((j) => j.nilai === p?.jenis_usaha)
-    if (jenis) {
+    const namaJenis = jenis ? (bahasa === 'en' ? jenis.labelEn : jenis.label) : null
+    const kw = p?.kawasan ?? KAWASAN_AWAL.nama
+    const budget = p?.budget_sewa_bulanan ?? null
+    const en = bahasa === 'en'
+    const rp = (n: number) => `Rp${n.toLocaleString(en ? 'en-US' : 'id-ID')}`
+    const keluar: { kunci: string; teks: string; glif?: string }[] = []
+
+    if (jenis && namaJenis) {
       keluar.push({
-        kunci: 'jenis',
-        teks: bahasa === 'en' ? jenis.labelEn : jenis.label,
+        kunci: 'jenis-kw',
+        teks: en ? `${namaJenis} business in ${kw}` : `Lokasi Usaha ${namaJenis} di ${kw}`,
         glif: jenis.glif,
       })
     }
-    if (p?.kawasan) keluar.push({ kunci: 'kawasan', teks: p.kawasan })
-    if (p?.budget_sewa_bulanan) {
-      const n = p.budget_sewa_bulanan.toLocaleString(bahasa === 'en' ? 'en-US' : 'id-ID')
-      keluar.push({ kunci: 'anggaran', teks: `≤ Rp${n}` })
-    }
-    if (keluar.length) return keluar
-    JENIS_USAHA.slice(0, 2).forEach((j) =>
+    keluar.push({
+      kunci: 'spot',
+      teks: en ? `The best spots in ${kw}` : `Spot terbaik di ${kw}`,
+    })
+    if (budget) {
       keluar.push({
-        kunci: j.nilai,
-        teks: bahasa === 'en' ? j.labelEn : j.label,
-        glif: j.glif,
-      }),
-    )
-    keluar.push({ kunci: 'kawasan-bawaan', teks: KAWASAN_AWAL.nama })
-    return keluar
+        kunci: 'anggaran',
+        teks: en
+          ? `Rent under ${rp(budget)} a month in ${kw}`
+          : `Sewa di bawah ${rp(budget)} di ${kw}`,
+      })
+    }
+    keluar.push({
+      kunci: 'umkm',
+      teks: en ? `Promising UMKM locations in ${kw}` : `Lokasi Usaha UMKM di ${kw}`,
+    })
+    keluar.push({
+      kunci: 'hidden',
+      teks: en
+        ? `Which places in ${kw} are good but still overlooked?`
+        : `Mana yang bagus tapi belum dilirik di ${kw}?`,
+    })
+    keluar.push({
+      kunci: 'jebakan',
+      teks: en
+        ? `Which places in ${kw} risk becoming a trap?`
+        : `Mana yang berisiko menjebak di ${kw}?`,
+    })
+    keluar.push({
+      kunci: 'sewa',
+      teks: en ? `What rent is fair in ${kw}?` : `Berapa harga sewa yang wajar di ${kw}?`,
+    })
+    keluar.push({
+      kunci: 'zona',
+      teks: en ? `Is a business allowed around ${kw}?` : `Boleh buka usaha di sekitar ${kw}?`,
+    })
+
+    const unik = new Map(keluar.map((x) => [x.teks, x]))
+    return [...unik.values()].slice(0, 8)
   }, [akun, bahasa])
 
   const [kabarPin, setKabarPin] = useState<{ h3: string; baru: boolean; kunci: number } | null>(null)
+
+  /**
+   * Pertanyaan yang dititipkan pil pintasan ke Loconomics AI.
+   *
+   * `kunci` (bukan cuma teksnya) supaya menekan pil yang SAMA dua kali tetap
+   * mengirim pertanyaan lagi - teks yang sama persis tidak akan pernah dianggap
+   * perubahan state.
+   */
+  const [tanyaAI, setTanyaAI] = useState<{ teks: string; kunci: number } | null>(null)
 
   /** Daftar pin yang sedang tergambar - sumber kebenaran di sisi layar. */
   const pinKini = useRef<
@@ -1619,12 +1677,9 @@ export default function App() {
               {kendaliFilter('turun')}
               {pengaturanEl}
             </div>
-            {/* Pemisah tipis: akun bukan pengaturan peta, dan tanpa jeda
-                visual keduanya terbaca sebagai satu kelompok tombol. */}
-            <span
-              className="mx-0.5 hidden h-6 w-px shrink-0 bg-line sm:block max-lg:hidden"
-              aria-hidden
-            />
+            {/* Garis pemisah tipis di kiri tombol akun DIHAPUS (21 Sep 2026):
+                jaraknya sudah cukup menyatakan kelompoknya sendiri, dan
+                garisnya justru terbaca sebagai sisa tata letak. */}
             <div className="hidden shrink-0 lg:block">
               <TombolAkun />
             </div>
@@ -2247,6 +2302,8 @@ export default function App() {
                       hexTerpilih={hexTerpilih}
                       layerAktif={layer}
                       onKeLokasi={keLokasiAI}
+                      tanyaAwal={tanyaAI}
+                      onTanyaDipakai={() => setTanyaAI(null)}
                     />
                   </div>
                 </div>
@@ -2258,12 +2315,13 @@ export default function App() {
                 yang terbaca sebagai benda miring dan tipis. */}
             {!panelTerbuka && (
               <div
-                className="kaca pop pointer-events-auto absolute bottom-0 right-0 hidden flex-col gap-1 rounded-lg p-1.5 lg:static lg:flex lg:justify-center"
+                className="pointer-events-auto hidden shrink-0 flex-col justify-center gap-2 lg:flex"
                 role="group"
                 aria-label={t.bukaPanel}
               >
                 {URUTAN_NAV.map((k) => {
-                  const label = k === 'rekomendasi' ? t.navUntuk : k === 'daftar' ? t.navLokasi : t.navAI
+                  const label =
+                    k === 'rekomendasi' ? t.navUntuk : k === 'daftar' ? t.navLokasi : t.navAI
                   const nama =
                     k === 'rekomendasi' ? t.tabRekomendasi : k === 'daftar' ? t.tabDaftar : t.tabAI
                   return (
@@ -2275,10 +2333,10 @@ export default function App() {
                       }}
                       aria-label={`${t.bukaPanel}: ${nama}`}
                       title={nama}
-                      className="flex w-16 cursor-pointer flex-col items-center gap-1 rounded-md px-1 py-2 text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+                      className="kaca pop flex w-[3.75rem] cursor-pointer flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
                     >
-                      <IkonNav k={k} ukuran={22} />
-                      <span className="text-[10px] font-semibold leading-none">{label}</span>
+                      <IkonNav k={k} ukuran={26} />
+                      <span className="text-[10.5px] font-semibold leading-none">{label}</span>
                     </button>
                   )
                 })}
@@ -2336,7 +2394,7 @@ export default function App() {
               yang sama di kiri-atas, di bawah bilah. Keduanya disembunyikan
               saat lembar terbuka - sama seperti pil filter dan atribusi. */}
           <div
-            className="pintasan-pil pointer-events-none absolute left-2.5 z-30 flex max-lg:right-[4.5rem] flex-row gap-1.5 overflow-x-auto lg:left-4 lg:top-[4.75rem]"
+            className="pintasan-pil pointer-events-none absolute left-2.5 z-30 flex max-lg:right-[4.5rem] flex-row gap-1.5 overflow-x-auto lg:left-4 lg:right-[27rem] lg:top-[6.25rem] lg:gap-2 lg:scroll-px-4"
             role="list"
             aria-label={t.pintasanJudul}
           >
@@ -2345,14 +2403,15 @@ export default function App() {
                 key={p.kunci}
                 role="listitem"
                 onClick={() => {
-                  setTab('rekomendasi')
+                  setTanyaAI({ teks: p.teks, kunci: Date.now() })
+                  setTab('ai')
                   setPanelTerbuka(true)
                 }}
                 title={t.pintasanBuka(p.teks)}
-                className="kaca pointer-events-auto flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[11.5px] font-medium text-ink-2 transition-colors duration-200 hover:text-ink lg:px-2.5 lg:py-1 lg:text-[11px]"
+                className="pil-pendar pointer-events-auto flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[12px] font-semibold text-ink transition-transform duration-200 ease-jelly hover:scale-[1.04] active:scale-95 lg:px-3.5 lg:py-2 lg:text-[12.5px]"
               >
                 {p.glif && (
-                  <svg width="13" height="13" viewBox="0 0 20 20" aria-hidden className="shrink-0 opacity-70">
+                  <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden className="shrink-0 opacity-80">
                     <path d={p.glif} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
@@ -2528,18 +2587,19 @@ export default function App() {
             diketik tangan. */}
         {sumberTerbuka && (
           <div
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-4 backdrop-blur-[3px] sm:p-6"
-            onClick={() => setSumberTerbuka(false)}
+            data-menutup={menutupSumber ? '1' : undefined}
+            className="tirai-peta fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-4 backdrop-blur-[3px] sm:p-6"
+            onClick={tutupSumber}
             role="dialog"
             aria-modal="true"
             aria-label={t.sumberData}
           >
             <div
-              className="kaca-tebal melayang my-auto w-[54rem] max-w-full overflow-hidden rounded-xl"
+              className="tirai-peta-panel kaca-tebal my-auto w-[54rem] max-w-full overflow-hidden rounded-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <Suspense fallback={null}>
-                <SumberData onTutup={() => setSumberTerbuka(false)} />
+                <SumberData onTutup={tutupSumber} />
               </Suspense>
             </div>
           </div>
@@ -2548,14 +2608,15 @@ export default function App() {
         {/* --- Diagram kuadran penuh --------------------------------------- */}
         {kuadranPenuh && (
           <div
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-3 backdrop-blur-[3px] sm:items-center sm:p-6"
-            onClick={() => setKuadranPenuh(false)}
+            data-menutup={menutupKuadran ? '1' : undefined}
+            className="tirai-peta fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-3 backdrop-blur-[3px] sm:items-center sm:p-6"
+            onClick={tutupKuadran}
             role="dialog"
             aria-modal="true"
             aria-label={t.diagramKuadran}
           >
             <div
-              className="kaca-tebal melayang my-auto flex w-[52rem] max-w-full flex-col overflow-hidden rounded-xl"
+              className="tirai-peta-panel kaca-tebal my-auto flex w-[52rem] max-w-full flex-col overflow-hidden rounded-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-baseline justify-between gap-4 border-b border-line/70 px-4 py-4 sm:gap-6 sm:px-6 sm:py-5">
@@ -2566,7 +2627,7 @@ export default function App() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setKuadranPenuh(false)}
+                  onClick={tutupKuadran}
                   className="shrink-0 cursor-pointer rounded-full border border-line px-4 py-1.5 text-[13.5px] font-medium transition-colors hover:bg-surface-2"
                 >
                   {t.tutup}
@@ -2582,7 +2643,7 @@ export default function App() {
                   batas={diagram ? { x: diagram.batas_x, y: diagram.batas_y } : undefined}
                   onPilih={(h3) => {
                     setHexTerpilih(h3)
-                    setKuadranPenuh(false)
+                    tutupKuadran()
                   }}
                 />
                 {/* Kolom kanan: penjelasan sumbu. Dipindah ke samping, bukan di
@@ -2745,5 +2806,6 @@ function AjakanPantauan({ onTutup }: { onTutup: () => void }) {
     </div>
   )
 }
+
 
 

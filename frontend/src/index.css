@@ -2211,32 +2211,58 @@ input:focus-visible {
     top: calc(4.75rem + env(safe-area-inset-top));
     bottom: auto;
   }
-    /* Pendar cahaya tombol Loconomics AI: gradien tepi + cincin yang berdenyut,
-     pola yang sama dengan tombol "Daftar" di halaman pembuka. */
+    /* Pendar cahaya tombol Loconomics AI. Dua lapis, karena satu lapis memang
+     terasa kurang: CINCIN WARNA yang berputar (teal - ungu - pink - kuning,
+     jadi warnanya tidak monoton) dan DENYUT yang jauh lebih cepat daripada
+     versi pertama (1,6 dtk, bukan 3,2) supaya tombolnya terlihat hidup. */
   .ai-pendar {
     isolation: isolate;
     box-shadow:
-      0 0 22px -3px rgb(45 232 192 / 0.55),
-      0 0 34px -8px rgb(124 92 255 / 0.5);
+      0 0 20px -2px rgb(45 232 192 / 0.65),
+      0 0 34px -6px rgb(124 92 255 / 0.6),
+      0 0 46px -10px rgb(244 114 182 / 0.5);
   }
-  .ai-pendar::before {
+  .ai-pendar::before,
+  .ai-pendar::after {
     content: '';
     position: absolute;
-    inset: -3px;
     border-radius: inherit;
+    pointer-events: none;
+  }
+  .ai-pendar::before {
+    inset: -3px;
+    background: conic-gradient(
+      from 0deg,
+      #2de8c0,
+      #22d3ee,
+      #7c5cff,
+      #f472b6,
+      #fbbf24,
+      #2de8c0
+    );
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    animation: ai-putar 4200ms linear infinite;
+  }
+  .ai-pendar::after {
+    inset: -2px;
     border: 2px solid var(--color-gem);
     opacity: 0;
-    pointer-events: none;
-    animation: ai-pendar-denyut 3200ms ease-out infinite;
+    animation: ai-denyut 1600ms ease-out infinite;
   }
-  @keyframes ai-pendar-denyut {
+  @keyframes ai-putar {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes ai-denyut {
     0% {
-      opacity: 0.8;
+      opacity: 0.85;
       transform: scale(1);
     }
-    65% {
+    70% {
       opacity: 0;
-      transform: scale(1.18);
+      transform: scale(1.22);
     }
     100% {
       opacity: 0;
@@ -2246,12 +2272,17 @@ input:focus-visible {
      kolom kendali kanan supaya tidak bertabrakan dengan kompas/tersimpan.
      Angkanya melewati piringan tombol AI (yang naik ±8,5rem dari dasar). */
   .pintasan-pil {
-    bottom: calc(8.75rem + env(safe-area-inset-bottom));
+    bottom: calc(8.15rem + env(safe-area-inset-bottom));
     scrollbar-width: none;
+    /* Tepi KANAN memudar, bukan terpotong: pil yang berhenti tepat sebelum
+       kolom kendali kanan tidak boleh terlihat seperti terpotong paksa. */
+    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 2.5rem), transparent 100%);
+    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 2.5rem), transparent 100%);
   }
   .pintasan-pil::-webkit-scrollbar {
     display: none;
   }
+
   /* Lembar Simulasi menempel DASAR layar, jadi keadaan penuhnya tidak dikurangi
      `bottom`: setinggi layar dikurangi tinggi bilah atas saja. */
   .simulasi-sheet[data-penuh='true'] {
@@ -2263,11 +2294,14 @@ input:focus-visible {
   .maplibregl-ctrl-scale {
     display: none !important;
   }
+  /* Tombol (i) pindah ke KANAN-ATAS, di bawah bilah - simetris dengan pil
+     Filter di kiri-atas (permintaan 21 Sep 2026). Tempat lama di kiri-bawah
+     berdesakan dengan pil pintasan. */
   .maplibregl-ctrl-bottom-left {
-    top: auto !important;
-    bottom: calc(6rem + env(safe-area-inset-bottom)) !important;
-    left: 0.625rem !important;
-    right: auto !important;
+    top: calc(4.75rem + env(safe-area-inset-top)) !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: 0.625rem !important;
     display: block !important;
   }
   .maplibregl-ctrl-bottom-right {
@@ -3514,6 +3548,58 @@ input:focus-visible {
   transition: max-width 520ms var(--ease-liquid);
 }
 
+/* TUTUP: tirai memudar sambil panelnya mengempis sedikit ke bawah. Tanpa ini
+   dialognya hilang seketika - dilaporkan pemilik repo 21 Sep 2026 pada dialog
+   isi preferensi. Elemennya ditahan terpasang sebentar oleh pemanggilnya. */
+@keyframes tirai-latar-keluar {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes tirai-panel-keluar {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+/* Dialog DI ATAS PETA (diagram kuadran penuh, layar Sumber data): masuk dengan
+   memudar + panelnya naik sedikit, keluar dengan kebalikannya. Sebelumnya
+   keduanya dipasang-dicabut, jadi menutupnya hilang seketika (21 Sep 2026). */
+@keyframes tirai-peta-masuk {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tirai-peta-keluar {
+  to {
+    opacity: 0;
+  }
+}
+.tirai-peta {
+  animation: tirai-peta-masuk 220ms var(--ease-liquid) both;
+}
+.tirai-peta[data-menutup='1'] {
+  animation: tirai-peta-keluar 180ms cubic-bezier(0.4, 0, 0.7, 1) both;
+  pointer-events: none;
+}
+@keyframes tirai-peta-panel-keluar {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+}
+.tirai-peta[data-menutup='1'] .tirai-peta-panel {
+  animation: tirai-peta-panel-keluar 180ms cubic-bezier(0.4, 0, 0.7, 1) both;
+}
+
+.tirai-latar[data-menutup='1'] {
+  animation: tirai-latar-keluar 200ms cubic-bezier(0.4, 0, 0.7, 1) both;
+  pointer-events: none;
+}
+.tirai-latar[data-menutup='1'] .tirai-panel {
+  animation: tirai-panel-keluar 200ms cubic-bezier(0.4, 0, 0.7, 1) both;
+}
+
 @keyframes panggung-masuk {
   from {
     opacity: 0;
@@ -4549,4 +4635,31 @@ input:focus-visible {
   .ai-kartu-lokasi:hover .ai-kartu-heks {
     transform: none;
   }
+}
+
+/* --- Pil pintasan preferensi ----------------------------------------------
+   Tepi bergradien seperti tombol "Daftar" di halaman pembuka, tetapi kacanya
+   tetap tembus pandang supaya peta di baliknya masih terbaca. Dipakai di
+   desktop MAUPUN ponsel, jadi aturannya berdiri di luar media query. */
+.pil-pendar {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(
+        color-mix(in srgb, var(--color-surface) 80%, transparent),
+        color-mix(in srgb, var(--color-surface) 80%, transparent)
+      )
+      padding-box,
+    linear-gradient(96deg, #2de8c0 0%, #7c5cff 55%, #f472b6 100%) border-box;
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  box-shadow:
+    0 6px 18px -10px rgb(22 33 28 / 0.55),
+    0 0 16px -8px rgb(45 232 192 / 0.6);
+}
+.pil-pendar:hover {
+  box-shadow:
+    0 8px 22px -10px rgb(22 33 28 / 0.6),
+    0 0 22px -6px rgb(124 92 255 / 0.7);
 }

@@ -1,4 +1,6 @@
 
+import type { ReactNode } from 'react'
+
 import { BATASAN, DIUKUR, RINGKASAN, SUMBER, TEMUAN } from '../lib/ringkasan-data'
 import { useTeks } from '../lib/bahasa'
 import { angka } from '../lib/format'
@@ -9,8 +11,10 @@ const K = {
     isi: 'Setiap angka di Loconomics berasal dari sumber yang bisa Anda buka sendiri. Daftar ini dibangkitkan dari basis data yang sama dengan yang menggambar petanya — bukan diketik ulang.',
     diukur: (t: string) => `Diukur ${t}`,
     resmiJudul: 'Data resmi — diukur, dan boleh mengisi kolom',
+    resmiRingkas: 'menghitung skor & keyakinan',
     resmiIsi: 'Yang di bawah ini menghitung skor, mewarnai peta, dan menentukan lencana keyakinan.',
     perkiraanJudul: 'Perkiraan — tidak pernah mengisi kolom',
+    perkiraanRingkas: 'tidak menghitung apa pun',
     perkiraanIsi:
       'Yang di bawah ini hanya tampil di panel detail, selalu berlabel Perkiraan. Ia tidak pernah menghitung skor, tidak pernah mewarnai peta, dan tidak pernah menaikkan lencana keyakinan.',
     kolSumber: 'Sumber',
@@ -28,11 +32,14 @@ const K = {
     rPoi: 'POI OpenStreetMap',
     rRute: 'rute jalan kaki',
     batasJudul: 'Yang belum ada, disebut apa adanya',
+    batasRingkas: 'kekurangan yang ikut dicetak',
     batasIsi:
       'Daftar ini sengaja ikut dicetak. Produk data yang cuma menyebut kekuatannya menuntut pembacanya menebak sisanya.',
     temuanJudul: 'Empat pengukuran yang membantah dugaan wajar',
+    temuanRingkas: 'empat temuan berangka',
     tutup: 'Tutup',
     metodeJudul: 'Metodologi — dari data mentah ke rekomendasi',
+    metodeRingkas: 'enam langkah',
     metode: [
       ['Kumpulkan', 'Data misi MAPID (Menu Go, Struk Go, Properti Go) dan Community Maps ditarik lewat API MAPID, disaring per poligon enam kawasan pilot; ditambah OpenStreetMap, openrouteservice, WorldPop, dan RDTR ATR/BPN.'],
       ['Bersihkan & baca foto', 'Koordinat di luar wilayah dibuang, satuan diseragamkan, kosong tetap kosong. Foto struk dan spanduk dibaca Gemini Vision menjadi angka terstruktur yang divalidasi skema.'],
@@ -42,6 +49,7 @@ const K = {
       ['Jelaskan lewat AI', 'Loconomics AI (Gemini) memilih alat dari daftar tertutup, membaca hasilnya dari basis data, dan menggerakkan peta. Ia TIDAK PERNAH menghitung skor; setiap jawaban membawa jejak alat yang dipanggil.'],
     ] as [string, string][],
     surveiJudul: 'Survey activities — peran data lapangan',
+    surveiRingkas: 'peran data lapangan',
     surveiIsi:
       'Survei dilakukan lewat MAPID APPS (misi Menu Go, Struk Go, Properti Go, dan Community Maps). Datanya ditarik per poligon, jadi yang masuk adalah kumpulan seluruh peserta yang titiknya jatuh di enam kawasan pilot — termasuk survei tim kami.',
     surveiAngka: (ditarik: string, masuk: string, heks: string) =>
@@ -55,9 +63,11 @@ const K = {
     surveiBatas:
       'Data mentah survei tidak pernah ditampilkan — yang keluar hanya rangkuman per heksagon, dan rangkuman dari satu baris survei pun ditahan.',
     estimasiJudul: 'Estimasi pengisi untuk peragaan',
+    estimasiRingkas: 'sel yang diisi estimasi',
     estimasiIsi:
       'Pada rilis ini, sel yang belum punya sumber lapangan untuk harga sewa, NJOP, pergantian usaha (churn), pola jam, prestise visual, proksi penumpang, dan kepadatan kos DIISI ESTIMASI supaya PriceLens, RiskRadar, dan Commuter Clock bisa diperagakan. Estimasi diturunkan dari sinyal nyata heksagon itu sendiri (jarak ke simpul, penduduk, jumlah usaha terpetakan), ikut dihitung mesin skor yang sama, dan lencana keyakinan TIDAK dinaikkan. Zonasi dan seluruh variabel survei MAPID tidak pernah diisi estimasi. Seluruh sel tercatat dan dapat dicabut kembali.',
     rekomJudul: 'Rekomendasi untuk pemangku kepentingan',
+    rekomRingkas: 'empat pemakainya',
     rekom: {
       umkm: 'Calon pelaku UMKM',
       pemda: 'Pemerintah daerah & perencana kota',
@@ -79,8 +89,10 @@ const K = {
     isi: 'Every number in Loconomics comes from a source you can open yourself. This list is generated from the same database that draws the map — not retyped.',
     diukur: (t: string) => `Measured ${t}`,
     resmiJudul: 'Official data — measured, and allowed to fill columns',
+    resmiRingkas: 'computes scores & confidence',
     resmiIsi: 'These compute the scores, colour the map, and set the confidence badges.',
     perkiraanJudul: 'Estimates — never fill a column',
+    perkiraanRingkas: 'computes nothing at all',
     perkiraanIsi:
       'These only appear in the detail panel, always labelled Estimate. They never compute a score, never colour the map, and never raise a confidence badge.',
     kolSumber: 'Source',
@@ -98,11 +110,14 @@ const K = {
     rPoi: 'OpenStreetMap POIs',
     rRute: 'walking routes',
     batasJudul: 'What is missing, said plainly',
+    batasRingkas: 'the gaps, printed too',
     batasIsi:
       'This list is printed on purpose. A data product that names only its strengths asks its reader to guess the rest.',
     temuanJudul: 'Four measurements that contradict a reasonable guess',
+    temuanRingkas: 'four numbered findings',
     tutup: 'Close',
     metodeJudul: 'Methodology — from raw data to recommendations',
+    metodeRingkas: 'six steps',
     metode: [
       ['Collect', 'MAPID mission data (Menu Go, Struk Go, Properti Go) and Community Maps are pulled through the MAPID API, filtered by the polygons of the six pilot areas; plus OpenStreetMap, openrouteservice, WorldPop, and ATR/BPN zoning (RDTR).'],
       ['Clean & read photos', 'Coordinates outside the study area are dropped, units are standardised, and empty stays empty. Receipt and banner photos are read by Gemini Vision into structured, schema-validated numbers.'],
@@ -112,6 +127,7 @@ const K = {
       ['Explain with AI', 'Loconomics AI (Gemini) picks tools from a closed list, reads their results from the database, and moves the map. It NEVER computes a score; every answer carries the trace of the tools it called.'],
     ] as [string, string][],
     surveiJudul: 'Survey activities — the role of field data',
+    surveiRingkas: 'why field data matters',
     surveiIsi:
       'Surveys are done with MAPID APPS (Menu Go, Struk Go, Properti Go missions and Community Maps). The data is pulled by polygon, so it is the combined work of every participant whose points fall in the six pilot areas — including our team’s surveys.',
     surveiAngka: (ditarik: string, masuk: string, heks: string) =>
@@ -125,9 +141,11 @@ const K = {
     surveiBatas:
       'Raw survey rows are never shown — only per-hexagon summaries leave the system, and even a summary of a single survey row is withheld.',
     estimasiJudul: 'Placeholder estimates for demonstration',
+    estimasiRingkas: 'cells filled by estimate',
     estimasiIsi:
       'In this release, cells with no field source yet for rent, land value (NJOP), business churn, hourly patterns, visual prestige, ridership proxy, and boarding-house density ARE FILLED WITH ESTIMATES so PriceLens, RiskRadar, and Commuter Clock can be demonstrated. Estimates are derived from real signals of the same hexagon (distance to the station, population, mapped businesses), pass through the same scoring engine, and confidence badges are NOT raised. Zoning and every MAPID survey variable are never estimated. Every filled cell is recorded and can be removed.',
     rekomJudul: 'Recommendations for stakeholders',
+    rekomRingkas: 'four kinds of reader',
     rekom: {
       umkm: 'Aspiring small-business owners',
       pemda: 'Local government & city planners',
@@ -203,7 +221,7 @@ export default function SumberData({ onTutup }: { onTutup?: () => void }) {
   ]
 
   return (
-    <div className="flex flex-col gap-6 px-5 py-5 sm:px-6">
+    <div className="flex flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-5">
       <header>
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="papan text-[19px]">{t.judul}</h2>
@@ -216,147 +234,110 @@ export default function SumberData({ onTutup }: { onTutup?: () => void }) {
             </button>
           )}
         </div>
-        <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-ink-2">{t.isi}</p>
-        <p className="mt-1 text-[11.5px] text-ink-3">{t.diukur(DIUKUR)}</p>
+        <p className="mt-1.5 max-w-[58ch] text-[13px] leading-relaxed text-ink-2">{t.isi}</p>
       </header>
 
-      <section>
-        <h3 className="eyebrow mb-2">{t.ringkasJudul}</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {angkaRingkas.map(([n, label]) => (
-            <div key={label} className="rounded-lg border border-line px-2.5 py-2">
-              <p className="tabular text-[18px] leading-none text-ink">{angka(n)}</p>
-              <p className="mt-1 text-[11.5px] leading-tight text-ink-3">{label}</p>
-            </div>
-          ))}
-          <div className="rounded-lg border border-line px-2.5 py-2">
-            <p className="tabular text-[18px] leading-none text-ink">
-              {RINGKASAN.variabelTerisi}/{RINGKASAN.variabelTotal}
-            </p>
-            <p className="mt-1 text-[11.5px] leading-tight text-ink-3">{t.rVariabel}</p>
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+        {angkaRingkas.map(([n, label]) => (
+          <div key={label} className="rounded-lg border border-line px-2.5 py-2">
+            <p className="tabular text-[17px] leading-none text-ink">{angka(n)}</p>
+            <p className="mt-1 text-[11px] leading-tight text-ink-3">{label}</p>
           </div>
+        ))}
+        <div className="rounded-lg border border-line px-2.5 py-2">
+          <p className="tabular text-[17px] leading-none text-ink">
+            {RINGKASAN.variabelTerisi}/{RINGKASAN.variabelTotal}
+          </p>
+          <p className="mt-1 text-[11px] leading-tight text-ink-3">{t.rVariabel}</p>
         </div>
       </section>
 
-      {/* --- Metodologi (B.3/B.5 panitia) -------------------------------------
-          Enam langkah, satu kalimat penjelas masing-masing. Bobot di langkah 4
-          SAMA dengan pipeline/config.py; kalau bobotnya diubah, kalimat ini
-          ikut diubah (tidak ada ekspor untuknya). */}
-      <section>
-        <h3 className="eyebrow mb-2">{t.metodeJudul}</h3>
-        <ol className="grid gap-2 sm:grid-cols-2">
-          {t.metode.map(([judul, isi], i) => (
-            <li key={judul} className="flex gap-2.5 rounded-lg border border-line px-2.5 py-2">
-              <span className="tabular grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-[12px] font-semibold text-ink">
-                {i + 1}
-              </span>
-              <span>
-                <span className="block text-[13px] font-semibold text-ink">{judul}</span>
-                <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-2">{isi}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      {/* Sembilan bagian panjang jadi daftar yang bisa dibuka satu per satu.
+          Yang tampil lebih dulu cuma judul + satu baris ringkasannya, jadi
+          layarnya bersih; isinya utuh begitu diketuk, dan di layar lebar
+          bagian-bagiannya tersusun dua kolom. Yang bernilai di sini justru isi
+          yang bisa diperiksa, bukan dinding teks yang dilewati. */}
+      <div className="grid gap-2 lg:grid-cols-2">
+        <Lipat judul={t.metodeJudul} ringkas={t.metodeRingkas}>
+          <ol className="grid gap-2 sm:grid-cols-2">
+            {t.metode.map(([judul, isi], i) => (
+              <li key={judul} className="flex gap-2.5">
+                <span className="tabular grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-[12px] font-semibold text-ink">
+                  {i + 1}
+                </span>
+                <span>
+                  <span className="block text-[13px] font-semibold text-ink">{judul}</span>
+                  <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-2">{isi}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </Lipat>
 
-      {/* --- Survey activities (B.5 panitia) ----------------------------------
-          Angkanya dari RINGKASAN (dibangkitkan), perannya kalimat tetap. */}
-      <section>
-        <h3 className="eyebrow mb-1">{t.surveiJudul}</h3>
-        <p className="mb-2 text-[12.5px] leading-snug text-ink-2">{t.surveiIsi}</p>
-        <p className="tabular mb-2 rounded-lg bg-surface-2 px-2.5 py-2 text-[13px] font-semibold text-ink">
-          {t.surveiAngka(
-            angka(RINGKASAN.titikMisiDitarik) ?? String(RINGKASAN.titikMisiDitarik),
-            angka(RINGKASAN.observasiMisi) ?? String(RINGKASAN.observasiMisi),
-            angka(RINGKASAN.heksagonBersurvei) ?? String(RINGKASAN.heksagonBersurvei),
-          )}
-        </p>
-        <ul className="flex flex-col gap-1.5">
-          {t.surveiPeran.map((p) => (
-            <li key={p} className="flex gap-2 text-[12.5px] leading-snug text-ink-2">
-              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gem" aria-hidden />
-              {p}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[12px] leading-snug text-ink-3 italic">{t.surveiBatas}</p>
-      </section>
-
-      {/* --- Rekomendasi untuk pemangku kepentingan (B.5 panitia) ---------------
-          Angka di dalam kalimatnya diambil dari TEMUAN yang dibangkitkan; kalau
-          temuannya tidak terbit, kalimatnya tetap berdiri tanpa angka. */}
-      <section>
-        <h3 className="eyebrow mb-2">{t.rekomJudul}</h3>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {(
-            [
-              [t.rekom.umkm, t.rekomUmkm(TEMUAN.find((f) => f.kunci === 'rute')?.angka ?? null)],
-              [
-                t.rekom.pemda,
-                t.rekomPemda(
-                  angka(TEMUAN.find((f) => f.kunci === 'zonasi')?.deret.find((d) => d.label.includes('RDTR'))?.nilai ?? null) ??
-                    null,
-                ),
-              ],
-              [t.rekom.operator, t.rekomOperator(TEMUAN.find((f) => f.kunci === 'jangkau')?.judul ?? null)],
-              [t.rekom.properti, t.rekomProperti],
-            ] as [string, string][]
-          ).map(([siapa, isi]) => (
-            <div key={siapa} className="rounded-lg border border-line px-2.5 py-2">
-              <p className="text-[13px] font-semibold text-ink">{siapa}</p>
-              <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{isi}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h3 className="eyebrow mb-1 text-jebakan">{t.estimasiJudul}</h3>
-        <p className="rounded-lg border border-dashed border-line-2 px-2.5 py-2 text-[12.5px] leading-snug text-ink-2">
-          {t.estimasiIsi}
-        </p>
-      </section>
-
-      <section>
-        <h3 className="eyebrow mb-1 text-gem">{t.resmiJudul}</h3>
-        <p className="mb-2 text-[12.5px] leading-snug text-ink-2">{t.resmiIsi}</p>
-        <Tabel baris={resmi} t={t} />
-      </section>
-
-      {perkiraan.length > 0 && (
-        <section>
-          <h3 className="eyebrow mb-1 text-jebakan">{t.perkiraanJudul}</h3>
-          <p className="mb-2 text-[12.5px] leading-snug text-ink-2">{t.perkiraanIsi}</p>
-          <Tabel baris={perkiraan} t={t} />
-        </section>
-      )}
-
-      {BATASAN.length > 0 && (
-        <section>
-          <h3 className="eyebrow mb-1">{t.batasJudul}</h3>
-          <p className="mb-2 text-[12.5px] leading-snug text-ink-2">{t.batasIsi}</p>
+        <Lipat judul={t.surveiJudul} ringkas={t.surveiRingkas}>
+          <p className="tabular mb-2 rounded-lg bg-surface-2 px-2.5 py-2 text-[12.5px] font-semibold text-ink">
+            {t.surveiAngka(
+              angka(RINGKASAN.titikMisiDitarik) ?? String(RINGKASAN.titikMisiDitarik),
+              angka(RINGKASAN.observasiMisi) ?? String(RINGKASAN.observasiMisi),
+              angka(RINGKASAN.heksagonBersurvei) ?? String(RINGKASAN.heksagonBersurvei),
+            )}
+          </p>
           <ul className="flex flex-col gap-1.5">
-            {BATASAN.map((b) => (
-              <li
-                key={b}
-                className="rounded-lg border border-dashed border-line-2 px-2.5 py-2 text-[12.5px] leading-snug text-ink-2"
-              >
-                {b}
+            {t.surveiPeran.map((p) => (
+              <li key={p} className="flex gap-2 text-[12.5px] leading-snug text-ink-2">
+                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gem" aria-hidden />
+                {p}
               </li>
             ))}
           </ul>
-        </section>
-      )}
+          <p className="mt-2 text-[12px] leading-snug text-ink-3 italic">{t.surveiBatas}</p>
+        </Lipat>
 
-      {TEMUAN.length > 0 && (
-        <section>
-          <h3 className="eyebrow mb-2">{t.temuanJudul}</h3>
-          <ul className="flex flex-col gap-2">
+        <Lipat judul={t.rekomJudul} ringkas={t.rekomRingkas}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                [t.rekom.umkm, t.rekomUmkm(TEMUAN.find((f) => f.kunci === 'rute')?.angka ?? null)],
+                [
+                  t.rekom.pemda,
+                  t.rekomPemda(
+                    angka(
+                      TEMUAN.find((f) => f.kunci === 'zonasi')?.deret.find((d) =>
+                        d.label.includes('RDTR'),
+                      )?.nilai ?? null,
+                    ) ?? null,
+                  ),
+                ],
+                [
+                  t.rekom.operator,
+                  t.rekomOperator(TEMUAN.find((f) => f.kunci === 'jangkau')?.judul ?? null),
+                ],
+                [t.rekom.properti, t.rekomProperti],
+              ] as [string, string][]
+            ).map(([siapa, isi]) => (
+              <div key={siapa}>
+                <p className="text-[13px] font-semibold text-ink">{siapa}</p>
+                <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{isi}</p>
+              </div>
+            ))}
+          </div>
+        </Lipat>
+
+        <Lipat judul={t.resmiJudul} ringkas={t.resmiRingkas} nada="text-gem">
+          <Tabel baris={resmi} t={t} />
+        </Lipat>
+
+        {perkiraan.length > 0 && (
+          <Lipat judul={t.perkiraanJudul} ringkas={t.perkiraanRingkas} nada="text-jebakan">
+            <p className="mb-2 text-[12.5px] leading-snug text-ink-2">{t.perkiraanIsi}</p>
+            <Tabel baris={perkiraan} t={t} />
+          </Lipat>
+        )}
+
+        <Lipat judul={t.temuanJudul} ringkas={t.temuanRingkas}>
+          <ul className="flex flex-col gap-2.5">
             {TEMUAN.map((f) => (
-              <li key={f.kunci} className="rounded-lg border border-line px-2.5 py-2">
-                {/* DUGAAN dulu, temuan menyusul. Temuan yang berdiri sendiri
-                    cuma angka; yang membuatnya temuan adalah bahwa ia
-                    membantah sesuatu yang wajar dipercaya. */}
+              <li key={f.kunci}>
                 <p className="text-[11.5px] leading-snug text-ink-3 italic">{f.dugaan}</p>
                 <p className="mt-1 text-[13px] font-semibold text-ink">{f.judul}</p>
                 <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{f.uraian}</p>
@@ -364,8 +345,60 @@ export default function SumberData({ onTutup }: { onTutup?: () => void }) {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        </Lipat>
+
+        {BATASAN.length > 0 && (
+          <Lipat judul={t.batasJudul} ringkas={t.batasRingkas}>
+            <p className="mb-2 text-[12.5px] leading-snug text-ink-2">{t.batasIsi}</p>
+            <ul className="flex flex-col gap-1.5">
+              {BATASAN.map((b) => (
+                <li key={b} className="text-[12.5px] leading-snug text-ink-2">
+                  • {b}
+                </li>
+              ))}
+            </ul>
+          </Lipat>
+        )}
+
+        <Lipat judul={t.estimasiJudul} ringkas={t.estimasiRingkas} nada="text-jebakan">
+          <p className="text-[12.5px] leading-snug text-ink-2">{t.estimasiIsi}</p>
+        </Lipat>
+      </div>
+
+      <p className="text-[11.5px] leading-snug text-ink-3">{t.diukur(DIUKUR)}</p>
     </div>
   )
 }
+
+/** Satu bagian yang bisa dibuka. Ringkasannya satu baris, isinya utuh. */
+function Lipat({
+  judul,
+  ringkas,
+  nada,
+  children,
+}: {
+  judul: string
+  ringkas: string
+  nada?: string
+  children: ReactNode
+}) {
+  return (
+    <details className="group overflow-hidden rounded-lg border border-line">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 transition-colors hover:bg-surface-2">
+        <span className={`eyebrow flex-1 ${nada ?? ''}`}>{judul}</span>
+        <span className="hidden shrink-0 text-[11.5px] text-ink-3 sm:inline">{ringkas}</span>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 12 12"
+          aria-hidden
+          className="shrink-0 text-ink-3 transition-transform duration-200 ease-liquid group-open:rotate-90"
+        >
+          <path d="M4 1.5 8.5 6 4 10.5" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+        </svg>
+      </summary>
+      <div className="border-t border-line/60 px-3 py-3">{children}</div>
+    </details>
+  )
+}
+

@@ -69,6 +69,11 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
   const [akun, setAkun] = useState<Akun | null>(null)
   const [memuat, setMemuat] = useState(adaTiket())
   const [alur, setAlur] = useState<Alur | null>(null)
+  /**
+   * Tirai sedang MENUTUP: ditahan terpasang sebentar supaya animasinya
+   * berjalan. Tanpa ini dialognya hilang seketika (dilaporkan 21 Sep 2026).
+   */
+  const [menutupAlur, setMenutupAlur] = useState(false)
 
   // Validasi tiket tersimpan, sekali saat memuat. Tiket yang kedaluwarsa atau
   // akunnya dinonaktifkan mendarat di 401 dan langsung dibuang - lebih baik
@@ -153,6 +158,18 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
     }
   }, [premiumKini, sinyalSimpan])
 
+  /**
+   * Menutup tirai alur dengan ANIMASI: penandanya dinyalakan dulu, elemennya
+   * dibiarkan terpasang selama animasinya (200ms), baru dilepas.
+   */
+  const tutupAlur = useCallback(() => {
+    setMenutupAlur(true)
+    window.setTimeout(() => {
+      setAlur(null)
+      setMenutupAlur(false)
+    }, 220)
+  }, [])
+
   const mintaMasuk = useCallback((alasan: AlasanKunci = null) => {
     setAlur({ langkah: 'akun', alasan })
   }, [])
@@ -198,34 +215,35 @@ export function SesiProvider({ anak }: { anak: ReactNode }) {
       {anak}
       {alur && (
         <TiraiAlur
+          menutup={menutupAlur}
           kunci={alur.langkah}
           judul={alur.langkah === 'akun' ? 'Akun Loconomics' : 'Loconomics Premium'}
           // Penanda tahap hanya untuk alur PENDAFTARAN. Orang yang membuka
           // preferensi dari menu akun tidak sedang menempuh tiga langkah apa pun.
           tahap={alur.langkah === 'akun' || !alur.rayakan ? null : alur.langkah === 'paket' ? 1 : 2}
-          onTutup={() => setAlur(null)}
+          onTutup={tutupAlur}
         >
           {alur.langkah === 'akun' ? (
             <DialogAkun
               alasan={alur.alasan}
-              onTutup={() => setAlur(null)}
+              onTutup={tutupAlur}
               onBerhasil={(baru) => {
-                setAlur(baru ? { langkah: 'paket', alasan: null, rayakan: true } : null)
+                if (baru) setAlur({ langkah: 'paket', alasan: null, rayakan: true }); else tutupAlur()
               }}
             />
           ) : alur.langkah === 'paket' ? (
             <DialogLangganan
               alasan={alur.alasan}
               rayakan={alur.rayakan}
-              onTutup={() => setAlur(null)}
+              onTutup={tutupAlur}
               onLanjut={(pesan) => setAlur({ langkah: 'usaha', pesan, rayakan: alur.rayakan })}
             />
           ) : (
             <DialogPreferensi
               pesan={alur.pesan}
-              onTutup={() => setAlur(null)}
+              onTutup={tutupAlur}
               onSelesai={(hasil) => {
-                setAlur(null)
+                tutupAlur()
                 if (hasil) {
                   window.dispatchEvent(
                     new CustomEvent<DetailBukaPeta>(PERISTIWA_BUKA_PETA, { detail: hasil }),
@@ -273,11 +291,13 @@ function TiraiDasar({
   judul,
   onTutup,
   lebar,
+  menutup = false,
   children,
 }: {
   judul: string
   onTutup: () => void
   lebar: string
+  menutup?: boolean
   children: ReactNode
 }) {
   useEffect(() => {
@@ -298,6 +318,7 @@ function TiraiDasar({
 
   return createPortal(
     <div
+      data-menutup={menutup ? '1' : undefined}
       className="tirai-latar fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-[4px] sm:p-6"
       onClick={onTutup}
       role="dialog"
@@ -321,18 +342,20 @@ function TiraiAlur({
   judul,
   tahap,
   onTutup,
+  menutup = false,
   children,
 }: {
   kunci: string
   judul: string
   tahap: number | null
   onTutup: () => void
+  menutup?: boolean
   children: ReactNode
 }) {
   const [lebar, setLebar] = useState('26.5rem')
   return (
     <PanggungKonteks.Provider value={setLebar}>
-      <TiraiDasar judul={judul} onTutup={onTutup} lebar={lebar}>
+      <TiraiDasar judul={judul} onTutup={onTutup} lebar={lebar} menutup={menutup}>
         {tahap !== null && <Tahapan aktif={tahap} />}
         <Panggung kunci={kunci}>{children}</Panggung>
       </TiraiDasar>
@@ -1923,3 +1946,4 @@ export function DialogPreferensi({
     </Tirai>
   )
 }
+

@@ -196,10 +196,14 @@ export const IDENTITAS = {
   tim: 'Tim #33 · Top 50',
   institusi: 'Telkom University, Bandung',
   ketua: 'Irvan Tegar Yunadi',
+  /** Kontak yang dipakai di menu Pengaturan. Diisi 21 Sep 2026 atas
+   *  permintaan pemilik repo; surel sengaja dibiarkan kosong daripada diisi
+   *  alamat yang tidak dipakai. */
+  penanggungJawab: 'Fijar Satria Pinandita Mangkauna',
   email: '',
-  instagram: '',
-  situs: '',
-  repositori: '',
+  instagram: '@fjrs_07',
+  situs: 'loconomics.mapid.io',
+  repositori: 'github.com/Fijarsatria',
 }
 
 export interface Pendiri {

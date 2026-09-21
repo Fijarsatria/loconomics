@@ -1027,13 +1027,30 @@ export function PilihBasemap<T extends string>({
 /** Baris data yang jujur: yang kosong ditulis kosong, bukan disembunyikan. */
 function BarisIdentitas({ label, nilai }: { label: string; nilai: string }) {
   const t = useTeks(K_PENGATURAN)
+  // Nilai yang berupa alamat (instagram/github/situs) bisa dibuka; nama dan
+  // jabatan tetap teks biasa.
+  const tautan = /^(https?:\/\/|@|[\w.-]+\.(io|com|id|org|net)\b)/.test(nilai)
+  const href = nilai.startsWith('@')
+    ? `https://instagram.com/${nilai.slice(1)}`
+    : nilai.startsWith('http')
+      ? nilai
+      : `https://${nilai}`
   return (
     <div className="flex gap-3 py-1.5">
       <span className="w-[6.5rem] shrink-0 text-[12.5px] text-ink-3">{label}</span>
-      {nilai ? (
-        <span className="text-[13px] leading-snug text-ink">{nilai}</span>
-      ) : (
+      {!nilai ? (
         <span className="text-[13px] italic text-ink-3">{t.belumDiisi}</span>
+      ) : tautan ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="break-all text-[13px] leading-snug text-ink underline decoration-line-2 underline-offset-2 transition-colors hover:decoration-ink"
+        >
+          {nilai}
+        </a>
+      ) : (
+        <span className="text-[13px] leading-snug text-ink">{nilai}</span>
       )}
     </div>
   )
@@ -1053,7 +1070,7 @@ const K_PENGATURAN = {
     },
     kontak: {
       judul: 'Kontak',
-      label: ['Surel', 'Instagram', 'Situs', 'Repositori'],
+      label: ['Nama', 'Instagram', 'GitHub', 'Situs'],
       catatan: 'Kontak tim belum dicantumkan.',
     },
   },
@@ -1070,7 +1087,7 @@ const K_PENGATURAN = {
     },
     kontak: {
       judul: 'Contact',
-      label: ['Email', 'Instagram', 'Website', 'Repository'],
+      label: ['Name', 'Instagram', 'GitHub', 'Website'],
       catatan: 'The team’s contact details are not listed yet.',
     },
   },
@@ -1087,7 +1104,12 @@ const NILAI_PENGATURAN = {
     IDENTITAS.institusi,
     IDENTITAS.ketua,
   ],
-  kontak: [IDENTITAS.email, IDENTITAS.instagram, IDENTITAS.situs, IDENTITAS.repositori],
+  kontak: [
+    IDENTITAS.penanggungJawab,
+    IDENTITAS.instagram,
+    IDENTITAS.repositori,
+    IDENTITAS.situs,
+  ],
 }
 
 type KunciPengaturan = keyof typeof NILAI_PENGATURAN
@@ -1541,3 +1563,4 @@ export function Terkunci({
     </div>
   )
 }
+
