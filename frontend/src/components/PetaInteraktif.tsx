@@ -885,11 +885,19 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       }),
       'bottom-left',
     )
-    if (window.matchMedia('(max-width: 1023.98px)').matches) {
+    // Panel sumber peta SELALU mulai dalam keadaan terlipat - hanya tombol (i)
+    // yang terlihat, persis seperti sebelumnya. MapLibre menambah
+    // `maplibregl-compact-show` sendiri saat gaya selesai dimuat (karena
+    // atribusinya lebih dari satu), jadi kelasnya dibuang lagi tiap kali gaya
+    // terpasang - bukan sekali di sini. Tanpa ini panelnya menganga terus dan
+    // menutupi kendali peta, dan tombolnya berhenti terlihat seperti tombol.
+    const lipatAttrib = () => {
       m.getContainer()
         .querySelector('.maplibregl-ctrl-attrib')
         ?.classList.remove('maplibregl-compact-show')
     }
+    lipatAttrib()
+    m.on('styledata', lipatAttrib)
     m.on('load', () => setSiap(true))
     m.once('styledata', () => setSiap(true))
     // Gaya awal dipasang SESUDAH kunci basemap siap. Terbitan tanpa kunci
