@@ -1436,18 +1436,25 @@ export default function App() {
   const kendaliFilter = (arah: 'turun' | 'naik') => (
     <>
       <MenuKawasan nilai={kawasan} onUbah={gantiKawasan} arah={arah} />
-      {/* Mematikan layer kini berarti kembali ke Opportunity Score, bukan
-          menyembunyikan heksagon (permintaan pemilik repo). Pilihan "tanpa
-          layer" dihapus justru karena itu. */}
+      {/* "Tanpa layer" ada lagi: ia menyembunyikan heksagon tematik supaya
+          peta dasarnya terlihat. Bawaannya tetap Opportunity Score - yang
+          dimatikan cuma lapisan warnanya. */}
       <Menu
         label="Layer"
         arah={arah}
-        nilai={layer}
-        opsi={Object.entries(LAYER).map(([k, l]) => ({
-          nilai: k as NamaLayer,
-          label: l.nama,
-        }))}
+        nilai={layerNyala ? layer : 'mati'}
+        opsi={[
+          { nilai: 'mati' as NamaLayer, label: t.tanpaLayer },
+          ...Object.entries(LAYER).map(([k, l]) => ({
+            nilai: k as NamaLayer,
+            label: l.nama,
+          })),
+        ]}
         onUbah={(v) => {
+          if ((v as string) === 'mati') {
+            setLayerNyala(false)
+            return
+          }
           setLayer(v)
           setLayerNyala(true)
         }}
