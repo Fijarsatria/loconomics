@@ -14,6 +14,12 @@ MODEL_DEFAULT = "claude-opus-5"
 # Bawaan saat LLM_PROVIDER=gemini. Bisa ditimpa LLM_MODEL, sama seperti di atas.
 MODEL_GEMINI = "gemini-flash-latest"
 
+# Bawaan untuk penyedia kompatibel-OpenAI (DashScope/Qwen/DeepSeek).
+MODEL_OPENAI = "deepseek-v4.1-flash"
+
+#: Penyedia yang bicara `/chat/completions` seperti OpenAI.
+_PROVIDER_OPENAI = {"openai", "dashscope", "qwen", "deepseek"}
+
 # Ditekan dari 8 ke 6 (21 Sep 2026): tiap putaran = satu panggilan model penuh,
 # dan satu pertanyaan sudah memakai 5. Panggilan penutup tetap menjamin jawaban.
 MAKS_PUTARAN = 6
@@ -30,7 +36,12 @@ class LLMBelumSiap(RuntimeError):
 def model_aktif() -> str:
     if settings.llm_model:
         return settings.llm_model
-    return MODEL_GEMINI if settings.llm_provider.lower() == "gemini" else MODEL_DEFAULT
+    penyedia = settings.llm_provider.lower()
+    if penyedia == "gemini":
+        return MODEL_GEMINI
+    if penyedia in _PROVIDER_OPENAI:
+        return MODEL_OPENAI
+    return MODEL_DEFAULT
 
 
 #: Sampai kapan penyedia dianggap sedang menolak. Epoch detik; 0 = tidak.
@@ -127,6 +138,18 @@ def klien():
         log.info("Klien LLM siap (Gemini), model %s", model_aktif())
         return _klien
 
+    if settings.llm_provider.lower() in _PROVIDER_OPENAI:
+        from app.core.llm_openai import KlienOpenAI
+
+        if not settings.llm_base_url:
+            raise LLMBelumSiap(
+                "LLM_BASE_URL belum diisi (mis. https://dashscope-intl.aliyuncs.com/compatible-mode/v1)."
+            )
+        cadangan = [k.strip() for k in settings.llm_api_key_cadangan.split(",") if k.strip()]
+        _klien = KlienOpenAI([settings.llm_api_key, *cadangan], settings.llm_base_url)
+        log.info("Klien LLM siap (OpenAI-compatible), model %s", model_aktif())
+        return _klien
+
     try:
         import anthropic
     except ModuleNotFoundError as e:  # pragma: no cover - hanya saat dependensi kurang
@@ -150,6 +173,12 @@ def biaya_usd(usage) -> float | None:
     # akibatnya Konsultan AI mati jauh sebelum uangnya benar-benar terpakai.
     if settings.llm_provider.lower() == "gemini":
         from app.core.llm_gemini import TARIF_KELUAR, TARIF_MASUK
+
+        return round(
+            masuk / 1_000_000 * TARIF_MASUK + keluar / 1_000_000 * TARIF_KELUAR, 6
+        )
+    if settings.llm_provider.lower() in _PROVIDER_OPENAI:
+        from app.core.llm_openai import TARIF_KELUAR, TARIF_MASUK
 
         return round(
             masuk / 1_000_000 * TARIF_MASUK + keluar / 1_000_000 * TARIF_KELUAR, 6

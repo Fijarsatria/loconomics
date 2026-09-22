@@ -54,9 +54,12 @@
 #                              menjawab 501 dengan pesan yang jujur
 #      LLM_API_KEY_CADANGAN    kunci Gemini dari PROYEK Google lain, dipisah
 #                              koma; dicoba berurutan saat kunci utama kena batas
-#      LLM_PROVIDER            anthropic ATAU gemini
-#      LLM_MODEL               claude-opus-5 (anthropic) atau
-#                              gemini-3-flash-preview (gemini)
+#      LLM_PROVIDER            anthropic, gemini, ATAU dashscope (kompatibel OpenAI:
+#                              openai/dashscope/qwen/deepseek)
+#      LLM_BASE_URL            hanya untuk penyedia kompatibel-OpenAI, mis.
+#                              https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+#      LLM_MODEL               claude-opus-5 (anthropic), gemini-3-flash-preview
+#                              (gemini), atau deepseek-v4.1-flash (dashscope)
 #      LLM_PLAFON_HARIAN_USD   2.0
 #
 #    UNTUK PAMERAN 3-4 SEPTEMBER 2026: dipakai `gemini`, bukan `anthropic`,

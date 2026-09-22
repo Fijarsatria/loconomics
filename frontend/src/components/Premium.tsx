@@ -88,7 +88,7 @@ const K = {
     // kalimat - jadi ia memang milik kamus, bukan milik backend.
     tingkat: { AMAN: 'aman', WASPADA: 'waspada', BAHAYA: 'bahaya' } as Record<string, string>,
     belumDinilai: 'belum dinilai',
-    rH3: 'Indeks H3',
+    rH3: 'Kode lokasi',
     rVersi: 'Versi skor',
     selisihNol:
       'Selisihnya nol karena skornya belum pernah diterbitkan ulang sejak Anda menyimpan lokasi ini — bukan karena tidak ada yang berubah.',
@@ -195,7 +195,7 @@ const K = {
     rRisiko: 'Turnover risk',
     tingkat: { AMAN: 'safe', WASPADA: 'caution', BAHAYA: 'danger' } as Record<string, string>,
     belumDinilai: 'not judged yet',
-    rH3: 'H3 index',
+    rH3: 'Location code',
     rVersi: 'Score version',
     selisihNol:
       'The difference is zero because the score has not been published again since you saved this location — not because nothing has changed.',
@@ -1418,7 +1418,7 @@ export function DialogPantauan({
                           b.risiko ? (t.tingkat[b.risiko] ?? b.risiko.toLowerCase()) : t.belumDinilai
                         }
                       />
-                      <BarisRinci label={t.rH3} nilai={b.h3_index} mono />
+                      <BarisRinci label={t.rH3} nilai={kodeLokasi(b.h3_index, b.kawasan ?? '')} />
                       <BarisRinci
                         label={t.rVersi}
                         nilai={

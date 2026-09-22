@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -14,6 +15,7 @@ from app.api import pricelens, skor as modul_skor
 from app.api.bersama import ambil_hex, periksa_kawasan, zoneguard
 from app.api.hex import commuter_clock, detail_heksagon
 from app.core.akun import PenggunaPremium, wajib_akses_penuh
+from app.core.aturan import kode_lokasi
 from app.core.batas import periksa_anggaran, periksa_laju
 from app.core.config import settings
 from app.core.database import get_db
@@ -103,7 +105,15 @@ def cari_lokasi(
         )
 
     baris = db.execute(stmt).all()
-    hasil = [skor_heksagon(hx, sc).model_dump() for hx, sc in baris]
+    hasil = []
+    for hx, sc in baris:
+        item = skor_heksagon(hx, sc).model_dump()
+        # Kode yang bisa dibaca ikut dikirim supaya model tidak pernah perlu
+        # menulis indeks H3 mentah ke jawaban.
+        kode = _kode(item["h3_index"], hx.kawasan)
+        if kode:
+            item["kode_lokasi"] = kode
+        hasil.append(item)
 
     # `jenis_usaha` belum dipakai menyaring: kompetitor per kelas induk baru bisa
     # dibedakan setelah data POI terklasifikasi masuk. Dikembalikan apa adanya
@@ -252,6 +262,7 @@ def _ringkas_detail(d) -> dict[str, Any]:
     """Bentuk ringkas DetailHeksagon untuk konteks model."""
     return {
         "h3_index": d.skor.h3_index,
+        "kode_lokasi": _kode(d.skor.h3_index, d.skor.kawasan),
         "kawasan": d.skor.kawasan,
         "opportunity_score": d.skor.opportunity_score,
         "hidden_gem_score": d.skor.hidden_gem_score,
@@ -526,7 +537,9 @@ HEMAT ALAT. Panggil alat seperlunya saja. Jangan menumpuk cek_harga, cek_risiko,
 jelaskan_skor, cari_hidden_gem, atau bedah_blok kalau pengguna tidak menanyakan \
 hal itu - setiap alat menambah satu putaran penuh dan memperlambat jawaban. Untuk \
 pencarian lokasi, cukup: cari_lokasi -> cek_zona kandidat teratas -> flyTo dan \
-highlight, lalu tulis jawabannya. Berhenti memanggil begitu datanya cukup.
+highlight, lalu tulis jawabannya. Keluarkan panggilan yang tidak saling \
+bergantung dalam SATU giliran sekaligus - misalnya flyTo dan highlight bersama - \
+supaya tidak memakan putaran tambahan. Berhenti memanggil begitu datanya cukup.
 
 8. CAKUPAN ANDA HANYA LOCONOMICS: pemilihan lokasi usaha, skor peluang, zonasi, \
 harga sewa, kompetisi, rute ke simpul transit, simulasi usaha, dan cara kerja \
@@ -570,8 +583,10 @@ Jangan pernah menulis kode mentah. Kuadran ditulis dengan namanya: HIDDEN_GEM = 
 "Hidden Gem", PEMENANG_JELAS = "Aman" (Inggris: "Safe"), JEBAKAN_GENGSI = \
 "Jebakan Gengsi" (Inggris: "Prestige Trap"), HINDARI = "Hindari" (Inggris: \
 "Avoid"). Status zona DIIZINKAN/DILARANG/TIDAK_DIKETAHUI ditulis "diizinkan", \
-"dilarang", "belum bisa dipastikan". Heksagon disebut dengan kode lokasinya \
-kalau ada, bukan indeks H3 panjang.
+"dilarang", "belum bisa dipastikan". JANGAN PERNAH menulis indeks H3 mentah \
+(deretan 15 huruf/angka seperti 898c107830bffff) di jawaban. Selalu sebut lokasi \
+dengan kode lokasinya, misalnya Manggarai-33651; kalau kode lokasinya tidak ada, \
+sebut kawasannya saja.
 
 PANJANG: tiga sampai enam kalimat untuk pertanyaan biasa - cukup untuk menjawab, \
 menyebut angka yang mendukungnya, DAN menerangkan kenapa hasilnya begitu. Pakai \
@@ -579,12 +594,13 @@ daftar hanya kalau memang membandingkan beberapa lokasi. Jawaban satu baris tanp
 alasan tidak memenuhi tugas Anda: orang datang untuk pertimbangan, bukan untuk \
 satu angka.
 
-Bicara seperti konsultan yang membantu langsung di depan orangnya, bukan seperti \
-sistem yang membacakan isi tabel. Buka dengan jawaban intinya, baru susul dengan \
-alasannya - jangan menahan orang menunggu sampai kalimat terakhir untuk tahu \
-rekomendasinya. Boleh hangat, tetapi hindari bahasa pemasaran ("luar biasa", \
-"wajib coba", "dijamin untung"): kepercayaan datang dari kejujuran soal data, \
-bukan dari nada bersemangat.
+GAYA: santai, hangat, dan ceria seperti teman yang jago data - bukan konsultan \
+berjas yang membacakan tabel. Sapa dengan akrab, boleh sedikit bercanda dan pakai \
+emoji sesekali (cukup 1-2 per jawaban, jangan berlebihan). Buka dengan jawaban \
+intinya, baru susul alasannya - jangan menahan orang menunggu sampai kalimat \
+terakhir. Tetap hindari bahasa pemasaran berlebih ("luar biasa", "wajib coba", \
+"dijamin untung"): kepercayaan datang dari kejujuran soal data. Kalau kabarnya \
+kurang enak, sampaikan jujur tapi tetap suportif.
 
 JELASKAN MENGAPA, bukan cuma APA. Setiap angka yang Anda sebut disertai satu \
 kalimat yang membuatnya berarti: dibanding apa, dari mana asalnya, dan apa artinya \
@@ -613,6 +629,16 @@ menjanjikan keuntungan.\
 TANDA_TOLAK_CAKUPAN = "[TOLAK_CAKUPAN]"
 
 
+def _kode(h3: str | None, kawasan: str | None) -> str | None:
+    """Kode lokasi yang aman; None kalau h3/kawasan tidak sah (mis. data uji)."""
+    if not h3 or not kawasan:
+        return None
+    try:
+        return kode_lokasi(h3, kawasan)
+    except (ValueError, IndexError):
+        return None
+
+
 def _konteks(permintaan: PermintaanAI, db: Session | None = None, bahasa: str = "id") -> str | None:
     """Konteks peta yang sedang dilihat pengguna, kalau ada."""
     bagian = []
@@ -624,6 +650,9 @@ def _konteks(permintaan: PermintaanAI, db: Session | None = None, bahasa: str = 
         kawasan = getattr(hx, "kawasan", None)
         if isinstance(kawasan, str):
             bagian.append(f"Kawasan heksagon itu: {kawasan}")
+            kode = _kode(permintaan.hex_terpilih, kawasan)
+            if kode:
+                bagian.append(f"Kode lokasi heksagon itu: {kode}")
     if permintaan.layer_aktif:
         bagian.append(f"Layer aktif: {permintaan.layer_aktif}")
     return "\n".join(bagian) if bagian else None
@@ -639,6 +668,22 @@ def _ringkas_hasil(nama: str, hasil: Any) -> str:
         if "status" in hasil:
             return f"{nama}: {hasil['status']}"
     return f"{nama}: selesai"
+
+
+#: Indeks H3 res-9 = 15 karakter heksadesimal. Model kadang menuliskannya
+#: mentah walau prompt melarang; ini jaring pengaman terakhir sebelum ke layar.
+_POLA_H3 = re.compile(r"(?<![0-9a-f])[0-9a-f]{15}(?![0-9a-f])")
+
+
+def _sembunyikan_h3(teks: str, db: Session, kandidat: list[str]) -> str:
+    """Ganti indeks H3 mentah di jawaban dengan kode lokasi yang bisa dibaca."""
+    peta: dict[str, str] = {}
+    for h3 in dict.fromkeys(kandidat):
+        hx = db.get(HexFeature, h3)
+        kode = _kode(h3, getattr(hx, "kawasan", None))
+        if kode:
+            peta[h3] = kode
+    return _POLA_H3.sub(lambda m: peta.get(m.group(0), "lokasi itu"), teks)
 
 
 def _kumpulkan_hex(hasil: Any, keranjang: list[str]) -> None:
@@ -884,6 +929,13 @@ def tanya(
     ditolak_cakupan = teks.startswith(TANDA_TOLAK_CAKUPAN)
     if ditolak_cakupan:
         teks = teks[len(TANDA_TOLAK_CAKUPAN):].lstrip(" :\n-")
+
+    # Jaring pengaman: apa pun yang dikatakan prompt, indeks H3 mentah tidak
+    # pernah sampai ke layar pengguna.
+    kandidat_h3 = [*hex_disebut]
+    if permintaan.hex_terpilih:
+        kandidat_h3.append(permintaan.hex_terpilih)
+    teks = _sembunyikan_h3(teks, db, kandidat_h3)
 
     keyakinan = None
     if permintaan.hex_terpilih:

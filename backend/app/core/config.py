@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     llm_api_key_cadangan: str = ""
     llm_provider: str = "anthropic"
     llm_model: str = "claude-opus-5"
+    # Untuk penyedia yang kompatibel OpenAI (DashScope/Qwen/DeepSeek).
+    llm_base_url: str = ""
 
     # Plafon biaya AI per hari. Bukan kehati-hatian berlebihan: satu useEffect
     # tanpa dependensi yang benar di frontend sudah cukup untuk memanggil

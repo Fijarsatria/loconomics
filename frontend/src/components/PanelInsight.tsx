@@ -612,18 +612,11 @@ function PanelInsight({
             : 'var(--color-surface)',
         }}
       >
-        {/* Nama yang bisa dibaca di depan, indeks H3 di belakangnya dan
-            kecil. Indeksnya TETAP ada - ia yang dipakai kalau seseorang perlu
-            menelusuri ke basis data - tapi ia bukan yang dicari mata saat
-            panel ini terbuka. */}
+        {/* Nama lokasi yang bisa dibaca (mis. Manggarai-33651). Indeks H3
+            mentah tidak lagi tampil di sini - pemilik repo memintanya hilang. */}
         <div className="mb-2 flex items-baseline justify-between gap-2 max-lg:mb-1.5">
-          <span className="min-w-0">
-            <span className="block truncate text-[13.5px] font-semibold text-ink max-lg:text-[12.5px]">
-              {kodeLokasi(skor.h3_index, skor.kawasan)}
-            </span>
-            <code className="block truncate font-mono text-[10.5px] text-ink-3 max-lg:text-[9.5px]">
-              {skor.h3_index}
-            </code>
+          <span className="block min-w-0 truncate text-[13.5px] font-semibold text-ink max-lg:text-[12.5px]">
+            {kodeLokasi(skor.h3_index, skor.kawasan)}
           </span>
           <Badge badge={skor.keyakinan} />
         </div>

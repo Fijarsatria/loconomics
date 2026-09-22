@@ -604,6 +604,99 @@ def test_setiap_setting_disebut_di_petunjuk_deploy():
     )
 
 
+def test_adapter_openai_menerjemahkan_percakapan_alat_dan_balasan():
+    """Adapter kompatibel-OpenAI (DashScope/DeepSeek) - tanpa jaringan.
+
+    Yang dijaga: percakapan yang diterjemahkan ke bentuk OpenAI, dan balasan
+    `tool_calls` yang dibaca kembali jadi panggilan alat. Salah di sini tidak
+    memunculkan galat di dev - modelnya cuma diam-diam berhenti memanggil alat.
+    """
+    from app.core import llm_openai
+    from app.core.llm_gemini import BlokAlat
+
+    pesan = llm_openai._pesan_openai(
+        "SISTEM",
+        [
+            {"role": "user", "content": "halo"},
+            {
+                "role": "assistant",
+                "content": [BlokAlat(id="call_1", name="cek_zona", input={"hex_id": "x"})],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_1",
+                        "content": '{"status":"DIIZINKAN"}',
+                    },
+                    {"type": "text", "text": "jawab sekarang"},
+                ],
+            },
+        ],
+    )
+    cek("system jadi giliran pertama", pesan[0] == {"role": "system", "content": "SISTEM"})
+    cek(
+        "assistant membawa tool_calls",
+        pesan[2].get("tool_calls", [{}])[0]["function"]["name"] == "cek_zona",
+    )
+    cek(
+        "hasil alat jadi role tool",
+        pesan[3]["role"] == "tool" and pesan[3]["tool_call_id"] == "call_1",
+    )
+    cek(
+        "teks penutup jadi user SESUDAH giliran tool",
+        pesan[4]["role"] == "user" and "jawab sekarang" in pesan[4]["content"],
+    )
+
+    alat = llm_openai._alat_openai(
+        [
+            {
+                "name": "cek_zona",
+                "description": "d",
+                "input_schema": {"type": "object", "properties": {"hex_id": {"type": "string"}}},
+            }
+        ]
+    )
+    cek(
+        "alat jadi bentuk function",
+        alat[0]["type"] == "function" and alat[0]["function"]["name"] == "cek_zona",
+    )
+
+    balasan = llm_openai._dari_openai(
+        {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_9",
+                                "type": "function",
+                                "function": {
+                                    "name": "flyTo",
+                                    "arguments": '{"lat": -6.2, "lon": 106.8}',
+                                },
+                            }
+                        ],
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        }
+    )
+    cek("balasan tool_calls jadi stop tool_use", balasan.stop_reason == "tool_use")
+    cek(
+        "argumen JSON dibaca jadi dict",
+        balasan.content[0].name == "flyTo" and balasan.content[0].input["lat"] == -6.2,
+    )
+    cek(
+        "pemakaian token terbaca",
+        balasan.usage.input_tokens == 10 and balasan.usage.output_tokens == 5,
+    )
+
+
 def test_petunjuk_deploy_tidak_menyuruh_menyetel_ors():
     """Kunci ORS di satu tempat lagi = risiko tambahan tanpa kemampuan tambahan.
 
