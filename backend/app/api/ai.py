@@ -337,6 +337,10 @@ REGISTRI = {
 
 NAMA_FRONTEND = {"flyTo", "highlight", "setLayer", "filter"}
 
+#: Argumen yang menunjuk satu heksagon. Model boleh mengisinya dengan indeks H3
+#: mentah ATAU kode lokasi (Manggarai-33547) - keduanya diterjemahkan di sini.
+KUNCI_HEX = {"hex_id", "hex_a", "hex_b", "h3_index"}
+
 
 def panggil_fungsi(
     db: Session, nama: str, argumen: dict[str, Any], pengguna=None
@@ -352,6 +356,9 @@ def panggil_fungsi(
     # bertanya dan tidak boleh bisa berpura-pura jadi siapa pun. Ia disuntik
     # dari endpoint /ai/tanya, hanya ke alat yang memang menerimanya.
     bersih.pop("pengguna", None)
+    for kunci in list(bersih):
+        if kunci in KUNCI_HEX and isinstance(bersih[kunci], str):
+            bersih[kunci] = _h3_dari_kode(db, bersih[kunci])
     if "pengguna" in inspect.signature(fungsi).parameters:
         bersih["pengguna"] = pengguna
     return fungsi(db, **bersih)
@@ -598,7 +605,11 @@ Jangan pernah menulis kode mentah. Kuadran ditulis dengan namanya: HIDDEN_GEM = 
 "dilarang", "belum bisa dipastikan". JANGAN PERNAH menulis indeks H3 mentah \
 (deretan 15 huruf/angka seperti 898c107830bffff) di jawaban. Selalu sebut lokasi \
 dengan kode lokasinya, misalnya Manggarai-33651; kalau kode lokasinya tidak ada, \
-sebut kawasannya saja.
+sebut kawasannya saja. Saat MEMANGGIL ALAT (cek_zona, bandingkan, jelaskan_skor, \
+cek_harga, pola_jam, bedah_blok), isi argumen heksagon dengan kode lokasi itu juga \
+(mis. bandingkan(hex_a="Manggarai-33547", hex_b="Manggarai-33539")) - backend \
+menerjemahkannya sendiri. Jangan pernah bilang tidak punya kode internal: kode \
+lokasi sudah cukup untuk semua alat.
 
 PANJANG: tiga sampai enam kalimat untuk pertanyaan biasa - cukup untuk menjawab, \
 menyebut angka yang mendukungnya, DAN menerangkan kenapa hasilnya begitu. Pakai \
@@ -649,6 +660,47 @@ def _kode(h3: str | None, kawasan: str | None) -> str | None:
         return kode_lokasi(h3, kawasan)
     except (ValueError, IndexError):
         return None
+
+
+_POLA_H3_MURNI = re.compile(r"[0-9a-f]{15}")
+_POLA_KODE_LOKASI = re.compile(r"^\s*(.+?)\s*-\s*(\d{1,5})\s*$")
+
+
+def _h3_dari_kode(db: Session, nilai: str) -> str:
+    """Terima indeks H3 mentah ATAU kode lokasi (mis. Manggarai-33547).
+
+    Pengguna dan model melihat kode lokasi; alat di sini bekerja dengan indeks
+    H3. Menerjemahkan di satu tempat ini membuat perbandingan dan seluruh alat
+    ber-indeks tidak lagi gagal hanya karena model menyebut kode yang terbaca.
+    """
+    teks = str(nilai).strip().lower()
+    if _POLA_H3_MURNI.fullmatch(teks):
+        return teks
+
+    cocok = _POLA_KODE_LOKASI.match(teks)
+    if not cocok:
+        # Bukan H3, bukan kode lokasi - bukan urusan penerjemah ini. Diteruskan
+        # apa adanya supaya alat yang menolaknya memberi pesannya sendiri.
+        return str(nilai)
+
+    from sqlalchemy import func, select
+
+    kawasan = cocok.group(1).strip()
+    dicari = f"{int(cocok.group(2)):05d}"
+    baris = db.execute(
+        select(HexFeature.h3_index, HexFeature.kawasan).where(
+            func.lower(HexFeature.kawasan) == kawasan.lower()
+        )
+    ).all()
+    for h3, kaw in baris:
+        kode = _kode(h3, kaw)
+        if kode and kode.rsplit("-", 1)[-1] == dicari:
+            return h3
+
+    raise KesalahanAPI(
+        f"Lokasi '{nilai}' tidak dikenali. Pakai kode lokasi seperti 'Manggarai-33547' "
+        f"(lihat field kode_lokasi pada hasil alat) atau indeks H3 dari hasil sebelumnya."
+    )
 
 
 def _preferensi(pengguna) -> str | None:

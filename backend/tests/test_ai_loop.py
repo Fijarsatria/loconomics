@@ -80,6 +80,9 @@ class HasilTiruan:
     def scalar_one(self):
         return self.nilai
 
+    def all(self):
+        return []
+
 
 class DbTiruan:
     """Cukup untuk alat yang dipakai di berkas ini. Tidak menyentuh basis data."""
@@ -167,6 +170,26 @@ def test_aksi_peta_tidak_dieksekusi_backend():
     cek("argumen flyTo utuh", jawab.aksi_peta[0].argumen["lat"] == -6.21)
     cek("teks akhir terbaca", "mengizinkan" in jawab.teks)
     cek("loop berhenti setelah end_turn", k.dipanggil == 2, f"- {k.dipanggil} panggilan")
+
+
+def test_alat_menerima_kode_lokasi_bukan_cuma_h3():
+    """Alat ber-indeks harus menerima kode lokasi (Manggarai-33547) juga.
+
+    Dulu model cuma memegang kode lokasi lalu `bandingkan` menolaknya - jawaban
+    berakhir minta maaf dan perbandingannya gagal, tanpa galat di server.
+    """
+    from app.core.galat import KesalahanAPI
+
+    raw = "898c107830bffff"
+    cek("H3 mentah diteruskan apa adanya", ai._h3_dari_kode(DbTiruan(hex_contoh()), raw) == raw)
+    try:
+        ai._h3_dari_kode(DbTiruan(hex_contoh()), "Manggarai-99999")
+        cek("kode tak dikenal ditolak dengan pesan jelas", False)
+    except KesalahanAPI as e:
+        cek(
+            "kode tak dikenal ditolak dengan pesan jelas",
+            "tidak dikenali" in str(getattr(e, "pesan", e)),
+        )
 
 
 def test_jawaban_bersama_aksi_peta_tidak_dibuang():

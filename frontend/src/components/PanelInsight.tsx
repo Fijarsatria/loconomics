@@ -166,7 +166,7 @@ const K = {
     makinBeban: ' · makin tinggi makin membebani',
     makinBaik: ' · makin tinggi makin baik',
 
-    tabelJudul: 'Seluruh 43 angka lokasi ini',
+    tabelJudul: 'Angka di balik skor lokasi ini',
     tabelKunciIsi:
       'Semua angka yang dipakai menilai lokasi ini — orang di sekitarnya, kebiasaan belanjanya, pesaingnya, biayanya, risikonya, dan bentuk bangunannya.',
     tabelBuka: 'Tampilkan tabel lengkap',
@@ -325,7 +325,7 @@ const K = {
     makinBeban: ' · the higher, the heavier',
     makinBaik: ' · the higher, the better',
 
-    tabelJudul: 'All 43 numbers for this location',
+    tabelJudul: 'The numbers behind this score',
     tabelKunciIsi:
       'Every number used to judge this location — the people around it, how they spend, its rivals, its costs, its risks, and the shape of its buildings.',
     tabelBuka: 'Show the full table',
@@ -1203,15 +1203,7 @@ function PanelInsight({
                 t.jamTakAda
               )}
             </p>
-            {jam.catatan && (
-              <p className="mt-1.5 flex gap-1.5 text-[13px] leading-snug text-ink-3">
-                <span
-                  aria-hidden
-                  className="arsir mt-[3px] h-3 w-3 shrink-0 rounded-[2px] border border-line-2"
-                />
-                {jam.catatan}
-              </p>
-            )}
+
           </>
         ) : (
           /* "Profil jam belum tersedia" tidak memberi tahu apa pun kepada

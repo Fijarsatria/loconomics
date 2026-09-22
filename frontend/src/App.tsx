@@ -669,7 +669,8 @@ export default function App() {
   const namaZona = useNamaZona()
   const [kawasan, setKawasan] = useState<string>(AWAL.kawasan ?? KAWASAN_AWAL.nama)
   const [layer, setLayer] = useState<NamaLayer>(AWAL.layer ?? 'opportunity')
-  const [layerNyala, setLayerNyala] = useState(AWAL.layerNyala ?? true)
+  // Selalu menyala: keadaan "layer mati" kini berarti Opportunity Score.
+  const [layerNyala, setLayerNyala] = useState(true)
   const [namaTempat, setNamaTempat] = useState<string>(AWAL.namaTempat ?? 'normal')
   const { tema, gantiTema } = useTema()
   const [rutaTampil, setRutaTampil] = useState(false)
@@ -1034,7 +1035,10 @@ export default function App() {
     }
   }, [])
 
-  const keLokasiAI = useCallback(
+  // Klik kartu lokasi AI HANYA memfokuskan peta: kamera bergerak dan
+  // heksagonnya tersorot, TANPA membuka panel detail (permintaan pemilik repo -
+  // membuka detail menutup Konsultan AI dan memaksa membukanya lagi).
+  const keLokasiPeta = useCallback(
     (h3: string, kawasanLokasi?: string) => {
       if (
         kawasanLokasi &&
@@ -1044,11 +1048,6 @@ export default function App() {
         setKawasan(kawasanLokasi)
         setNHeksagon(null)
       }
-      setHexTerpilih(h3)
-      setHexBanding(null)
-      setSimulasiTerbuka(false)
-      setPanelTerbuka(true)
-      setTab('daftar')
       peta.current?.highlight([h3])
       peta.current?.fokusHeksagon(h3)
     },
@@ -1430,25 +1429,18 @@ export default function App() {
   const kendaliFilter = (arah: 'turun' | 'naik') => (
     <>
       <MenuKawasan nilai={kawasan} onUbah={gantiKawasan} arah={arah} />
+      {/* Mematikan layer kini berarti kembali ke Opportunity Score, bukan
+          menyembunyikan heksagon (permintaan pemilik repo). Pilihan "tanpa
+          layer" dihapus justru karena itu. */}
       <Menu
         label="Layer"
         arah={arah}
-        nilai={layerNyala ? layer : 'mati'}
-        /* "Tanpa layer" DI ATAS, bukan di bawah: ia keadaan bawaan, dan keadaan
-           bawaan yang harus dicari dulu di ujung daftar bukan keadaan bawaan
-           yang berguna. */
-        opsi={[
-          { nilai: 'mati' as NamaLayer, label: t.tanpaLayer },
-          ...Object.entries(LAYER).map(([k, l]) => ({
-            nilai: k as NamaLayer,
-            label: l.nama,
-          })),
-        ]}
+        nilai={layer}
+        opsi={Object.entries(LAYER).map(([k, l]) => ({
+          nilai: k as NamaLayer,
+          label: l.nama,
+        }))}
         onUbah={(v) => {
-          if ((v as string) === 'mati') {
-            setLayerNyala(false)
-            return
-          }
           setLayer(v)
           setLayerNyala(true)
         }}
@@ -2257,7 +2249,7 @@ export default function App() {
                       kendali={kendali}
                       hexTerpilih={hexTerpilih}
                       layerAktif={layer}
-                      onKeLokasi={keLokasiAI}
+                      onKeLokasi={keLokasiPeta}
                     />
                   </div>
                 </div>
