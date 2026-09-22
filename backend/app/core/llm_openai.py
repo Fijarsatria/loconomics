@@ -14,9 +14,15 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from app.core.config import settings
+
 # Bentuk balasan dipinjam dari adapter Gemini: keduanya meniru objek Anthropic,
 # dan duplikat definisinya cuma akan berselisih cepat atau lambat.
 from app.core.llm_gemini import Balasan, BlokAlat, BlokTeks, Pemakaian
+
+#: DashScope/Qwen/DeepSeek menerima `enable_thinking`. Dimatikan: model berpikir
+#: token yang tidak dipakai (terukur output 82 -> 9 token) dan menambah 5-30 dtk.
+_PROVIDER_TANPA_PIKIR = {"dashscope", "qwen", "deepseek"}
 
 log = logging.getLogger(__name__)
 
@@ -184,6 +190,8 @@ class _Pesan:
             badan["tool_choice"] = (
                 "none" if (tool_choice or {}).get("type") == "none" else "auto"
             )
+        if settings.llm_provider.lower() in _PROVIDER_TANPA_PIKIR:
+            badan["enable_thinking"] = False
 
         muatan = json.dumps(badan).encode()
         url = f"{self._base}/chat/completions"
