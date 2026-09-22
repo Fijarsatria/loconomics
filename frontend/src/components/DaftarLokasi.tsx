@@ -4,7 +4,6 @@ import { memo, useEffect, useRef, useState } from 'react'
 import {
   KUADRAN,
   LAYER,
-  SEMUA_KAWASAN,
   URUTAN_KUADRAN,
   frasaKawasan,
   kodeLokasi,
@@ -20,14 +19,10 @@ type Isi =
   | { jenis: 'skor'; baris: SkorHeksagon[] }
   | { jenis: 'gem'; baris: HiddenGem[] }
   | { jenis: 'risiko'; baris: TitikKuadran[] }
-  | { jenis: 'cakupan'; baris: Record<string, unknown>[] }
-  | { jenis: 'harga'; baris: Record<string, unknown>[] }
+  | { jenis: 'cakupan'; baris: SkorHeksagon[] }
+  | { jenis: 'harga'; baris: SkorHeksagon[] }
 
 const BATAS_BARIS = 200
-
-const disorot = (kawasanAktif: string, nama: string) =>
-  kawasanAktif === SEMUA_KAWASAN || kawasanAktif.split(',').includes(nama)
-
 const K = {
   id: {
     gagalJudul: 'Daftar gagal dimuat',
@@ -44,9 +39,15 @@ const K = {
     potong: (n: number) =>
       `Menampilkan ${n} berskor tertinggi. Pilih satu kawasan untuk melihat seluruh isinya.`,
     memuat: 'sedang menyiapkan daftar lokasi…',
-    metode: (n: number) => `${n}/3 metode`,
+    metode: (n: number) => `cocok di ${n} dari 3 ciri`,
+    metodeTip:
+      'Tiga ciri hidden gem: harga di bawah potensinya, bagus di data tapi biasa di tampilan, dan permintaan yang belum terlayani.',
     zonaRagu: 'zona belum pasti',
     zonaBelum: 'Zona belum bisa dipastikan',
+    izin: 'Zona mengizinkan usaha',
+    zonaLarang: 'Zona melarang usaha',
+    belum: 'Belum bisa dipastikan',
+    rbM2: 'rb / m²',
     churn: (v: string) => ` · indeks churn ${v}`,
     risiko: {
       BAHAYA: 'Pergantian usaha termasuk 10% tertinggi di kawasan ini',
@@ -68,7 +69,7 @@ const K = {
       risiko: (k: string) =>
         `Tidak ada area di ${k} yang pergantian usahanya melewati ambang wajar kawasannya sendiri. Itu kabar baik.`,
       gem: (k: string) =>
-        `Belum ada heksagon di ${k} yang lolos minimal dua dari tiga metode deteksi. Coba kawasan yang prestise visualnya lebih rendah.`,
+        `Belum ada heksagon di ${k} yang cocok dengan minimal dua dari tiga ciri hidden gem. Coba kawasan yang prestise visualnya lebih rendah.`,
       skor: (k: string) => `Skor untuk ${k} belum dihitung. Jalankan pipeline sampai tahap terbit.`,
     },
   },
@@ -87,9 +88,15 @@ const K = {
     potong: (n: number) =>
       `Showing the top ${n} by score. Pick a single area to see all of it.`,
     memuat: 'putting the location list together…',
-    metode: (n: number) => `${n}/3 methods`,
+    metode: (n: number) => `matches ${n} of 3 traits`,
+    metodeTip:
+      'The three hidden-gem traits: priced below its potential, good in the data but ordinary to look at, and demand nobody serves yet.',
     zonaRagu: 'zoning uncertain',
     zonaBelum: 'Zoning cannot be confirmed',
+    izin: 'Zoning allows business',
+    zonaLarang: 'Zoning prohibits business',
+    belum: 'Cannot be confirmed yet',
+    rbM2: 'k / m²',
     churn: (v: string) => ` · churn index ${v}`,
     risiko: {
       BAHAYA: 'Business turnover is in the top 10% of this area',
@@ -111,7 +118,7 @@ const K = {
       risiko: (k: string) =>
         `No area in ${k} has business turnover past its own area's normal threshold. That is good news.`,
       gem: (k: string) =>
-        `No hexagon in ${k} passes at least two of the three detection methods. Try an area with lower visual prestige.`,
+        `No hexagon in ${k} matches at least two of the three hidden-gem traits. Try an area with lower visual prestige.`,
       skor: (k: string) => `Scores for ${k} have not been computed. Run the pipeline through publishing.`,
     },
   },
@@ -156,9 +163,15 @@ function DaftarLokasi({
             baris: await api.riskRadar({ kawasan, hanya_berperingatan: true, limit: 25 }),
           }
         case 'zoneguard':
-          return { jenis: 'cakupan', baris: await api.cakupanZona() }
+          return {
+            jenis: 'cakupan',
+            baris: await api.daftarLayer({ layer: 'zoneguard', kawasan, limit: 200 }),
+          }
         case 'pricelens':
-          return { jenis: 'harga', baris: await api.ringkasanHarga() }
+          return {
+            jenis: 'harga',
+            baris: await api.daftarLayer({ layer: 'pricelens', kawasan, limit: 200 }),
+          }
         default:
           return { jenis: 'skor', baris: await api.ranking({ kawasan, limit: BATAS_BARIS }) }
       }
@@ -220,6 +233,14 @@ function DaftarLokasi({
           )}
         </div>
 
+        {/* Satu kalimat penjelas layer. Opportunity Score sengaja TANPA ini - ia
+            ringkasan seluruh lapisan lain, dan namanya sudah cukup. */}
+        {(bahasa === 'en' ? LAYER[layer].deskripsiEn : LAYER[layer].deskripsi) && (
+          <p className="mt-1 text-[12px] leading-snug text-ink-3">
+            {bahasa === 'en' ? LAYER[layer].deskripsiEn : LAYER[layer].deskripsi}
+          </p>
+        )}
+
         {ringkasKuadran && (
           <>
             <div className="mt-2.5 flex items-center gap-2 max-lg:mt-2">
@@ -265,10 +286,64 @@ function DaftarLokasi({
         )}
       </div>
 
-      {isi.jenis === 'cakupan' ? (
-        <Cakupan baris={isi.baris} kawasanAktif={kawasan} />
+      {isi.baris.length === 0 && (isi.jenis === 'cakupan' || isi.jenis === 'harga') ? (
+        <Kosong teks={isi.jenis === 'cakupan' ? t.zonaKosong : t.hargaKosong} />
+      ) : isi.jenis === 'cakupan' ? (
+        /* Daftar per heksagon: status izin tiap petak, bukan ringkasan kawasan.
+           DIIZINKAN dulu, lalu belum diketahui, lalu DILARANG. */
+        <ol>
+          {isi.baris.map((s, i) => {
+            const izin = s.zona_izin_komersial
+            const label = izin === true ? t.izin : izin === false ? t.zonaLarang : t.belum
+            return (
+              <Kartu
+                key={s.h3_index}
+                no={i + 1}
+                h3={s.h3_index}
+                kawasan={s.kawasan}
+                aktif={terpilih === s.h3_index}
+                onPilih={onPilih}
+                kuadran={null}
+                nilai={izin === true ? '✓' : izin === false ? '✕' : '?'}
+                satuan="RDTR"
+                badge={s.keyakinan}
+              >
+                <p
+                  className={`mt-1 text-[13px] font-semibold leading-snug ${
+                    izin === false ? 'text-bahaya' : izin === true ? 'text-ink' : 'text-ink-3'
+                  }`}
+                >
+                  {label}
+                </p>
+              </Kartu>
+            )
+          })}
+        </ol>
       ) : isi.jenis === 'harga' ? (
-        <RentangKawasan baris={isi.baris} kawasanAktif={kawasan} />
+        /* Daftar per heksagon: sewa per m², dari yang termurah. */
+        <ol>
+          {isi.baris.map((s, i) => {
+            const h = s.harga_sewa_per_m2
+            return (
+              <Kartu
+                key={s.h3_index}
+                no={i + 1}
+                h3={s.h3_index}
+                kawasan={s.kawasan}
+                aktif={terpilih === s.h3_index}
+                onPilih={onPilih}
+                kuadran={null}
+                nilai={h == null ? '—' : String(Math.round(h / 1000))}
+                satuan={t.rbM2}
+                badge={s.keyakinan}
+              >
+                <p className="mt-1 text-[13px] leading-snug text-ink-2">
+                  {h == null ? '—' : `${rupiah(h)} / m²`}
+                </p>
+              </Kartu>
+            )
+          })}
+        </ol>
       ) : isi.baris.length === 0 ? (
         <Ajakan
           judul={
@@ -330,7 +405,7 @@ function DaftarLokasi({
                       />
                     ))}
                   </span>
-                  <span className="text-[11.5px] text-ink-3">
+                  <span className="text-[11.5px] text-ink-3" title={t.metodeTip}>
                     {t.metode(g.n_metode_lolos)}
                     {g.zoneguard.status === 'TIDAK_DIKETAHUI' && ` · ${t.zonaRagu}`}
                   </span>
@@ -612,124 +687,6 @@ function Kartu({
         </div>
       </button>
     </li>
-  )
-}
-
-function RentangKawasan({
-  baris,
-  kawasanAktif,
-}: {
-  baris: Record<string, unknown>[]
-  kawasanAktif: string
-}) {
-  const t = useTeks(K)
-  const berisi = baris.filter((r) => {
-    const w = r.sewa_per_m2 as Record<string, number | null> | undefined
-    return w?.p50 != null
-  })
-  if (berisi.length === 0) return <Kosong teks={t.hargaKosong} />
-
-  const semua = berisi.flatMap((r) => {
-    const w = r.sewa_per_m2 as Record<string, number>
-    return [w.p25, w.p75]
-  })
-  const min = Math.min(...semua)
-  const maks = Math.max(...semua)
-  const pos = (n: number) => ((n - min) / (maks - min || 1)) * 100
-
-  return (
-    <div className="p-4">
-      <ul className="space-y-3.5">
-        {berisi.map((r) => {
-          const nama = String(r.kawasan)
-          const w = r.sewa_per_m2 as Record<string, number>
-          const cakupan = Number(r.cakupan_harga) || 0
-          return (
-            <li key={nama} className={disorot(kawasanAktif, nama) ? '' : 'opacity-55'}>
-              <div className="mb-1 flex items-baseline justify-between gap-2">
-                <span className="text-[14.5px] font-medium">{nama}</span>
-                <span className="tabular text-[13px] text-ink-2">
-                  {rupiah(w.p50)}/m²
-                </span>
-              </div>
-              <div className="relative h-3">
-                <span className="absolute inset-x-0 top-1.5 h-px bg-line" />
-                <span
-                  className="absolute top-0.5 h-2 rounded-xs bg-ground-2"
-                  style={{ left: `${pos(w.p25)}%`, width: `${pos(w.p75) - pos(w.p25)}%` }}
-                  title={`${rupiah(w.p25)} – ${rupiah(w.p75)} per m²`}
-                />
-                <span
-                  className="absolute top-0 h-3 w-[2px] rounded-full bg-ink"
-                  style={{ left: `${pos(w.p50)}%` }}
-                />
-              </div>
-              <p className="tabular mt-1 text-[12.5px] text-ink-3">
-                {rupiah(w.p25)} – {rupiah(w.p75)}
-                {t.cakupanHarga((cakupan * 100).toFixed(0), String(r.total_heksagon))}
-              </p>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
-function Cakupan({
-  baris,
-  kawasanAktif,
-}: {
-  baris: Record<string, unknown>[]
-  kawasanAktif: string
-}) {
-  const t = useTeks(K)
-  if (baris.length === 0) return <Kosong teks={t.zonaKosong} />
-
-  return (
-    <div className="p-4">
-      <ul className="space-y-3">
-        {baris.map((r) => {
-          const nama = String(r.kawasan)
-          const total = Number(r.total) || 0
-          const diizinkan = Number(r.diizinkan) || 0
-          const dilarang = Number(r.dilarang) || 0
-          const takTahu = Number(r.tidak_diketahui) || 0
-          const cakupan = Number(r.cakupan_rdtr) || 0
-
-          return (
-            <li key={nama} className={disorot(kawasanAktif, nama) ? '' : 'opacity-60'}>
-              <div className="mb-1 flex items-baseline justify-between gap-2">
-                <span className="text-[14.5px] font-medium">{nama}</span>
-                <span className="tabular text-[13px] text-ink-3">
-                  {t.terdata((cakupan * 100).toFixed(0))}
-                </span>
-              </div>
-              <div className="flex h-2.5 overflow-hidden rounded-xs bg-ground-2">
-                <span
-                  className="bg-[#c9dbd4]"
-                  style={{ width: `${(diizinkan / total) * 100}%` }}
-                  title={t.izinkan(diizinkan)}
-                />
-                <span
-                  className="bg-bahaya"
-                  style={{ width: `${(dilarang / total) * 100}%` }}
-                  title={t.larang(dilarang)}
-                />
-                <span
-                  className="arsir bg-line-2 text-ink-3"
-                  style={{ width: `${(takTahu / total) * 100}%` }}
-                  title={t.takAdaRdtr(takTahu)}
-                />
-              </div>
-              <p className="tabular mt-1 text-[12.5px] text-ink-3">
-                {t.izinkan(diizinkan)} · {t.larang(dilarang)} · {t.takTahu(takTahu)}
-              </p>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
   )
 }
 

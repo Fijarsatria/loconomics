@@ -746,7 +746,11 @@ def alasan_blok(
     return alasan, peringatan
 
 
-AMBANG_INDEKS_LAYAK_TAMPIL = 1 / 3
+# Dua pertiga, bukan sepertiga: indeks yang cuma separuh bahannya terukur tidak
+# cukup untuk menempelkan kata seperti "Ramai" - pengguna akan menganggapnya
+# terukur padahal setengah bahannya kosong. Di bawah ambang ini antarmuka
+# menuliskan "butuh survei", bukan nilai.
+AMBANG_INDEKS_LAYAK_TAMPIL = 2 / 3
 
 
 def cakupan_indeks(

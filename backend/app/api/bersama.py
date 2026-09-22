@@ -177,6 +177,7 @@ def skor_heksagon(hx: HexFeature, sc: LocationScore | None) -> SkorHeksagon:
         kuadran=sc.kuadran if sc else None,  # type: ignore[arg-type]
         peringkat=sc.peringkat if sc else None,
         zona_izin_komersial=hx.zona_izin_komersial,
+        harga_sewa_per_m2=getattr(hx, "harga_sewa_per_m2", None),
         keyakinan=badge(hx),
     )
 

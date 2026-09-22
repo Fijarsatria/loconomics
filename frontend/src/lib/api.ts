@@ -132,6 +132,8 @@ export interface ParamSimulasi {
   sewa_bulanan_diminta?: number
   /** Harga rata-rata per pembeli menurut rencana pengguna sendiri. */
   harga_rata_rata?: number
+  /** Omzet bulanan usaha yang sudah berjalan, untuk mengukur pertumbuhan. */
+  omzet_sekarang_bulanan?: number
 }
 
 async function unduhPdf(jalur: string, namaBerkas: string): Promise<void> {
@@ -228,7 +230,7 @@ export const api = {
   simpulTransit: (kawasan?: string) =>
     ambil<SimpulTransit[]>(`/transit/nodes${kueri({ kawasan })}`),
 
-  catchment: (p: { node_id?: number; menit?: number } = {}) =>
+  catchment: (p: { node_id?: number; menit?: number; profil?: ProfilRute } = {}) =>
     ambil<GeoJSON>(`/transit/catchment${kueri(p)}`),
 
   // --- Skor ---
@@ -246,6 +248,14 @@ export const api = {
     limit?: number
     versi?: string
   } = {}) => ambil<TitikKuadran[]>(`/skor/risk-radar${kueri(p)}`),
+
+  /** Daftar per heksagon untuk layer PriceLens/ZoneGuard. TIDAK menyaring ZoneGuard. */
+  daftarLayer: (p: {
+    layer: 'pricelens' | 'zoneguard'
+    kawasan?: string
+    limit?: number
+    versi?: string
+  }) => ambil<SkorHeksagon[]>(`/skor/daftar-layer${kueri(p)}`),
 
   /** Titik sebar diagram kuadran. TIDAK menyaring ZoneGuard — ini alat analisis. */
   diagramKuadran: (p: { kawasan?: string; limit?: number; versi?: string } = {}) =>
@@ -314,6 +324,23 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ nama }),
     }),
+
+  /** Simpan rencana pengembangan lokasi tersimpan: catatan, jenis usaha, omzet
+   *  usaha yang sudah jalan. Bidang yang tidak dikirim tidak disentuh. */
+  simpanRencana: (
+    h3: string,
+    p: {
+      catatan?: string | null
+      rencana_jenis_usaha?: string | null
+      rencana_omzet_bulanan?: number | null
+    },
+  ) =>
+    ambil<{
+      h3_index: string
+      catatan: string | null
+      rencana_jenis_usaha: string | null
+      rencana_omzet_bulanan: number | null
+    }>(`/akun/pantauan/${h3}`, { method: 'PATCH', body: JSON.stringify(p) }),
 
   lepasPantauan: (h3: string) =>
     ambil<{ dihapus: string }>(`/akun/pantauan/${h3}`, { method: 'DELETE' }),

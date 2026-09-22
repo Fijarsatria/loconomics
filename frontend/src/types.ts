@@ -43,6 +43,8 @@ export interface SkorHeksagon {
   peringkat: number | null
   /** FALSE = ZoneGuard menolkan skor. NULL = kawasan tanpa RDTR digital, bukan larangan. */
   zona_izin_komersial: boolean | null
+  /** Dipakai daftar layer PriceLens. NULL = belum ada sampel harga. */
+  harga_sewa_per_m2?: number | null
   keyakinan: BadgeKeyakinan
 }
 
@@ -76,6 +78,8 @@ export interface Simulasi {
     /** Diisi pengguna. Menang atas angka basis data kalau > 0. */
     sewa_bulanan_diminta: number | null
     harga_rata_rata: number | null
+    /** Omzet usaha pengguna yang sudah jalan, untuk mengukur pertumbuhan. */
+    omzet_sekarang_bulanan: number | null
   }
   sumber: {
     sewa: 'pengguna' | 'data' | null
@@ -107,6 +111,12 @@ export interface Simulasi {
   }
   /** Laba pada beberapa nilai pangsa - rumus yang sama, masukan berbeda. */
   sensitivitas: { pangsa_persen: number; laba_kotor_bulanan: number | null }[]
+  /** Omzet usaha yang sudah jalan dibanding proyeksi di lokasi ini. */
+  pertumbuhan: {
+    omzet_sekarang_bulanan: number | null
+    selisih_omzet_bulanan: number | null
+    pertumbuhan_persen: number | null
+  }
   rumus: Record<string, string>
   peringatan: { kode: string; tingkat: 'INFO' | 'WASPADA' | 'BAHAYA'; pesan: string }[]
   keyakinan: BadgeKeyakinan
@@ -558,6 +568,40 @@ export interface ButirPantauan {
   kuadran: Kuadran | null
   risiko: string | null
   dibuat_pada: string
+  /** Rencana pengembangan yang dicatat pemiliknya untuk lokasi ini. */
+  rencana_jenis_usaha: string | null
+  rencana_omzet_bulanan: number | null
+  /** Usahanya sendiri: nama di pin peta, dan deskripsinya. */
+  nama_usaha: string | null
+  deskripsi: string | null
+}
+
+export interface PenjualanBulanan {
+  bulan: string
+  omzet: number | null
+  pembeli: number | null
+  catatan: string | null
+}
+
+export interface TrenUsaha {
+  penjualan: PenjualanBulanan[]
+  omzet_terakhir: number | null
+  bulan_terakhir: string | null
+  perubahan_persen: number | null
+  rata_rata: number | null
+  bulan_terbaik: string | null
+  omzet_terbaik: number | null
+}
+
+export interface UsahaHeksagon {
+  h3_index: string
+  kawasan: string | null
+  nama_usaha: string | null
+  deskripsi: string | null
+  catatan: string | null
+  rencana_jenis_usaha: string | null
+  rencana_omzet_bulanan: number | null
+  tren: TrenUsaha
 }
 
 export interface TitikRiwayat {

@@ -354,6 +354,10 @@ export interface Layer {
   /** Pertanyaan yang sama dalam bahasa Inggris. `nama` TIDAK punya pasangan:
    *  PriceLens, GemFinder, ZoneGuard adalah nama, bukan kata. */
   pertanyaanEn: string
+  /** Satu kalimat di kepala daftar. Opportunity Score sengaja TANPA ini - ia
+   *  ringkasan seluruh lapisan yang lain, dan namanya sudah cukup. */
+  deskripsi?: string
+  deskripsiEn?: string
 }
 
 export const LAYER: Record<string, Layer> = {
@@ -366,21 +370,29 @@ export const LAYER: Record<string, Layer> = {
     nama: 'PriceLens',
     pertanyaan: 'Berapa harga sewa yang wajar di sini?',
     pertanyaanEn: 'What is a fair rent around here?',
+    deskripsi: 'Harga sewa per m² hasil survei, dari termurah ke termahal.',
+    deskripsiEn: 'Surveyed rent per m², cheapest to most expensive.',
   },
   hidden_gem: {
     nama: 'GemFinder',
     pertanyaan: 'Mana yang bagus tapi belum dilirik?',
     pertanyaanEn: 'Which places are good but still overlooked?',
+    deskripsi: 'Lokasi berskor bagus yang tampilannya belum kelihatan istimewa.',
+    deskripsiEn: 'Well-scored places that still look ordinary.',
   },
   risk_radar: {
     nama: 'RiskRadar',
     pertanyaan: 'Mana yang berisiko menjebak?',
     pertanyaanEn: 'Which places risk becoming a trap?',
+    deskripsi: 'Lokasi yang terlihat bagus tetapi usahanya sering berganti.',
+    deskripsiEn: 'Places that look good but where businesses turn over fast.',
   },
   zoneguard: {
     nama: 'ZoneGuard',
     pertanyaan: 'Boleh buka usaha di sini?',
     pertanyaanEn: 'Is business allowed here?',
+    deskripsi: 'Status izin usaha menurut RDTR: diizinkan, dilarang, atau belum dipastikan.',
+    deskripsiEn: 'Business-permission status from the zoning plan: allowed, prohibited, or unknown.',
   },
 }
 

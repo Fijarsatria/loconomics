@@ -63,6 +63,8 @@ class SkorHeksagon(BaseModel):
     zona_izin_komersial: bool | None = Field(
         default=None, description="FALSE = ZoneGuard menolkan skor, apa pun nilai variabel lain"
     )
+    # Dipakai daftar layer PriceLens; None = belum ada sampel harga di heksagon ini.
+    harga_sewa_per_m2: float | None = None
     keyakinan: BadgeKeyakinan
 
 
@@ -241,6 +243,8 @@ class MasukanSimulasi(BaseModel):
     # kalau kosong, simulasi jatuh ke angka heksagon seperti sebelumnya.
     sewa_bulanan_diminta: float | None = None
     harga_rata_rata: float | None = None
+    # Omzet usaha pengguna yang SUDAH berjalan, untuk mengukur pertumbuhan.
+    omzet_sekarang_bulanan: float | None = None
 
 
 class SumberSimulasi(BaseModel):
@@ -288,6 +292,18 @@ class TitikSensitivitas(BaseModel):
 
     pangsa_persen: float
     laba_kotor_bulanan: float | None = None
+
+
+class PertumbuhanSimulasi(BaseModel):
+    """Omzet usaha yang sudah jalan dibanding proyeksi di lokasi ini.
+
+    Seluruhnya None kalau penggunanya tidak mengisi omzet sekarang - dan None
+    memang jawabannya, bukan nol.
+    """
+
+    omzet_sekarang_bulanan: float | None = None
+    selisih_omzet_bulanan: float | None = None
+    pertumbuhan_persen: float | None = None
 
 
 class BlokSimulasi(BaseModel):
@@ -348,6 +364,7 @@ class Simulasi(BaseModel):
     sumber: SumberSimulasi
     terukur: TerukurSimulasi
     hasil: HasilSimulasi
+    pertumbuhan: PertumbuhanSimulasi = Field(default_factory=PertumbuhanSimulasi)
     rumus: dict[str, str]
     peringatan: list[PeringatanSimulasi] = Field(default_factory=list)
     keyakinan: BadgeKeyakinan
@@ -683,6 +700,12 @@ class ButirPantauan(BaseModel):
     kuadran: str | None = None
     risiko: str | None = None
     dibuat_pada: datetime
+    # Rencana pengembangan yang dicatat pemiliknya untuk lokasi ini.
+    rencana_jenis_usaha: str | None = None
+    rencana_omzet_bulanan: float | None = None
+    # Usahanya sendiri: nama yang muncul di pin peta, dan deskripsinya.
+    nama_usaha: str | None = None
+    deskripsi: str | None = None
 
 
 class PermintaanPantau(BaseModel):
@@ -696,7 +719,61 @@ class PermintaanPantau(BaseModel):
 
 
 class PermintaanNamaPantau(BaseModel):
+    """Ubah satu lokasi tersimpan. Seluruh bidang opsional - yang kosong tidak
+    disentuh. Nama kosong mengembalikannya ke kode lokasi; rencana kosong
+    menghapus rencananya."""
+
     nama: str | None = Field(default=None, max_length=80)
+    catatan: str | None = Field(default=None, max_length=200)
+    rencana_jenis_usaha: str | None = Field(default=None, max_length=40)
+    rencana_omzet_bulanan: float | None = Field(default=None, ge=0, le=100_000_000_000)
+    # Usaha di lokasi ini. Nama kosong mengembalikan pin ke kode lokasi.
+    nama_usaha: str | None = Field(default=None, max_length=80)
+    deskripsi: str | None = Field(default=None, max_length=2000)
+
+
+class PenjualanBulanan(BaseModel):
+    """Satu bulan catatan penjualan usaha. Seluruhnya diisi pemiliknya."""
+
+    bulan: str = Field(description="YYYY-MM")
+    omzet: float | None = None
+    pembeli: int | None = None
+    catatan: str | None = None
+
+
+class PermintaanPenjualan(BaseModel):
+    """Tambah atau perbarui catatan penjualan satu bulan (upsert)."""
+
+    bulan: str = Field(pattern=r"^\d{4}-\d{2}$", description="YYYY-MM")
+    omzet: float | None = Field(default=None, ge=0, le=100_000_000_000)
+    pembeli: int | None = Field(default=None, ge=0, le=10_000_000)
+    catatan: str | None = Field(default=None, max_length=200)
+
+
+class TrenUsaha(BaseModel):
+    """Tren dari catatan penjualan yang ada. Kosong tetap kosong, bukan nol."""
+
+    penjualan: list[PenjualanBulanan] = Field(default_factory=list)
+    omzet_terakhir: float | None = None
+    bulan_terakhir: str | None = None
+    #: Perubahan terhadap bulan sebelumnya, persen. None kalau belum ada dua bulan.
+    perubahan_persen: float | None = None
+    rata_rata: float | None = None
+    bulan_terbaik: str | None = None
+    omzet_terbaik: float | None = None
+
+
+class UsahaHeksagon(BaseModel):
+    """Usaha yang tercatat pada satu lokasi tersimpan, beserta trennya."""
+
+    h3_index: str
+    kawasan: str | None = None
+    nama_usaha: str | None = None
+    deskripsi: str | None = None
+    catatan: str | None = None
+    rencana_jenis_usaha: str | None = None
+    rencana_omzet_bulanan: float | None = None
+    tren: TrenUsaha = Field(default_factory=TrenUsaha)
 
 
 class TitikRiwayat(BaseModel):

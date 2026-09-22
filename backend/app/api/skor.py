@@ -1,6 +1,6 @@
 """Peringkat, GemFinder, RiskRadar, dan ZoneGuard."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import Float, case, func, select
@@ -105,6 +105,48 @@ def ranking(
         .limit(limit)
     )
     return _baris_skor(db.execute(stmt).all())
+
+
+@router.get(
+    "/daftar-layer",
+    response_model=list[SkorHeksagon],
+    summary="Daftar heksagon per layer (PriceLens/ZoneGuard)",
+)
+def daftar_layer(
+    db: Annotated[Session, Depends(get_db)],
+    respons: Response,
+    layer: Annotated[Literal["pricelens", "zoneguard"], Query()] = "pricelens",
+    kawasan: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 120,
+    versi: str = "baseline",
+) -> list[SkorHeksagon]:
+    """Daftar per heksagon untuk layer PriceLens dan ZoneGuard.
+
+    Sengaja TIDAK lewat saring_zoneguard(): ZoneGuard justru harus bisa
+    menampilkan heksagon yang DILARANG. Urutannya mengikuti layer-nya sendiri,
+    bukan opportunity_score - jadi ini bukan peringkat rekomendasi.
+    """
+    daftar_kawasan = periksa_kawasan_banyak(kawasan)
+    dasar = gabung_skor(versi)
+    if daftar_kawasan:
+        dasar = dasar.where(HexFeature.kawasan.in_(daftar_kawasan))
+
+    if layer == "pricelens":
+        dasar = dasar.where(HexFeature.harga_sewa_per_m2.is_not(None)).order_by(
+            HexFeature.harga_sewa_per_m2.asc()
+        )
+    else:
+        # Diizinkan dulu, lalu belum diketahui, lalu dilarang.
+        dasar = dasar.order_by(
+            case(
+                (HexFeature.zona_izin_komersial.is_(True), 0),
+                (HexFeature.zona_izin_komersial.is_(None), 1),
+                else_=2,
+            ).asc()
+        )
+
+    respons.headers[HEADER_TOTAL] = str(_total(db, dasar))
+    return _baris_skor(db.execute(dasar.limit(limit)).all())
 
 
 # ---------------------------------------------------------------------------

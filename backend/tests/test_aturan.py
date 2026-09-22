@@ -182,6 +182,30 @@ def test_simulasi_sewa_nol_bukan_sewa_gratis():
     assert h["hasil"]["pembeli_impas_per_hari"] is None
 
 
+def test_simulasi_pertumbuhan_dibandingkan_pada_omzet():
+    """Pemilik yang usahanya sudah jalan mengisi omzetnya, dan selisihnya
+    dihitung pada OMZET - bukan laba. Omzet sekarang tidak memuat sewa dan gaji
+    yang tidak kita ketahui, jadi menyandingkannya dengan laba kotor akan
+    membandingkan dua hal yang berbeda."""
+    h = _simulasi(
+        variabel={"belanja_per_jam": 500_000},
+        omzet_sekarang_bulanan=40_000_000,
+    )
+    # 500rb x 12 jam x 5% x 26 hari = 7.800.000
+    assert h["hasil"]["omzet_bulanan"] == 7_800_000
+    assert h["pertumbuhan"]["selisih_omzet_bulanan"] == 7_800_000 - 40_000_000
+    assert abs(h["pertumbuhan"]["pertumbuhan_persen"] - (-80.5)) < 0.1
+
+
+def test_simulasi_pertumbuhan_kosong_tetap_kosong():
+    """Aturan 4. Tanpa omzet sekarang, pertumbuhan TIDAK dihitung - dan itu
+    tampil sebagai 'belum diisi', bukan sebagai nol."""
+    h = _simulasi(variabel={"belanja_per_jam": 500_000})
+    assert h["pertumbuhan"]["omzet_sekarang_bulanan"] is None
+    assert h["pertumbuhan"]["selisih_omzet_bulanan"] is None
+    assert h["pertumbuhan"]["pertumbuhan_persen"] is None
+
+
 def test_simulasi_asal_angka_selalu_ikut():
     """Tanpa `sumber`, angka yang diketik orang dan angka yang diukur pipeline
     terlihat sama persis di layar."""
@@ -722,6 +746,22 @@ def test_indeks_yang_nyaris_kosong_TIDAK_layak_tampil():
         _Faktor("IBR", "L03", 0.37),
     ])["IBR"]
     assert c["layak_tampil"] is False, c
+
+
+def test_indeks_separuh_terukur_TIDAK_layak_tampil():
+    """Ambang 2/3: separuh bahan terukur belum cukup untuk mengucapkan kata.
+
+    Kasus nyatanya: IAE yang 2 dari 4 bahannya terisi dulu tetap menampilkan
+    "Ramai", padahal "seberapa ramai" masih kosong. Dua pernyataan yang
+    bertabrakan di satu layar.
+    """
+    c = cakupan_indeks([
+        _Faktor("IAE", "B01", 0.4),
+        _Faktor("IAE", "B02", None),
+        _Faktor("IAE", "B03", 0.6),
+        _Faktor("IAE", "B04", None),
+    ])["IAE"]
+    assert c["terukur"] == 2 and c["layak_tampil"] is False, c
 
 
 def test_indeks_yang_penuh_layak_tampil():
