@@ -169,6 +169,38 @@ def test_aksi_peta_tidak_dieksekusi_backend():
     cek("loop berhenti setelah end_turn", k.dipanggil == 2, f"- {k.dipanggil} panggilan")
 
 
+def test_jawaban_bersama_aksi_peta_tidak_dibuang():
+    """Putaran yang HANYA menggerakkan peta dan sudah menulis jawaban = selesai.
+
+    Tanpa penjaga ini, teks panjang di putaran itu terbuang dan digantikan
+    kalimat pendek dari putaran berikutnya - jawaban jadi buruk tanpa galat apa
+    pun, dan waktu jawab ikut bertambah satu putaran model.
+    """
+    k = pasang(
+        [
+            Balasan(
+                [
+                    Blok("text", text="Ini jawaban lengkapnya."),
+                    Blok(
+                        "tool_use",
+                        id="t1",
+                        name="highlight",
+                        input={"hex_ids": ["89aitest0001"]},
+                    ),
+                ],
+                "tool_use",
+            ),
+        ]
+    )
+    db = DbTiruan(hex_contoh())
+    jawab = ai.tanya(PermintaanAI(pertanyaan="sorot dong"), db, None)
+    pulihkan()
+
+    cek("jawaban lengkap dipertahankan", jawab.teks == "Ini jawaban lengkapnya.")
+    cek("aksi peta tetap terkirim", [a.fungsi for a in jawab.aksi_peta] == ["highlight"])
+    cek("berhenti tanpa putaran tambahan", k.dipanggil == 1, f"- {k.dipanggil}")
+
+
 def test_alat_backend_hasilnya_kembali_ke_model():
     """Model harus MENERIMA angka, bukan mengarangnya."""
     k = pasang([

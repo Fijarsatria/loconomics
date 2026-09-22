@@ -113,6 +113,14 @@ def cari_lokasi(
         kode = _kode(item["h3_index"], hx.kawasan)
         if kode:
             item["kode_lokasi"] = kode
+        # Status zona ikut di sini supaya model tidak perlu satu putaran
+        # tambahan cek_zona hanya untuk kandidat yang baru dicari.
+        z = zoneguard(hx)
+        item["zona"] = {
+            "status": z.status,
+            "kelas_zona": z.kelas_zona,
+            "penjelasan": z.penjelasan,
+        }
         hasil.append(item)
 
     # `jenis_usaha` belum dipakai menyaring: kompetitor per kelas induk baru bisa
@@ -510,10 +518,12 @@ titik survei dan skor 82 dari 3 titik survei adalah dua pernyataan yang berbeda,
 dan pengguna berhak tahu yang mana. Kalau keyakinannya RENDAH, katakan terus terang \
 bahwa datanya masih tipis.
 
-3. Sebelum merekomendasikan sebuah lokasi, periksa zonasinya dengan cek_zona. \
-Lokasi berstatus DILARANG tidak boleh direkomendasikan dengan alasan apa pun. \
-Lokasi berstatus TIDAK_DIKETAHUI boleh disebut, tetapi Anda wajib mengatakan bahwa \
-status izinnya belum bisa dipastikan.
+3. cari_lokasi SUDAH mengembalikan status zona tiap kandidat di field "zona" - \
+pakai itu langsung, JANGAN memanggil cek_zona lagi untuk kandidat yang sama. \
+Panggil cek_zona hanya untuk heksagon yang tidak muncul dari cari_lokasi, mis. \
+heksagon yang sedang dibuka pengguna. Lokasi berstatus DILARANG tidak boleh \
+direkomendasikan dengan alasan apa pun. Status TIDAK_DIKETAHUI boleh disebut, \
+tetapi Anda wajib mengatakan status izinnya belum bisa dipastikan.
 
 4. Jawaban Anda harus MENGGERAKKAN PETA, bukan berhenti sebagai teks. Setelah \
 menemukan atau menjelaskan lokasi, panggil flyTo dan highlight supaya pengguna \
@@ -533,13 +543,15 @@ yang Anda sebut - termasuk kalau statusnya WASPADA atau BAHAYA.
 (hapus batas anggaran atau menit jalan) lalu cari lagi, katakan kriteria mana \
 yang dilonggarkan, dan tetap gerakkan peta ke hasil terbaiknya.
 
-HEMAT ALAT. Panggil alat seperlunya saja. Jangan menumpuk cek_harga, cek_risiko, \
+HEMAT ALAT. Panggil alat seperlunya saja, dan JANGAN memanggil alat yang sama dua \
+kali untuk heksagon yang sama. Jangan menumpuk cek_harga, cek_risiko, \
 jelaskan_skor, cari_hidden_gem, atau bedah_blok kalau pengguna tidak menanyakan \
 hal itu - setiap alat menambah satu putaran penuh dan memperlambat jawaban. Untuk \
-pencarian lokasi, cukup: cari_lokasi -> cek_zona kandidat teratas -> flyTo dan \
-highlight, lalu tulis jawabannya. Keluarkan panggilan yang tidak saling \
-bergantung dalam SATU giliran sekaligus - misalnya flyTo dan highlight bersama - \
-supaya tidak memakan putaran tambahan. Berhenti memanggil begitu datanya cukup.
+pencarian lokasi, cukup: cari_lokasi (status zonanya sudah ikut) lalu tulis \
+jawabannya. Keluarkan panggilan yang tidak saling bergantung dalam SATU giliran \
+sekaligus - misalnya flyTo dan highlight bersamaan, atau menempel pada jawaban \
+akhir - supaya tidak memakan putaran tambahan. Berhenti memanggil begitu datanya \
+cukup.
 
 8. CAKUPAN ANDA HANYA LOCONOMICS: pemilihan lokasi usaha, skor peluang, zonasi, \
 harga sewa, kompetisi, rute ke simpul transit, simulasi usaha, dan cara kerja \
@@ -639,7 +651,37 @@ def _kode(h3: str | None, kawasan: str | None) -> str | None:
         return None
 
 
-def _konteks(permintaan: PermintaanAI, db: Session | None = None, bahasa: str = "id") -> str | None:
+def _preferensi(pengguna) -> str | None:
+    """Preferensi usaha yang disimpan akun, kalau ada. Dibaca apa adanya."""
+    mentah = getattr(pengguna, "preferensi", None) if pengguna is not None else None
+    if not mentah:
+        return None
+    try:
+        p = json.loads(mentah) if isinstance(mentah, str) else dict(mentah)
+    except (ValueError, TypeError):
+        return None
+    potong = []
+    jenis = p.get("jenis_usaha")
+    if jenis:
+        from app.core.simulasi import JENIS_USAHA
+
+        potong.append(f"jenis usaha {JENIS_USAHA.get(jenis, {}).get('label', jenis)}")
+    if p.get("kawasan"):
+        potong.append(f"kawasan incaran {p['kawasan']}")
+    anggaran = p.get("budget_sewa_bulanan")
+    if isinstance(anggaran, (int, float)) and anggaran > 0:
+        potong.append(f"anggaran sewa {int(anggaran)} rupiah per bulan")
+    if not potong:
+        return None
+    return "Preferensi usaha pengguna (disimpan di akunnya): " + "; ".join(potong) + "."
+
+
+def _konteks(
+    permintaan: PermintaanAI,
+    db: Session | None = None,
+    bahasa: str = "id",
+    pengguna=None,
+) -> str | None:
     """Konteks peta yang sedang dilihat pengguna, kalau ada."""
     bagian = []
     if bahasa == "en":
@@ -655,6 +697,9 @@ def _konteks(permintaan: PermintaanAI, db: Session | None = None, bahasa: str = 
                 bagian.append(f"Kode lokasi heksagon itu: {kode}")
     if permintaan.layer_aktif:
         bagian.append(f"Layer aktif: {permintaan.layer_aktif}")
+    pref = _preferensi(pengguna)
+    if pref:
+        bagian.append(pref)
     return "\n".join(bagian) if bagian else None
 
 
@@ -793,7 +838,7 @@ def tanya(
     while pesan and pesan[0]["role"] != "user":
         pesan.pop(0)
 
-    konteks = _konteks(permintaan, db, bahasa)
+    konteks = _konteks(permintaan, db, bahasa, pengguna)
     isi_awal = permintaan.pertanyaan if not konteks else f"{konteks}\n\n{permintaan.pertanyaan}"
     pesan.append({"role": "user", "content": isi_awal})
 
@@ -803,6 +848,8 @@ def tanya(
     hex_disebut: list[str] = []
     total_biaya = 0.0
     balasan = None
+    #: Putaran terakhir cuma menggerakkan peta + sudah menulis jawaban.
+    selesai_peta = False
 
     for putaran in range(MAKS_PUTARAN):
         try:
@@ -899,10 +946,22 @@ def tanya(
             )
 
         pesan.append({"role": "user", "content": hasil_alat})
+
+        # Putaran ini HANYA menggerakkan peta DAN sudah menulis jawabannya -
+        # tidak perlu satu putaran model lagi; teksnya sudah jawaban lengkap.
+        # Tanpa ini jawaban itu terbuang dan digantikan kalimat pendek.
+        hanya_peta = all(b.name in NAMA_FRONTEND for b in panggilan)
+        ada_teks = any(
+            getattr(b, "type", "") == "text" and (getattr(b, "text", "") or "").strip()
+            for b in balasan.content
+        )
+        if hanya_peta and ada_teks:
+            selesai_peta = True
+            break
     else:
         log.warning("Batas %d putaran alat tercapai", MAKS_PUTARAN)
 
-    if balasan is not None and balasan.stop_reason == "tool_use":
+    if balasan is not None and balasan.stop_reason == "tool_use" and not selesai_peta:
         try:
             akhir = c.messages.create(
                 model=model_aktif(),
