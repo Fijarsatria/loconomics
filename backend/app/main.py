@@ -80,7 +80,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
     allow_headers=["*"],
     # Peramban menyembunyikan setiap header respons yang tidak disebut di sini,
     # termasuk header buatan sendiri. X-Total-Count adalah janji paginasi
