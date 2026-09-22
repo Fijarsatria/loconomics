@@ -914,8 +914,18 @@ export default function App() {
 
   /** Daftar pin yang sedang tergambar - sumber kebenaran di sisi layar. */
   const pinKini = useRef<
-    { lat: number; lon: number; h3: string; label: string; sendiri: boolean }[]
+    { lat: number; lon: number; h3: string; label: string; sublabel?: string; sendiri: boolean }[]
   >([])
+
+  /** Label pin: nama usaha kalau ada, kalau tidak nama lokasi atau kodenya.
+   *  Baris keduanya menjelaskan lokasinya atau deskripsi usahanya. */
+  const labelPin = useCallback((x: ButirPantauan) => {
+    const kode = kodeLokasi(x.h3_index, x.kawasan ?? '')
+    if (x.nama_usaha) {
+      return { label: x.nama_usaha, sublabel: x.nama ?? kode }
+    }
+    return { label: x.nama ?? kode, sublabel: x.deskripsi ?? '' }
+  }, [])
 
   const pasangPin = useCallback((b: ButirPantauan[]) => {
     const daftar = b
@@ -926,12 +936,12 @@ export default function App() {
         lat: x.lat,
         lon: x.lon,
         h3: x.h3_index,
-        label: x.nama ?? kodeLokasi(x.h3_index, x.kawasan ?? ''),
+        ...labelPin(x),
         sendiri: x.titik_sendiri,
       }))
     pinKini.current = daftar
     peta.current?.setPin(daftar)
-  }, [])
+  }, [labelPin])
 
   const taruhPin = useCallback(
     async (h3: string, lat: number, lon: number) => {
@@ -942,20 +952,17 @@ export default function App() {
       const lain = pinKini.current.filter((p) => p.h3 !== h3)
       pinKini.current = [
         ...lain,
-        { lat, lon, h3, label: kodeLokasi(h3, kawasan), sendiri: true },
+        { lat, lon, h3, label: kodeLokasi(h3, kawasan), sublabel: '', sendiri: true },
       ]
       peta.current?.setPin(pinKini.current)
       try {
         const item = await api.pantau(h3, { lat, lon })
         // Jawaban server yang berwenang soal nama dan titiknya; di sini cuma
         // labelnya yang mungkin berubah.
+        const lp = labelPin(item)
         pinKini.current = pinKini.current.map((p) =>
           p.h3 === item.h3_index
-            ? {
-                ...p,
-                label: item.nama ?? kodeLokasi(item.h3_index, item.kawasan ?? ''),
-                sendiri: item.titik_sendiri,
-              }
+            ? { ...p, ...lp, sendiri: item.titik_sendiri }
             : p,
         )
         peta.current?.setPin(pinKini.current)
@@ -971,7 +978,7 @@ export default function App() {
           .catch(() => {})
       }
     },
-    [tersimpan, catatSimpan, pasangPin, kawasan],
+    [tersimpan, catatSimpan, pasangPin, labelPin, kawasan],
   )
   const [baki, setBaki] = useState<string[]>([])
   const [komparasiTerbuka, setKomparasiTerbuka] = useState(false)

@@ -2523,23 +2523,43 @@ input:focus-visible {
   bottom: calc(100% + 6px);
   left: 50%;
   max-width: 220px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  border-radius: 999px;
+  border-radius: 12px;
   padding: 3px 10px;
+  text-align: center;
   font-size: 11.5px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.25;
   color: #ffffff;
   background: rgb(16 26 22 / 0.88);
   backdrop-filter: blur(6px);
   pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, 4px);
+  /* Nama usaha terlihat TERUS, bukan cuma saat disorot: yang menyimpan usaha
+     ingin membacanya dari peta tanpa harus berburu kursor. */
+  opacity: 1;
+  transform: translate(-50%, 0);
   transition:
     opacity 180ms var(--ease-liquid),
     transform 260ms var(--ease-liquid);
+}
+.pin-simpan-nama-teks {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pin-simpan-sub {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.pin-simpan-sub:empty {
+  display: none;
 }
 .pin-simpan:hover .pin-simpan-nama,
 .pin-simpan:focus-visible .pin-simpan-nama {

@@ -74,6 +74,12 @@ const K = {
       'Isi sewa yang ditawarkan dan harga rata-rata per pembeli di bawah. Keduanya ada di tangan Anda, bukan di peta.',
     sewaLabel: 'Sewa',
     omzetLabel: 'Omzet',
+    usahaSekarang: 'Omzet sekarang tiap bulan',
+    bUsahaSekarang: 'Sudah punya usaha? Isi omzetnya untuk melihat pertumbuhannya di sini.',
+    tumbuhJudul: 'Dari usaha Anda sekarang',
+    tumbuhNaik: (n: string) => `+${n}% dari omzet sekarang`,
+    tumbuhTurun: (n: string) => `−${n}% dari omzet sekarang`,
+    tumbuhSama: 'Setara dengan omzet sekarang',
     pembanding: 'Pembanding',
     andaLebihBaik: 'Lokasi yang Anda buka lebih baik.',
     pembandingLebihBaik: 'Pembandingnya lebih baik untuk skenario ini.',
@@ -189,6 +195,12 @@ const K = {
       'Fill in the rent on offer and the average spend per buyer below. Both are in your hands, not on the map.',
     sewaLabel: 'Rent',
     omzetLabel: 'Revenue',
+    usahaSekarang: 'Current revenue each month',
+    bUsahaSekarang: 'Already have a business? Enter its revenue to see the growth here.',
+    tumbuhJudul: 'From your current business',
+    tumbuhNaik: (n: string) => `+${n}% on your current revenue`,
+    tumbuhTurun: (n: string) => `−${n}% on your current revenue`,
+    tumbuhSama: 'On par with your current revenue',
     pembanding: 'Comparison',
     andaLebihBaik: 'The location you opened is the better one.',
     pembandingLebihBaik: 'The comparison is better for this scenario.',
@@ -635,6 +647,9 @@ export default function Simulasi({
   // `null` berarti "belum diisi", dan simulasi menyatakannya apa adanya.
   const [sewaDiisi, setSewaDiisi] = useState<number | null>(null)
   const [hargaDiisi, setHargaDiisi] = useState<number | null>(null)
+  // Untuk pemilik usaha yang sudah jalan. Kosong = pertumbuhan tidak dihitung,
+  // dan itu ditampilkan sebagai "belum diisi", bukan sebagai nol.
+  const [omzetSekarang, setOmzetSekarang] = useState<number | null>(null)
   const [hasil, setHasil] = useState<HasilSimulasi | null>(null)
   const [banding, setBanding] = useState<HasilSimulasi | null>(null)
   const hasilBanding = banding
@@ -659,6 +674,7 @@ export default function Simulasi({
       // membuat URL-nya mengaku sudah diisi padahal belum.
       sewa_bulanan_diminta: sewaDiisi ?? undefined,
       harga_rata_rata: hargaDiisi ?? undefined,
+      omzet_sekarang_bulanan: omzetSekarang ?? undefined,
       h3_blok: h3Blok ?? undefined,
     }
     // Isian yang SAMA disimpan untuk unduhan PDF. Merakit ulang objeknya di
@@ -684,7 +700,7 @@ export default function Simulasi({
       batal = true
       clearTimeout(t)
     }
-  }, [h3, h3Blok, h3Banding, jenis, jam, luas, pangsa, margin, sewaDiisi, hargaDiisi, ist.bahasa])
+  }, [h3, h3Blok, h3Banding, jenis, jam, luas, pangsa, margin, sewaDiisi, hargaDiisi, omzetSekarang, ist.bahasa])
 
   useEffect(() => {
     const kunci = (e: KeyboardEvent) => {
@@ -728,6 +744,7 @@ export default function Simulasi({
   const bisaImpas = !bisaLaba && impasPembeli !== null
   const L = hasil?.lingkungan
   const impas = hasil?.hasil.pangsa_impas_persen ?? null
+  const tumbuh = hasil?.pertumbuhan ?? null
 
   const SLIDE = [
     {
@@ -1122,6 +1139,28 @@ export default function Simulasi({
                       )}
                     </div>
                   )}
+
+                  {tumbuh && tumbuh.pertumbuhan_persen !== null && (
+                    <div className="masuk mt-3 rounded-lg border border-line bg-surface-2/60 px-4 py-3">
+                      <p className="eyebrow mb-1">{t.tumbuhJudul}</p>
+                      <p
+                        className="tabular text-[19px] font-semibold leading-none"
+                        style={{
+                          color:
+                            tumbuh.pertumbuhan_persen >= 0
+                              ? 'var(--q-menang)'
+                              : 'var(--q-jebakan)',
+                        }}
+                      >
+                        {tumbuh.pertumbuhan_persen >= 0
+                          ? t.tumbuhNaik(angka(tumbuh.pertumbuhan_persen, 0) ?? '0')
+                          : t.tumbuhTurun(angka(Math.abs(tumbuh.pertumbuhan_persen), 0) ?? '0')}
+                      </p>
+                      <p className="mt-1 text-[12px] leading-snug text-ink-2">
+                        {rupiah(tumbuh.omzet_sekarang_bulanan)} → {rupiah(hasil.hasil.omzet_bulanan)}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -1425,6 +1464,14 @@ export default function Simulasi({
                   nilai={hargaDiisi}
                   bantuan={t.bHarga}
                   onUbah={setHargaDiisi}
+                />
+              </div>
+              <div className="min-w-[9rem] flex-1">
+                <IsianRupiah
+                  label={t.usahaSekarang}
+                  nilai={omzetSekarang}
+                  bantuan={t.bUsahaSekarang}
+                  onUbah={setOmzetSekarang}
                 />
               </div>
               <div className="min-w-[7rem] flex-1">

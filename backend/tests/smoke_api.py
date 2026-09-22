@@ -704,29 +704,35 @@ def jalankan(db) -> None:
         )
 
         # INVARIAN: kawasan yang dibatasi jaringan jalan TIDAK MUNGKIN lebih luas
-        # daripada lingkaran berjari-jari `menit x 80 m` - kawasan yang bisa
-        # ditembus ke segala arah. Kalau ia melebihi, yang tersimpan bukan
-        # isochrone jalan kaki, dan menggambarnya berarti menjanjikan jangkauan
-        # yang tidak ada.
+        # daripada lingkaran berjari-jari `menit x kecepatan bebas-hambatan`
+        # - kawasan yang bisa ditembus ke segala arah. Kalau ia melebihi, yang
+        # tersimpan bukan isochrone profil itu. Kecepatannya PER PROFIL: pita
+        # mobil memang jauh lebih luas daripada pita jalan kaki.
         melebihi = db.execute(
             text(
                 """
                 SELECT count(*) FROM catchment_areas
-                WHERE ST_Area(geom::geography) > pi() * power(menit * 80.0, 2)
+                WHERE ST_Area(geom::geography) > pi() * power(
+                    menit * CASE profil
+                        WHEN 'driving-car' THEN 1000.0
+                        WHEN 'cycling-regular' THEN 300.0
+                        ELSE 80.0
+                    END, 2)
                 """
             )
         ).scalar_one()
         cek("tak ada pita melebihi lingkaran bebas-hambatannya", melebihi == 0, f"- {melebihi} melanggar")
 
         # Pita yang lebih lama harus lebih LUAS. Tertukar tidak menghasilkan
-        # galat, cuma peta yang salah.
+        # galat, cuma peta yang salah. Dipisah PER PROFIL: mencampur profil
+        # membuat pita mobil selalu "lebih luas" dari pita jalan kaki.
         tidak_bersarang = db.execute(
             text(
                 """
                 SELECT count(*) FROM (
-                    SELECT transport_node_id
+                    SELECT transport_node_id, profil
                     FROM catchment_areas
-                    GROUP BY transport_node_id
+                    GROUP BY transport_node_id, profil
                     HAVING max(CASE WHEN menit = 5 THEN ST_Area(geom::geography) END)
                          > min(CASE WHEN menit = 15 THEN ST_Area(geom::geography) END)
                 ) x
@@ -735,9 +741,9 @@ def jalankan(db) -> None:
         ).scalar_one()
         cek("pita 15 menit selalu lebih luas dari 5 menit", tidak_bersarang == 0)
 
-        # Tiap simpul punya ketiga pitanya, atau tidak sama sekali. Simpul yang
-        # cuma punya sebagian akan menggambar jangkauan yang bolong tanpa ada
-        # yang mengatakannya.
+        # Tiap simpul punya seluruh pitanya, PER PROFIL, atau tidak sama sekali.
+        # Simpul yang cuma punya sebagian akan menggambar jangkauan yang bolong
+        # tanpa ada yang mengatakannya.
         # Jumlah pitanya DITURUNKAN dari `ISOCHRONE_MENIT`, tidak ditulis 3.
         #
         # Ketiga asersi di bawah dulu mengunci angka tiga, dan ketiganya langsung
@@ -750,8 +756,9 @@ def jalankan(db) -> None:
             text(
                 """
                 SELECT count(*) FROM (
-                    SELECT transport_node_id FROM catchment_areas
-                    GROUP BY transport_node_id HAVING count(DISTINCT menit) <> :n
+                    SELECT transport_node_id, profil FROM catchment_areas
+                    GROUP BY transport_node_id, profil
+                    HAVING count(DISTINCT menit) <> :n
                 ) x
                 """
             ),

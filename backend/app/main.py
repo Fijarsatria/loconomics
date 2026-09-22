@@ -18,7 +18,7 @@ logging.basicConfig(
 KETERANGAN_TAG = [
     {"name": "heksagon", "description": "Satuan analisis utama: H3 res-9, ±0,10 km²."},
     {"name": "pricelens", "description": "Peta harga. Sewa per m² dan belanja per jam, keduanya dari OCR."},
-    {"name": "transit", "description": "Simpul transportasi dan isochrone jalan kaki."},
+    {"name": "transit", "description": "Simpul transportasi dan kawasan jangkau per moda."},
     {"name": "skor", "description": "Peringkat, GemFinder, RiskRadar, ZoneGuard. Membaca saja - tidak menghitung."},
     {"name": "ai", "description": "AI Consultant. Satu-satunya bagian yang membelanjakan uang sungguhan."},
     {"name": "meta", "description": "Kesehatan, kesiapan, cakupan data."},

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -48,6 +48,7 @@ from app.models import (
     ScoreFactor,
     Subscription,
     User,
+    UsahaPenjualan,
     WatchlistItem,
 )
 from app.core.aturan import kode_lokasi
@@ -57,12 +58,16 @@ from app.schemas import (
     Akun,
     PreferensiUsaha,
     ButirPantauan,
+    PenjualanBulanan,
     PermintaanDaftar,
     PermintaanLangganan,
     PermintaanMasuk,
     PermintaanNamaPantau,
     PermintaanPantau,
+    PermintaanPenjualan,
     SesiAkun,
+    TrenUsaha,
+    UsahaHeksagon,
 )
 
 log = logging.getLogger("loconomics.akun")
@@ -326,6 +331,10 @@ def daftar_pantauan(
                 kuadran=sc.kuadran if sc else None,
                 risiko=risiko,
                 dibuat_pada=b.dibuat_pada,
+                rencana_jenis_usaha=b.rencana_jenis_usaha,
+                rencana_omzet_bulanan=b.rencana_omzet_bulanan,
+                nama_usaha=b.nama_usaha,
+                deskripsi=b.deskripsi,
             )
         )
     return keluar
@@ -427,17 +436,21 @@ def tambah_pantauan(
         kuadran=sc.kuadran if sc else None,
         risiko=peringatan_risiko(hx, p75, p90).tingkat,
         dibuat_pada=ada.dibuat_pada,
+        rencana_jenis_usaha=ada.rencana_jenis_usaha,
+        rencana_omzet_bulanan=ada.rencana_omzet_bulanan,
+        nama_usaha=ada.nama_usaha,
+        deskripsi=ada.deskripsi,
     )
 
 
-@router.patch("/pantauan/{h3_index}", summary="Beri nama lokasi tersimpan")
+@router.patch("/pantauan/{h3_index}", summary="Ubah nama, catatan, atau rencana lokasi tersimpan")
 def namai_pantauan(
     h3_index: str,
     p: PermintaanNamaPantau,
     user: PenggunaPremium,
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    """Nama kosong mengembalikannya ke kode lokasi."""
+    """Nama kosong mengembalikannya ke kode lokasi; rencana kosong menghapusnya."""
     ada = db.execute(
         select(WatchlistItem).where(
             WatchlistItem.user_id == user.id, WatchlistItem.h3_index == h3_index
@@ -445,9 +458,36 @@ def namai_pantauan(
     ).scalar_one_or_none()
     if ada is None:
         raise TidakDitemukan("Lokasi itu tidak ada di simpanan Anda.", {"h3_index": h3_index})
-    ada.nama = (p.nama or "").strip() or None
+    # Hanya bidang yang DIKIRIM yang disentuh. Tanpa ini, menyimpan catatan akan
+    # menghapus nama, dan sebaliknya.
+    if p.nama is not None:
+        ada.nama = p.nama.strip() or None
+    if p.catatan is not None:
+        ada.catatan = p.catatan.strip() or None
+    if p.rencana_jenis_usaha is not None:
+        jenis = p.rencana_jenis_usaha.strip() or None
+        if jenis is not None and jenis not in JENIS_USAHA:
+            raise KesalahanAPI(
+                f"Jenis usaha '{jenis}' tidak dikenal.",
+                {"tersedia": sorted(JENIS_USAHA)},
+            )
+        ada.rencana_jenis_usaha = jenis
+    if p.rencana_omzet_bulanan is not None:
+        ada.rencana_omzet_bulanan = p.rencana_omzet_bulanan or None
+    if p.nama_usaha is not None:
+        ada.nama_usaha = p.nama_usaha.strip() or None
+    if p.deskripsi is not None:
+        ada.deskripsi = p.deskripsi.strip() or None
     db.commit()
-    return {"h3_index": h3_index, "nama": ada.nama}
+    return {
+        "h3_index": h3_index,
+        "nama": ada.nama,
+        "catatan": ada.catatan,
+        "rencana_jenis_usaha": ada.rencana_jenis_usaha,
+        "rencana_omzet_bulanan": ada.rencana_omzet_bulanan,
+        "nama_usaha": ada.nama_usaha,
+        "deskripsi": ada.deskripsi,
+    }
 
 
 @router.delete("/pantauan/{h3_index}", summary="Hapus dari pantauan")
@@ -461,6 +501,152 @@ def hapus_pantauan(
     )
     db.commit()
     return {"dihapus": h3_index}
+
+
+# ---------------------------------------------------------------------------
+# Usaha pada satu lokasi tersimpan
+# ---------------------------------------------------------------------------
+
+
+def _parse_bulan(teks: str) -> date:
+    """'YYYY-MM' -> hari pertama bulan itu."""
+    try:
+        tahun, bulan = teks.split("-")
+        return date(int(tahun), int(bulan), 1)
+    except (ValueError, TypeError, AttributeError):
+        raise KesalahanAPI("Bulan harus berformat YYYY-MM.", {"bulan": teks})
+
+
+def _tren(baris: list[UsahaPenjualan]) -> TrenUsaha:
+    """Tren dari catatan penjualan yang ada. Kosong tetap kosong, bukan nol."""
+    urut = sorted(baris, key=lambda b: b.bulan)
+    penjualan = [
+        PenjualanBulanan(
+            bulan=b.bulan.strftime("%Y-%m"),
+            omzet=b.omzet,
+            pembeli=b.pembeli,
+            catatan=b.catatan,
+        )
+        for b in urut
+    ]
+    beromzet = [b for b in urut if b.omzet is not None]
+    if not beromzet:
+        return TrenUsaha(penjualan=penjualan)
+    terakhir = beromzet[-1]
+    rata = sum(float(b.omzet) for b in beromzet) / len(beromzet)
+    terbaik = max(beromzet, key=lambda b: b.omzet or 0)
+    perubahan = None
+    if len(beromzet) >= 2:
+        sebelum = float(beromzet[-2].omzet or 0)
+        if sebelum > 0:
+            perubahan = round((float(terakhir.omzet or 0) - sebelum) / sebelum * 100, 1)
+    return TrenUsaha(
+        penjualan=penjualan,
+        omzet_terakhir=terakhir.omzet,
+        bulan_terakhir=terakhir.bulan.strftime("%Y-%m"),
+        perubahan_persen=perubahan,
+        rata_rata=round(rata),
+        bulan_terbaik=terbaik.bulan.strftime("%Y-%m"),
+        omzet_terbaik=terbaik.omzet,
+    )
+
+
+def _usaha(db: Session, user, h3_index: str) -> UsahaHeksagon:
+    item = db.execute(
+        select(WatchlistItem).where(
+            WatchlistItem.user_id == user.id, WatchlistItem.h3_index == h3_index
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise TidakDitemukan("Lokasi itu tidak ada di simpanan Anda.", {"h3_index": h3_index})
+    hx = db.get(HexFeature, h3_index)
+    baris = db.execute(
+        select(UsahaPenjualan)
+        .where(
+            UsahaPenjualan.user_id == user.id, UsahaPenjualan.h3_index == h3_index
+        )
+        .order_by(UsahaPenjualan.bulan)
+    ).scalars().all()
+    return UsahaHeksagon(
+        h3_index=h3_index,
+        kawasan=getattr(hx, "kawasan", None),
+        nama_usaha=item.nama_usaha,
+        deskripsi=item.deskripsi,
+        catatan=item.catatan,
+        rencana_jenis_usaha=item.rencana_jenis_usaha,
+        rencana_omzet_bulanan=item.rencana_omzet_bulanan,
+        tren=_tren(list(baris)),
+    )
+
+
+@router.get(
+    "/usaha/{h3_index}",
+    response_model=UsahaHeksagon,
+    summary="Usaha dan tren satu lokasi tersimpan",
+)
+def usaha_heksagon(
+    h3_index: str, user: PenggunaPremium, db: Annotated[Session, Depends(get_db)]
+) -> UsahaHeksagon:
+    """Nama usaha, deskripsi, dan tren penjualan bulanannya."""
+    return _usaha(db, user, h3_index)
+
+
+@router.put(
+    "/usaha/{h3_index}/penjualan",
+    response_model=UsahaHeksagon,
+    summary="Catat penjualan satu bulan (upsert)",
+)
+def simpan_penjualan(
+    h3_index: str,
+    p: PermintaanPenjualan,
+    user: PenggunaPremium,
+    db: Annotated[Session, Depends(get_db)],
+) -> UsahaHeksagon:
+    item = db.execute(
+        select(WatchlistItem).where(
+            WatchlistItem.user_id == user.id, WatchlistItem.h3_index == h3_index
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise TidakDitemukan("Lokasi itu tidak ada di simpanan Anda.", {"h3_index": h3_index})
+    bulan = _parse_bulan(p.bulan)
+    ada = db.execute(
+        select(UsahaPenjualan).where(
+            UsahaPenjualan.user_id == user.id,
+            UsahaPenjualan.h3_index == h3_index,
+            UsahaPenjualan.bulan == bulan,
+        )
+    ).scalar_one_or_none()
+    if ada is None:
+        ada = UsahaPenjualan(user_id=user.id, h3_index=h3_index, bulan=bulan)
+        db.add(ada)
+    ada.omzet = p.omzet
+    ada.pembeli = p.pembeli
+    ada.catatan = (p.catatan or "").strip() or None
+    db.commit()
+    return _usaha(db, user, h3_index)
+
+
+@router.delete(
+    "/usaha/{h3_index}/penjualan/{bulan}",
+    response_model=UsahaHeksagon,
+    summary="Hapus catatan penjualan satu bulan",
+)
+def hapus_penjualan(
+    h3_index: str,
+    bulan: str,
+    user: PenggunaPremium,
+    db: Annotated[Session, Depends(get_db)],
+) -> UsahaHeksagon:
+    db.execute(
+        delete(UsahaPenjualan).where(
+            UsahaPenjualan.user_id == user.id,
+            UsahaPenjualan.h3_index == h3_index,
+            UsahaPenjualan.bulan == _parse_bulan(bulan),
+        )
+    )
+    db.commit()
+    return _usaha(db, user, h3_index)
 
 
 # ---------------------------------------------------------------------------
@@ -578,6 +764,7 @@ def laporan_simulasi_pdf(
     margin_persen: Annotated[float, Query(gt=0, le=100)] = 30.0,
     sewa_bulanan_diminta: Annotated[float | None, Query(ge=0, le=5_000_000_000)] = None,
     harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
+    omzet_sekarang_bulanan: Annotated[float | None, Query(ge=0, le=100_000_000_000)] = None,
     h3_blok: Annotated[str | None, Query()] = None,
 ) -> Response:
     """Rencana usaha satu halaman, siap dibawa ke pemberi modal."""
@@ -588,6 +775,7 @@ def laporan_simulasi_pdf(
         jenis_usaha=jenis_usaha, jam_buka=jam_buka, luas_m2=luas_m2,
         pangsa_persen=pangsa_persen, margin_persen=margin_persen,
         sewa_bulanan_diminta=sewa_bulanan_diminta, harga_rata_rata=harga_rata_rata,
+        omzet_sekarang_bulanan=omzet_sekarang_bulanan,
         h3_blok=h3_blok,
     )
     pdf = _rakit_pdf_simulasi(sim, user)
@@ -680,6 +868,21 @@ def _rakit_pdf_simulasi(sim, user) -> bytes:
         _pita_keyakinan(sim.keyakinan, dok.width, g, colors),
         Spacer(1, 9),
     ]
+    # Pertumbuhan untuk pemilik usaha yang sudah jalan. Satu kalimat, muncul
+    # hanya kalau penggunanya memang mengisi omzet sekarang.
+    tum = sim.pertumbuhan
+    if tum.pertumbuhan_persen is not None and tum.selisih_omzet_bulanan is not None:
+        arah = "naik" if tum.pertumbuhan_persen >= 0 else "turun"
+        isi += [
+            Paragraph(
+                "<b>Dari usaha Anda sekarang</b> &mdash; omzet "
+                f"{_angka_id(tum.omzet_sekarang_bulanan, 'Rp', 0)} sebulan; di lokasi ini "
+                f"diproyeksikan {_angka_id(h.omzet_bulanan, 'Rp', 0)}, {arah} "
+                f"{_angka_id(abs(tum.pertumbuhan_persen), '%', 0)}.",
+                g["kecil"],
+            ),
+            Spacer(1, 8),
+        ]
     # Simulasi SATU BLOK dinyatakan di halaman pertama, dengan asumsinya.
     # Dokumen ini dibawa ke pemberi modal; omzet blok yang terbaca sebagai hasil
     # ukur per 130 m akan dipercaya lebih dari yang pantas.

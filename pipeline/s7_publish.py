@@ -1647,7 +1647,7 @@ def hitung_temuan(db: Session, n_hex: int) -> list[dict[str, Any]]:
                                        ST_Centroid(hf.geom::geometry))) AS n_hex
             FROM catchment_areas ca
             JOIN transport_nodes tn ON tn.id = ca.transport_node_id
-            WHERE ca.menit = 15
+            WHERE ca.menit = 15 AND ca.profil = 'foot-walking'
             ORDER BY km2
         """)
     ).all()

@@ -635,6 +635,7 @@ def simulasi_heksagon(
     margin_persen: Annotated[float, Query(gt=0, le=100)] = MARGIN_BAWAAN,
     sewa_bulanan_diminta: Annotated[float | None, Query(ge=0, le=5_000_000_000)] = None,
     harga_rata_rata: Annotated[float | None, Query(ge=0, le=100_000_000)] = None,
+    omzet_sekarang_bulanan: Annotated[float | None, Query(ge=0, le=100_000_000_000)] = None,
     h3_blok: Annotated[
         str | None,
         Query(description="Persempit ke satu blok res-10 di dalam heksagon ini"),
@@ -682,6 +683,7 @@ def simulasi_heksagon(
         margin_persen=margin_persen,
         sewa_bulanan_diminta=sewa_bulanan_diminta,
         harga_rata_rata=harga_rata_rata,
+        omzet_sekarang_bulanan=omzet_sekarang_bulanan,
         bahasa=bahasa,
     )
 
@@ -724,6 +726,7 @@ def simulasi_heksagon(
         sumber=hasil["sumber"],
         terukur=hasil["terukur"],
         hasil=hasil["hasil"],
+        pertumbuhan=hasil["pertumbuhan"],
         rumus=rumus,
         peringatan=hasil["peringatan"],
         sensitivitas=hasil["sensitivitas"],

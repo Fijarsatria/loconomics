@@ -17,9 +17,12 @@ import type {
   Komparasi,
   Kuadran as NamaKuadran,
   RiwayatSkor,
+  Simulasi as HasilSimulasi,
+  UsahaHeksagon,
 } from '../types'
 import { useSesi } from './Akun'
 import { useBahasa, useNamaZona, useTeks } from '../lib/bahasa'
+import { JENIS_USAHA } from '../lib/jenis-usaha'
 import { Badge, Glif, Kosong, Memuat, MemuatNama, Terkunci, useTutupHalus } from './primitif'
 
 const K = {
@@ -96,6 +99,49 @@ const K = {
     lepasPantauan: 'Hapus dari simpanan',
     berhentiPantau: (h3: string) => `Hapus ${h3} dari simpanan`,
     gagalHapus: 'Gagal menghapus lokasi dari simpanan. Coba lagi.',
+
+    rencanaJudul: 'Rencana pengembangan',
+    rencanaIsi:
+      'Simpan usaha yang Anda rencanakan di lokasi ini dan omzet usaha Anda sekarang. Pertumbuhannya diproyeksikan oleh mesin simulasi yang sama — tidak ada angka baru yang dihitung di sini.',
+    rencanaTambah: 'Catat rencana pengembangan',
+    rencanaCatatan: 'Catatan',
+    rencanaCatatanTempat: 'mis. sewa ditawar Rp4,5 jt, target buka September',
+    rencanaJenis: 'Usaha yang direncanakan',
+    rencanaOmzet: 'Omzet sekarang tiap bulan',
+    rencanaSimpan: 'Simpan rencana',
+    rencanaMenyimpan: 'Menyimpan…',
+    rencanaProyeksi: 'Proyeksi di lokasi ini',
+    rencanaNaik: (n: string) => `+${n}% dari omzet sekarang`,
+    rencanaTurun: (n: string) => `−${n}% dari omzet sekarang`,
+    rencanaSama: 'Setara dengan omzet sekarang',
+    rencanaGagal: 'Gagal menyimpan rencana. Coba lagi.',
+    rencanaKosong: 'Belum ada rencana.',
+
+    usahaJudul: 'Usaha saya',
+    usahaIsi:
+      'Catat usaha Anda di lokasi ini beserta penjualan bulanannya. Trennya dihitung dari catatan Anda sendiri.',
+    usahaNama: 'Nama usaha',
+    usahaNamaTempat: 'mis. Kopi Kendal',
+    usahaDeskripsi: 'Deskripsi',
+    usahaDeskripsiTempat: 'Apa yang dijual, jam buka, keunggulannya',
+    usahaSimpan: 'Simpan',
+    usahaMenyimpan: 'Menyimpan…',
+    usahaGagal: 'Gagal menyimpan. Coba lagi.',
+    penjualanJudul: 'Catatan penjualan bulanan',
+    penjualanBulan: 'Bulan',
+    penjualanOmzet: 'Omzet',
+    penjualanPembeli: 'Pembeli',
+    penjualanCatatan: 'Catatan',
+    penjualanCatat: 'Catat',
+    penjualanKosong: 'Belum ada catatan penjualan.',
+    trenJudul: 'Tren penjualan',
+    trenTerakhir: 'Bulan terakhir',
+    trenPerubahan: 'dari bulan sebelumnya',
+    trenTerbaik: 'Bulan terbaik',
+    trenRata: 'Rata-rata',
+    trenBelum: 'Belum bisa dilihat trennya.',
+    trenNaik: (n: string) => `+${n}%`,
+    trenTurun: (n: string) => `−${n}%`,
 
     dinamikaJudul: 'Dinamika kawasan',
     dinamikaIsi:
@@ -203,6 +249,49 @@ const K = {
     lepasPantauan: 'Remove from saved',
     berhentiPantau: (h3: string) => `Remove ${h3} from saved`,
     gagalHapus: 'Could not remove the location. Try again.',
+
+    rencanaJudul: 'Growth plan',
+    rencanaIsi:
+      'Store the business you plan at this location and your current revenue. The growth is projected by the same simulation engine — no figure is invented here.',
+    rencanaTambah: 'Record a growth plan',
+    rencanaCatatan: 'Notes',
+    rencanaCatatanTempat: 'e.g. rent offered Rp4.5m, aiming to open in September',
+    rencanaJenis: 'Planned business',
+    rencanaOmzet: 'Current revenue each month',
+    rencanaSimpan: 'Save plan',
+    rencanaMenyimpan: 'Saving…',
+    rencanaProyeksi: 'Projection at this location',
+    rencanaNaik: (n: string) => `+${n}% on your current revenue`,
+    rencanaTurun: (n: string) => `−${n}% on your current revenue`,
+    rencanaSama: 'On par with your current revenue',
+    rencanaGagal: 'Could not save the plan. Try again.',
+    rencanaKosong: 'No plan yet.',
+
+    usahaJudul: 'My business',
+    usahaIsi:
+      'Record your business at this location and its monthly sales. The trend is worked out from your own records.',
+    usahaNama: 'Business name',
+    usahaNamaTempat: 'e.g. Kopi Kendal',
+    usahaDeskripsi: 'Description',
+    usahaDeskripsiTempat: 'What you sell, opening hours, what sets it apart',
+    usahaSimpan: 'Save',
+    usahaMenyimpan: 'Saving…',
+    usahaGagal: 'Could not save. Try again.',
+    penjualanJudul: 'Monthly sales record',
+    penjualanBulan: 'Month',
+    penjualanOmzet: 'Revenue',
+    penjualanPembeli: 'Buyers',
+    penjualanCatatan: 'Notes',
+    penjualanCatat: 'Record',
+    penjualanKosong: 'No sales recorded yet.',
+    trenJudul: 'Sales trend',
+    trenTerakhir: 'Latest month',
+    trenPerubahan: 'from the month before',
+    trenTerbaik: 'Best month',
+    trenRata: 'Average',
+    trenBelum: 'No trend to show yet.',
+    trenNaik: (n: string) => `+${n}%`,
+    trenTurun: (n: string) => `−${n}%`,
 
     dinamikaJudul: 'Area dynamics',
     dinamikaIsi:
@@ -1162,6 +1251,442 @@ export function KabarPin({
   )
 }
 
+/** Kilau tren: polyline sederhana dari omzet beberapa bulan. Nol angka
+ *  karangan - kalau kurang dari dua bulan, tidak ada yang digambar. */
+function KilauTren({ nilai }: { nilai: number[] }) {
+  if (nilai.length < 2) return null
+  const w = 220
+  const h = 44
+  const p = 4
+  const min = Math.min(...nilai)
+  const maks = Math.max(...nilai)
+  const jarak = maks - min || 1
+  const titik = nilai.map((v, i) => {
+    const x = p + (i / (nilai.length - 1)) * (w - p * 2)
+    const y = h - p - ((v - min) / jarak) * (h - p * 2)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  })
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 h-11 w-full text-aksen" aria-hidden>
+      <polyline
+        points={titik.join(' ')}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Usaha satu lokasi tersimpan: nama, deskripsi, catatan penjualan bulanan,
+ *  dan trennya. Seluruh angkanya diisi pemiliknya - tidak pernah menyentuh
+ *  skor pipeline. */
+function UsahaPantau({ b, onTersimpan }: { b: ButirPantauan; onTersimpan: () => void }) {
+  const t = useTeks(K)
+  const { bahasa } = useBahasa()
+  const [data, setData] = useState<UsahaHeksagon | null>(null)
+  const [nama, setNama] = useState(b.nama_usaha ?? '')
+  const [deskripsi, setDeskripsi] = useState(b.deskripsi ?? '')
+  const [menyimpan, setMenyimpan] = useState(false)
+  const [bulan, setBulan] = useState(new Date().toISOString().slice(0, 7))
+  const [omzet, setOmzet] = useState<number | null>(null)
+  const [pembeli, setPembeli] = useState<number | null>(null)
+  const [catatanBulan, setCatatanBulan] = useState('')
+  const [galat, setGalat] = useState<string | null>(null)
+
+  useEffect(() => {
+    let batal = false
+    api
+      .usaha(b.h3_index)
+      .then((d) => !batal && setData(d))
+      .catch(() => {})
+    return () => {
+      batal = true
+    }
+  }, [b.h3_index, bahasa])
+
+  const simpanUsaha = async () => {
+    setMenyimpan(true)
+    setGalat(null)
+    try {
+      await api.simpanRencana(b.h3_index, { nama_usaha: nama, deskripsi })
+      onTersimpan()
+    } catch (e) {
+      setGalat(e instanceof GalatAPI ? e.message : t.usahaGagal)
+    } finally {
+      setMenyimpan(false)
+    }
+  }
+
+  const catat = async () => {
+    setGalat(null)
+    try {
+      const d = await api.catatPenjualan(b.h3_index, {
+        bulan,
+        omzet,
+        pembeli,
+        catatan: catatanBulan,
+      })
+      setData(d)
+      setOmzet(null)
+      setPembeli(null)
+      setCatatanBulan('')
+      onTersimpan()
+    } catch (e) {
+      setGalat(e instanceof GalatAPI ? e.message : t.usahaGagal)
+    }
+  }
+
+  const hapusBulan = async (bln: string) => {
+    setGalat(null)
+    try {
+      setData(await api.hapusPenjualan(b.h3_index, bln))
+      onTersimpan()
+    } catch (e) {
+      setGalat(e instanceof GalatAPI ? e.message : t.usahaGagal)
+    }
+  }
+
+  const tren = data?.tren
+  const deret = (tren?.penjualan ?? [])
+    .filter((p) => p.omzet !== null)
+    .map((p) => p.omzet as number)
+  const naik = (tren?.perubahan_persen ?? 0) >= 0
+
+  return (
+    <div className="mt-3 rounded-md border border-line bg-surface px-3.5 py-3">
+      <h4 className="eyebrow">{t.usahaJudul}</h4>
+      <p className="mt-1 text-[11.5px] leading-snug text-ink-3">{t.usahaIsi}</p>
+
+      <div className="mt-2.5 space-y-2">
+        <label className="block">
+          <span className="text-[11.5px] text-ink-2">{t.usahaNama}</span>
+          <input
+            value={nama}
+            placeholder={t.usahaNamaTempat}
+            maxLength={80}
+            onChange={(e) => setNama(e.target.value)}
+            className="mt-1 w-full rounded-sm border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-ink-3"
+          />
+        </label>
+        <label className="block">
+          <span className="text-[11.5px] text-ink-2">{t.usahaDeskripsi}</span>
+          <textarea
+            value={deskripsi}
+            placeholder={t.usahaDeskripsiTempat}
+            maxLength={2000}
+            rows={2}
+            onChange={(e) => setDeskripsi(e.target.value)}
+            className="mt-1 w-full resize-none rounded-sm border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-ink-3"
+          />
+        </label>
+        <button
+          onClick={simpanUsaha}
+          disabled={menyimpan}
+          className="cursor-pointer rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-surface transition-transform duration-200 ease-jelly hover:scale-[1.03] disabled:cursor-wait disabled:opacity-50"
+        >
+          {menyimpan ? t.usahaMenyimpan : t.usahaSimpan}
+        </button>
+      </div>
+
+      <div className="mt-3 border-t border-line/70 pt-2.5">
+        <p className="text-[11.5px] font-semibold text-ink-2">{t.penjualanJudul}</p>
+
+        {tren && tren.omzet_terakhir !== null ? (
+          <div className="mt-1.5 rounded-sm bg-surface-2 px-2.5 py-2">
+            <p className="eyebrow text-[9.5px]">
+              {t.trenTerakhir} · {tren.bulan_terakhir}
+            </p>
+            <p className="tabular mt-0.5 text-[16px] font-semibold text-ink">
+              {rupiah(tren.omzet_terakhir)}
+            </p>
+            {tren.perubahan_persen !== null && (
+              <p
+                className="text-[11.5px] font-medium"
+                style={{ color: naik ? 'var(--q-menang)' : 'var(--q-jebakan)' }}
+              >
+                {naik
+                  ? t.trenNaik(angka(tren.perubahan_persen, 1) ?? '0')
+                  : t.trenTurun(angka(Math.abs(tren.perubahan_persen), 1) ?? '0')}{' '}
+                <span className="font-normal text-ink-3">{t.trenPerubahan}</span>
+              </p>
+            )}
+            <KilauTren nilai={deret} />
+            <p className="mt-0.5 flex flex-wrap gap-x-4 text-[11px] text-ink-3">
+              {tren.omzet_terbaik !== null && (
+                <span>
+                  {t.trenTerbaik}: {rupiah(tren.omzet_terbaik)}
+                </span>
+              )}
+              {tren.rata_rata !== null && (
+                <span>
+                  {t.trenRata}: {rupiah(tren.rata_rata)}
+                </span>
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-1.5 text-[11.5px] text-ink-3">{t.penjualanKosong}</p>
+        )}
+
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-[11px] text-ink-2">{t.penjualanBulan}</span>
+            <input
+              type="month"
+              value={bulan}
+              onChange={(e) => setBulan(e.target.value)}
+              className="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1.5 text-[12px] text-ink focus:border-ink-3"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-ink-2">{t.penjualanOmzet}</span>
+            <div className="mt-0.5 flex items-center gap-1 rounded-sm border border-line bg-surface px-2 py-1.5 focus-within:border-ink-3">
+              <span className="text-[10.5px] text-ink-3">Rp</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={omzet === null ? '' : omzet.toLocaleString('id-ID')}
+                onChange={(e) => {
+                  const n = e.target.value.replace(/[^0-9]/g, '')
+                  setOmzet(n === '' ? null : Number(n))
+                }}
+                className="w-full bg-transparent text-[12px] text-ink outline-none"
+              />
+            </div>
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-ink-2">{t.penjualanPembeli}</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={pembeli === null ? '' : pembeli.toLocaleString('id-ID')}
+              onChange={(e) => {
+                const n = e.target.value.replace(/[^0-9]/g, '')
+                setPembeli(n === '' ? null : Number(n))
+              }}
+              className="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1.5 text-[12px] text-ink focus:border-ink-3"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-ink-2">{t.penjualanCatatan}</span>
+            <input
+              value={catatanBulan}
+              maxLength={200}
+              onChange={(e) => setCatatanBulan(e.target.value)}
+              className="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1.5 text-[12px] text-ink focus:border-ink-3"
+            />
+          </label>
+        </div>
+        <button
+          onClick={catat}
+          className="mt-2 cursor-pointer rounded-full border border-line px-3.5 py-1.5 text-[12px] font-medium text-ink-2 transition-colors hover:border-ink hover:text-ink"
+        >
+          {t.penjualanCatat}
+        </button>
+
+        {(tren?.penjualan?.length ?? 0) > 0 && (
+          <ul className="mt-2 space-y-1">
+            {[...(tren?.penjualan ?? [])].reverse().map((p) => (
+              <li
+                key={p.bulan}
+                className="flex items-center justify-between gap-2 rounded-sm bg-surface-2 px-2.5 py-1.5 text-[12px]"
+              >
+                <span className="text-ink-3">{p.bulan}</span>
+                <span className="tabular font-medium text-ink">
+                  {p.omzet === null ? '—' : rupiah(p.omzet)}
+                </span>
+                {p.pembeli !== null && (
+                  <span className="tabular text-[11px] text-ink-3">
+                    {p.pembeli.toLocaleString('id-ID')}
+                  </span>
+                )}
+                <button
+                  onClick={() => hapusBulan(p.bulan)}
+                  aria-label={`${t.lepasPantauan} ${p.bulan}`}
+                  className="cursor-pointer text-ink-3 hover:text-bahaya"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {galat && <p className="mt-1.5 text-[11.5px] text-bahaya">{galat}</p>}
+      </div>
+    </div>
+  )
+}
+
+/** Rencana pengembangan satu lokasi tersimpan: catatan, usaha yang
+ *  direncanakan, omzet sekarang, dan proyeksi pertumbuhannya. Proyeksinya
+ *  memanggil mesin simulasi yang sama - bukan aritmetika baru. */
+function RencanaPantau({ b, onTersimpan }: { b: ButirPantauan; onTersimpan: () => void }) {
+  const t = useTeks(K)
+  const { bahasa } = useBahasa()
+  const [buka, setBuka] = useState(false)
+  const [jenis, setJenis] = useState<string | null>(b.rencana_jenis_usaha)
+  const [omzet, setOmzet] = useState<number | null>(b.rencana_omzet_bulanan)
+  const [catatan, setCatatan] = useState(b.catatan ?? '')
+  const [menyimpan, setMenyimpan] = useState(false)
+  const [galat, setGalat] = useState<string | null>(null)
+  const [proyeksi, setProyeksi] = useState<HasilSimulasi | null>(null)
+
+  const adaRencana =
+    b.rencana_jenis_usaha !== null || b.rencana_omzet_bulanan !== null || !!b.catatan
+
+  useEffect(() => {
+    // Proyeksi hanya mungkin kalau rencananya punya jenis usaha DAN omzet.
+    if (!b.rencana_jenis_usaha || b.rencana_omzet_bulanan === null) {
+      setProyeksi(null)
+      return
+    }
+    let batal = false
+    api
+      .simulasi(b.h3_index, {
+        jenis_usaha: b.rencana_jenis_usaha,
+        omzet_sekarang_bulanan: b.rencana_omzet_bulanan,
+      })
+      .then((h) => !batal && setProyeksi(h))
+      .catch(() => !batal && setProyeksi(null))
+    return () => {
+      batal = true
+    }
+  }, [b.h3_index, b.rencana_jenis_usaha, b.rencana_omzet_bulanan, bahasa])
+
+  const simpan = async () => {
+    setMenyimpan(true)
+    setGalat(null)
+    try {
+      // Kosong diirim sebagai '' / 0, dan backend membacanya sebagai "hapus".
+      await api.simpanRencana(b.h3_index, {
+        catatan,
+        rencana_jenis_usaha: jenis ?? '',
+        rencana_omzet_bulanan: omzet ?? 0,
+      })
+      onTersimpan()
+      setBuka(false)
+    } catch (e) {
+      setGalat(e instanceof GalatAPI ? e.message : t.rencanaGagal)
+    } finally {
+      setMenyimpan(false)
+    }
+  }
+
+  const jenisTerpilih = JENIS_USAHA.find((j) => j.nilai === (jenis ?? b.rencana_jenis_usaha))
+  const labelJenis = jenisTerpilih
+    ? bahasa === 'en'
+      ? jenisTerpilih.labelEn
+      : jenisTerpilih.label
+    : (jenis ?? b.rencana_jenis_usaha ?? '')
+  const p = proyeksi?.pertumbuhan.pertumbuhan_persen
+  const pAman = typeof p === 'number'
+
+  return (
+    <div className="mt-3 rounded-md border border-line bg-surface px-3.5 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="eyebrow">{t.rencanaJudul}</h4>
+        <button
+          onClick={() => setBuka((v) => !v)}
+          className="cursor-pointer rounded-full border border-line px-2.5 py-1 text-[11.5px] font-medium text-ink-2 transition-colors hover:border-ink hover:text-ink"
+        >
+          {buka ? t.tutup : adaRencana ? t.gantiNama : t.rencanaTambah}
+        </button>
+      </div>
+
+      {buka ? (
+        <div className="mt-3 space-y-2.5">
+          <p className="text-[11.5px] leading-snug text-ink-3">{t.rencanaIsi}</p>
+          <label className="block">
+            <span className="text-[11.5px] text-ink-2">{t.rencanaJenis}</span>
+            <select
+              value={jenis ?? ''}
+              onChange={(e) => setJenis(e.target.value || null)}
+              className="mt-1 w-full rounded-sm border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-ink-3"
+            >
+              <option value="">—</option>
+              {JENIS_USAHA.map((j) => (
+                <option key={j.nilai} value={j.nilai}>
+                  {bahasa === 'en' ? j.labelEn : j.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-[11.5px] text-ink-2">{t.rencanaOmzet}</span>
+            <div className="mt-1 flex items-center gap-1 rounded-sm border border-line bg-surface px-2 py-1.5 focus-within:border-ink-3">
+              <span className="text-[11px] text-ink-3">Rp</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={omzet === null ? '' : omzet.toLocaleString('id-ID')}
+                onChange={(e) => {
+                  const n = e.target.value.replace(/[^0-9]/g, '')
+                  setOmzet(n === '' ? null : Number(n))
+                }}
+                className="w-full bg-transparent text-[12.5px] text-ink outline-none"
+              />
+            </div>
+          </label>
+          <label className="block">
+            <span className="text-[11.5px] text-ink-2">{t.rencanaCatatan}</span>
+            <textarea
+              value={catatan}
+              placeholder={t.rencanaCatatanTempat}
+              onChange={(e) => setCatatan(e.target.value)}
+              rows={2}
+              maxLength={200}
+              className="mt-1 w-full resize-none rounded-sm border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-ink-3"
+            />
+          </label>
+          {galat && <p className="text-[11.5px] text-bahaya">{galat}</p>}
+          <button
+            onClick={simpan}
+            disabled={menyimpan}
+            className="cursor-pointer rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-surface transition-transform duration-200 ease-jelly hover:scale-[1.03] disabled:cursor-wait disabled:opacity-50"
+          >
+            {menyimpan ? t.rencanaMenyimpan : t.rencanaSimpan}
+          </button>
+        </div>
+      ) : !adaRencana ? (
+        <p className="mt-1.5 text-[11.5px] text-ink-3">{t.rencanaKosong}</p>
+      ) : (
+        <div className="mt-1.5 space-y-1.5">
+          {labelJenis && (
+            <p className="text-[12.5px] text-ink">
+              <span className="text-ink-3">{t.rencanaJenis}: </span>
+              {labelJenis}
+            </p>
+          )}
+          {b.catatan && (
+            <p className="rounded-sm bg-surface-2 px-2.5 py-2 text-[12px] leading-snug text-ink-2">
+              {b.catatan}
+            </p>
+          )}
+          {pAman && (
+            <div className="rounded-sm bg-surface-2 px-2.5 py-2">
+              <p className="eyebrow text-[9.5px]">{t.rencanaProyeksi}</p>
+              <p
+                className="tabular mt-0.5 text-[16px] font-semibold"
+                style={{ color: p >= 0 ? 'var(--q-menang)' : 'var(--q-jebakan)' }}
+              >
+                {p >= 0
+                  ? t.rencanaNaik(angka(p, 0) ?? '0')
+                  : t.rencanaTurun(angka(Math.abs(p), 0) ?? '0')}
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-ink-3">
+                {rupiah(b.rencana_omzet_bulanan)} → {rupiah(proyeksi?.hasil.omzet_bulanan)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function DialogPantauan({
   kawasan,
   onTutup,
@@ -1428,11 +1953,8 @@ export function DialogPantauan({
                         }
                       />
                     </dl>
-                    {b.catatan && (
-                      <p className="mt-2.5 rounded-sm bg-surface px-2.5 py-2 text-[12.5px] leading-snug text-ink-2">
-                        {b.catatan}
-                      </p>
-                    )}
+                    <UsahaPantau b={b} onTersimpan={muat} />
+                    <RencanaPantau b={b} onTersimpan={muat} />
                     {/* Kalimat ini ada karena selisihnya bisa berbunyi 0,0
                         selamanya dan itu BUKAN cacat: basis data baru memuat
                         satu versi penerbitan, jadi "sekarang" dan "saat

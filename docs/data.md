@@ -228,7 +228,7 @@ dipakai untuk C04, tidak menggantikan 8 kelas induk.
 |---|---|
 | **Misi MAPID** (Menu Go, Struk Go, Properti Go) | Sebagian besar variabel B, C, P |
 | OpenStreetMap (Overpass) | POI usaha (**C01–C03, C05, C06**), konteks heksagon (**D08, D09**), simpul transit, footprint. **Lisensi ODbL — atribusi WAJIB**, dan atribusi "© OpenStreetMap" yang sudah dibawa gaya MAPID itu milik MAPID atas ubinnya, bukan milik kita atas POI yang kita turunkan sendiri jadi angka. Dipasang terpisah lewat `customAttribution` di `PetaInteraktif.tsx` |
-| OpenRouteService | Rute jalan kaki heksagon→simpul (`hex_routes`) dan kawasan jangkau 5/10/15 menit (`catchment_areas`). Berbasis OSM; kunci backend-only, kuota gratis 2.000 directions + 500 isochrones per hari |
+| OpenRouteService | Rute heksagon→simpul (`hex_routes`, per profil jalan kaki/mobil/sepeda) dan kawasan jangkau 5–60 menit (`catchment_areas`, juga per profil). Berbasis OSM; kunci backend-only, kuota gratis 2.000 directions + 500 isochrones per hari |
 | WorldPop | **D01** — `idn_ppp_2020_UNadj_constrained.tif` (51 MB, EPSG:4326, piksel ~92,8 m). **Lisensi CC BY 4.0, atribusi WAJIB** dan sudah dipasang di peta + `/meta/siap` |
 | BPS | D02, dan kelak D01 tingkat kelurahan | 
 | RDTR (zonasi) | L01, L02 |

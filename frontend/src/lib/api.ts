@@ -27,6 +27,7 @@ import type {
   StatusAI,
   StatusZoneGuard,
   TitikKuadran,
+  UsahaHeksagon,
 } from '../types'
 
 type GeoJSON = { type: 'FeatureCollection'; features: unknown[] }
@@ -333,6 +334,8 @@ export const api = {
       catatan?: string | null
       rencana_jenis_usaha?: string | null
       rencana_omzet_bulanan?: number | null
+      nama_usaha?: string | null
+      deskripsi?: string | null
     },
   ) =>
     ambil<{
@@ -340,7 +343,24 @@ export const api = {
       catatan: string | null
       rencana_jenis_usaha: string | null
       rencana_omzet_bulanan: number | null
+      nama_usaha: string | null
+      deskripsi: string | null
     }>(`/akun/pantauan/${h3}`, { method: 'PATCH', body: JSON.stringify(p) }),
+
+  // --- Usaha & penjualan (bagian dari Premium) ---
+  usaha: (h3: string) => ambil<UsahaHeksagon>(`/akun/usaha/${h3}`),
+
+  catatPenjualan: (
+    h3: string,
+    p: { bulan: string; omzet?: number | null; pembeli?: number | null; catatan?: string | null },
+  ) =>
+    ambil<UsahaHeksagon>(`/akun/usaha/${h3}/penjualan`, {
+      method: 'PUT',
+      body: JSON.stringify(p),
+    }),
+
+  hapusPenjualan: (h3: string, bulan: string) =>
+    ambil<UsahaHeksagon>(`/akun/usaha/${h3}/penjualan/${bulan}`, { method: 'DELETE' }),
 
   lepasPantauan: (h3: string) =>
     ambil<{ dihapus: string }>(`/akun/pantauan/${h3}`, { method: 'DELETE' }),

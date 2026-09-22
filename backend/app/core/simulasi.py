@@ -70,6 +70,7 @@ def hitung_simulasi(
     margin_persen: float,
     sewa_bulanan_diminta: float | None = None,
     harga_rata_rata: float | None = None,
+    omzet_sekarang_bulanan: float | None = None,
     bahasa: Bahasa = BAHASA_BAWAAN,
 ) -> dict:
     """Satu skenario, seluruh langkahnya terbuka."""
@@ -139,6 +140,24 @@ def hitung_simulasi(
         else (sewa_bulanan / dasar_omzet) * 100
     )
     sewa_tahun_pertama = None if sewa_bulanan is None else sewa_bulanan * 12
+
+    # Pertumbuhan untuk yang SUDAH punya usaha: omzetnya sekarang dibanding
+    # omzet yang diproyeksikan di sini. Dibandingkan pada OMZET, bukan laba -
+    # omzet sekarang tidak memuat sewa dan gaji yang tidak kita ketahui, jadi
+    # menyandingkannya dengan laba kotor akan membandingkan dua hal berbeda.
+    omzet_sekarang = _aman(omzet_sekarang_bulanan)
+    if omzet_sekarang is not None and omzet_sekarang <= 0:
+        omzet_sekarang = None
+    selisih_omzet = (
+        None
+        if omzet_bulanan is None or omzet_sekarang is None
+        else omzet_bulanan - omzet_sekarang
+    )
+    pertumbuhan_persen = (
+        None
+        if selisih_omzet is None or omzet_sekarang is None or omzet_sekarang <= 0
+        else (selisih_omzet / omzet_sekarang) * 100
+    )
 
     # Kalau sewanya diisi sendiri, ubah jadi per m2 supaya bisa disandingkan
     # dengan angka lokasi - satu-satunya cara tahu penawarannya wajar atau tidak.
@@ -258,6 +277,13 @@ def hitung_simulasi(
             "pangsa_impas_persen": pangsa_impas,
             "sewa_tahun_pertama": sewa_tahun_pertama,
             "sewa_per_m2_tersirat": sewa_per_m2_tersirat,
+        },
+        # Kosong kalau penggunanya tidak mengisi omzet sekarang - dan kosong
+        # memang jawabannya, bukan nol.
+        "pertumbuhan": {
+            "omzet_sekarang_bulanan": omzet_sekarang,
+            "selisih_omzet_bulanan": selisih_omzet,
+            "pertumbuhan_persen": pertumbuhan_persen,
         },
         "sensitivitas": sensitivitas,
         # Rumusnya ikut berubah menurut asal angkanya. Menampilkan

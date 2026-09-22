@@ -114,10 +114,6 @@ const UNDAK_MS = 240
 const TUNDA_RUTE_MS = 380
 /** Satu perjalanan penuh titik aliran, dari pusat heksagon ke simpulnya. */
 const ALIR_MS = 2400
-/** Jeda antar-langkah aliran. 16 langkah/detik - sama dengan alasan jam arus
- *  yang lama: mata sudah membacanya halus, dan rAF 60x berarti empat kali
- *  ongkos untuk gerak yang sama. */
-const ALIR_LANGKAH_MS = 62
 
 function panjangKumulatif(k: [number, number][]): number[] {
   const kum = [0]
@@ -158,6 +154,18 @@ function potongJalur(
   keluar.push(titikPada(k, kum, t))
   // Satu titik bukan garis; MapLibre tidak menggambar apa pun untuk itu.
   return keluar.length >= 2 ? keluar : [k[0], keluar[0]]
+}
+
+/** Ringkas polyline jadi paling banyak `maks` titik untuk ANIMASI tumbuh.
+ *  Rute mobil panjangnya ribuan titik; menulis ulang semuanya tiap bingkai
+ *  membuat animasinya tersendat. Bentuknya tetap, ujungnya tetap. */
+function ringkasJalur(k: [number, number][], maks = 360): [number, number][] {
+  if (k.length <= maks) return k
+  const keluar: [number, number][] = [k[0]]
+  const langkah = k.length / maks
+  for (let x = langkah; x < k.length - 1; x += langkah) keluar.push(k[Math.floor(x)])
+  keluar.push(k[k.length - 1])
+  return keluar
 }
 
 function buatPolaArsir(): ImageData {
@@ -641,7 +649,16 @@ export interface AksiPetaRef {
   fokusHeksagon: (h3: string) => void
   /** Kembalikan arah & kemiringan ke utara-datar. */
   resetArah: () => void
-  setPin: (daftar: { lat: number; lon: number; h3: string; label: string; sendiri: boolean }[]) => void
+  setPin: (
+    daftar: {
+      lat: number
+      lon: number
+      h3: string
+      label: string
+      sublabel?: string
+      sendiri: boolean
+    }[],
+  ) => void
   /** Arah kompas & kemiringan saat ini, untuk memunculkan tombol reset. */
   arah: () => { bearing: number; pitch: number }
 }
@@ -766,7 +783,9 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 ) {
   const wadah = useRef<HTMLDivElement>(null)
   const peta = useRef<MapLibreMap | null>(null)
-  const pinAktif = useRef<Map<string, { marker: Marker; el: HTMLElement; label: string }>>(new Map())
+  const pinAktif = useRef<
+    Map<string, { marker: Marker; el: HTMLElement; label: string; sublabel: string }>
+  >(new Map())
   /** Timer langkah gelombang yang sedang berjalan. Wajib dibatalkan saat
       komponen dilepas: timer yang masih hidup akan menyentuh peta yang sudah
       dibuang. */
@@ -1436,16 +1455,22 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           paint: {
             'fill-color': [
               'interpolate', ['linear'], ['get', 'menit'],
-              5, '#f2b705',
-              10, '#f07818',
-              15, '#dc3f6a',
+              1, '#facc15',
+              2, '#f2b705',
+              4, '#ef8a17',
+              7, '#e0559a',
+              10, '#dc3f6a',
+              15, '#b23bd0',
               30, '#8b3bb8',
               60, '#3b41b8',
             ],
             'fill-opacity': [
               'interpolate', ['linear'], ['get', 'menit'],
-              5, 0.05,
-              10, 0.035,
+              1, 0.075,
+              2, 0.06,
+              4, 0.048,
+              7, 0.035,
+              10, 0.028,
               15, 0.022,
               30, 0.012,
               60, 0.008,
@@ -1480,9 +1505,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           paint: {
             'line-color': [
               'interpolate', ['linear'], ['get', 'menit'],
-              5, '#f2b705',
-              10, '#f07818',
-              15, '#dc3f6a',
+              1, '#facc15',
+              2, '#f2b705',
+              4, '#ef8a17',
+              7, '#e0559a',
+              10, '#dc3f6a',
+              15, '#b23bd0',
               30, '#8b3bb8',
               60, '#3b41b8',
             ],
@@ -1490,13 +1518,13 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             // dengan urutan pentingnya bagi orang yang mencari lokasi.
             'line-width': [
               'interpolate', ['linear'], ['get', 'menit'],
-              5, 3.2, 15, 1.9, 60, 1.4,
+              1, 3.6, 5, 3.2, 15, 1.9, 60, 1.4,
             ],
             'line-opacity': 0.62,
             // Pita TERDALAM utuh, sisanya putus-putus. Bentuknya ikut membawa
             // arti: yang utuh batas yang paling layak dipercaya sekaligus yang
             // paling sering dipakai orang.
-            'line-dasharray': ['case', ['==', ['get', 'menit'], 5], ['literal', [1, 0]], ['literal', [2.6, 1.8]]],
+            'line-dasharray': ['case', ['<=', ['get', 'menit'], 5], ['literal', [1, 0]], ['literal', [2.6, 1.8]]],
           },
         })
         m.addLayer({
@@ -1505,15 +1533,18 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           source: SUMBER_ISO,
           layout: {
             'symbol-placement': 'line',
-            'symbol-spacing': 1100,
-            // "5 menit jalan kaki", bukan "5 menit jalan". Dua kata lebih
-            // panjang, dan menghapus satu-satunya pertanyaan yang tersisa.
-            'text-field': ['concat', ['to-string', ['get', 'menit']], ' menit jalan kaki'],
+            'symbol-spacing': 900,
+            // Cukup "N mnt": modanya sudah tertulis di tombol panel, dan
+            // satuannya yang selama ini hilang dari peta justru menitnya.
+            'text-field': ['concat', ['to-string', ['get', 'menit']], ' mnt'],
             'text-font': FONT_ANGKA,
-            'text-size': ['case', ['==', ['get', 'menit'], 5], 12.5, 11.5],
+            'text-size': ['case', ['<=', ['get', 'menit'], 5], 12.5, 11.5],
             'text-offset': [0, -1],
-            'text-allow-overlap': false,
-            'text-ignore-placement': false,
+            // Tiap pita punya menitnya sendiri; membiarkan label saling
+            // menimpa membuat pita luar menghapus label pita dalam, dan
+            // justru pita dalam yang paling sering dibaca orang.
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
           },
           paint: {
             'text-color': WARNA_ISO(gaya),
@@ -1988,10 +2019,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     ])
   }, [blokTerpilih, siap, blok])
 
-  const isoRef = useRef(new Map<number, unknown>())
+  const isoRef = useRef(new Map<string, unknown>())
   // Kawasan jangkau ikut gerbang yang sama dengan rute: keduanya jawaban atas
   // pertanyaan yang sama, dan menampilkan salah satunya saja membuat peta
-  // separuh menjawab.
+  // separuh menjawab. Kuncinya MEMUAT profil: pita mobil dan pita jalan kaki
+  // adalah dua bentuk berbeda, dan kunci yang cuma menyebut simpul akan
+  // menyajikan pita jalan kaki begitu modanya berganti.
   const nodeTujuan =
     rutaTampil && terpilih ? (konteks.get(kunciKt(terpilih))?.simpul?.id ?? null) : null
 
@@ -2007,7 +2040,8 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       return
     }
 
-    const tersimpan = isoRef.current.get(nodeTujuan)
+    const kunciIso = `${profilNyata}|${nodeTujuan}`
+    const tersimpan = isoRef.current.get(kunciIso)
     if (tersimpan) {
       sumber.setData(tersimpan as never)
       return
@@ -2015,10 +2049,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
 
     let batal = false
     api
-      .catchment({ node_id: nodeTujuan })
+      .catchment({ node_id: nodeTujuan, profil: profilNyata })
       .then((gj) => {
         if (batal) return
-        isoRef.current.set(nodeTujuan, gj)
+        isoRef.current.set(kunciIso, gj)
         const f = [...((gj as { features?: { properties?: { menit?: number } }[] }).features ?? [])]
         f.sort((a, b) => (b.properties?.menit ?? 0) - (a.properties?.menit ?? 0))
         sumber.setData({ type: 'FeatureCollection', features: f } as never)
@@ -2031,7 +2065,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     return () => {
       batal = true
     }
-  }, [nodeTujuan, siap])
+  }, [nodeTujuan, siap, profilNyata])
 
   const rafRute = useRef(0)
   /** Kunci rute yang kameranya sudah dibingkai, supaya tidak dibingkai ulang
@@ -2057,10 +2091,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     }
     berhenti()
     const alirSumber = m.getSource(SUMBER_ALIR) as GeoJSONSource | undefined
-    let idAlir = 0
+    let rafAlir = 0
     const hentiAlir = () => {
-      if (idAlir) window.clearInterval(idAlir)
-      idAlir = 0
+      if (rafAlir) cancelAnimationFrame(rafAlir)
+      rafAlir = 0
       alirSumber?.setData(kosong as never)
     }
     hentiAlir()
@@ -2069,6 +2103,8 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
     const jalur: {
       k: [number, number][]
       kum: number[]
+      ka: [number, number][]
+      kuma: number[]
       warna: string
       label: string
       utama: boolean
@@ -2085,9 +2121,12 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       dipakai.forEach((r) => {
         const k = r.koordinat as [number, number][]
         if (k.length < 2) return
+        const ka = ringkasJalur(k)
         jalur.push({
           k,
           kum: panjangKumulatif(k),
+          ka,
+          kuma: panjangKumulatif(ka),
           warna,
           utama: r.utama,
           profil: r.profil ?? 'foot-walking',
@@ -2189,10 +2228,10 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
         if (j.utama && pp > 0 && pp < 1)
           kepala.push({
             type: 'Feature',
-            geometry: { type: 'Point', coordinates: titikPada(j.k, j.kum, f) },
+            geometry: { type: 'Point', coordinates: titikPada(j.ka, j.kuma, f) },
             properties: { jenis: 'kepala', warna: j.warna },
           })
-        return potongJalur(j.k, j.kum, f)
+        return potongJalur(j.ka, j.kuma, f)
       }, false)
       data.features.push(...(kepala as never[]))
       sumber.setData(data as never)
@@ -2207,19 +2246,22 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
       const utama = jalur.filter((j) => j.utama)
       if (!alirSumber || !utama.length) return
       const t1 = performance.now()
+      // rAF, bukan setInterval: arus yang melangkah 16 kali/detik terbaca
+      // patah-patah persis di sebelah animasi tumbuh yang 60 fps - dan pada
+      // rute mobil yang panjang, patahnya paling kentara.
       const langkah = () => {
         const t = ((performance.now() - t1) % ALIR_MS) / ALIR_MS
         alirSumber.setData({
           type: 'FeatureCollection',
           features: utama.map((j) => ({
             type: 'Feature',
-            geometry: { type: 'Point', coordinates: titikPada(j.k, j.kum, t) },
+            geometry: { type: 'Point', coordinates: titikPada(j.ka, j.kuma, t) },
             properties: { warna: j.warna },
           })),
         } as never)
+        rafAlir = requestAnimationFrame(langkah)
       }
-      langkah()
-      idAlir = window.setInterval(langkah, ALIR_LANGKAH_MS)
+      rafAlir = requestAnimationFrame(langkah)
     }
     rafRute.current = requestAnimationFrame(maju)
 
@@ -2257,15 +2299,19 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
             pinAktif.current.delete(h3)
           }
         }
-        for (const { lat, lon, h3, label, sendiri } of daftar) {
+        for (const { lat, lon, h3, label, sublabel, sendiri } of daftar) {
+          const sub = sublabel ?? ''
           const ada = pinAktif.current.get(h3)
           if (ada) {
             ada.marker.setLngLat([lon, lat])
-            if (ada.label !== label) {
+            if (ada.label !== label || ada.sublabel !== sub) {
               ada.label = label
-              ada.el.setAttribute('aria-label', label)
-              const n = ada.el.querySelector('.pin-simpan-nama')
+              ada.sublabel = sub
+              ada.el.setAttribute('aria-label', sub ? `${label}. ${sub}` : label)
+              const n = ada.el.querySelector('.pin-simpan-nama-teks')
               if (n) n.textContent = label
+              const s = ada.el.querySelector('.pin-simpan-sub')
+              if (s) s.textContent = sub
             }
             if (sendiri) ada.el.dataset.sendiri = '1'
             else delete ada.el.dataset.sendiri
@@ -2275,16 +2321,21 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           el.type = 'button'
           el.className = 'pin-simpan'
           if (sendiri) el.dataset.sendiri = '1'
-          el.setAttribute('aria-label', label)
+          el.setAttribute('aria-label', sub ? `${label}. ${sub}` : label)
           // Glif digambar inline (berkas ini tidak boleh menambah aset). Label
           // namanya diisi lewat `textContent`, TIDAK PERNAH lewat innerHTML:
           // nama itu diketik pengguna, dan innerHTML di sini adalah XSS.
           el.innerHTML =
             '<span class="pin-simpan-kepala"><svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true">' +
             '<path d="M5.5 3.5h9V17L10 13.6 5.5 17Z" fill="currentColor"/></svg></span>' +
-            '<span class="pin-simpan-nama"></span>'
-          const namaEl = el.querySelector('.pin-simpan-nama')
+            '<span class="pin-simpan-nama">' +
+            '<span class="pin-simpan-nama-teks"></span>' +
+            '<span class="pin-simpan-sub"></span>' +
+            '</span>'
+          const namaEl = el.querySelector('.pin-simpan-nama-teks')
           if (namaEl) namaEl.textContent = label
+          const subEl = el.querySelector('.pin-simpan-sub')
+          if (subEl) subEl.textContent = sub
           // Klik pin = buka detail heksagonnya. Kejadiannya dihentikan di sini
           // supaya peta di bawahnya tidak ikut menerima klik yang sama - klik
           // itu jatuh DI DALAM heksagon terbuka dan akan menaruh titik baru.
@@ -2298,7 +2349,7 @@ const PetaInteraktif = forwardRef<AksiPetaRef, Props>(function PetaInteraktif(
           const marker = new Marker({ element: el, anchor: 'bottom' })
             .setLngLat([lon, lat])
             .addTo(m)
-          pinAktif.current.set(h3, { marker, el, label })
+          pinAktif.current.set(h3, { marker, el, label, sublabel: sub })
         }
       },
 

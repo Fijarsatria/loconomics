@@ -1,10 +1,11 @@
 """Tabel database Loconomics."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from geoalchemy2 import Geometry
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -40,7 +41,7 @@ class TransportNode(Base):
 
 
 class CatchmentArea(Base):
-    """Isochrone jalan kaki. Level 2 unit analisis. Dihitung offline, bukan saat request."""
+    """Isochrone per simpul dan per profil. Level 2 unit analisis. Dihitung offline."""
 
     __tablename__ = "catchment_areas"
 
@@ -48,10 +49,17 @@ class CatchmentArea(Base):
     transport_node_id: Mapped[int] = mapped_column(
         ForeignKey("transport_nodes.id", ondelete="CASCADE"), index=True
     )
-    menit: Mapped[int] = mapped_column(Integer, nullable=False)  # 5 | 10 | 15
+    menit: Mapped[int] = mapped_column(Integer, nullable=False)  # 5 | 10 | 15 | 30 | 60
     geom: Mapped[str] = mapped_column(Geometry("POLYGON", srid=4326), nullable=False)
+    #: Profil modanya. Tanpa kolom ini, pita mobil menimpa pita jalan kaki dan
+    #: peta menggambar jangkauan jalan kaki walau modanya sudah berganti.
+    profil: Mapped[str] = mapped_column(String(24), default="foot-walking", nullable=False)
 
-    __table_args__ = (UniqueConstraint("transport_node_id", "menit", name="uq_catchment_node_menit"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "transport_node_id", "menit", "profil", name="uq_catchment_node_menit_profil"
+        ),
+    )
 
 
 class HexRoute(Base):
@@ -514,8 +522,43 @@ class WatchlistItem(Base):
     lon: Mapped[float | None] = mapped_column(Float)
     #: Nama yang ia berikan ("Ruko pojok Kendal"). NULL = kode lokasi.
     nama: Mapped[str | None] = mapped_column(String(80))
+    #: Usahanya sendiri: namanya (muncul di pin peta) dan deskripsinya.
+    nama_usaha: Mapped[str | None] = mapped_column(String(80))
+    deskripsi: Mapped[str | None] = mapped_column(Text)
+    #: Rencana pengembangan yang ia catat untuk lokasi ini: usaha apa yang
+    #: direncanakan, dan omzet usahanya sekarang. Dipakai memproyeksikan
+    #: pertumbuhan lewat mesin simulasi yang sama - bukan angka baru.
+    rencana_jenis_usaha: Mapped[str | None] = mapped_column(String(40))
+    rencana_omzet_bulanan: Mapped[float | None] = mapped_column(Float)
     skor_saat_dipantau: Mapped[float | None] = mapped_column(Float)
     versi_saat_dipantau: Mapped[str | None] = mapped_column(String(40))
+    dibuat_pada: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
+class UsahaPenjualan(Base):
+    """Catatan penjualan SATU BULAN usaha di satu lokasi tersimpan.
+
+    Diisi pemiliknya sendiri, bukan hasil pengukuran. Dipakai menghitung tren
+    bulanannya - dan tidak pernah masuk ke perhitungan skor mana pun.
+    """
+
+    __tablename__ = "usaha_penjualan"
+    __table_args__ = (
+        UniqueConstraint("user_id", "h3_index", "bulan", name="uq_penjualan_user_hex_bulan"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    h3_index: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    #: Selalu hari PERTAMA bulan itu, supaya satu bulan cuma punya satu baris.
+    bulan: Mapped[date] = mapped_column(Date, nullable=False)
+    omzet: Mapped[float | None] = mapped_column(Float)
+    pembeli: Mapped[int | None] = mapped_column(Integer)
+    catatan: Mapped[str | None] = mapped_column(String(200))
     dibuat_pada: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )

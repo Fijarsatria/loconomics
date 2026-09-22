@@ -2,7 +2,7 @@
 
 import json
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -17,6 +17,18 @@ from app.schemas import SimpulTransit
 router = APIRouter(prefix="/transit", tags=["transit"])
 
 ISOCHRONE_MENIT = (5, 10, 15, 30, 60)
+
+#: Pita menit per profil. Mobil dan sepeda jauh lebih cepat, jadi pita 5-60
+#: menit yang sama membuat lapisan mobil menutupi seluruh peta. Angka ini
+#: dijaga sama dengan `ISOCHRONE_MENIT_PROFIL` di pipeline/rute_ors.py.
+ISOCHRONE_MENIT_PROFIL: dict[str, tuple[int, ...]] = {
+    "foot-walking": ISOCHRONE_MENIT,
+    "cycling-regular": (2, 4, 6, 10, 15),
+    "driving-car": (1, 2, 4, 7, 10),
+}
+
+#: Profil yang punya kawasan jangkau sendiri. Motor tidak ada di ORS.
+ProfilIso = Literal["foot-walking", "driving-car", "cycling-regular"]
 
 
 @router.get("/nodes", response_model=list[SimpulTransit], summary="Daftar simpul transportasi")
@@ -46,8 +58,12 @@ def daftar_simpul(
 
 
 @router.get("/simpul/{node_id}", summary="Detail satu simpul + heksagon yang dilayaninya")
-def detail_simpul(node_id: int, db: Annotated[Session, Depends(get_db)]) -> dict:
-    """Simpul beserta heksagon di dalam jangkauan jalan kakinya."""
+def detail_simpul(
+    node_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    profil: Annotated[ProfilIso, Query(description="Profil kawasan jangkau")] = "foot-walking",
+) -> dict:
+    """Simpul beserta heksagon di dalam jangkauannya untuk satu profil."""
     simpul = db.get(TransportNode, node_id)
     if simpul is None:
         raise TidakDitemukan(f"Simpul transportasi {node_id} tidak ditemukan.")
@@ -60,10 +76,12 @@ def detail_simpul(node_id: int, db: Annotated[Session, Depends(get_db)]) -> dict
     ).one()
 
     jangkauan = []
-    for menit in ISOCHRONE_MENIT:
+    for menit in ISOCHRONE_MENIT_PROFIL[profil]:
         area = db.execute(
             select(CatchmentArea.geom).where(
-                CatchmentArea.transport_node_id == node_id, CatchmentArea.menit == menit
+                CatchmentArea.transport_node_id == node_id,
+                CatchmentArea.menit == menit,
+                CatchmentArea.profil == profil,
             )
         ).scalar_one_or_none()
         if area is None:
@@ -117,22 +135,25 @@ def detail_simpul(node_id: int, db: Annotated[Session, Depends(get_db)]) -> dict
         "ridership_harian": simpul.ridership_harian,
         "lat": koordinat.lat,
         "lon": koordinat.lon,
+        "profil": profil,
         "jangkauan": jangkauan,
     }
 
 
-@router.get("/catchment", summary="Layer isochrone jalan kaki (GeoJSON)")
+@router.get("/catchment", summary="Layer kawasan jangkau satu profil (GeoJSON)")
 def layer_catchment(
     db: Annotated[Session, Depends(get_db)],
     node_id: Annotated[int | None, Query()] = None,
-    menit: Annotated[int | None, Query(description="5 | 10 | 15")] = None,
+    menit: Annotated[int | None, Query(description="Pita menit (lihat pita profilnya)")] = None,
+    profil: Annotated[ProfilIso, Query(description="Profil kawasan jangkau")] = "foot-walking",
 ) -> dict:
     stmt = select(
         CatchmentArea.id,
         CatchmentArea.transport_node_id,
         CatchmentArea.menit,
+        CatchmentArea.profil,
         func.ST_AsGeoJSON(CatchmentArea.geom).label("geom"),
-    )
+    ).where(CatchmentArea.profil == profil)
     if node_id is not None:
         stmt = stmt.where(CatchmentArea.transport_node_id == node_id)
     if menit is not None:
@@ -145,7 +166,11 @@ def layer_catchment(
                 "type": "Feature",
                 "id": r.id,
                 "geometry": json.loads(r.geom),
-                "properties": {"transport_node_id": r.transport_node_id, "menit": r.menit},
+                "properties": {
+                    "transport_node_id": r.transport_node_id,
+                    "menit": r.menit,
+                    "profil": r.profil,
+                },
             }
             for r in db.execute(stmt)
         ],

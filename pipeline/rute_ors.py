@@ -1,4 +1,4 @@
-"""Jalan kaki di sekitar simpul transportasi, lewat OpenRouteService."""
+"""Rute dan kawasan jangkau di sekitar simpul transportasi, lewat OpenRouteService."""
 
 from __future__ import annotations
 
@@ -61,6 +61,23 @@ URL_ISO = "https://api.openrouteservice.org/v2/isochrones/{profil}"
 
 ISOCHRONE_MENIT = (5, 10, 15, 30, 60)
 
+#: Pita menit PER PROFIL. Mobil dan sepeda berkali-kali lebih cepat, jadi
+#: memakai pita 5-60 menit yang sama membuat lapisan mobil menutupi seluruh
+#: peta - pita mobil 15 menit terukur 140-400 km2 melawan 1-3 km2 pita jalan
+#: kaki. Angka di bawah dipilih supaya LUAS pita tiap nomor kurang lebih
+#: sebanding dengan pita jalan kaki: mobil 10 menit ~ jalan kaki 60 menit.
+ISOCHRONE_MENIT_PROFIL = {
+    PROFIL_JALAN: ISOCHRONE_MENIT,
+    PROFIL_SEPEDA: (2, 4, 6, 10, 15),
+    PROFIL_MOBIL: (1, 2, 4, 7, 10),
+}
+
+
+def menit_iso() -> tuple[int, ...]:
+    """Pita menit untuk PROFIL yang sedang ditarik."""
+    return ISOCHRONE_MENIT_PROFIL[PROFIL]
+
+
 #: Kuota isochrone ORS jauh lebih ketat daripada directions: 500 per hari dan
 #: 20 per menit. Enam simpul cuma butuh enam permintaan, jadi jedanya longgar.
 JEDA_ISO_DETIK = 3.5
@@ -68,6 +85,15 @@ JEDA_ISO_DETIK = 3.5
 MAKS_GESER_M = 250
 
 M_PER_MENIT = 80.0
+
+#: Kecepatan bebas-hambatan tiap profil, meter/menit, HANYA untuk memeriksa
+#: kewajaran luas isochrone. Mobil memang jauh lebih luas dari jalan kaki;
+#: menilainya dengan batas jalan kaki akan menolak setiap pita mobil.
+M_PER_MENIT_PROFIL = {
+    PROFIL_JALAN: 80.0,
+    PROFIL_SEPEDA: 300.0,
+    PROFIL_MOBIL: 1000.0,
+}
 
 
 def _meter(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -109,10 +135,10 @@ def jahit(
 
 
 def minta_isochrone(lon: float, lat: float) -> list[dict] | str:
-    """Kawasan jangkau jalan kaki dari satu titik, ketiga pita sekaligus."""
+    """Kawasan jangkau satu titik untuk PROFIL yang sedang ditarik, semua pita."""
     badan = {
         "locations": [[lon, lat]],
-        "range": [m * 60 for m in ISOCHRONE_MENIT],
+        "range": [m * 60 for m in menit_iso()],
         "range_type": "time",
         "attributes": ["area"],
     }
@@ -162,11 +188,16 @@ def minta_isochrone(lon: float, lat: float) -> list[dict] | str:
 
 
 def simpan_isochrone(db, node_id: int, pita: list[dict]) -> int:
-    """Tulis kawasan jangkau satu simpul. Menghapus yang lama dulu."""
-    db.execute(delete(CatchmentArea).where(CatchmentArea.transport_node_id == node_id))
+    """Tulis kawasan jangkau satu simpul UNTUK PROFIL yang sedang ditarik."""
+    db.execute(
+        delete(CatchmentArea).where(
+            CatchmentArea.transport_node_id == node_id,
+            CatchmentArea.profil == PROFIL,
+        )
+    )
     n = 0
     for b in pita:
-        if b["menit"] not in ISOCHRONE_MENIT:
+        if b["menit"] not in menit_iso():
             continue
         # Cincin luar saja. ORS bisa mengembalikan lubang di tengah kawasan yang
         # tidak terjangkau (blok tanpa jalan tembus), dan lubang itu benar -
@@ -177,11 +208,16 @@ def simpan_isochrone(db, node_id: int, pita: list[dict]) -> int:
         db.execute(
             text(
                 """
-                INSERT INTO catchment_areas (transport_node_id, menit, geom)
-                VALUES (:node, :menit, ST_SetSRID(ST_GeomFromText(:wkt), 4326))
+                INSERT INTO catchment_areas (transport_node_id, menit, geom, profil)
+                VALUES (:node, :menit, ST_SetSRID(ST_GeomFromText(:wkt), 4326), :profil)
                 """
             ),
-            {"node": node_id, "menit": b["menit"], "wkt": f"POLYGON({cincin})"},
+            {
+                "node": node_id,
+                "menit": b["menit"],
+                "wkt": f"POLYGON({cincin})",
+                "profil": PROFIL,
+            },
         )
         n += 1
     return n
@@ -196,7 +232,8 @@ def isochrone(db) -> int:
         print("Belum ada simpul transportasi di basis data.")
         return 0
 
-    print(f"\n  {len(simpul)} simpul x {len(ISOCHRONE_MENIT)} pita, satu permintaan per simpul\n")
+    print(f"\n  {len(simpul)} simpul x {len(menit_iso())} pita, satu permintaan per simpul")
+    print(f"  profil {PROFIL}\n")
     total = 0
     for i, s in enumerate(simpul, 1):
         hasil = minta_isochrone(s["lon"], s["lat"])
@@ -205,8 +242,9 @@ def isochrone(db) -> int:
         else:
             hasil.sort(key=lambda b: b["menit"])
             keluhan = []
+            kecepatan = M_PER_MENIT_PROFIL.get(PROFIL, M_PER_MENIT)
             for b in hasil:
-                lingkaran = math.pi * (b["menit"] * M_PER_MENIT) ** 2
+                lingkaran = math.pi * (b["menit"] * kecepatan) ** 2
                 if b["luas_m2"] > lingkaran:
                     keluhan.append(f"{b['menit']} mnt melebihi lingkarannya")
             for a, b in zip(hasil, hasil[1:]):
@@ -501,9 +539,17 @@ def status(db) -> None:
             f"{r['sepeda_hex']:>11}{smnt:>12}"
         )
     total = db.execute(select(func.count()).select_from(HexRoute)).scalar_one()
-    iso = db.execute(select(func.count()).select_from(CatchmentArea)).scalar_one()
+    iso = db.execute(
+        select(CatchmentArea.profil, func.count())
+        .group_by(CatchmentArea.profil)
+        .order_by(CatchmentArea.profil)
+    ).all()
     print(f"\n  total baris hex_routes: {total}")
-    print(f"  total pita catchment_areas: {iso}\n")
+    if iso:
+        rincian = "  ".join(f"{p}: {n}" for p, n in iso)
+        print(f"  pita catchment_areas per profil: {rincian}\n")
+    else:
+        print("  pita catchment_areas: kosong\n")
 
 
 URL_MATRIKS = "https://api.openrouteservice.org/v2/matrix/{profil}"
@@ -647,7 +693,10 @@ def main() -> int:
     ap.add_argument(
         "--isochrone",
         action="store_true",
-        help="ambil kawasan jangkau 5/10/15 menit tiap simpul -> catchment_areas",
+        help=(
+            "ambil kawasan jangkau tiap simpul -> catchment_areas. Ikut profil yang "
+            "dipilih (--mobil / --sepeda); pita tiap profil disimpan terpisah."
+        ),
     )
     ap.add_argument(
         "--rapikan",
@@ -691,7 +740,7 @@ def main() -> int:
             return matriks_blok(db)
 
         if a.isochrone:
-            if not settings.ors_api_key:
+            if not kunci_ors():
                 print("ORS_API_KEY kosong di backend/.env. Isi dulu.")
                 return 1
             isochrone(db)

@@ -384,10 +384,10 @@ def isi(db, penanda: bool = True) -> None:
         db.execute(
             text(
                 """
-                INSERT INTO catchment_areas (transport_node_id, menit, geom)
+                INSERT INTO catchment_areas (transport_node_id, menit, geom, profil)
                 SELECT transport_node_id, :menit,
-                       ST_MakeValid(ST_Buffer(geom, :skala))
-                FROM catchment_areas WHERE menit = 15
+                       ST_MakeValid(ST_Buffer(geom, :skala)), profil
+                FROM catchment_areas WHERE menit = 15 AND profil = 'foot-walking'
                 ON CONFLICT DO NOTHING
                 """
             ),
