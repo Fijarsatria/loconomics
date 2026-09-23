@@ -37,6 +37,7 @@ from app.core.akun import (
 from app.core.database import get_db
 from app.core.galat import (
     AkunSudahAda,
+    BukanAdmin,
     KesalahanAPI,
     KredensialSalah,
     TidakDitemukan,
@@ -226,6 +227,15 @@ def berlangganan(
     user: PenggunaWajib,
     db: Annotated[Session, Depends(get_db)],
 ) -> Akun:
+    # Aktivasi Premium TIDAK lagi bisa dilakukan sendiri oleh pengguna - itu
+    # pintu penyalahgunaan. Hanya admin (tim) yang membukanya; akun untuk
+    # pengguna baru dibuatkan tim, bukan diaktifkan dari layar.
+    if user.peran != "admin":
+        raise BukanAdmin(
+            "Mengaktifkan Loconomics Premium dilakukan oleh tim, bukan sendiri. "
+            "Minta akun Premium-nya ke petugas."
+        )
+
     paket = next((x for x in PAKET_LANGGANAN if x["kode"] == p.paket), None)
     if paket is None:
         raise TidakDitemukan(

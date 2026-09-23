@@ -852,6 +852,9 @@ const K_BAYAR = {
     mengaktifkan: 'Mengaktifkan…',
     aktifkan: 'Aktifkan (mode demo)',
     lencanaDemo: 'DEMO',
+    olehTim: 'Premium dibuka oleh tim',
+    olehTimCatatan:
+      'Aktivasi sendiri dimatikan supaya tidak disalahgunakan. Minta akun Premium ke petugas — Anda akan diberi nama pengguna dan kata sandinya.',
     pilihDulu: 'Pilih paket dulu',
     belumTerpasang: 'Gerbang pembayaran belum terpasang di lingkungan ini.',
     masukSebagai: 'Masuk sebagai',
@@ -917,6 +920,9 @@ const K_BAYAR = {
     mengaktifkan: 'Activating…',
     aktifkan: 'Activate (demo mode)',
     lencanaDemo: 'DEMO',
+    olehTim: 'Premium is opened by the team',
+    olehTimCatatan:
+      'Self-activation is disabled to prevent misuse. Ask the staff for a Premium account — you will be given its username and password.',
     pilihDulu: 'Pick a plan first',
     belumTerpasang: 'No payment gateway is wired up in this environment.',
     masukSebagai: 'Signed in as',
@@ -969,38 +975,15 @@ function DialogLangganan({
   onLanjut: (pesan: string | null) => void
 }) {
   const t = useTeks(K_BAYAR)
-  const { akun, segarkan } = useSesi()
+  const { akun } = useSesi()
   const [katalog, setKatalog] = useState<KatalogPaket | null>(null)
   const [pilih, setPilih] = useState<string | null>(null)
-  const [sibuk, setSibuk] = useState(false)
-  const [galat, setGalat] = useState<string | null>(null)
-
   useEffect(() => {
     api
       .katalogPaket()
       .then(setKatalog)
-      .catch(() => setGalat(t.gagalPaket))
-    // Tanpa `t` di dependensi: kalimat cadangan itu cuma terbaca kalau
-    // permintaannya gagal, dan menambahkannya berarti katalog diminta ulang
-    // tiap kali bahasa ditukar.
+      .catch(() => setKatalog(null))
   }, [])
-
-  const bayar = async () => {
-    if (!pilih || sibuk) return
-    setSibuk(true)
-    setGalat(null)
-    try {
-      await api.berlangganan(pilih)
-      await segarkan()
-      // Sesudah langganan aktif, langkah berikutnya BUKAN tanda centang: ia
-      // menanyakan usaha apa dan di mana, lalu membuka peta ke sana.
-      onLanjut(t.premiumAktif)
-    } catch (err) {
-      setGalat(err instanceof GalatAPI ? err.message : t.gagalAktivasi)
-    } finally {
-      setSibuk(false)
-    }
-  }
 
   const paketTerpilih = katalog?.langganan.find((p) => p.kode === pilih)
   const harga = paketTerpilih?.harga_rp ?? null
@@ -1147,20 +1130,13 @@ function DialogLangganan({
                   </div>
                 </dl>
 
-                {galat && (
-                  <p role="alert" className="mt-3 text-[12.5px] leading-snug text-bahaya">
-                    {galat}
-                  </p>
-                )}
-
-                <button
-                  onClick={bayar}
-                  disabled={!pilih || sibuk}
-                  className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[14px] font-semibold text-surface transition-all duration-300 ease-jelly hover:scale-[1.015] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
-                >
-                  {sibuk && <Pusaran />}
-                  {sibuk ? t.mengaktifkan : pilih ? t.aktifkan : t.pilihDulu}
-                </button>
+                {/* TIDAK ada tombol aktivasi mandiri. Premium dibuka oleh tim
+                    supaya tidak disalahgunakan; akun Premium dibuatkan dan
+                    kredensialnya diberikan ke pengguna. */}
+                <div className="mt-4 rounded-md border border-dashed border-line-2 bg-surface px-4 py-3">
+                  <p className="text-[13px] font-semibold text-ink">{t.olehTim}</p>
+                  <p className="mt-1 text-[12px] leading-snug text-ink-3">{t.olehTimCatatan}</p>
+                </div>
 
                 {/* Keadaan pembayaran dikatakan apa adanya. Ini yang membedakan
                     layar berbayar yang jujur dari layar berbayar palsu. */}
